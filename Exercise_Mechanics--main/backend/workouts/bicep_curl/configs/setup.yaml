@@ -1,0 +1,35 @@
+# Double-arm bicep curl setup transport/capture configuration. Which templates run is defined in
+# switches.yaml; the generic setup orchestrator consumes the complete context selection. The same
+# combined-gate flow as squat: keypoint visibility + stance pre-check held stable, then a timed
+# baseline capture. Captured shoulders/elbows/wrists/hips define curl ROM's body-relative rest and
+# target references; shoulders/hips provide shoulder-elevation monitoring, while baseline ankles
+# orient anatomical left/right for lateral torso lean.
+schema_version: 1
+exercise: bicep_curl
+
+keypoints:
+  - left_shoulder
+  - right_shoulder
+  - left_elbow
+  - right_elbow
+  - left_wrist
+  - right_wrist
+  - left_hip
+  - right_hip
+  - left_ankle
+  - right_ankle
+
+pre_check:
+  enabled: true
+  stable_ms: 2000
+
+baseline:
+  required: true
+  file: bicep_curl_baseline_keypoints.json
+  capture:
+    duration_ms: 3000
+    min_valid_samples: 45
+    min_valid_coverage: 0.80
+    invalid_pause_ms: 250
+    invalid_reset_ms: 1000
+    max_joint_stddev_px: 8

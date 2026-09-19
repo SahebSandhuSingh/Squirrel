@@ -1,0 +1,30 @@
+# Squat setup transport/capture configuration. Which templates run is defined in switches.yaml;
+# the generic setup orchestrator consumes the complete context selection.
+schema_version: 1
+exercise: squat
+
+keypoints:
+  - nose
+  - left_shoulder
+  - right_shoulder
+  - left_hip
+  - right_hip
+  - left_knee
+  - right_knee
+  - left_ankle
+  - right_ankle
+
+pre_check:
+  enabled: true
+  stable_ms: 2000
+
+baseline:
+  required: true
+  file: squat_baseline_keypoints.json
+  capture:
+    duration_ms: 3000
+    min_valid_samples: 45
+    min_valid_coverage: 0.80
+    invalid_pause_ms: 250
+    invalid_reset_ms: 1000
+    max_joint_stddev_px: 8

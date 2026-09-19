@@ -1,0 +1,145 @@
+# Squat template definitions and scorer/timeline configuration. `active_phases` controls live
+# monitoring/cues; `scoring.evidence_phases` independently controls form-score evidence. Activation
+# lives exclusively in switches.yaml so an inactive template cannot affect cues or form score.
+schema_version: 1
+
+scoring:
+  version: 9
+  min_active_ms: 250
+  min_active_frames: 5
+  max_frame_delta_ms: 100
+  cue_min_display_ms: 800
+
+templates:
+  - id: knee_valgus
+    rank: 1
+    tier: high
+    tuning_status: ready
+    fault_label: "Knee valgus"
+    active_phases: [descent, bottom, ascent]
+    required_keypoints: [left_hip, right_hip, left_knee, right_knee, left_ankle, right_ankle]
+    issue: "Knees collapse inward toward each other instead of tracking over the feet."
+    cue: "Push knees out in line with toes."
+    coaching: "Your knees drifted inward under load. As you drive up, screw your feet into the floor and push your knees out so they track over your toes — that keeps the force off your joints and in your muscles."
+    policy:
+      mode: baseline_relative
+      ranges:
+        - range: {lte: 0.00}
+          state: safe
+          skeleton_color: green
+        - range: {gt: 0.00, lte: 0.005}
+          state: warning
+          skeleton_color: green
+        - range: {gt: 0.005}
+          state: not_ok
+          skeleton_color: red
+    scoring:
+      role: penalty
+      weight: 0.50
+      confirmed_fault:
+        min_not_ok_ms: 250
+        minimum_penalty: 0.30
+      evidence_phases: [descent, bottom, ascent]
+  - id: lateral_torso_lean
+    rank: 2
+    tier: high
+    tuning_status: ready
+    fault_label: "Lateral torso lean"
+    active_phases: [descent, bottom, ascent]
+    # LIVE keypoints only; drift-guarded against the module's REQUIRED_KEYPOINTS. Ankles are needed
+    # at BASELINE construction (they orient anatomical left) but never live, so the feet leaving
+    # frame no longer takes this rule offline. They remain in setup.yaml because knee_valgus and
+    # stance_width require them on every live frame.
+    required_keypoints: [left_shoulder, right_shoulder, left_hip, right_hip]
+    issue: "The torso leans sideways instead of remaining upright over the hips."
+    cue: "Keep your torso upright and centered."
+    coaching: "You were tipping to one side through the rep. Brace your core and keep your shoulders level so your torso stays stacked evenly over both hips — even weight, even effort."
+    policy:
+      mode: baseline_relative_angle
+      ranges:
+        - range: {lt: -5.0}
+          state: not_ok
+          side: right
+          skeleton_color: red
+        - range: {gte: -5.0, lt: -3.0}
+          state: warning
+          side: right
+          skeleton_color: green
+        - range: {gte: -3.0, lte: 3.0}
+          state: safe
+          side: null
+          skeleton_color: green
+        - range: {gt: 3.0, lte: 5.0}
+          state: warning
+          side: left
+          skeleton_color: green
+        - range: {gt: 5.0}
+          state: not_ok
+          side: left
+          skeleton_color: red
+    scoring:
+      role: penalty
+      weight: 0.30
+      evidence_phases: [descent, bottom, ascent]
+
+  - id: depth
+    rank: 3
+    tier: medium
+    tuning_status: ready
+    fault_label: "Short depth"
+    active_phases: [descent, bottom, ascent]
+    required_keypoints: [left_hip, right_hip, left_knee, right_knee]
+    issue: "The squat does not reach the intended depth."
+    cue: "Go to the target depth with control."
+    coaching: "You're cutting your squats short. Sit down until your hips reach at least the top of your knees, own the bottom for a beat, then drive up — full depth is where the strength is built."
+    full_rom_gate: 0.85
+    min_baseline_span_px: 60
+    shallow_next_rep_cue_ms: 500
+    scoring:
+      role: rom
+      mode: rom
+      rom_floor: 0.30
+      evidence_phases: [descent, bottom, ascent]
+
+  - id: stance_width
+    rank: 4
+    tier: low
+    tuning_status: ready
+    fault_label: "Stance too narrow / too wide"
+    active_phases: [setup]
+    required_keypoints: [left_ankle, right_ankle, left_shoulder, right_shoulder]
+    issue: "The feet are outside the configured stable stance range."
+    cue: "Stand shoulder-width with stable feet."
+    min_shoulder_px: 10
+    policy:
+      ranges:
+        - range: {lt: 0.70}
+          state: not_ok
+          skeleton_color: red
+        - range: {gte: 0.70, lt: 0.80}
+          state: warning
+          skeleton_color: green
+        - range: {gte: 0.80, lte: 1.20}
+          state: safe
+          skeleton_color: green
+        - range: {gt: 1.20, lte: 1.30}
+          state: warning
+          skeleton_color: green
+        - range: {gt: 1.30}
+          state: not_ok
+          skeleton_color: red
+    scoring:
+      role: monitor
+
+  - id: standing_posture
+    rank: 5
+    tier: pre_check
+    tuning_status: ready
+    fault_label: "Stand upright"
+    active_phases: [setup]
+    required_keypoints: [left_hip, right_hip, left_knee, right_knee, left_ankle, right_ankle]
+    issue: "The squat baseline must be captured from an upright, extended-leg position."
+    cue: "Stand tall with both knees straight but relaxed."
+    setup_policy:
+      min_knee_extension_deg: 160
+      require_hip_above_knee: true

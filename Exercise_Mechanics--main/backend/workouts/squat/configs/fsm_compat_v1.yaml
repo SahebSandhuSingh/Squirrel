@@ -1,0 +1,19 @@
+# Immutable transition graph for replaying captures written before fsm.yaml schema version 2.
+schema_version: 1
+phases: [setup, descent, bottom, ascent, reset]
+initial_phase: setup
+transitions:
+  - {from: setup, to: setup, when: tracking_recovery_failed, action: reset_attempt}
+  - {from: setup, to: descent, when: descent_started}
+  - {from: descent, to: setup, when: tracking_recovery_failed, action: discard_attempt, emit: attempt_discarded}
+  - {from: descent, to: setup, when: phase_stale, action: discard_attempt, emit: attempt_discarded}
+  - {from: descent, to: bottom, when: full_rom_reached}
+  - {from: descent, to: ascent, when: turnaround_confirmed}
+  - {from: bottom, to: setup, when: tracking_recovery_failed, action: discard_attempt, emit: attempt_discarded}
+  - {from: bottom, to: setup, when: phase_stale, action: discard_attempt, emit: attempt_discarded}
+  - {from: bottom, to: ascent, when: turnaround_confirmed}
+  - {from: ascent, to: setup, when: tracking_recovery_failed, action: discard_attempt, emit: attempt_discarded}
+  - {from: ascent, to: setup, when: phase_stale, action: discard_attempt, emit: attempt_discarded}
+  - {from: ascent, to: reset, when: top_returned, action: complete_attempt, emit: attempt_completed}
+  - {from: reset, to: setup, when: tracking_recovery_failed, action: reset_attempt}
+  - {from: reset, to: setup, when: reset_dwell_elapsed, action: reset_attempt, emit: rep_cycle_completed}

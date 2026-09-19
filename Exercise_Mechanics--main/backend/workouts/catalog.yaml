@@ -1,0 +1,26 @@
+# Workout catalog — canonical exercise slug → camera view + delivery lifecycle.
+#
+# One row per exercise. `view` is the camera angle the exercise is coached from;
+# it decides which keypoints are visible, so each exercise's rule kernels + the
+# visibility gate are written for its view.
+#
+# Prototype 1 = 5 exercises. All front-view EXCEPT plank (side-view).
+# Only `enabled` exercises may create a session. Planned entries remain discoverable metadata and
+# do not require an implementation directory until their delivery stage.
+
+exercises:
+  squat:
+    view: front
+    status: enabled
+  bicep_curl:
+    view: front
+    status: enabled
+  high_knee:
+    view: front
+    status: enabled
+  lunge:
+    view: front
+    status: planned
+  plank:
+    view: side
+    status: planned

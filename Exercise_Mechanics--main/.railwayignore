@@ -1,0 +1,8 @@
+frontend-react/node_modules
+frontend-dist
+test_env
+.venv
+data
+.pytest_cache
+**/__pycache__
+.DS_Store
