@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.venv/
+venv/
+
+# Downloaded MediaPipe model bundles (fetch with tools/fetch_model.py).
+models/*.task
+models/*.task.part
+models/sample_person.jpg
+
+# Test artefacts: sample streams and tuning logs.
+*.mp4
+*.csv
+*.log

@@ -1,0 +1,5 @@
+# Test-only dependencies (the suite needs no camera, video, model or network).
+-r requirements.txt
+
+pytest>=8.0        # verified: 9.1.1
+httpx>=0.27        # verified: 0.28.1 — required by fastapi.testclient
