@@ -1,0 +1,161 @@
+# High Knee keeps the four-rule rank contract. Knee tracking, lateral torso lean, and ROM are the
+# current development rules. Left/right asymmetry is a set-level informational monitor: it never
+# enters live cue arbitration, skeleton coloring, or form-score penalties.
+# Cadence and alternation are metrics and therefore intentionally absent.
+schema_version: 1
+
+scoring:
+  version: 1
+  min_active_ms: 250
+  min_active_frames: 5
+  max_frame_delta_ms: 100
+  cue_min_display_ms: 800
+
+templates:
+  - id: knee_tracking_corridor
+    rank: 1
+    tier: high
+    tuning_status: development
+    fault_label: "Knee tracking"
+    active_phases: [ascent, top, descent]
+    required_keypoints: [left_shoulder, right_shoulder, left_hip, right_hip, left_knee, right_knee]
+    issue: "A lifted knee moves outside its stable front-view corridor."
+    cue: "Drive your knee straight ahead."
+    coaching: "Keep the lifted knee tracking straight ahead instead of letting it collapse inward or drift outward."
+    min_shoulder_width_px: 30
+    min_torso_length_px: 50
+    # PROVISIONAL (single corridor session `20260720T232023-9a703963b6`, one user, gross drifts
+    # only). Bands in baseline shoulder-widths of lateral drift. Clean lifts maxed at 0.217 (standing
+    # sway 0.231); deliberate drifts ran 0.355-0.732. 0.28 fault line sits ~0.06 above the clean
+    # envelope (false-positive margin) and well below gross drift. The 0.25-0.35 SUBTLE-drift zone is
+    # still unmeasured — it falls in the warning band on purpose, so soft valgus hints without a
+    # penalty we cannot yet justify. Confirm the fault line with a gentle-drift capture before locking.
+    policy:
+      mode: baseline_relative_lateral_drift
+      ranges:
+        - range: {lte: 0.20}
+          state: safe
+          skeleton_color: green
+        - range: {gt: 0.20, lte: 0.28}
+          state: warning
+          skeleton_color: green
+        - range: {gt: 0.28}
+          state: not_ok
+          skeleton_color: red
+    scoring:
+      role: penalty
+      weight: 0.40
+      confirmed_fault:
+        min_not_ok_ms: 300
+        minimum_penalty: 0.20
+      evidence_phases: [ascent, top, descent]
+
+  - id: lateral_torso_lean
+    rank: 2
+    tier: high
+    tuning_status: development
+    fault_label: "Lateral torso lean"
+    active_phases: [ascent, top, descent]
+    required_keypoints: [left_shoulder, right_shoulder, left_hip, right_hip]
+    issue: "The torso leans sideways during the knee drive."
+    cue: "Stay tall and centered."
+    coaching: "Brace your trunk and keep your shoulders centered over your hips while driving each knee."
+    min_torso_length_px: 50
+    # PROVISIONAL PLACEHOLDER — not validated against any capture. +/-5 deg safe, 5-8 a diagnostic
+    # warning buffer, beyond 8 Not OK are untuned starting guesses for the expected torso shift over
+    # the stance leg. Confirm or replace these bands from a fresh Phase 8 rig capture.
+    policy:
+      mode: baseline_relative_angle
+      ranges:
+        - range: {lt: -8.0}
+          state: not_ok
+          side: right
+          skeleton_color: red
+        - range: {gte: -8.0, lt: -5.0}
+          state: warning
+          side: right
+          skeleton_color: green
+        - range: {gte: -5.0, lte: 5.0}
+          state: safe
+          side: null
+          skeleton_color: green
+        - range: {gt: 5.0, lte: 8.0}
+          state: warning
+          side: left
+          skeleton_color: green
+        - range: {gt: 8.0}
+          state: not_ok
+          side: left
+          skeleton_color: red
+    scoring:
+      role: penalty
+      weight: 0.30
+      confirmed_fault:
+        min_not_ok_ms: 300
+        minimum_penalty: 0.15
+      evidence_phases: [ascent, top, descent]
+
+  - id: knee_drive_rom
+    rank: 3
+    tier: high
+    tuning_status: development
+    fault_label: "Low knee drive"
+    active_phases: [ascent, top, descent]
+    required_keypoints: [left_shoulder, right_shoulder, left_hip, right_hip, left_knee, right_knee]
+    issue: "The knee drive does not reach the intended height."
+    cue: "Drive each knee toward hip height."
+    coaching: "Lift each knee toward hip height while staying tall and controlled."
+    # PROVISIONAL PLACEHOLDER — not validated against any capture. The 0.90 full-ROM gate is an
+    # untuned starting guess that mirrors the Squat/Bicep Curl peak/gate score curve. The
+    # full-vs-shallow boundary must be set from a fresh Phase 8 rig capture.
+    full_rom_gate: 0.90
+    min_baseline_gap_px: 40
+    min_torso_length_px: 50
+    scoring:
+      role: rom
+      mode: rom
+      rom_floor: 0.30
+      evidence_phases: [ascent, top, descent]
+
+  - id: left_right_asymmetry
+    rank: 4
+    tier: medium
+    tuning_status: development
+    fault_label: "Left-right asymmetry"
+    active_phases: [ascent, top, descent]
+    required_keypoints: [left_shoulder, right_shoulder, left_hip, right_hip, left_knee, right_knee]
+    issue: "Knee-drive height differs consistently between sides."
+    cue: "Match the height on both sides."
+    coaching: "Keep the left and right knee drives at a similar controlled height across the set."
+    # PROVISIONAL PLACEHOLDER — not validated against any capture. Qualified peaks are normalized
+    # by the side-local standing baseline; three-per-side + median comparison limits single-lift
+    # noise, but max_travel_gap and min_lifts_per_side stay untuned pending a fresh Phase 8 capture.
+    min_lifts_per_side: 3
+    max_travel_gap: 0.15
+    scoring:
+      role: monitor
+
+  # Setup-only combined readiness check. The generic gate separately requires all eight configured
+  # landmarks and enforces dwell/capture stillness; this template validates their geometry.
+  - id: setup_readiness
+    rank: 5
+    tier: pre_check
+    tuning_status: development
+    fault_label: "High Knee setup position"
+    active_phases: [setup]
+    required_keypoints: [left_shoulder, right_shoulder, left_hip, right_hip, left_knee, right_knee, left_ankle, right_ankle]
+    issue: "The full-body starting position is not ready for High Knees."
+    cue: "Face the camera, stand tall, and keep both feet down."
+    setup_policy:
+      min_shoulder_width_px: 30
+      min_hip_width_px: 20
+      min_torso_length_px: 50
+      min_upper_leg_px: 40
+      min_lower_leg_px: 40
+      max_side_length_ratio: 1.35
+      min_knee_extension_deg: 160
+      min_stance_ratio: 0.60
+      max_stance_ratio: 1.40
+      max_foot_height_difference_ratio: 0.10
+    scoring:
+      role: monitor

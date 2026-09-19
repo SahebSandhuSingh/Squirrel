@@ -1,0 +1,37 @@
+# Double-arm bicep curl ascend-first repetition model. Progress is normalized wrist rise:
+# 0 at the resting (extended) position, growing to a peak at the top of the curl. Numeric policy
+# and phase routing are configuration owned; the engine's RepFSM derives its lifecycle roles
+# (setup / reset / movement phases / the single returning phase) from this transition graph, so it
+# runs curl and squat with different phase vocabularies and no code change.
+schema_version: 2
+movement_type: reps
+
+phases: [setup, ascent, top, descent, reset]
+initial_phase: setup
+
+transitions:
+  - {from: setup, to: setup, when: tracking_recovery_failed, action: reset_attempt}
+  - {from: setup, to: ascent, when: descent_started}
+
+  - {from: ascent, to: setup, when: tracking_recovery_failed, action: discard_attempt, emit: attempt_discarded}
+  - {from: ascent, to: setup, when: phase_stale, action: discard_attempt, emit: attempt_discarded}
+  - {from: ascent, to: top, when: full_rom_reached}
+  - {from: ascent, to: descent, when: turnaround_confirmed}
+
+  - {from: top, to: setup, when: tracking_recovery_failed, action: discard_attempt, emit: attempt_discarded}
+  - {from: top, to: setup, when: phase_stale, action: discard_attempt, emit: attempt_discarded}
+  - {from: top, to: descent, when: turnaround_confirmed}
+
+  - {from: descent, to: setup, when: tracking_recovery_failed, action: discard_attempt, emit: attempt_discarded}
+  - {from: descent, to: setup, when: phase_stale, action: discard_attempt, emit: attempt_discarded}
+  - {from: descent, to: reset, when: top_returned, action: complete_attempt, emit: attempt_completed}
+
+  - {from: reset, to: reset, when: tracking_recovery_failed, action: reset_attempt}
+  - {from: reset, to: setup, when: reset_dwell_elapsed, action: reset_attempt, emit: rep_cycle_completed}
+
+descent_trigger: 0.10
+top_return: 0.10
+min_rep_peak: 0.30
+turnaround_ms: 200
+reset_dwell_ms: 500
+stale_phase_ms: 10000
