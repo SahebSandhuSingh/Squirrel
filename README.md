@@ -331,6 +331,23 @@ queueing it.
 - **Classification is per-frame and stateless apart from the unrecognized
   streak.** No temporal model, by design at this step.
 
+## Ported into Exercise Mechanics
+
+This step's push-up logic is also integrated into the Exercise Mechanics app in this repository, as a
+normal exercise package: `Exercise_Mechanics--main/backend/workouts/pushup/`. That app takes a
+different architecture — MediaPipe runs in the browser and streams landmark JSON, so the port carries
+the *logic* rather than this code:
+
+| This service | The push-up package in Exercise Mechanics |
+|---|---|
+| `validation.check_orientation` + frame hysteresis | `rules/side_view_orientation.py` (one range table, same hysteresis) |
+| `exercises/pushup.py` elbow angle | `rules/pushup_depth.py` (normalized against the user's captured plank) |
+| `exercises/pushup.py` body-line angle | `rules/body_line.py` (signed offset, so sag and pike coach apart) |
+| `PUSHUP` classifier signals | `rules/plank_ready.py` (a setup gate — that app already knows which exercise was selected) |
+| `config.py` constants | `configs/templates.yaml` range tables + `configs/fsm.yaml` |
+
+Rep counting there is the app's own generic engine, not this step's output contract.
+
 ## For the next step (rep counting)
 
 Consume `FrameResult` (`pose_backend/schemas.py`). Per frame you get a monotonic

@@ -83,6 +83,7 @@ def test_startup_fully_validates_only_enabled_exercises():
         "squat",
         "bicep_curl",
         "high_knee",
+        "pushup",
     )
     with pytest.raises(ConfigurationError, match="planned exercise"):
         load_exercise_config("plank")

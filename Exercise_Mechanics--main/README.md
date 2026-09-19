@@ -4,8 +4,15 @@ Exercise Mechanics is a browser-based live fitness-coaching prototype. MediaPipe
 React frontend, while FastAPI owns setup, exercise state, form evaluation, scoring and coaching
 cues.
 
-The currently usable exercises are **Squat**, **Single / Double Arm Bicep Curl**, and **High Knees**.
-Lunges and Plank appear in the library but are still **Coming Soon**.
+The currently usable exercises are **Squat**, **Single / Double Arm Bicep Curl**, **High Knees**, and
+**Push-up**. Lunges and Plank appear in the library but are still **Coming Soon**.
+
+> **Push-up is the first SIDE-view exercise.** Elbow bend and hip alignment are both sagittal-plane
+> quantities, so the setup flow refuses to start a set until the camera is at the user's side, and it
+> keeps checking during the set — a confirmed front-on view pauses the rep machine rather than scoring
+> readings the angle cannot support. Its thresholds are `development` and were derived geometrically
+> rather than from a rig capture; `backend/workouts/pushup/configs/templates.yaml` records what each
+> one needs before it can be promoted to `ready`.
 
 > **New here?** [`USER_GUIDE.md`](USER_GUIDE.md) is a plain-language, step-by-step walkthrough of
 > installing, starting, and using the app. Start there. This README is the quick technical reference.

@@ -384,5 +384,5 @@ def test_default_adapter_constructs_only_active_ready_rules():
 
 
 def test_explicit_builder_registry_matches_enabled_catalog():
-    assert set(EXERCISE_BUILDERS) == {"squat", "bicep_curl", "high_knee"}
-    assert validate_training_builders() == ("bicep_curl", "high_knee", "squat")
+    assert set(EXERCISE_BUILDERS) == {"squat", "bicep_curl", "high_knee", "pushup"}
+    assert validate_training_builders() == ("bicep_curl", "high_knee", "pushup", "squat")

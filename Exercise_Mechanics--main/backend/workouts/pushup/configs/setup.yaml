@@ -1,0 +1,46 @@
+# Push-up setup transport/capture configuration. Which templates run is defined in switches.yaml.
+# The combined gate is the same shape as squat and curl: keypoint visibility + a pre-check held
+# stable, then a timed baseline capture.
+#
+# The baseline is captured in the TOP of the push-up (a held plank, arms extended). That position
+# is what every live signal is measured against: the captured elbow angle is push-up depth's zero
+# point, and the captured shoulder-hip-ankle geometry is the body line's reference.
+#
+# KEYPOINT GATE AND THE SIDE-ON VIEW — the one thing to validate on a rig capture first.
+# Both sides are listed because the live rules read whichever side the camera can see (see
+# kinematics.analysis_side), so the gate insists the whole body is trackable before a set starts.
+# The gate floor is the global CONFIDENCE_MIN (0.5) in backend/config.py, applied to every name
+# below. In a true profile view the far-side limbs are occluded and MediaPipe reports them as
+# predictions; if a capture shows the far side sitting under 0.5 and blocking setup, the per-exercise
+# lever is this list (drop the far side to the midline joints), NOT the global floor.
+schema_version: 1
+exercise: pushup
+
+keypoints:
+  - left_shoulder
+  - right_shoulder
+  - left_elbow
+  - right_elbow
+  - left_wrist
+  - right_wrist
+  - left_hip
+  - right_hip
+  - left_ankle
+  - right_ankle
+
+pre_check:
+  enabled: true
+  stable_ms: 2000
+
+baseline:
+  required: true
+  file: pushup_baseline_keypoints.json
+  capture:
+    # Holding the top of a plank still for 3s is achievable; the stillness bound is the same 8px
+    # per-joint standard deviation the other exercises use.
+    duration_ms: 3000
+    min_valid_samples: 45
+    min_valid_coverage: 0.80
+    invalid_pause_ms: 250
+    invalid_reset_ms: 1000
+    max_joint_stddev_px: 8

@@ -1,0 +1,44 @@
+# Push-up descend-first repetition model. Progress is normalized elbow flexion: 0 at the baseline
+# top (arms extended in the plank), growing to a peak at the bottom of the rep. Same lifecycle
+# vocabulary as squat (setup → descent → bottom → ascent → reset); the engine's RepFSM derives its
+# roles from this transition graph, so no engine change was needed to add this exercise.
+#
+# CAMERA VIEW: side-on. See templates.yaml and rules/ for why every measurement requires it.
+schema_version: 2
+movement_type: reps
+
+phases: [setup, descent, bottom, ascent, reset]
+initial_phase: setup
+
+transitions:
+  - {from: setup, to: setup, when: tracking_recovery_failed, action: reset_attempt}
+  - {from: setup, to: descent, when: descent_started}
+
+  - {from: descent, to: setup, when: tracking_recovery_failed, action: discard_attempt, emit: attempt_discarded}
+  - {from: descent, to: setup, when: phase_stale, action: discard_attempt, emit: attempt_discarded}
+  - {from: descent, to: bottom, when: full_rom_reached}
+  - {from: descent, to: ascent, when: turnaround_confirmed}
+
+  - {from: bottom, to: setup, when: tracking_recovery_failed, action: discard_attempt, emit: attempt_discarded}
+  - {from: bottom, to: setup, when: phase_stale, action: discard_attempt, emit: attempt_discarded}
+  - {from: bottom, to: ascent, when: turnaround_confirmed}
+
+  - {from: ascent, to: setup, when: tracking_recovery_failed, action: discard_attempt, emit: attempt_discarded}
+  - {from: ascent, to: setup, when: phase_stale, action: discard_attempt, emit: attempt_discarded}
+  - {from: ascent, to: reset, when: top_returned, action: complete_attempt, emit: attempt_completed}
+
+  - {from: reset, to: reset, when: tracking_recovery_failed, action: reset_attempt}
+  - {from: reset, to: setup, when: reset_dwell_elapsed, action: reset_attempt, emit: rep_cycle_completed}
+
+# Progress policy. Must satisfy 0 <= top_return <= descent_trigger < min_rep_peak.
+# descent_trigger 0.10: ~8 deg of elbow flexion off a 170 deg baseline — past landmark jitter but
+# well short of a rep, so a small bounce at the top does not open an attempt.
+descent_trigger: 0.10
+# top_return 0.10: the same boundary closes the rep, so a rep ends where it began.
+top_return: 0.10
+# min_rep_peak 0.30: below ~24 deg of flexion the movement is a twitch, not a shallow push-up, and
+# is recorded as a diagnostic invalid attempt that never advances the set.
+min_rep_peak: 0.30
+turnaround_ms: 200
+reset_dwell_ms: 500
+stale_phase_ms: 10000
