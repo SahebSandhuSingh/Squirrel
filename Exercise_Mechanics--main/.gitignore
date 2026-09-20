@@ -44,6 +44,9 @@ recordings/
 # Internal planning documents — not part of the public codebase
 plans/
 
+# Pose model bundles downloaded by the local vision tools (backend/tools/live_pushup.py)
+backend/tools/.models/
+
 # Test and diagnostic output
 coverage/
 test-results/

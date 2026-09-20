@@ -1,0 +1,17 @@
+# Extra dependencies for the LOCAL vision tools in this directory (live_pushup.py,
+# vision_source.py). Deliberately separate from ../../requirements.txt: the deployed service does
+# no pose inference — MediaPipe runs in the browser and the backend receives landmark JSON — so
+# these must not be installed into the container image.
+#
+#   pip install -r backend/tools/requirements-vision.txt
+#
+# opencv-python (NOT the headless build) is what gives you --window. On a headless machine install
+# opencv-python-headless instead and use --out FILE.
+#
+# MediaPipe >= 1.0 needs EGL/GLES present even for CPU-only inference:
+#   Debian/Ubuntu:  sudo apt-get install -y libegl1 libgles2
+# Without them, creating a PoseLandmarker fails with "libEGL.so.1: cannot open shared object file".
+
+mediapipe>=1.0.0,<2          # verified: 1.0.1  (BlazePose, 33 landmarks)
+numpy>=1.26,<2               # verified: 1.26.4
+opencv-python>=4.9           # verified: 4.11.0 (use opencv-python-headless if you only need --out)

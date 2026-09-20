@@ -13,6 +13,17 @@ The currently usable exercises are **Squat**, **Single / Double Arm Bicep Curl**
 > readings the angle cannot support. Its thresholds are `development` and were derived geometrically
 > rather than from a rig capture; `backend/workouts/pushup/configs/templates.yaml` records what each
 > one needs before it can be promoted to `ready`.
+>
+> **To watch the push-up rules run**, there is a local OpenCV tool that feeds a camera, a video file
+> or a drawn synthetic body through the real setup gate and the real live adapter and draws what
+> they return — depth percentage, rep verdicts, sag/pike, the camera check and the cues:
+>
+> ```bash
+> pip install -r backend/tools/requirements-vision.txt
+> python backend/tools/live_pushup.py --source synthetic --window   # no camera needed
+> python backend/tools/live_pushup.py --source 0 --window           # webcam
+> python backend/tools/live_pushup.py --source clip.mp4 --out annotated.mp4
+> ```
 
 > **New here?** [`USER_GUIDE.md`](USER_GUIDE.md) is a plain-language, step-by-step walkthrough of
 > installing, starting, and using the app. Start there. This README is the quick technical reference.
