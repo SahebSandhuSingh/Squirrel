@@ -25,6 +25,7 @@ Two sources:
 from __future__ import annotations
 
 import math
+import sys
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -41,6 +42,27 @@ MODEL_VARIANTS = {0: "lite", 1: "full", 2: "heavy"}
 MODEL_URL = (
     "https://storage.googleapis.com/mediapipe-models/pose_landmarker/"
     "pose_landmarker_{variant}/float16/latest/pose_landmarker_{variant}.task"
+)
+
+
+#: Install guidance, kept next to the logic that raises it.
+_LEGACY_MISSING = (
+    "mediapipe {version} has no mp.solutions.pose.\n"
+    "That API exists only up to 0.10.21 (0.10.30+ and 1.0+ are Tasks-only), so:\n"
+    "    pip install 'mediapipe==0.10.21'"
+)
+_MACOS_NEEDS_LEGACY = (
+    "mediapipe {version} on macOS would use the Tasks API, which aborts this process inside a\n"
+    "Metal calculator (DrishtiMetalHelper / 'Check failed: service_ Service is unavailable').\n"
+    "\n"
+    "Install the last release with the CPU-only legacy API, which this tool then picks up\n"
+    "automatically:\n"
+    "\n"
+    "    pip install 'mediapipe==0.10.21'\n"
+    "\n"
+    "Note that 'mediapipe<1.0' is NOT enough - it resolves to 0.10.3x, which is also Tasks-only.\n"
+    "To try the Tasks API anyway, pass --backend tasks. To see the tool run with no camera and no\n"
+    "model at all, use --source synthetic."
 )
 
 
@@ -97,14 +119,24 @@ def select_backend(requested: str = "auto") -> str:
     has_solutions = hasattr(mp, "solutions") and hasattr(mp.solutions, "pose")
     if requested == "solutions":
         if not has_solutions:
-            raise SystemExit(
-                f"mediapipe {mp.__version__} has no mp.solutions.pose (it was removed in 1.0).\n"
-                "Install the legacy line for this backend:  pip install 'mediapipe<1.0'"
-            )
+            raise SystemExit(_LEGACY_MISSING.format(version=mp.__version__))
         return "solutions"
     if requested == "tasks":
+        if sys.platform == "darwin":
+            print(
+                "warning: the Tasks backend aborts the PROCESS on many macOS builds "
+                "(DrishtiMetalHelper / 'Service is unavailable'). You asked for it explicitly.",
+                file=sys.stderr,
+            )
         return "tasks"
-    return "solutions" if has_solutions else "tasks"
+    if has_solutions:
+        return "solutions"
+    if sys.platform == "darwin":
+        # Refuse rather than let MediaPipe SIGABRT: a CHECK failure inside the graph kills the
+        # interpreter with a stack trace that looks like a crash in this tool, which is a miserable
+        # thing to hand somebody who just wanted to see their push-ups counted.
+        raise SystemExit(_MACOS_NEEDS_LEGACY.format(version=mp.__version__))
+    return "tasks"
 
 
 class MediaPipeSource:
@@ -138,13 +170,15 @@ class MediaPipeSource:
         self._last_stamp = -1
 
         self.backend = select_backend(backend)
+        # Printed before construction on purpose: if the graph aborts the process, this line is the
+        # only evidence of which backend was responsible.
+        print(f"pose backend: {self.backend} (mediapipe {_mediapipe_version()})")
         if self.backend == "solutions":
             self._open_solutions(complexity, min_detection_confidence, min_tracking_confidence)
         else:
             self._open_tasks(
                 complexity, model_path, min_detection_confidence, min_tracking_confidence
             )
-        print(f"pose backend: {self.backend}")
 
     def _open_solutions(
         self, complexity: int, detection_confidence: float, tracking_confidence: float
@@ -240,6 +274,12 @@ class MediaPipeSource:
                 self._landmarker.close()
         except Exception:  # pragma: no cover - defensive teardown
             pass
+
+
+def _mediapipe_version() -> str:
+    import mediapipe as mp
+
+    return getattr(mp, "__version__", "unknown")
 
 
 def _to_keypoints(landmarks, width: int, height: int) -> dict:
