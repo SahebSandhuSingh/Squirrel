@@ -16,7 +16,8 @@ in requirements.txt (the deployed service does not do pose inference); install t
 
 Two sources:
 
-    MediaPipeSource       a webcam or video file, run through MediaPipe Pose (BlazePose, 33 points)
+    MediaPipeSource       a webcam or video file, run through MediaPipe Pose (BlazePose, 33 points),
+                          on whichever of MediaPipe's two APIs this install has (see select_backend)
     SyntheticPushUpSource a drawn side-on push-up, no camera and no model, for watching the rule
                           kernels and the setup gate behave on a known-good body
 """
@@ -77,11 +78,40 @@ def resolve_model(complexity: int = 1, model_path: Optional[Path] = None) -> Pat
     return path
 
 
+def select_backend(requested: str = "auto") -> str:
+    """Pick which MediaPipe API to run: ``"solutions"`` (legacy, CPU-only) or ``"tasks"``.
+
+    Why this choice exists at all — it is a macOS problem. On mediapipe >= 1.0 the Tasks API pose
+    graph reaches for Metal inside TensorsToDetectionsCalculator, and on macOS builds where that GPU
+    service is not wired up the process does not raise, it ABORTS:
+
+        F graph_service.h:139] Check failed: service_ Service is unavailable.
+        @ -[DrishtiMetalHelper initWithCalculatorContext:]
+
+    The legacy `mp.solutions.pose` API has no Metal path, so it runs everywhere — but it was REMOVED
+    in mediapipe 1.0. Hence: prefer legacy when it exists (any 0.10.x install, including macOS),
+    fall back to Tasks when it does not (1.0+, which is Linux-safe).
+    """
+    import mediapipe as mp
+
+    has_solutions = hasattr(mp, "solutions") and hasattr(mp.solutions, "pose")
+    if requested == "solutions":
+        if not has_solutions:
+            raise SystemExit(
+                f"mediapipe {mp.__version__} has no mp.solutions.pose (it was removed in 1.0).\n"
+                "Install the legacy line for this backend:  pip install 'mediapipe<1.0'"
+            )
+        return "solutions"
+    if requested == "tasks":
+        return "tasks"
+    return "solutions" if has_solutions else "tasks"
+
+
 class MediaPipeSource:
     """A webcam or video file, converted to backend-shaped landmarks.
 
-    ``RunningMode.VIDEO`` tracks between frames (and so needs monotonically increasing timestamps),
-    which is both faster and steadier than re-detecting every frame.
+    Two interchangeable inference backends (see :func:`select_backend`), both producing identical
+    pixel-space keypoints, so everything downstream is unaffected by which one ran.
     """
 
     def __init__(
@@ -92,15 +122,10 @@ class MediaPipeSource:
         model_path: Optional[Path] = None,
         flip: bool = False,
         width: Optional[int] = None,
+        backend: str = "auto",
         min_detection_confidence: float = 0.5,
         min_tracking_confidence: float = 0.5,
     ) -> None:
-        from mediapipe import Image, ImageFormat  # noqa: N811 - vendor casing
-        from mediapipe.tasks import python as mp_python
-        from mediapipe.tasks.python import vision
-
-        self._Image = Image
-        self._ImageFormat = ImageFormat
         self._flip = flip
         self._width = width
         self._spec: object = int(source) if source.isdigit() else source
@@ -109,20 +134,60 @@ class MediaPipeSource:
             raise SystemExit(f"could not open video source: {source!r}")
         self.native_fps = self._capture.get(cv2.CAP_PROP_FPS) or 0.0
         self._is_camera = isinstance(self._spec, int)
+        self._frame_index = 0
+        self._last_stamp = -1
 
+        self.backend = select_backend(backend)
+        if self.backend == "solutions":
+            self._open_solutions(complexity, min_detection_confidence, min_tracking_confidence)
+        else:
+            self._open_tasks(
+                complexity, model_path, min_detection_confidence, min_tracking_confidence
+            )
+        print(f"pose backend: {self.backend}")
+
+    def _open_solutions(
+        self, complexity: int, detection_confidence: float, tracking_confidence: float
+    ) -> None:
+        """Legacy API: the model ships inside the wheel, so nothing is downloaded."""
+        import mediapipe as mp
+
+        self._pose = mp.solutions.pose.Pose(
+            static_image_mode=False,
+            model_complexity=complexity,
+            enable_segmentation=False,
+            min_detection_confidence=detection_confidence,
+            min_tracking_confidence=tracking_confidence,
+        )
+
+    def _open_tasks(
+        self,
+        complexity: int,
+        model_path: Optional[Path],
+        detection_confidence: float,
+        tracking_confidence: float,
+    ) -> None:
+        from mediapipe import Image, ImageFormat  # noqa: N811 - vendor casing
+        from mediapipe.tasks import python as mp_python
+        from mediapipe.tasks.python import vision
+
+        self._Image = Image
+        self._ImageFormat = ImageFormat
         options = vision.PoseLandmarkerOptions(
             base_options=mp_python.BaseOptions(
-                model_asset_path=str(resolve_model(complexity, model_path))
+                model_asset_path=str(resolve_model(complexity, model_path)),
+                # Ask for CPU explicitly. It does not rescue every macOS build (the abort above
+                # happens inside a calculator, before the delegate is consulted), but it keeps this
+                # path off the GPU wherever the choice is honoured.
+                delegate=mp_python.BaseOptions.Delegate.CPU,
             ),
             running_mode=vision.RunningMode.VIDEO,
             num_poses=1,
-            min_pose_detection_confidence=min_detection_confidence,
-            min_tracking_confidence=min_tracking_confidence,
+            min_pose_detection_confidence=detection_confidence,
+            min_tracking_confidence=tracking_confidence,
             output_segmentation_masks=False,
         )
         self._landmarker = vision.PoseLandmarker.create_from_options(options)
-        self._frame_index = 0
-        self._last_stamp = -1
 
     def frames(self) -> Iterator[Frame]:
         while True:
@@ -147,31 +212,44 @@ class MediaPipeSource:
                 fps = self.native_fps or 30.0
                 t_ms = self._frame_index * (1000.0 / fps)
             self._frame_index += 1
-
             stamp = max(int(t_ms), self._last_stamp + 1)
             self._last_stamp = stamp
+
             rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            result = self._landmarker.detect_for_video(
-                self._Image(image_format=self._ImageFormat.SRGB, data=rgb), stamp
-            )
-            poses = list(result.pose_landmarks or [])
-            keypoints = (
-                _to_keypoints(poses[0], image.shape[1], image.shape[0]) if poses else None
-            )
+            keypoints = self._detect(rgb, stamp, image.shape[1], image.shape[0])
             yield Frame(image=image, keypoints=keypoints, t_ms=float(stamp))
+
+    def _detect(self, rgb, stamp: int, width: int, height: int) -> Optional[dict]:
+        if self.backend == "solutions":
+            rgb.flags.writeable = False
+            result = self._pose.process(rgb)
+            landmarks = result.pose_landmarks
+            return _to_keypoints(landmarks.landmark, width, height) if landmarks else None
+        result = self._landmarker.detect_for_video(
+            self._Image(image_format=self._ImageFormat.SRGB, data=rgb), stamp
+        )
+        poses = list(result.pose_landmarks or [])
+        return _to_keypoints(poses[0], width, height) if poses else None
 
     def close(self) -> None:
         self._capture.release()
         try:
-            self._landmarker.close()
+            if self.backend == "solutions":
+                self._pose.close()
+            else:
+                self._landmarker.close()
         except Exception:  # pragma: no cover - defensive teardown
             pass
 
 
-def _to_keypoints(pose, width: int, height: int) -> dict:
-    """MediaPipe's normalized landmarks → the backend's pixel-space keypoint mapping."""
+def _to_keypoints(landmarks, width: int, height: int) -> dict:
+    """MediaPipe's normalized landmarks → the backend's pixel-space keypoint mapping.
+
+    Takes a plain sequence of landmarks, which is what both backends can supply, so the conversion
+    is shared and the two paths cannot drift apart.
+    """
     keypoints: dict[str, dict[str, float]] = {}
-    for index, landmark in enumerate(pose[: len(ALL_LANDMARKS)]):
+    for index, landmark in enumerate(list(landmarks)[: len(ALL_LANDMARKS)]):
         visibility = landmark.visibility
         keypoints[ALL_LANDMARKS[index]] = {
             "x": float(landmark.x) * width,

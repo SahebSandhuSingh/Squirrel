@@ -4,6 +4,10 @@
     # webcam, live window (needs opencv-python, not the headless build)
     python backend/tools/live_pushup.py --source 0 --window
 
+    # macOS: if MediaPipe aborts with "DrishtiMetalHelper" / "Service is unavailable", the Tasks
+    # API hit its Metal bug. Install the legacy line, which this tool then picks automatically:
+    #   pip install 'mediapipe<1.0'
+
     # a clip of someone doing push-ups side-on, rendered to a file
     python backend/tools/live_pushup.py --source pushups.mp4 --out annotated.mp4
 
@@ -219,6 +223,7 @@ def _build_source(args):
         model_path=Path(args.model) if args.model else None,
         flip=args.flip,
         width=args.width,
+        backend=args.backend,
     )
 
 
@@ -658,7 +663,16 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--width", type=int, default=960, help="downscale camera frames to this")
     parser.add_argument("--flip", action="store_true", help="mirror the camera image")
     parser.add_argument("--complexity", type=int, default=1, choices=(0, 1, 2))
-    parser.add_argument("--model", help="path to a pose_landmarker .task bundle")
+    parser.add_argument("--model", help="path to a pose_landmarker .task bundle (tasks backend)")
+    parser.add_argument(
+        "--backend",
+        default="auto",
+        choices=("auto", "solutions", "tasks"),
+        help=(
+            "MediaPipe API to use. auto prefers the legacy CPU-only mp.solutions.pose when the "
+            "install has it (mediapipe<1.0), which is what works on macOS; tasks is the 1.0+ API"
+        ),
+    )
     parser.add_argument("--fps", type=int, default=30, help="synthetic source frame rate")
     parser.add_argument(
         "--fault",

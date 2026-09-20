@@ -24,6 +24,10 @@ The currently usable exercises are **Squat**, **Single / Double Arm Bicep Curl**
 > python backend/tools/live_pushup.py --source 0 --window           # webcam
 > python backend/tools/live_pushup.py --source clip.mp4 --out annotated.mp4
 > ```
+>
+> The requirements file pins MediaPipe to 0.10.21 on purpose: newer releases dropped the legacy
+> CPU-only `mp.solutions` API, and their Tasks API aborts on macOS inside a Metal calculator. See
+> the note at the top of `backend/tools/requirements-vision.txt`.
 
 > **New here?** [`USER_GUIDE.md`](USER_GUIDE.md) is a plain-language, step-by-step walkthrough of
 > installing, starting, and using the app. Start there. This README is the quick technical reference.
