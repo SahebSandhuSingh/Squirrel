@@ -2,6 +2,7 @@
 
      new visitor:   landing → onboarding → modes → (session)
      existing user: landing → returning → modes → (session)
+     demo mode:     demo → (session)          ← the default today, see DEMO_PUSHUP below
 
    The "returning" page combines profile selection (a card per profile cached on this
    device) with the welcome-back greeting; switching profiles never deletes anyone.
@@ -17,6 +18,7 @@ import { Onboarding } from './flow/Onboarding'
 import { ReturningUser } from './flow/ReturningUser'
 import { ModeSelect } from './flow/ModeSelect'
 import { SoloWorkspace } from './flow/SoloWorkspace'
+import { PushUpDemo } from './flow/PushUpDemo'
 import { loadUser, loadUsers, setActiveUser, type CachedUser } from './flow/storage'
 
 // Flip to true to replace the real pose-coach (camera + skeleton + HUD) with a
@@ -24,12 +26,27 @@ import { loadUser, loadUsers, setActiveUser, type CachedUser } from './flow/stor
 // Override per-load with ?coach=real or ?coach=stub.
 const USE_COACH_STUB = false
 
-type Flow = 'landing' | 'onboarding' | 'returning' | 'modes' | 'solo' | 'session'
+/* Demo-first entry. While this is true the app opens straight on a push-up set — no landing page,
+   no profile choice, no workout builder — because that is what a demo needs and clicking through
+   four screens to reach the thing being demonstrated is friction, not flow. The full flow is not
+   removed, only skipped: open the app with ?demo=off to reach the landing page, and set this to
+   false to make the landing page the default again. */
+const DEMO_PUSHUP = true
+
+function demoRequested(): boolean {
+  const override = new URLSearchParams(location.search).get('demo') // 'pushup' | 'off' | null
+  if (override === 'off') return false
+  if (override) return true
+  return DEMO_PUSHUP
+}
+
+type Flow = 'landing' | 'onboarding' | 'returning' | 'modes' | 'solo' | 'session' | 'demo'
 
 export default function App() {
   const [user, setUser] = useState<CachedUser | null>(() => loadUser())
-  // Always start on the landing page so the user is asked new-vs-existing.
-  const [flow, setFlow] = useState<Flow>('landing')
+  // Demo mode opens on the push-up set; otherwise start on the landing page so the user is asked
+  // new-vs-existing.
+  const [flow, setFlow] = useState<Flow>(() => (demoRequested() ? 'demo' : 'landing'))
   const [sessionId, setSessionId] = useState<string | undefined>(undefined) // current training session
   const [workout, setWorkout] = useState<WorkoutConfig | undefined>(undefined) // real sets/reps/rest for the session
 
@@ -52,6 +69,15 @@ export default function App() {
   )
 
   switch (flow) {
+    case 'demo':
+      // Provisions the identity and the session the coach requires, then mounts the real coach on
+      // its setup gate. Exiting a demo set returns here for a fresh one.
+      return (
+        <PushUpDemo
+          onReady={(u, sid, w) => { setUser(u); setSessionId(sid); setWorkout(w); setFlow('session') }}
+        />
+      )
+
     case 'onboarding':
       return <Onboarding onDone={onboardingDone} onBack={() => setFlow('landing')} />
 
@@ -97,7 +123,16 @@ export default function App() {
       // Session creation is a hard dependency: never mount camera/setup without its persisted id
       // and normalized plan, even if a future flow change reaches this branch incorrectly.
       return user && sessionId && workout
-        ? <Coach userId={user.user_id} purpose="session" autoStartCamera sessionId={sessionId} workout={workout} onExit={() => setFlow('solo')} />
+        ? (
+          <Coach
+            userId={user.user_id}
+            purpose="session"
+            autoStartCamera
+            sessionId={sessionId}
+            workout={workout}
+            onExit={() => setFlow(demoRequested() ? 'demo' : 'solo')}
+          />
+        )
         : landing
 
     case 'landing':
