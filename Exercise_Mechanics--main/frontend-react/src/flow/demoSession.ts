@@ -9,8 +9,8 @@
    Kept apart from the component so it can be tested without a DOM. */
 import type { WorkoutConfig } from '../types'
 import {
-  createUser, loadUser, loadUsers, saveSession, saveUser,
-  type CachedUser, type SessionExercise,
+  ApiError, createUser, loadUser, loadUsers, saveSession, saveUser,
+  type CachedUser, type SessionExercise, type CreatedSession,
 } from './storage'
 
 /* One set of five: enough to watch depth, body line and the camera monitor all do their thing
@@ -47,6 +47,10 @@ export async function demoUser(): Promise<CachedUser> {
   if (active) return active
   const [first] = loadUsers()
   if (first) { saveUser(first); return first }
+  return newDemoUser()
+}
+
+async function newDemoUser(): Promise<CachedUser> {
   const created = await createUser(DEMO_PROFILE)
   saveUser(created)
   return created
@@ -55,8 +59,22 @@ export async function demoUser(): Promise<CachedUser> {
 export type DemoSession = { user: CachedUser; sessionId: string; workout: WorkoutConfig }
 
 export async function startPushUpDemo(): Promise<DemoSession> {
-  const user = await demoUser()
-  const created = await saveSession(user.user_id, [DEMO_PUSHUP_EXERCISE])
+  /* The cached identity lives in the BROWSER; the profile it names lives on the SERVER's disk. The
+     two go out of sync whenever the origin stays the same but the backend behind it changes — a
+     container with an empty data/users/ replacing a local run on the same localhost port, a
+     redeploy without a persistent volume, or a wiped data directory. The server answers 404
+     "user not found" and, before this, the demo simply stopped there with nothing the user could
+     do about it. A stale pointer to a profile that no longer exists is recoverable: mint a new one
+     and carry on. Only 404 is retried — a 500 or a network failure is not fixed by making users. */
+  let user = await demoUser()
+  let created: CreatedSession
+  try {
+    created = await saveSession(user.user_id, [DEMO_PUSHUP_EXERCISE])
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.status !== 404) throw error
+    user = await newDemoUser()
+    created = await saveSession(user.user_id, [DEMO_PUSHUP_EXERCISE])
+  }
   // The persisted normalized plan is authoritative, exactly as it is for a Solo-built session:
   // the backend may clamp or canonicalize what was asked for, and the coach must run on what was
   // actually stored rather than on what the client sent.

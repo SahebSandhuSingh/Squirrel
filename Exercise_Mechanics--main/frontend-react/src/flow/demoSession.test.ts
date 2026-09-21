@@ -30,6 +30,19 @@ function stubFetch(responses: Record<string, unknown>) {
   }))
 }
 
+/* Responds to each matching request from a queue, so one url can answer differently on the first
+   and second call — which is what recovering from a stale identity looks like on the wire. */
+function stubFetchSequence(script: { match: string; ok: boolean; status?: number; body: unknown }[]) {
+  const queue = [...script]
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+    calls.push({ url, body: init?.body ? JSON.parse(String(init.body)) : undefined })
+    const i = queue.findIndex((s) => url.includes(s.match))
+    if (i === -1) throw new Error(`unexpected request: ${url}`)
+    const [step] = queue.splice(i, 1)
+    return { ok: step.ok, status: step.status ?? 200, json: async () => step.body } as Response
+  }))
+}
+
 const CREATED_USER = { user_id: 'u_demo', first_name: 'Demo', last_name: 'User' }
 const CREATED_SESSION = {
   session_id: 's_1',
@@ -85,6 +98,32 @@ describe('push-up demo provisioning', () => {
     const { workout } = await startPushUpDemo()
     expect(workout.reps).toBe(3)
     expect(workout.sets).toBe(2)
+  })
+
+  it('recovers when the cached identity no longer exists on the server', async () => {
+    // Exactly what happens when a container with an empty data/users/ takes over the port a local
+    // backend was on: the browser still points at a profile that is not there any more.
+    localStorage.setItem('fitsync_user', JSON.stringify({ ...CREATED_USER, user_id: 'u_gone' }))
+    stubFetchSequence([
+      { match: '/users/u_gone/sessions', ok: false, status: 404, body: { detail: 'user not found' } },
+      { match: '/api/users', ok: true, body: CREATED_USER },
+      { match: '/sessions', ok: true, body: CREATED_SESSION },
+    ])
+
+    const { user, sessionId } = await startPushUpDemo()
+    expect(user).toEqual(CREATED_USER)
+    expect(sessionId).toBe('s_1')
+    // And the replacement is cached, so the next reload does not repeat the round trip.
+    expect(JSON.parse(localStorage.getItem('fitsync_user') ?? 'null')).toEqual(CREATED_USER)
+  })
+
+  it('does not mint users to paper over a server failure', async () => {
+    localStorage.setItem('fitsync_user', JSON.stringify(CREATED_USER))
+    stubFetchSequence([
+      { match: '/sessions', ok: false, status: 500, body: { detail: 'session store unavailable' } },
+    ])
+    await expect(startPushUpDemo()).rejects.toThrow('session store unavailable')
+    expect(calls.filter((c) => c.url.endsWith('/api/users'))).toHaveLength(0)
   })
 
   it('propagates a failure rather than starting a set with no session', async () => {
