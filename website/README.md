@@ -6,16 +6,19 @@ Static site, no build step. Open `index.html` in a browser, or serve the folder:
 cd website && python3 -m http.server 8080
 ```
 
-## Photos
+## Images
 
-The design's photos load from `assets/`. Until a file exists, a stylised fallback shows in its place.
+All images live in `assets/`. To change one, replace the file and keep its name.
 
 | File | Where it shows |
 | --- | --- |
-| `assets/hero-crew.jpg` | Big torn photo in the hero |
-| `assets/runners.jpg` | Polaroid in the hero |
-| `assets/meetup.jpg` | "Real places. Real meetups." photo |
-| `assets/rooftop-crew.jpg` | Footer banner background |
+| `hero.jpg` | Big torn photo in the hero |
+| `run.jpg` | Polaroid in the hero |
+| `places.jpg` | "Real places. Real meetups." photo |
+| `crew.jpg` | Footer banner background |
+| `phone.jpg` | Live-run app screen in "Game on, in real life" |
+| `avatar-1.jpg` … `avatar-5.jpg` | Avatar picker |
+| `logo.jpg` | Menu bar logo (`logo.svg` is the browser-tab icon) |
 
 ## Wiring up the waitlist
 
