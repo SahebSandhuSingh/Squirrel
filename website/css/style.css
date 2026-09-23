@@ -195,27 +195,41 @@ h1, h2, h3 { margin: 0; }
 .nav {
   position: sticky; top: 0; z-index: 50;
   display: flex; align-items: center; gap: 2rem;
-  padding: 14px var(--gutter);
-  background: rgba(8,8,8,.82);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(255,255,255,.04);
+  height: 76px; padding: 0 var(--gutter);
+  background: transparent;
+  border-bottom: 1px solid transparent;
+  transition: background .25s, border-color .25s, height .25s;
 }
-.brand { display: flex; align-items: center; gap: .6rem; text-decoration: none; }
-.brand span { font-family: var(--f-marker); font-size: 1.2rem; text-transform: uppercase; letter-spacing: .02em; }
-.nav-links { display: flex; gap: 2rem; margin-left: 3rem; }
+.nav.scrolled {
+  height: 64px;
+  background: rgba(8,8,8,.85);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-bottom-color: rgba(255,255,255,.06);
+}
+.brand { display: flex; align-items: center; gap: .55rem; text-decoration: none; flex: none; }
+.brand img { width: 44px; height: auto; transition: transform .25s; }
+.brand:hover img { transform: rotate(-8deg) scale(1.06); }
+.brand span {
+  font-family: var(--f-marker); font-size: 1.3rem; text-transform: uppercase;
+  letter-spacing: .01em; transform: rotate(-3deg); white-space: nowrap;
+}
+.nav-links { display: flex; align-items: center; gap: clamp(1.2rem, 2.4vw, 2.4rem); margin: 0 auto; }
 .nav-links a {
-  text-decoration: none; text-transform: uppercase; font-size: .85rem; font-weight: 500;
-  letter-spacing: .06em; color: #d8d8d8; padding: 6px 0; position: relative;
+  text-decoration: none; text-transform: uppercase;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: .78rem; font-weight: 600;
+  letter-spacing: .08em; color: #bdbdbd; padding: 8px 0; position: relative; transition: color .2s;
 }
+.nav-links a:hover { color: #fff; }
 .nav-links a::after {
-  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; border-radius: 2px;
   background: var(--lime); transform: scaleX(0); transform-origin: left; transition: transform .25s;
 }
 .nav-links a:hover::after, .nav-links a.active::after { transform: scaleX(1); }
 .nav-links a.active { color: #fff; }
-.nav-cta { margin-left: auto; }
-.nav-toggle { display: none; background: none; border: 0; padding: 8px; margin-left: .5rem; }
-.nav-toggle span { display: block; width: 24px; height: 2px; background: #fff; margin: 5px 0; transition: .25s; }
+.nav-menu-cta { display: none; }
+.nav-cta { flex: none; border-radius: 10px; }
+.nav-toggle { display: none; background: none; border: 0; padding: 8px; margin-right: -8px; }
+.nav-toggle span { display: block; width: 24px; height: 2px; background: #fff; margin: 5px 0; border-radius: 2px; transition: .25s; }
 
 /* ==========================================================
    HERO
@@ -539,14 +553,18 @@ h1, h2, h3 { margin: 0; }
 
 @media (max-width: 900px) {
   .nav { gap: 1rem; }
+  .nav-cta { margin-left: auto; }
   .nav-toggle { display: block; }
   .nav-links {
     position: absolute; top: 100%; left: 0; right: 0; margin: 0;
-    flex-direction: column; gap: 0; padding: 8px var(--gutter) 16px;
+    flex-direction: column; align-items: stretch; gap: 0; padding: 8px var(--gutter) 20px;
     background: rgba(8,8,8,.97); border-bottom: 1px solid var(--line);
     transform: translateY(-8px); opacity: 0; visibility: hidden; transition: .2s;
   }
-  .nav-links a { padding: 12px 0; font-size: 1rem; }
+  .nav-links a { padding: 14px 0; font-size: .95rem; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .nav-links a::after { display: none; }
+  .nav-links a.active { color: var(--lime); }
+  .nav.open { background: rgba(8,8,8,.97); }
   .nav.open .nav-links { transform: none; opacity: 1; visibility: visible; }
   .nav.open .nav-toggle span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
   .nav.open .nav-toggle span:nth-child(2) { opacity: 0; }
@@ -576,6 +594,8 @@ h1, h2, h3 { margin: 0; }
 
 @media (max-width: 560px) {
   .nav-cta { display: none; }
+  .nav-toggle { margin-left: auto; }
+  .nav-menu-cta { display: inline-flex; justify-content: center; margin-top: 16px; }
   .brand span { font-size: 1rem; }
   .hero-title { font-size: clamp(2.8rem, 15vw, 4rem); }
   .hero-photo { min-height: 300px; }

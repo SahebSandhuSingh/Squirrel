@@ -18,7 +18,7 @@ All images live in `assets/`. To change one, replace the file and keep its name.
 | `crew.jpg` | Footer banner background |
 | `phone.jpg` | Live-run app screen in "Game on, in real life" |
 | `avatar-1.jpg` … `avatar-5.jpg` | Avatar picker |
-| `logo.jpg` | Menu bar logo (`logo.svg` is the browser-tab icon) |
+| `logo.png` | Menu bar logo (transparent copy of `logo.jpg`; `logo.svg` is the browser-tab icon) |
 
 ## Wiring up the waitlist
 

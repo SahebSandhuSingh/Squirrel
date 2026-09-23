@@ -12,30 +12,62 @@
     const open = nav.classList.toggle("open");
     toggle.setAttribute("aria-expanded", String(open));
   });
-  $$(".nav-links a").forEach((a) =>
+  $$(".nav-links a, .nav-menu-cta").forEach((a) =>
     a.addEventListener("click", () => {
       nav.classList.remove("open");
       toggle.setAttribute("aria-expanded", "false");
     })
   );
 
-  /* Highlight the nav link for the section in view */
+  /* Solid header once scrolled; underline the link for the section in view */
   const sectionLinks = $$(".nav-links a");
   const sections = sectionLinks
     .map((a) => document.querySelector(a.getAttribute("href")))
     .filter(Boolean);
-  const spy = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((e) => {
-        if (!e.isIntersecting) return;
-        sectionLinks.forEach((a) =>
-          a.classList.toggle("active", a.getAttribute("href") === "#" + e.target.id)
-        );
-      });
-    },
-    { rootMargin: "-45% 0px -50% 0px" }
+  const setActive = (id) =>
+    sectionLinks.forEach((a) => {
+      const on = a.getAttribute("href") === "#" + id;
+      a.classList.toggle("active", on);
+      if (on) a.setAttribute("aria-current", "page");
+      else a.removeAttribute("aria-current");
+    });
+  // after a nav click, keep that link underlined until its scroll finishes
+  let lockedTo = null;
+  let lockTimer;
+  let lockedAt = 0;
+  const unlock = () => { lockedTo = null; clearTimeout(lockTimer); };
+  sectionLinks.forEach((a) =>
+    a.addEventListener("click", () => {
+      lockedTo = a.getAttribute("href").slice(1);
+      lockedAt = performance.now();
+      setActive(lockedTo);
+      clearTimeout(lockTimer);
+      lockTimer = setTimeout(unlock, 1500);
+    })
   );
-  sections.forEach((s) => spy.observe(s));
+  // Chrome can fire a stray scrollend as the smooth scroll starts, so ignore early ones
+  window.addEventListener("scrollend", () => {
+    if (lockedTo && performance.now() - lockedAt > 250) setTimeout(unlock, 50);
+  });
+
+  let ticking = false;
+  const onScroll = () => {
+    ticking = false;
+    nav.classList.toggle("scrolled", window.scrollY > 10);
+    if (lockedTo) return;
+    const line = window.innerHeight * 0.4;
+    const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
+    // the footer (Community) sits last on the page, so it wins once you hit the bottom
+    const current = atBottom
+      ? sections.reduce((a, b) => (a.offsetTop > b.offsetTop ? a : b))
+      : sections.filter((s) => s.getBoundingClientRect().top <= line)
+          .reduce((a, b) => (a && a.offsetTop > b.offsetTop ? a : b), null);
+    setActive(current ? current.id : "home");
+  };
+  onScroll();
+  window.addEventListener("scroll", () => {
+    if (!ticking) { ticking = true; requestAnimationFrame(onScroll); }
+  }, { passive: true });
 
   /* ---------------- Avatars ---------------- */
   const AVATARS = [

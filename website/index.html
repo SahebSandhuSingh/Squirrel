@@ -17,16 +17,17 @@
 
   <!-- ================= NAV ================= -->
   <header class="nav" id="top">
-    <a href="#top" class="brand" aria-label="Squirrel Social home">
-      <img src="assets/logo.jpg" alt="" width="40" height="40" />
+    <a href="#home" class="brand" aria-label="Squirrel Social home">
+      <img src="assets/logo.png" alt="" width="44" height="46" />
       <span>Squirrel Social</span>
     </a>
     <nav class="nav-links" id="navLinks" aria-label="Primary">
-      <a href="#top" class="active">Home</a>
+      <a href="#home" class="active" aria-current="page">Home</a>
       <a href="#how">How it works</a>
       <a href="#features">Features</a>
       <a href="#community">Community</a>
       <a href="#faq">FAQ</a>
+      <button class="btn btn-lime nav-menu-cta" data-open-modal>Join early access <span class="arrow">→</span></button>
     </nav>
     <button class="btn btn-lime btn-sm nav-cta" data-open-modal>Join early access <span class="arrow">→</span></button>
     <button class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false" aria-controls="navLinks">
@@ -36,7 +37,7 @@
 
   <main>
     <!-- ================= HERO ================= -->
-    <section class="hero">
+    <section class="hero" id="home">
       <div class="hero-left">
         <div class="hero-copy">
           <h1 class="hero-title">
@@ -72,7 +73,7 @@
         <h2 class="brush-title">More than a<br/><span class="t-lime">workout app.</span></h2>
         <p class="mono muted">Squirrel Social is a real-world fitness playground where movement turns into friendships, challenges, and community.</p>
 
-        <div class="pillars" id="features">
+        <div class="pillars">
           <article class="card pillar">
             <svg class="ico pink" viewBox="0 0 48 48"><circle cx="24" cy="14" r="6"/><circle cx="11" cy="18" r="4.5"/><circle cx="37" cy="18" r="4.5"/><path d="M13 38c0-7 5-12 11-12s11 5 11 12z"/><path d="M3 36c0-5 3-9 8-9M45 36c0-5-3-9-8-9"/></svg>
             <h3>Compete</h3>
@@ -151,7 +152,7 @@
     </section>
 
     <!-- ================= GAME ON ================= -->
-    <section class="band game" id="community">
+    <section class="band game" id="features">
       <div class="phone-wrap">
         <img class="phone" src="assets/phone.jpg" alt="Squirrel Social app: live run with friends on the map, time 28:16, 3.2 km, pace 8'48&quot;" width="480" height="1011" loading="lazy" />
       </div>
@@ -159,10 +160,10 @@
       <div class="game-copy">
         <h2 class="brush-title">Game on,<br/><span class="t-lime">in real life.</span></h2>
         <p class="mono muted">Challenges, territories, leaderboards and rewards — all designed to keep you moving and coming back for more.</p>
-        <a href="#features" class="btn btn-lime">Explore features <span class="arrow">→</span></a>
+        <a href="#feature-tiles" class="btn btn-lime">Explore features <span class="arrow">→</span></a>
       </div>
 
-      <div class="game-tiles">
+      <div class="game-tiles" id="feature-tiles">
         <article class="card tile">
           <svg class="ico pink" viewBox="0 0 48 48"><circle cx="24" cy="24" r="18"/><circle cx="24" cy="24" r="10"/><circle cx="24" cy="24" r="3" class="fill"/><path d="M24 24 L40 8M34 8h6v6"/></svg>
           <h3>Daily goals</h3><p>Build consistency one day at a time.</p>
@@ -223,7 +224,7 @@
   </main>
 
   <!-- ================= FOOTER BANNER ================= -->
-  <footer class="footer-banner">
+  <footer class="footer-banner" id="community">
     <div class="photo-fallback skyline" aria-hidden="true"></div>
     <div class="footer-inner">
       <div class="footer-left">
