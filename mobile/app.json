@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "Squirrel Social",
+    "slug": "squirrel-social",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "in.squirrelsocial.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0A0610",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "in.squirrelsocial.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "scheme": "squirrelsocial",
+    "backgroundColor": "#0A0610",
+    "plugins": [
+      "expo-router",
+      "expo-font"
+    ]
+  }
+}
