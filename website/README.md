@@ -27,15 +27,30 @@ The page tells the story in order: **hook → what it is → how it works → wh
 | Early access | `#join` | Email form on a founding-member pass |
 | FAQ | `#faq` | 10 questions |
 
+### The demo city (`js/city.js`)
+
+The site is city-agnostic. Every place name, map shape and location-based sample on the page comes from one dataset, `window.SquirrelCity` in `js/city.js` — a **fictional** "Demo City" (Riverside, West End, Old Town, North District, …). `js/main.js` never names a place itself; it reads:
+
+| Field | Used by |
+| --- | --- |
+| `map` (size, river, roads) | Territory map background |
+| `districts` (polygon, label, `territory.status` / control / XP) | Map zones and zone card; the `featured` district feeds the Track/Claim card, challenge cards and "Meet the game" |
+| `landmarks` | Map labels and meetup locations |
+| `routes`, `players` | Your run and the people on the map |
+| `members` | Home district on each crew profile card |
+| `meetups` | Crew meetup module |
+| `activities` | Hero ticker, "Right now" feed and map pings |
+| `crews` | Rival crew name on the zone card |
+
+Map geometry is in abstract map units (`map.width × map.height`), not latitude/longitude. To show another city, replace the object in `city.js` with one of the same shape; no HTML, CSS or UI code changes are needed. Place names in `index.html` are only fallbacks — elements with `data-city="…"` are filled from the dataset at runtime.
+
 ### Demo data
 
 Everything that looks like live product data is illustrative and labelled on the page ("Demo feed", "Demo activity", "Sample data", "Pre-launch preview figures"). Edit it in `js/main.js`:
 
-- `TICKS` — hero ticker
-- `FEED` — Right now feed
-- `BOARD` — leaderboard (name, XP, streak)
-- `ZONES` — territory card text
-- `AVATARS` — avatar identities, stats and perks
+- `js/city.js` → `activities`, `districts`, `meetups`, `members` — ticker, feed, map, territory card, meetup, profile locations
+- `js/main.js` → `BOARD` — leaderboard (name, XP, streak)
+- `js/main.js` → `AVATARS` — avatar identities, stats and perks
 - `LAUNCH` — launch date for the countdown (`new Date(2026, 9, 2)` = 2 Oct 2026, visitor's local time)
 
 Hero stats are in `index.html` (`.stats`). Social links in the footer are placeholders marked "soon" — swap in real URLs when the accounts exist.

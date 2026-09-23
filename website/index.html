@@ -92,7 +92,7 @@
             <p class="ticker-item" id="tickerItem">
               <i class="face" style="--fx:87;--fy:808" aria-hidden="true"></i>
               <span><b>Aarav</b> just completed a 5K</span>
-              <span class="chip chip-loc"><svg class="i"><use href="#i-pin"/></svg>Viman Nagar</span>
+              <span class="chip chip-loc"><svg class="i"><use href="#i-pin"/></svg><span data-city="featured.name">Riverside</span></span>
               <span class="chip chip-xp">+420 XP</span>
             </p>
           </div>
@@ -162,7 +162,7 @@
           <svg class="pillar-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-flag"/></svg>
           <h3 class="brush">Claim</h3>
           <p>Move through real places and compete for territory.</p>
-          <p class="pillar-ui"><span class="chip chip-loc"><svg class="i"><use href="#i-pin"/></svg>Viman Nagar</span><span class="chip chip-yellow">82% yours</span></p>
+          <p class="pillar-ui"><span class="chip chip-loc"><svg class="i"><use href="#i-pin"/></svg><span data-city="featured.name">Riverside</span></span><span class="chip chip-yellow"><span data-city="featured.control">82%</span>&nbsp;yours</span></p>
         </li>
       </ol>
     </section>
@@ -273,8 +273,8 @@
             </li>
             <li class="mc mc-terr">
               <span class="mc-type">Territory</span>
-              <b>Viman Nagar</b>
-              <span class="mc-score">82% control · 2,340 XP to claim</span>
+              <b data-city="featured.name">Riverside</b>
+              <span class="mc-score"><span data-city="featured.control">82%</span> control · <span data-city="featured.xpToClaim">2,340</span> XP to claim</span>
               <span class="chip chip-yellow">Contested</span>
             </li>
           </ul>
@@ -294,7 +294,7 @@
         <!-- Crew -->
         <article class="module m-crew" data-tilt>
           <header class="module-head"><svg class="i"><use href="#i-users"/></svg><h3>Crew meetups</h3></header>
-          <p class="meet-when"><b>Sunday long run</b><span><svg class="i"><use href="#i-clock"/></svg>7:00 AM</span><span><svg class="i"><use href="#i-pin"/></svg>Kalyani Nagar</span></p>
+          <p class="meet-when"><b data-city="meetup.title">Sunday long run</b><span><svg class="i"><use href="#i-clock"/></svg><span data-city="meetup.time">7:00 AM</span></span><span><svg class="i"><use href="#i-pin"/></svg><span data-city="meetup.place">Greenway Park</span></span></p>
           <p class="meet-going"><span class="faces" aria-hidden="true"><i class="face" style="--fx:87;--fy:808"></i><i class="face" style="--fx:180;--fy:808"></i><i class="face" style="--fx:365;--fy:808"></i></span><span id="goingCount">3</span> going</p>
           <button class="btn btn-outline rsvp" type="button" aria-pressed="false" id="rsvpBtn">I'm in <span class="arrow">→</span></button>
         </article>
@@ -347,12 +347,12 @@
         <!-- Territory -->
         <article class="battle b-terr" data-tilt>
           <p class="battle-type"><svg class="i"><use href="#i-flag"/></svg>Territory</p>
-          <p class="terr-name brush">Viman<br/>Nagar</p>
+          <p class="terr-name brush" data-city="featured.name">Riverside</p>
           <div class="terr-control">
-            <p><span>Your crew</span><b><span data-count="82" data-suffix="%">82%</span></b></p>
-            <span class="bar bar-yellow" aria-hidden="true"><i style="--fill:0.82"></i></span>
+            <p><span>Your crew</span><b><span data-count="82" data-suffix="%" data-city-count="featured.control">82%</span></b></p>
+            <span class="bar bar-yellow" aria-hidden="true"><i style="--fill:0.82" data-city-fill="featured.control"></i></span>
           </div>
-          <p class="battle-foot"><span class="mono-sm">2,340 XP to claim</span><span class="stamp stamp-yellow">Claim it</span></p>
+          <p class="battle-foot"><span class="mono-sm"><span data-city="featured.xpToClaim">2,340</span> XP to claim</span><span class="stamp stamp-yellow">Claim it</span></p>
         </article>
       </div>
     </section>
@@ -373,57 +373,23 @@
         </div>
 
         <div class="terr-map-wrap">
-          <div class="terr-map">
-            <svg class="map-svg" viewBox="0 0 800 600" aria-hidden="true">
+          <div class="terr-map" id="terrMap" role="group" aria-label="Demo city territory map">
+            <p class="map-city" id="mapCity">Demo city</p>
+            <svg class="map-svg" id="mapSvg" viewBox="0 0 800 600" aria-hidden="true">
               <defs>
                 <pattern id="mapGrid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#1d1d21" stroke-width="1"/></pattern>
                 <pattern id="contested" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="14" height="14" fill="rgba(255,210,31,.12)"/><rect width="6" height="14" fill="rgba(255,210,31,.3)"/></pattern>
               </defs>
-              <rect width="800" height="600" fill="#0b0b0d"/>
-              <rect width="800" height="600" fill="url(#mapGrid)"/>
-              <!-- river -->
-              <path class="river" d="M-10 250 C120 230 170 300 280 290 S430 200 520 230 S690 330 810 300"/>
-              <!-- roads -->
-              <g class="roads">
-                <path d="M0 120 L800 150"/><path d="M0 420 L800 380"/><path d="M160 0 L200 600"/>
-                <path d="M420 0 L380 600"/><path d="M640 0 L690 600"/><path d="M0 520 L300 300 L800 60"/>
-              </g>
-              <g class="roads minor">
-                <path d="M0 200 L800 210"/><path d="M0 330 L800 470"/><path d="M290 0 L300 600"/><path d="M540 0 L520 600"/><path d="M740 0 L760 600"/>
-              </g>
-              <!-- zones -->
-              <path class="zone z-neutral" d="M210 60 L380 70 L370 190 L220 180 Z"/>
-              <path class="zone z-neutral" d="M40 450 L200 430 L210 570 L50 580 Z"/>
-              <path class="zone z-rival" d="M30 110 L180 100 L190 230 L150 300 L40 290 Z"/>
-              <path class="zone z-yours" d="M420 250 L560 240 L600 330 L560 420 L430 410 L400 330 Z"/>
-              <path class="zone z-contested" d="M620 160 L770 150 L780 330 L700 360 L630 320 Z"/>
-              <!-- my route -->
-              <path class="route" d="M300 520 L330 450 L400 420 L440 360 L470 300 L540 280 L580 330 L560 400 L480 430"/>
+              <rect class="map-bg" width="100%" height="100%" fill="#0b0b0d"/>
+              <rect width="100%" height="100%" fill="url(#mapGrid)"/>
+              <!-- river, roads, districts and routes are drawn from js/city.js -->
             </svg>
-
-            <!-- labels are HTML so they stay readable at every size -->
-            <button class="zone-tag t-yours" type="button" data-zone="viman" style="left:61%;top:53%" aria-pressed="true"><b>Viman Nagar</b><span>Your crew · 82%</span></button>
-            <button class="zone-tag t-rival" type="button" data-zone="hinjewadi" style="left:13%;top:30%" aria-pressed="false"><b>Hinjewadi</b><span>Rival crew</span></button>
-            <button class="zone-tag t-contested" type="button" data-zone="kharadi" style="left:87%;top:42%" aria-pressed="false"><b>Kharadi</b><span>Contested</span></button>
-
-            <span aria-hidden="true" class="map-place" style="left:37%;top:21%">Baner</span>
-            <span aria-hidden="true" class="map-place" style="left:16%;top:84%">Aundh</span>
-            <span aria-hidden="true" class="map-place" style="left:48%;top:83%">Koregaon Park</span>
-            <span aria-hidden="true" class="map-place" style="left:84%;top:74%">Wagholi</span>
-            <span class="ping" style="left:47%;top:61%" aria-hidden="true"></span>
-            <span class="ping" style="left:68%;top:40%;--c:var(--lime);--d:.8s" aria-hidden="true"></span>
-            <span class="ping" style="left:9%;top:44%;--c:var(--pink);--d:.4s" aria-hidden="true"></span>
-            <span class="ping" style="left:92%;top:55%;--c:var(--yellow);--d:1.2s" aria-hidden="true"></span>
-            <span class="ping" style="left:30%;top:66%;--c:#888;--d:1.6s" aria-hidden="true"></span>
-            <span aria-hidden="true" class="player p1" style="left:55%;top:46%"><i class="face" style="--fx:87;--fy:808;--s:26"></i></span>
-            <span aria-hidden="true" class="player p2" style="left:84%;top:33%"><i class="face" style="--fx:180;--fy:808;--s:26"></i></span>
-            <span aria-hidden="true" class="player p3" style="left:17%;top:22%"><i class="face" style="--fx:273;--fy:808;--s:26"></i></span>
-            <span aria-hidden="true" class="player p4 me" style="left:60%;top:71%"><i class="face" style="--fx:365;--fy:808;--s:26"></i></span>
+            <div class="map-layer" id="mapLayer"><!-- zone buttons, labels, players and pings come from js/city.js --></div>
           </div>
 
           <div class="zone-card" id="zoneCard" aria-live="polite">
             <p class="zc-status" id="zcStatus">Your crew</p>
-            <p class="zc-name brush" id="zcName">Viman Nagar</p>
+            <p class="zc-name brush" id="zcName">Riverside</p>
             <div class="zc-bar"><span class="bar" aria-hidden="true"><i id="zcFill" style="--fill:.82"></i></span><b id="zcPct">82%</b></div>
             <p class="zc-meta" id="zcMeta">2,340 XP to claim · Defended by 14 movers</p>
           </div>
@@ -483,7 +449,7 @@
           <h3>Aarav</h3>
           <p class="pf-streak"><svg class="i"><use href="#i-flame"/></svg>12 day streak</p>
           <p class="pf-sport"><svg class="i"><use href="#i-run"/></svg>Running</p>
-          <p class="pf-lvl">Lvl 14 · Viman Nagar</p>
+          <p class="pf-lvl">Lvl 14 · <span data-city="member:Aarav">Riverside</span></p>
           <button class="follow" type="button" aria-pressed="false" aria-label="Follow Aarav">Follow</button>
         </li>
         <li class="profile" data-tilt style="--accent: var(--pink)">
@@ -491,7 +457,7 @@
           <h3>Meera</h3>
           <p class="pf-streak"><svg class="i"><use href="#i-flame"/></svg>8 day streak</p>
           <p class="pf-sport"><svg class="i"><use href="#i-yoga"/></svg>Yoga</p>
-          <p class="pf-lvl">Lvl 09 · Koregaon Park</p>
+          <p class="pf-lvl">Lvl 09 · <span data-city="member:Meera">North District</span></p>
           <button class="follow" type="button" aria-pressed="false" aria-label="Follow Meera">Follow</button>
         </li>
         <li class="profile" data-tilt style="--accent: var(--purple)">
@@ -499,7 +465,7 @@
           <h3>Rohan</h3>
           <p class="pf-streak"><svg class="i"><use href="#i-flame"/></svg>21 day streak</p>
           <p class="pf-sport"><svg class="i"><use href="#i-lift"/></svg>Strength</p>
-          <p class="pf-lvl">Lvl 17 · Kharadi</p>
+          <p class="pf-lvl">Lvl 17 · <span data-city="member:Rohan">Old Town</span></p>
           <button class="follow" type="button" aria-pressed="false" aria-label="Follow Rohan">Follow</button>
         </li>
         <li class="profile" data-tilt style="--accent: var(--yellow)">
@@ -507,7 +473,7 @@
           <h3>Diya</h3>
           <p class="pf-streak"><svg class="i"><use href="#i-flame"/></svg>5 day streak</p>
           <p class="pf-sport"><svg class="i"><use href="#i-bike"/></svg>Cycling</p>
-          <p class="pf-lvl">Lvl 06 · Baner</p>
+          <p class="pf-lvl">Lvl 06 · <span data-city="member:Diya">Lake District</span></p>
           <button class="follow" type="button" aria-pressed="false" aria-label="Follow Diya">Follow</button>
         </li>
         <li class="profile profile-you">
@@ -523,7 +489,7 @@
         <ul class="wall">
           <li><i class="face" style="--fx:87;--fy:808" aria-hidden="true"></i><p><b>Aarav</b> completed a 5K</p><span class="chip chip-xp">+420 XP</span></li>
           <li><i class="face" style="--fx:180;--fy:808" aria-hidden="true"></i><p><b>Meera</b> joined a head-to-head</p><span class="chip chip-pink">vs Rohan</span></li>
-          <li><i class="face" style="--fx:273;--fy:808" aria-hidden="true"></i><p><b>Rohan</b> claimed Viman Nagar</p><span class="chip chip-yellow"><svg class="i"><use href="#i-trophy"/></svg>Territory</span></li>
+          <li><i class="face" style="--fx:273;--fy:808" aria-hidden="true"></i><p><b>Rohan</b> defended <span data-city="featured.name">Riverside</span></p><span class="chip chip-yellow"><svg class="i"><use href="#i-trophy"/></svg>Territory</span></li>
         </ul>
       </div>
     </section>
@@ -764,6 +730,7 @@
     <div class="video-slot"><p class="scribble">Video coming soon.</p></div>
   </dialog>
 
+  <script src="js/city.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>

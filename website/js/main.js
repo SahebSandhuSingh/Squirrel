@@ -178,6 +178,49 @@
   );
   renderBoard("week");
 
+  /* ---------------- City data (js/city.js) ----------------
+     Every place name and map shape comes from window.SquirrelCity, so the page
+     can show any city by swapping that one dataset. */
+  const CITY = window.SquirrelCity || null;
+  const districtById = (id) => (CITY && CITY.districts.find((d) => d.id === id)) || null;
+  const landmarkById = (id) => (CITY && CITY.landmarks.find((l) => l.id === id)) || null;
+  const featured = CITY && (CITY.districts.find((d) => d.featured) || CITY.districts.find((d) => d.territory.status === "yours"));
+  const meetup = CITY && CITY.meetups[0];
+  const pct = (v) => `${Math.round(v * 100)}%`;
+  // where an activity/meetup happened: a landmark beats a district
+  const placeOf = (item) =>
+    (item.landmark && landmarkById(item.landmark)?.name) || (item.district && districtById(item.district)?.name) || null;
+
+  const CITY_VALUES = CITY && {
+    "city.name": () => CITY.name,
+    "featured.name": () => featured?.name,
+    "featured.control": () => featured && pct(featured.territory.control),
+    "featured.xpToClaim": () => featured && fmt.format(featured.territory.xpToClaim),
+    "meetup.title": () => meetup?.title,
+    "meetup.time": () => meetup?.time,
+    "meetup.place": () => meetup && placeOf(meetup),
+  };
+  const cityValue = (key) =>
+    key.startsWith("member:") ? districtById(CITY.members[key.slice(7)])?.name : CITY_VALUES[key]?.();
+
+  if (CITY) {
+    $$("[data-city]").forEach((el) => {
+      const v = cityValue(el.dataset.city);
+      if (v != null) el.textContent = v;
+    });
+    if (featured) {
+      $$("[data-city-count='featured.control']").forEach((el) => { el.dataset.count = Math.round(featured.territory.control * 100); });
+      $$("[data-city-fill='featured.control']").forEach((el) => el.style.setProperty("--fill", featured.territory.control));
+    }
+    if (meetup) {
+      $("#goingCount").textContent = meetup.going.length;
+      $(".meet-going .faces").innerHTML = meetup.going
+        .filter((n) => FACES[n])
+        .map((n) => `<i class="face" style="${faceStyle(FACES[n])}"></i>`)
+        .join("");
+    }
+  }
+
   /* ---------------- Stat counters ---------------- */
   const countUp = (el) => {
     const target = Number(el.dataset.count);
@@ -254,28 +297,24 @@
   videoModal.addEventListener("click", (e) => { if (e.target === videoModal) videoModal.close(); });
 
   /* ---------------- Hero: demo activity ticker ---------------- */
-  const TICKS = [
-    ["Aarav", "just completed a 5K", "Viman Nagar", "+420 XP"],
-    ["Meera", "started a head-to-head", "Koregaon Park", "vs Rohan"],
-    ["Rohan", "claimed a block", "Kharadi", "+900 XP"],
-    ["Diya", "hit a 7 day streak", "Baner", "+150 XP"],
-    ["Kabir", "joined a Sunday crew run", "Kalyani Nagar", "+80 XP"],
-  ];
   const PIN = '<svg class="i" aria-hidden="true"><use href="#i-pin"/></svg>';
+  const TONE = { xp: "chip-xp", pink: "chip-pink", yellow: "chip-yellow", orange: "chip-orange", purple: "chip-purple" };
   const tickerItem = $("#tickerItem");
-  if (tickerItem && !reduceMotion) {
+  const TICKS = CITY ? CITY.activities.filter((act) => FACES[act.person]) : [];
+  if (tickerItem && TICKS.length > 1 && !reduceMotion) {
     let t = 0;
     setInterval(() => {
       if (document.hidden) return;
       t = (t + 1) % TICKS.length;
-      const [name, what, where, xp] = TICKS[t];
+      const act = TICKS[t];
+      const where = placeOf(act);
       tickerItem.classList.remove("in");
       tickerItem.classList.add("out");
       setTimeout(() => {
-        tickerItem.innerHTML = `<i class="face" style="${faceStyle(FACES[name])}" aria-hidden="true"></i>
-          <span><b>${name}</b> ${what}</span>
-          <span class="chip chip-loc">${PIN}${where}</span>
-          <span class="chip ${xp.startsWith("+") ? "chip-xp" : "chip-pink"}">${xp}</span>`;
+        tickerItem.innerHTML = `<i class="face" style="${faceStyle(FACES[act.person])}" aria-hidden="true"></i>
+          <span><b>${act.person}</b> ${act.action.toLowerCase()}</span>
+          ${where ? `<span class="chip chip-loc">${PIN}${where}</span>` : ""}
+          <span class="chip ${TONE[act.reward.tone] || "chip-xp"}">${act.reward.label}</span>`;
         tickerItem.classList.remove("out");
         tickerItem.classList.add("in");
       }, 300);
@@ -350,25 +389,100 @@
     }, { threshold: 0.4 }).observe($(".b-h2h"));
   }
 
-  /* ---------------- Territory map ---------------- */
-  const ZONES = {
-    viman: { status: "Your crew", name: "Viman Nagar", pct: 0.82, meta: "2,340 XP to claim · Defended by 14 movers", c: "var(--lime)" },
-    hinjewadi: { status: "Rival crew", name: "Hinjewadi", pct: 0.67, meta: "Held by Hinjewadi Hustlers · 4,100 XP to flip", c: "var(--pink)" },
-    kharadi: { status: "Contested", name: "Kharadi", pct: 0.48, meta: "Neck and neck · 3 crews fighting for it", c: "var(--yellow)" },
+  /* ---------------- Territory map (drawn from the city dataset) ---------------- */
+  const STATUS = {
+    yours: { label: "Your crew", color: "var(--lime)" },
+    rival: { label: "Rival crew", color: "var(--pink)" },
+    contested: { label: "Contested", color: "var(--yellow)" },
+    neutral: { label: "Open", color: "#777" },
+  };
+  const zoneMeta = (d) => {
+    const t = d.territory;
+    if (t.status === "yours") return `${fmt.format(t.xpToClaim)} XP to claim · Defended by ${t.defenders} movers`;
+    if (t.status === "rival") return `Held by ${CITY.crews[t.owner]?.name || "a rival crew"} · ${fmt.format(t.xpToFlip)} XP to flip`;
+    if (t.status === "contested") return `Neck and neck · ${t.crews} crews fighting for it`;
+    return "Nobody owns it yet";
   };
   const zoneCard = $("#zoneCard");
-  $$(".zone-tag").forEach((tag) =>
-    tag.addEventListener("click", () => {
-      const z = ZONES[tag.dataset.zone];
-      $$(".zone-tag").forEach((t) => t.setAttribute("aria-pressed", String(t === tag)));
-      zoneCard.style.setProperty("--c", z.c);
-      $("#zcStatus").textContent = z.status;
-      $("#zcName").textContent = z.name;
-      $("#zcPct").textContent = `${Math.round(z.pct * 100)}%`;
-      $("#zcFill").style.setProperty("--fill", z.pct);
-      $("#zcMeta").textContent = z.meta;
-    })
-  );
+  const showZone = (d) => {
+    const st = STATUS[d.territory.status];
+    $$(".zone-tag").forEach((t) => t.setAttribute("aria-pressed", String(t.dataset.zone === d.id)));
+    zoneCard.style.setProperty("--c", st.color);
+    $("#zcStatus").textContent = st.label;
+    $("#zcName").textContent = d.name;
+    $("#zcPct").textContent = pct(d.territory.control || 0);
+    $("#zcFill").style.setProperty("--fill", d.territory.control || 0);
+    $("#zcMeta").textContent = zoneMeta(d);
+  };
+
+  function renderMap(city) {
+    const svg = $("#mapSvg");
+    const layer = $("#mapLayer");
+    const { width: W, height: H } = city.map;
+    const NS = "http://www.w3.org/2000/svg";
+    const at = ([x, y]) => `left:${((x / W) * 100).toFixed(2)}%;top:${((y / H) * 100).toFixed(2)}%`;
+    const line = (pts) => "M" + pts.map((p) => p.join(" ")).join(" L");
+    const add = (tag, attrs, parent = svg) => {
+      const el = document.createElementNS(NS, tag);
+      Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
+      parent.appendChild(el);
+      return el;
+    };
+
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    $("#terrMap").style.aspectRatio = `${W} / ${H}`;
+    $("#terrMap").setAttribute("aria-label", `${city.name} territory map${city.isDemo ? " (demo)" : ""}`);
+    $("#mapCity").textContent = city.isDemo ? `${city.name} · demo map` : city.name;
+
+    // smooth curve through the river points (quadratic segments via midpoints)
+    const smooth = (pts) => {
+      let d = `M${pts[0].join(" ")}`;
+      for (let i = 1; i < pts.length - 1; i++) {
+        const [x, y] = pts[i];
+        const [nx, ny] = pts[i + 1];
+        d += ` Q${x} ${y} ${(x + nx) / 2} ${(y + ny) / 2}`;
+      }
+      return `${d} L${pts[pts.length - 1].join(" ")}`;
+    };
+    add("path", { class: "river", d: smooth(city.map.river) });
+    const major = add("g", { class: "roads" });
+    const minor = add("g", { class: "roads minor" });
+    city.map.roads.major.forEach((r) => add("path", { d: line(r) }, major));
+    city.map.roads.minor.forEach((r) => add("path", { d: line(r) }, minor));
+    city.districts.filter((d) => d.polygon).forEach((d) =>
+      add("polygon", { class: `zone z-${d.territory.status}`, points: d.polygon.map((p) => p.join(",")).join(" ") })
+    );
+    city.routes.forEach((r) => add("path", { class: "route", d: line(r.points) }));
+
+    const html = [];
+    city.districts.forEach((d) => {
+      const st = d.territory.status;
+      if (st === "neutral") {
+        html.push(`<span class="map-place" style="${at(d.label)}" aria-hidden="true">${d.name}</span>`);
+        return;
+      }
+      const sub = st === "yours" ? `${STATUS.yours.label} · ${pct(d.territory.control)}` : STATUS[st].label;
+      html.push(`<button class="zone-tag t-${st}" type="button" data-zone="${d.id}" style="${at(d.label)}" aria-pressed="false"><b>${d.name}</b><span>${sub}</span></button>`);
+    });
+    city.landmarks.forEach((l) =>
+      html.push(`<span class="map-place landmark" style="${at(l.at)}" aria-hidden="true">${l.name}</span>`)
+    );
+    city.activities.filter((act) => act.at).forEach((act, i) => {
+      const st = districtById(act.district)?.territory.status || "neutral";
+      html.push(`<span class="ping" style="${at(act.at)};--c:${STATUS[st].color};--d:${(i * 0.4).toFixed(1)}s" aria-hidden="true"></span>`);
+    });
+    city.players.forEach((pl) => {
+      const who = pl.you
+        ? `<img class="you-img" src="assets/avatar-1.jpg" alt="" width="26" height="26" />`
+        : FACES[pl.person] ? `<i class="face" style="${faceStyle(FACES[pl.person], 26)}"></i>` : "";
+      html.push(`<span class="player${pl.you ? " me" : ""}" style="${at(pl.at)}" aria-hidden="true">${who}</span>`);
+    });
+    layer.innerHTML = html.join("");
+
+    $$(".zone-tag", layer).forEach((tag) => tag.addEventListener("click", () => showZone(districtById(tag.dataset.zone))));
+    if (featured) showZone(featured);
+  }
+  if (CITY) renderMap(CITY);
 
   /* ---------------- Small toggles: RSVP + follow ---------------- */
   const rsvp = $("#rsvpBtn");
@@ -377,7 +491,8 @@
     const on = rsvp.getAttribute("aria-pressed") !== "true";
     rsvp.setAttribute("aria-pressed", String(on));
     rsvp.innerHTML = on ? "You're going ✓" : 'I\'m in <span class="arrow">→</span>';
-    going.textContent = on ? "4" : "3";
+    const base = meetup ? meetup.going.length : 3;
+    going.textContent = on ? base + 1 : base;
   });
   $$(".follow").forEach((btn) =>
     btn.addEventListener("click", () => {
@@ -388,16 +503,13 @@
   );
 
   /* ---------------- Right now: demo feed ---------------- */
-  const FEED = [
-    { name: "Aarav", what: "Completed 5K", where: "Viman Nagar", chip: ["+420 XP", "chip-xp"], c: "var(--lime)" },
-    { name: "Meera", what: "Started a head-to-head", where: null, chip: ["vs Rohan", "chip-pink"], c: "var(--pink)" },
-    { name: "Diya", what: "Finished today's challenge", where: "Baner", chip: ["7 day streak", "chip-orange"], c: "var(--orange)" },
-    { name: "Rohan", what: "Claimed a block", where: "Kharadi", chip: ["Territory", "chip-yellow"], c: "var(--yellow)" },
-    { name: "Kabir", what: "Joined Sunday long run", where: "Kalyani Nagar", chip: ["Crew", "chip-purple"], c: "var(--purple)" },
-    { name: "Meera", what: "Levelled up", where: null, chip: ["Level 10", "chip-xp"], c: "var(--lime)" },
-    { name: "Aarav", what: "Beat Kabir by 312 steps", where: null, chip: ["+500 XP", "chip-xp"], c: "var(--pink)" },
-    { name: "Diya", what: "Defended the park", where: "Aundh", chip: ["Territory", "chip-yellow"], c: "var(--yellow)" },
-  ];
+  const TONE_COLOR = { xp: "var(--lime)", pink: "var(--pink)", yellow: "var(--yellow)", orange: "var(--orange)", purple: "var(--purple)" };
+  const FEED = CITY
+    ? CITY.activities.filter((act) => FACES[act.person]).map((act) => ({
+        name: act.person, what: act.action, where: placeOf(act),
+        chip: [act.reward.label, TONE[act.reward.tone] || "chip-xp"], c: TONE_COLOR[act.reward.tone] || "var(--lime)",
+      }))
+    : [];
   const feed = $("#feed");
   const feedRow = (f, ago) => {
     const li = document.createElement("li");
@@ -409,7 +521,7 @@
     return li;
   };
   FEED.slice(0, 4).forEach((f, i) => feed.appendChild(feedRow(f, i === 0 ? "just now" : `${i * 2}m ago`)));
-  if (!reduceMotion && "IntersectionObserver" in window) {
+  if (FEED.length > 4 && !reduceMotion && "IntersectionObserver" in window) {
     let next = 4;
     let feedTimer = null;
     new IntersectionObserver(([e]) => {
