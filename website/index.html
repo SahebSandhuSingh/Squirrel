@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Squirrel Social — Fitness Hits Different Together</title>
   <meta name="description" content="Squirrel Social is a real-world fitness community where movement turns into friendships, challenges and unforgettable experiences." />
-  <meta name="theme-color" content="#0a0a0a" />
+  <meta name="theme-color" content="#060606" />
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -27,9 +27,9 @@
       <a href="#features">Features</a>
       <a href="#community">Community</a>
       <a href="#faq">FAQ</a>
-      <button class="btn btn-lime nav-menu-cta" data-open-modal>Join early access <span class="arrow">→</span></button>
+      <a href="#join" class="btn btn-lime nav-menu-cta" data-join>Join early access <span class="arrow">→</span></a>
     </nav>
-    <button class="btn btn-lime btn-sm nav-cta" data-open-modal>Join early access <span class="arrow">→</span></button>
+    <a href="#join" class="btn btn-lime btn-sm nav-cta" data-join>Join early access <span class="arrow">→</span></a>
     <button class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false" aria-controls="navLinks">
       <span></span><span></span><span></span>
     </button>
@@ -38,170 +38,145 @@
   <main>
     <!-- ================= HERO ================= -->
     <section class="hero" id="home">
-      <div class="hero-left">
-        <div class="hero-copy">
-          <h1 class="hero-title">
-            <span class="t-white">Fitness</span>
-            <span class="t-lime">Hits Different</span>
-            <span class="t-pink">Together</span>
-          </h1>
-          <p class="mono lead">A real-world fitness community where movement turns into friendships, challenges and unforgettable experiences.</p>
-          <div class="hero-actions">
-            <button class="btn btn-lime" data-open-modal>Join early access <span class="arrow">→</span></button>
-            <button class="btn btn-ghost" id="watchVideo">Watch video <span class="play" aria-hidden="true">▶</span></button>
-            <svg class="doodle-globe" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="16"/><ellipse cx="20" cy="20" rx="7" ry="16"/><path d="M4 20h32M7 12h26M7 28h26"/></svg>
-          </div>
-        </div>
+      <div class="hero-photo" aria-hidden="true"></div>
 
-        <div class="hero-photo torn">
-          <div class="photo-fallback hero-fallback" aria-hidden="true">
-            <img src="assets/logo.svg" alt="" class="fallback-logo" />
-          </div>
-          <span class="scribble s-move">Move.<br/>Play.<br/>Connect.</span>
-          <svg class="doodle-crown c1" viewBox="0 0 40 30" aria-hidden="true"><path d="M3 26 L6 6 L14 16 L20 3 L26 16 L34 6 L37 26 Z"/></svg>
-          <span class="graffiti">Move<br/>Play<br/>Connect.</span>
-          <div class="polaroid"><div class="photo-fallback sunset"></div></div>
+      <div class="hero-copy">
+        <h1 class="hero-title">
+          <span class="l1">Fitness</span>
+          <span class="l2">Hits different</span>
+          <span class="l3">Together</span>
+          <svg class="crown hero-crown" viewBox="0 0 40 30" aria-hidden="true"><path d="M3 26 L6 6 L14 16 L20 3 L26 16 L34 6 L37 26 Z"/></svg>
+        </h1>
+        <p class="lead">A real-world fitness community where movement turns into friendships, challenges and unforgettable experiences.</p>
+        <div class="hero-actions">
+          <a href="#join" class="btn btn-lime" data-join>Join early access <span class="arrow">→</span></a>
+          <button class="btn btn-ghost" id="watchVideo">Watch video <span class="play" aria-hidden="true">▶</span></button>
         </div>
-
-        <span class="scribble s-same">Same parks.<br/>Different<br/>people.</span>
-        <svg class="doodle-arrow" viewBox="0 0 120 40" aria-hidden="true"><path d="M4 34 C40 30 70 22 110 8"/><path d="M96 6 L112 7 L104 20"/></svg>
+        <dl class="stats">
+          <div class="stat lime"><dt>Early registrations</dt><dd data-count="2" data-suffix="K+">2K+</dd></div>
+          <div class="stat pink"><dt>Cities</dt><dd data-count="50" data-suffix="+">50+</dd></div>
+          <div class="stat pink"><dt>Challenges created</dt><dd data-count="100" data-suffix="+">100+</dd></div>
+          <div class="stat lime"><dt>People on waitlist</dt><dd data-count="5" data-suffix="K+">5K+</dd></div>
+        </dl>
       </div>
 
-      <div class="hero-right">
-        <span class="scribble s-good">Good<br/>people<br/>move different</span>
-        <svg class="doodle-smile" viewBox="0 0 50 50" aria-hidden="true"><circle cx="25" cy="25" r="21"/><circle cx="18" cy="20" r="2" class="fill"/><circle cx="32" cy="20" r="2" class="fill"/><path d="M15 29 C19 36 31 36 35 29"/></svg>
-        <h2 class="brush-title">More than a<br/><span class="t-lime">workout app.</span></h2>
-        <p class="mono muted">Squirrel Social is a real-world fitness playground where movement turns into friendships, challenges, and community.</p>
+      <p class="brush mpc" aria-hidden="true">Move<br/>Play<br/>Connect
+        <svg class="crown" viewBox="0 0 40 30"><path d="M3 26 L6 6 L14 16 L20 3 L26 16 L34 6 L37 26 Z"/></svg>
+      </p>
 
-        <div class="pillars">
-          <article class="card pillar">
-            <svg class="ico pink" viewBox="0 0 48 48"><circle cx="24" cy="14" r="6"/><circle cx="11" cy="18" r="4.5"/><circle cx="37" cy="18" r="4.5"/><path d="M13 38c0-7 5-12 11-12s11 5 11 12z"/><path d="M3 36c0-5 3-9 8-9M45 36c0-5-3-9-8-9"/></svg>
-            <h3>Compete</h3>
-            <p>Take on challenges with friends or the global community.</p>
-          </article>
-          <article class="card pillar">
-            <svg class="ico lime" viewBox="0 0 48 48"><path d="M24 44s-13-13-13-24a13 13 0 0 1 26 0c0 11-13 24-13 24z"/><circle cx="24" cy="20" r="5"/></svg>
-            <h3>Explore</h3>
-            <p>Discover local workouts, events and groups.</p>
-          </article>
-          <article class="card pillar">
-            <svg class="ico purple" viewBox="0 0 48 48"><rect x="6" y="30" width="7" height="12" rx="2"/><rect x="17" y="22" width="7" height="20" rx="2"/><rect x="28" y="14" width="7" height="28" rx="2"/><rect x="39" y="6" width="5" height="36" rx="2"/></svg>
-            <h3>Build habits</h3>
-            <p>Turn consistency into rewards and new levels.</p>
-          </article>
-          <article class="card pillar">
-            <svg class="ico orange" viewBox="0 0 48 48"><circle cx="17" cy="15" r="7"/><circle cx="33" cy="15" r="7"/><path d="M4 42c0-8 6-14 13-14s13 6 13 14zM30 28c1 0 2-0 3 0 7 0 12 6 12 14h-13"/></svg>
-            <h3>Belong</h3>
-            <p>Find your people and grow together.</p>
-          </article>
-        </div>
-
-        <div class="stats">
-          <div class="stat"><strong data-count="2" data-suffix="K+">2K+</strong><span>Early registrations</span></div>
-          <div class="stat"><strong data-count="50" data-suffix="+">50+</strong><span>Cities</span></div>
-          <div class="stat"><strong data-count="100" data-suffix="+">100+</strong><span>Challenges created</span></div>
-          <div class="stat"><strong data-count="5" data-suffix="K+">5K+</strong><span>People on waitlist</span></div>
-          <span class="scribble s-real">Real<br/>people.<br/>Real<br/><u>movement.</u></span>
-        </div>
-      </div>
-    </section>
-
-    <!-- ================= HOW IT WORKS + AVATARS ================= -->
-    <section class="band how-band" id="how">
-      <div class="how">
-        <h2 class="section-title">How it <span class="t-pink brush">works</span>
-          <svg class="doodle-zig" viewBox="0 0 50 20" aria-hidden="true"><path d="M2 16 L18 6 L22 14 L40 4"/><path d="M34 3 L41 4 L38 10"/></svg>
-        </h2>
-        <ol class="steps">
-          <li class="card step">
-            <div class="step-head"><span class="num pink">01</span>
-              <svg class="ico pink" viewBox="0 0 48 48"><circle cx="24" cy="15" r="8"/><path d="M8 42c0-9 7-15 16-15s16 6 16 15z"/></svg></div>
-            <h3>Create<br/>your profile</h3>
-            <p>Set your fitness goals and style up your avatar.</p>
-          </li>
-          <li class="card step">
-            <div class="step-head"><span class="num purple">02</span>
-              <svg class="ico purple" viewBox="0 0 48 48"><path d="M28 3 L10 27 H23 L19 45 L38 19 H25 Z"/></svg></div>
-            <h3>Join<br/>challenges</h3>
-            <p>Daily goals, head-to-head battles or territory challenges.</p>
-          </li>
-          <li class="card step">
-            <div class="step-head"><span class="num lime">03</span>
-              <svg class="ico lime" viewBox="0 0 48 48"><rect x="4" y="18" width="5" height="12" rx="1.5"/><rect x="10" y="13" width="6" height="22" rx="1.5"/><rect x="32" y="13" width="6" height="22" rx="1.5"/><rect x="39" y="18" width="5" height="12" rx="1.5"/><path d="M16 24h16" stroke-width="4"/></svg></div>
-            <h3>Move<br/>in real life</h3>
-            <p>Run, walk, lift, play — any movement counts.</p>
-          </li>
-          <li class="card step">
-            <div class="step-head"><span class="num yellow">04</span>
-              <svg class="ico yellow" viewBox="0 0 48 48"><path d="M5 38 L8 12 L18 24 L24 8 L30 24 L40 12 L43 38 Z"/><path d="M8 43h32"/></svg></div>
-            <h3>Earn &amp;<br/>level up</h3>
-            <p>Unlock rewards, claim territories and grow your fitness circle.</p>
-          </li>
-        </ol>
-      </div>
-
-      <div class="avatars">
-        <h2 class="brush-title sm">Your avatar.<br/><span class="t-pink">Your vibe.</span></h2>
-        <span class="scribble s-vibes">Different<br/>vibes.<br/><u>Same goal.</u></span>
-        <div class="carousel">
-          <button class="car-btn prev" aria-label="Previous avatar">‹</button>
-          <div class="avatar-track" id="avatarTrack" role="listbox" aria-label="Choose your avatar"></div>
-          <button class="car-btn next" aria-label="Next avatar">›</button>
-        </div>
-      </div>
-    </section>
-
-    <!-- ================= GAME ON ================= -->
-    <section class="band game" id="features">
       <div class="phone-wrap">
-        <img class="phone" src="assets/phone.jpg" alt="Squirrel Social app: live run with friends on the map, time 28:16, 3.2 km, pace 8'48&quot;" width="480" height="1011" loading="lazy" />
+        <img class="phone" src="assets/phone.jpg" alt="Squirrel Social app: a live run with friends on the map — 28:16, 3.2 km, 8'48&quot; pace" width="480" height="1011" />
       </div>
 
-      <div class="game-copy">
-        <h2 class="brush-title">Game on,<br/><span class="t-lime">in real life.</span></h2>
-        <p class="mono muted">Challenges, territories, leaderboards and rewards — all designed to keep you moving and coming back for more.</p>
-        <a href="#feature-tiles" class="btn btn-lime">Explore features <span class="arrow">→</span></a>
-      </div>
+      <p class="scribble note-same" aria-hidden="true">Same<br/>parks.<br/>Different<br/>people.</p>
+      <svg class="doodle spark" viewBox="0 0 40 40" aria-hidden="true"><path d="M8 34 L14 8 M20 34 L22 4 M30 34 L36 12"/></svg>
+      <p class="scribble note-real" aria-hidden="true">Real<br/>people.<br/>Real<br/>movement.</p>
+      <svg class="doodle curl-arrow" viewBox="0 0 60 90" aria-hidden="true"><path d="M44 86 C10 70 6 34 30 10"/><path d="M18 14 L31 8 L34 22"/></svg>
 
-      <div class="game-tiles" id="feature-tiles">
-        <article class="card tile">
-          <svg class="ico pink" viewBox="0 0 48 48"><circle cx="24" cy="24" r="18"/><circle cx="24" cy="24" r="10"/><circle cx="24" cy="24" r="3" class="fill"/><path d="M24 24 L40 8M34 8h6v6"/></svg>
-          <h3>Daily goals</h3><p>Build consistency one day at a time.</p>
-        </article>
-        <article class="card tile">
-          <svg class="ico pink" viewBox="0 0 48 48"><path d="M6 6 L30 30M42 6 L18 30M26 34 L34 26M14 26 L22 34M8 40 L14 34M40 40 L34 34"/></svg>
-          <h3>Head-to-head</h3><p>Go 1v1 with friends or the community.</p>
-        </article>
-        <article class="card tile">
-          <svg class="ico lime" viewBox="0 0 48 48"><path d="M4 10 L16 6 L32 12 L44 8 V38 L32 42 L16 36 L4 40 Z M16 6 V36 M32 12 V42"/></svg>
-          <h3>Territories</h3><p>Claim your park, college or city.</p>
-        </article>
-        <article class="card tile">
-          <svg class="ico lime" viewBox="0 0 48 48"><path d="M24 4 L30 17 L44 18 L33 28 L37 42 L24 34 L11 42 L15 28 L4 18 L18 17 Z"/></svg>
-          <h3>Rewards</h3><p>Earn badges, unlock gear and flex your progress.</p>
-        </article>
-      </div>
+      <span class="tape tape-l1" aria-hidden="true"></span>
+      <span class="tape tape-r1" aria-hidden="true"></span>
+      <div class="torn-edge" aria-hidden="true"></div>
+    </section>
 
+    <!-- ================= HOW IT WORKS ================= -->
+    <section class="section how" id="how">
+      <h2 class="brush section-title">How it <span class="pink">works</span>
+        <svg class="doodle zig" viewBox="0 0 120 30" aria-hidden="true"><path d="M4 24 L40 10 L46 20 L84 6 L90 16 L116 8"/></svg>
+      </h2>
+      <ol class="steps">
+        <li class="card step">
+          <span class="num pink">01</span>
+          <svg class="ico pink" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="15" r="8"/><path d="M8 42c0-9 7-15 16-15s16 6 16 15z"/></svg>
+          <div><h3>Create<br/>your profile</h3><p>Set your fitness goals and style up your avatar.</p></div>
+        </li>
+        <li class="card step">
+          <span class="num purple">02</span>
+          <svg class="ico purple" viewBox="0 0 48 48" aria-hidden="true"><path d="M28 3 L10 27 H23 L19 45 L38 19 H25 Z"/></svg>
+          <div><h3>Join<br/>challenges</h3><p>Daily goals, head-to-head battles or territory challenges.</p></div>
+        </li>
+        <li class="card step">
+          <span class="num lime">03</span>
+          <svg class="ico lime" viewBox="0 0 48 48" aria-hidden="true"><rect x="4" y="18" width="5" height="12" rx="1.5"/><rect x="10" y="13" width="6" height="22" rx="1.5"/><rect x="32" y="13" width="6" height="22" rx="1.5"/><rect x="39" y="18" width="5" height="12" rx="1.5"/><path d="M16 24h16" stroke-width="4"/></svg>
+          <div><h3>Move<br/>in real life</h3><p>Run, walk, lift, play — any movement counts.</p></div>
+        </li>
+        <li class="card step">
+          <span class="num yellow">04</span>
+          <svg class="ico yellow" viewBox="0 0 48 48" aria-hidden="true"><path d="M5 38 L8 12 L18 24 L24 8 L30 24 L40 12 L43 38 Z"/><path d="M8 43h32"/></svg>
+          <div><h3>Earn &amp;<br/>level up</h3><p>Unlock rewards, claim territories and grow your fitness circle.</p></div>
+        </li>
+      </ol>
+    </section>
+
+    <!-- ================= AVATARS ================= -->
+    <section class="section avatars" id="features">
+      <h2 class="brush avatars-title">Your avatar. <span class="pink">Your vibe.</span></h2>
+      <div class="avatar-row">
+        <div class="avatar-grid" id="avatarGrid" role="listbox" aria-label="Choose your avatar"></div>
+        <div class="vibes">
+          <p class="scribble">Different<br/>vibes.<br/>Same goal.</p>
+          <svg class="crown" viewBox="0 0 40 30" aria-hidden="true"><path d="M3 26 L6 6 L14 16 L20 3 L26 16 L34 6 L37 26 Z"/></svg>
+          <svg class="doodle swoosh" viewBox="0 0 80 24" aria-hidden="true"><path d="M4 20 C24 16 44 10 76 4"/><path d="M14 22 C30 18 46 14 62 12"/></svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= CREW BANNER ================= -->
+    <section class="crew" id="community" aria-label="Community">
+      <p class="brush crew-note">Good<br/>people<br/>move<br/><span class="lime">different</span></p>
+      <svg class="doodle crew-line" viewBox="0 0 120 20" aria-hidden="true"><path d="M4 16 C40 10 80 6 116 4"/></svg>
+      <span class="tape tape-r2" aria-hidden="true"></span>
+    </section>
+
+    <!-- ================= LEADERBOARD + PLACES ================= -->
+    <section class="section board-places">
       <div class="leaderboard">
         <h2 class="lb-title">Leaderboard</h2>
-        <div class="lb-tabs" role="tablist">
+        <div class="lb-tabs" role="tablist" aria-label="Leaderboard period">
           <button role="tab" class="on" data-range="week" aria-selected="true">This week</button>
           <button role="tab" data-range="month" aria-selected="false">This month</button>
           <button role="tab" data-range="all" aria-selected="false">All time</button>
         </div>
         <ol class="lb-list" id="lbList" aria-live="polite"></ol>
       </div>
+      <figure class="places">
+        <img src="assets/places.jpg" alt="Friends doing pull-ups at an outdoor gym at sunset" loading="lazy" />
+        <figcaption class="brush">Real places.<br/>Real meetups.</figcaption>
+        <svg class="doodle pink-arrow" viewBox="0 0 70 40" aria-hidden="true"><path d="M4 34 C24 28 40 20 62 8"/><path d="M48 6 L63 7 L58 20"/></svg>
+      </figure>
+    </section>
 
-      <div class="meetups torn-alt">
-        <div class="photo-fallback sunset bars" aria-hidden="true"></div>
-        <span class="tape t1"></span><span class="tape t2"></span>
-        <span class="scribble s-places">Real places.<br/>Real meetups.</span>
+    <!-- ================= JOIN BAR ================= -->
+    <section class="section join" id="join">
+      <p class="brush join-title">Better habits.<br/><span class="lime">Brighter people.</span></p>
+      <form class="join-form" id="joinForm" novalidate>
+        <label for="email">Be part of something real.</label>
+        <div class="join-row">
+          <input id="email" type="email" name="email" placeholder="Your email" autocomplete="email" required />
+          <button class="btn btn-lime" type="submit">Join early access <span class="arrow">→</span></button>
+        </div>
+        <small id="joinMsg" aria-live="polite">No spam. Just movement, people and good vibes.</small>
+      </form>
+      <div class="shows-up">
+        <svg class="smile" viewBox="0 0 50 50" aria-hidden="true"><circle cx="25" cy="25" r="21"/><circle cx="18" cy="20" r="2.2" class="fill"/><circle cx="32" cy="20" r="2.2" class="fill"/><path d="M15 29 C19 36 31 36 35 29"/></svg>
+        <div>
+          <p class="brush">A community<br/>that shows up.</p>
+          <div class="joined">
+            <span class="faces" aria-hidden="true"><i class="face" style="--fx:87;--fy:808"></i><i class="face" style="--fx:180;--fy:808"></i><i class="face" style="--fx:273;--fy:808"></i><i class="face" style="--fx:365;--fy:808"></i></span>
+            <small>5K+ people already joined</small>
+          </div>
+        </div>
       </div>
     </section>
 
+    <!-- ================= RUN STRIP ================= -->
+    <section class="strip" aria-label="Small steps, bigger crews">
+      <p class="brush strip-note">Small<br/>steps<br/>bigger<br/>crews.</p>
+      <svg class="crown strip-crown" viewBox="0 0 40 30" aria-hidden="true"><path d="M3 26 L6 6 L14 16 L20 3 L26 16 L34 6 L37 26 Z"/></svg>
+    </section>
+
     <!-- ================= FAQ ================= -->
-    <section class="band faq" id="faq">
-      <h2 class="section-title">Got <span class="t-lime brush">questions?</span></h2>
+    <section class="section faq" id="faq">
+      <h2 class="brush section-title">Got <span class="lime">questions?</span></h2>
       <div class="faq-list">
         <details class="card">
           <summary>What is Squirrel Social?</summary>
@@ -223,58 +198,14 @@
     </section>
   </main>
 
-  <!-- ================= FOOTER BANNER ================= -->
-  <footer class="footer-banner" id="community">
-    <div class="photo-fallback skyline" aria-hidden="true"></div>
-    <div class="footer-inner">
-      <div class="footer-left">
-        <svg class="doodle-crown c2" viewBox="0 0 40 30" aria-hidden="true"><path d="M3 26 L6 6 L14 16 L20 3 L26 16 L34 6 L37 26 Z"/></svg>
-        <p class="scribble big">Better habits.<br/><span class="t-lime">Brighter people.</span></p>
-      </div>
-      <div class="footer-right">
-        <p class="scribble pink-scribble">Small<br/>steps<br/>bigger<br/>crews.</p>
-        <div class="cta-card">
-          <span class="tape t3"></span>
-          <h2>Be part of<br/>something real.</h2>
-          <div class="joined">
-            <span class="faces" aria-hidden="true"><i class="face" style="--fx:87;--fy:808"></i><i class="face" style="--fx:180;--fy:808"></i><i class="face" style="--fx:273;--fy:808"></i><i class="face" style="--fx:365;--fy:808"></i></span>
-            <small>5K+ people already joined</small>
-          </div>
-          <button class="btn btn-pink" data-open-modal>Join early access <span class="arrow">→</span></button>
-        </div>
-      </div>
-    </div>
-    <div class="footer-bottom mono">
-      <span>© <span id="year">2026</span> Squirrel Social</span>
-      <span>Move. Play. Connect.</span>
-    </div>
+  <footer class="footer">
+    <span>© <span id="year">2026</span> Squirrel Social</span>
+    <span>Move. Play. Connect.</span>
   </footer>
 
-  <!-- ================= MODAL ================= -->
-  <dialog class="modal" id="joinModal" aria-labelledby="joinTitle">
+  <dialog class="modal" id="videoModal" aria-label="Squirrel Social video">
     <form method="dialog" class="modal-close-form"><button class="modal-x" aria-label="Close">×</button></form>
-    <div class="modal-body" id="modalForm">
-      <h2 id="joinTitle" class="brush-title sm">Join the <span class="t-lime">crew.</span></h2>
-      <p class="mono muted">Get early access when Squirrel Social lands in your city.</p>
-      <form id="joinForm" novalidate>
-        <label>Name<input type="text" name="name" autocomplete="name" required /></label>
-        <label>Email<input type="email" name="email" autocomplete="email" required /></label>
-        <label>City<input type="text" name="city" autocomplete="address-level2" /></label>
-        <p class="form-error" id="formError" role="alert"></p>
-        <button class="btn btn-lime full" type="submit">Count me in <span class="arrow">→</span></button>
-      </form>
-    </div>
-    <div class="modal-body success" id="modalSuccess" hidden>
-      <h2 class="brush-title sm">You're <span class="t-pink">in!</span></h2>
-      <p class="mono muted">We'll hit your inbox when it's time to move. See you out there.</p>
-    </div>
-  </dialog>
-
-  <dialog class="modal video-modal" id="videoModal" aria-label="Squirrel Social video">
-    <form method="dialog" class="modal-close-form"><button class="modal-x" aria-label="Close">×</button></form>
-    <div class="video-slot">
-      <p class="scribble">Video coming soon.</p>
-    </div>
+    <div class="video-slot"><p class="scribble">Video coming soon.</p></div>
   </dialog>
 
   <script src="js/main.js"></script>

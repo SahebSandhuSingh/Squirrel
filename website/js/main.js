@@ -12,7 +12,7 @@
     const open = nav.classList.toggle("open");
     toggle.setAttribute("aria-expanded", String(open));
   });
-  $$(".nav-links a, .nav-menu-cta").forEach((a) =>
+  $$(".nav-links a").forEach((a) =>
     a.addEventListener("click", () => {
       nav.classList.remove("open");
       toggle.setAttribute("aria-expanded", "false");
@@ -20,7 +20,7 @@
   );
 
   /* Solid header once scrolled; underline the link for the section in view */
-  const sectionLinks = $$(".nav-links a");
+  const sectionLinks = $$(".nav-links a:not(.btn)");
   const sections = sectionLinks
     .map((a) => document.querySelector(a.getAttribute("href")))
     .filter(Boolean);
@@ -77,8 +77,7 @@
     { name: "Cap", src: "assets/avatar-4.jpg" },
     { name: "Headphones", src: "assets/avatar-5.jpg" },
   ];
-
-  const track = $("#avatarTrack");
+  const grid = $("#avatarGrid");
   AVATARS.forEach((a, i) => {
     const btn = document.createElement("button");
     btn.className = "avatar";
@@ -88,19 +87,11 @@
     btn.setAttribute("aria-selected", i === 0 ? "true" : "false");
     btn.innerHTML = `<img src="${a.src}" alt="" loading="lazy" />`;
     btn.addEventListener("click", () => {
-      $$(".avatar", track).forEach((b) => b.setAttribute("aria-selected", "false"));
+      $$(".avatar", grid).forEach((b) => b.setAttribute("aria-selected", "false"));
       btn.setAttribute("aria-selected", "true");
     });
-    track.appendChild(btn);
+    grid.appendChild(btn);
   });
-
-  const scrollByCard = (dir) => {
-    const card = $(".avatar", track);
-    const step = card ? card.getBoundingClientRect().width + 14 : 150;
-    track.scrollBy({ left: dir * step, behavior: reduceMotion ? "auto" : "smooth" });
-  };
-  $(".car-btn.prev").addEventListener("click", () => scrollByCard(-1));
-  $(".car-btn.next").addEventListener("click", () => scrollByCard(1));
 
   /* ---------------- Leaderboard ---------------- */
   // Face positions (centre x, y in px) inside assets/phone.jpg
@@ -116,13 +107,19 @@
     month: [["Meera", 98410], ["Aarav", 94720], ["Diya", 81305], ["Rohan", 77960], ["Kabir", 70115]],
     all: [["Kabir", 412880], ["Meera", 398210], ["Aarav", 377045], ["Rohan", 341990], ["Diya", 322460]],
   };
+  const CROWN = '<svg class="crown" viewBox="0 0 40 30"><path d="M3 26 L6 6 L14 16 L20 3 L26 16 L34 6 L37 26 Z"/></svg>';
+  const rankCell = (i) => {
+    if (i === 0) return `<span class="lb-rank" aria-label="Rank 1">${CROWN}</span>`;
+    if (i === 2) return `<span class="lb-rank bronze" aria-label="Rank 3"><span>3</span></span>`;
+    return `<span class="lb-rank">${i + 1}</span>`;
+  };
   const lbList = $("#lbList");
   const fmt = new Intl.NumberFormat("en-US");
   function renderBoard(range) {
     lbList.innerHTML = BOARD[range]
       .map(
         ([name, score], i) => `<li>
-          <span class="lb-rank">${i + 1}</span>
+          ${rankCell(i)}
           <span class="face" style="--fx:${FACES[name][0]};--fy:${FACES[name][1]}" aria-hidden="true"></span>
           <span class="lb-name">${name}</span>
           <span class="lb-score">${fmt.format(score)}</span>
@@ -166,52 +163,53 @@
   );
   $$("[data-count]").forEach((el) => statObs.observe(el));
 
-  /* ---------------- Modals ---------------- */
-  const joinModal = $("#joinModal");
-  const videoModal = $("#videoModal");
-  const openModal = (m) => (typeof m.showModal === "function" ? m.showModal() : m.setAttribute("open", ""));
+  /* ---------------- Join early access ---------------- */
+  const form = $("#joinForm");
+  const email = $("#email");
+  const msg = $("#joinMsg");
+  const defaultMsg = msg.textContent;
 
-  $$("[data-open-modal]").forEach((b) => b.addEventListener("click", () => openModal(joinModal)));
-  $("#watchVideo").addEventListener("click", () => openModal(videoModal));
-  [joinModal, videoModal].forEach((m) =>
-    m.addEventListener("click", (e) => { if (e.target === m) m.close(); })
+  // every "Join early access" button scrolls to the form and puts the cursor in the email box
+  $$("[data-join]").forEach((a) =>
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      $("#join").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+      setTimeout(() => email.focus({ preventScroll: true }), reduceMotion ? 0 : 600);
+    })
   );
 
-  const form = $("#joinForm");
-  const errorEl = $("#formError");
   form.addEventListener("submit", (e) => {
     e.preventDefault();
-    const name = form.elements.name;
-    const email = form.elements.email;
-    [name, email].forEach((f) => f.removeAttribute("aria-invalid"));
-
-    if (!name.value.trim()) {
-      name.setAttribute("aria-invalid", "true");
-      errorEl.textContent = "Tell us what to call you.";
-      name.focus();
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim())) {
-      email.setAttribute("aria-invalid", "true");
-      errorEl.textContent = "That email doesn't look right.";
+    const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim());
+    email.setAttribute("aria-invalid", String(!ok));
+    msg.classList.toggle("err", !ok);
+    msg.classList.toggle("ok", ok);
+    if (!ok) {
+      msg.textContent = "Enter a valid email to join early access.";
       email.focus();
       return;
     }
-    errorEl.textContent = "";
     // Hook up your waitlist backend here, e.g.
     // fetch("/api/waitlist", { method: "POST", body: new FormData(form) })
-    $("#modalForm").hidden = true;
-    $("#modalSuccess").hidden = false;
+    msg.textContent = "You're on the list. See you out there.";
     form.reset();
   });
-  joinModal.addEventListener("close", () => {
-    $("#modalForm").hidden = false;
-    $("#modalSuccess").hidden = true;
-    errorEl.textContent = "";
+  email.addEventListener("input", () => {
+    if (!msg.classList.contains("err")) return;
+    email.removeAttribute("aria-invalid");
+    msg.classList.remove("err");
+    msg.textContent = defaultMsg;
   });
 
+  /* ---------------- Video modal ---------------- */
+  const videoModal = $("#videoModal");
+  $("#watchVideo").addEventListener("click", () =>
+    typeof videoModal.showModal === "function" ? videoModal.showModal() : videoModal.setAttribute("open", "")
+  );
+  videoModal.addEventListener("click", (e) => { if (e.target === videoModal) videoModal.close(); });
+
   /* ---------------- Reveal on scroll ---------------- */
-  const revealTargets = $$(".pillar, .step, .tile, .leaderboard, .avatars, .faq details, .phone-wrap, .game-copy");
+  const revealTargets = $$(".step, .avatars, .leaderboard, .places, .join > *, .faq details");
   if (!reduceMotion && "IntersectionObserver" in window) {
     revealTargets.forEach((el) => el.classList.add("reveal"));
     const ro = new IntersectionObserver(
