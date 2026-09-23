@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Knewave&family=Permanent+Marker&family=Oswald:wght@500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
   <div class="grain" aria-hidden="true"></div>
@@ -52,14 +52,14 @@
           </div>
         </div>
 
-        <div class="hero-photo torn" style="--img: url('assets/hero.jpg')">
+        <div class="hero-photo torn">
           <div class="photo-fallback hero-fallback" aria-hidden="true">
             <img src="assets/logo.svg" alt="" class="fallback-logo" />
           </div>
           <span class="scribble s-move">Move.<br/>Play.<br/>Connect.</span>
           <svg class="doodle-crown c1" viewBox="0 0 40 30" aria-hidden="true"><path d="M3 26 L6 6 L14 16 L20 3 L26 16 L34 6 L37 26 Z"/></svg>
           <span class="graffiti">Move<br/>Play<br/>Connect.</span>
-          <div class="polaroid" style="--img: url('assets/run.jpg')"><div class="photo-fallback sunset"></div></div>
+          <div class="polaroid"><div class="photo-fallback sunset"></div></div>
         </div>
 
         <span class="scribble s-same">Same parks.<br/>Different<br/>people.</span>
@@ -191,7 +191,7 @@
         <ol class="lb-list" id="lbList" aria-live="polite"></ol>
       </div>
 
-      <div class="meetups torn-alt" style="--img: url('assets/places.jpg')">
+      <div class="meetups torn-alt">
         <div class="photo-fallback sunset bars" aria-hidden="true"></div>
         <span class="tape t1"></span><span class="tape t2"></span>
         <span class="scribble s-places">Real places.<br/>Real meetups.</span>
@@ -223,7 +223,7 @@
   </main>
 
   <!-- ================= FOOTER BANNER ================= -->
-  <footer class="footer-banner" style="--img: url('assets/crew.jpg')">
+  <footer class="footer-banner">
     <div class="photo-fallback skyline" aria-hidden="true"></div>
     <div class="footer-inner">
       <div class="footer-left">
@@ -236,7 +236,7 @@
           <span class="tape t3"></span>
           <h2>Be part of<br/>something real.</h2>
           <div class="joined">
-            <span class="faces"><i style="--c:#ff2d9b">A</i><i style="--c:#d7ff1f">M</i><i style="--c:#a855f7">R</i><i style="--c:#ff7a1a">D</i></span>
+            <span class="faces" aria-hidden="true"><i class="face" style="--fx:87;--fy:808"></i><i class="face" style="--fx:180;--fy:808"></i><i class="face" style="--fx:273;--fy:808"></i><i class="face" style="--fx:365;--fy:808"></i></span>
             <small>5K+ people already joined</small>
           </div>
           <button class="btn btn-pink" data-open-modal>Join early access <span class="arrow">→</span></button>
@@ -276,6 +276,6 @@
     </div>
   </dialog>
 
-  <script src="script.js"></script>
+  <script src="js/main.js"></script>
 </body>
 </html>

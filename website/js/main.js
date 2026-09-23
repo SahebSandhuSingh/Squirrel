@@ -71,37 +71,27 @@
   $(".car-btn.next").addEventListener("click", () => scrollByCard(1));
 
   /* ---------------- Leaderboard ---------------- */
+  // Face positions (centre x, y in px) inside assets/phone.jpg
+  const FACES = {
+    Aarav: [87, 808],
+    Meera: [180, 808],
+    Rohan: [273, 808],
+    Diya: [365, 808],
+    Kabir: [267, 232],
+  };
   const BOARD = {
-    week: [
-      ["Aarav", 25430, "#f0b38b"],
-      ["Meera", 21980, "#ff9fcf"],
-      ["Rohan", 18640, "#c98c68"],
-      ["Diya", 16210, "#e3b594"],
-      ["Kabir", 14980, "#d7a07a"],
-    ],
-    month: [
-      ["Meera", 98410, "#ff9fcf"],
-      ["Aarav", 94720, "#f0b38b"],
-      ["Ishaan", 81305, "#b8e0ff"],
-      ["Rohan", 77960, "#c98c68"],
-      ["Anaya", 70115, "#d9c2ff"],
-    ],
-    all: [
-      ["Kabir", 412880, "#d7a07a"],
-      ["Meera", 398210, "#ff9fcf"],
-      ["Aarav", 377045, "#f0b38b"],
-      ["Zoya", 341990, "#ffe08a"],
-      ["Diya", 322460, "#e3b594"],
-    ],
+    week: [["Aarav", 25430], ["Meera", 21980], ["Rohan", 18640], ["Diya", 16210], ["Kabir", 14980]],
+    month: [["Meera", 98410], ["Aarav", 94720], ["Diya", 81305], ["Rohan", 77960], ["Kabir", 70115]],
+    all: [["Kabir", 412880], ["Meera", 398210], ["Aarav", 377045], ["Rohan", 341990], ["Diya", 322460]],
   };
   const lbList = $("#lbList");
   const fmt = new Intl.NumberFormat("en-US");
   function renderBoard(range) {
     lbList.innerHTML = BOARD[range]
       .map(
-        ([name, score, c], i) => `<li>
+        ([name, score], i) => `<li>
           <span class="lb-rank">${i + 1}</span>
-          <span class="lb-face" style="--c:${c}">${name[0]}</span>
+          <span class="face" style="--fx:${FACES[name][0]};--fy:${FACES[name][1]}" aria-hidden="true"></span>
           <span class="lb-name">${name}</span>
           <span class="lb-score">${fmt.format(score)}</span>
         </li>`

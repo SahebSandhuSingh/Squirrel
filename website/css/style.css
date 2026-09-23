@@ -123,13 +123,17 @@ h1, h2, h3 { margin: 0; }
 .doodle-crown { stroke: var(--lime); }
 
 /* ---------- photo slots ----------
-   Each photo element sets --img. If the file exists it covers the
-   stylised fallback; if not, the fallback artwork shows instead. */
+   The photo sits in ::after on top of a stylised fallback, so the
+   fallback artwork shows if an image file is missing. */
 .hero-photo, .polaroid, .meetups, .footer-banner { position: relative; overflow: hidden; }
 .hero-photo::after, .polaroid::after, .meetups::after, .footer-banner::after {
   content: ""; position: absolute; inset: 0; z-index: 1;
-  background: var(--img) center / cover no-repeat;
+  background: center / cover no-repeat;
 }
+.hero-photo::after { background-image: url("../assets/hero.jpg"); }
+.polaroid::after { background-image: url("../assets/run.jpg"); }
+.meetups::after { background-image: url("../assets/places.jpg"); }
+.footer-banner::after { background-image: url("../assets/crew.jpg"); }
 .footer-banner::after { z-index: 0; }
 .photo-fallback { position: absolute; inset: 0; }
 .sunset {
@@ -408,7 +412,17 @@ h1, h2, h3 { margin: 0; }
 @keyframes slideIn { from { opacity: 0; transform: translateX(10px); } }
 .lb-rank { font-size: .85rem; color: #ddd; }
 .lb-list li:first-child .lb-rank { color: var(--lime); }
-.lb-face { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: .75rem; font-weight: 700; color: #111; background: var(--c); }
+/* round face crops taken from the app screenshot (assets/phone.jpg);
+   --fx/--fy = face centre in the source image, --s = rendered size */
+.face {
+  --s: 28; --src: 54;
+  display: block; width: calc(var(--s) * 1px); height: calc(var(--s) * 1px); border-radius: 50%;
+  background: #333 url("../assets/phone.jpg") no-repeat;
+  background-size: calc(480px * var(--s) / var(--src)) auto;
+  background-position:
+    calc(var(--s) * .5px - var(--fx) * var(--s) * 1px / var(--src))
+    calc(var(--s) * .5px - var(--fy) * var(--s) * 1px / var(--src));
+}
 .lb-name { font-size: .9rem; }
 .lb-score { font-family: var(--f-mono); font-size: .85rem; }
 .lb-list li:first-child .lb-score { color: var(--lime); }
@@ -454,10 +468,7 @@ h1, h2, h3 { margin: 0; }
 .cta-card h2 { font-family: var(--f-brush); font-weight: 400; text-transform: uppercase; font-size: 1.6rem; line-height: .95; margin-bottom: 14px; }
 .joined { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
 .faces { display: flex; }
-.faces i {
-  width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-style: normal;
-  font-size: .7rem; font-weight: 700; background: var(--c); border: 2px solid var(--lime); margin-left: -8px; color: #111;
-}
+.faces i { border: 2px solid #0b0b0b; margin-left: -8px; }
 .faces i:first-child { margin-left: 0; }
 .joined small { font-size: .72rem; font-weight: 600; }
 .cta-card .btn { width: 100%; justify-content: center; }

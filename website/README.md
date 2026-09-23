@@ -23,4 +23,4 @@ All images live in `assets/`. To change one, replace the file and keep its name.
 ## Wiring up the waitlist
 
 The "Join early access" form checks its inputs and shows a success message in the browser.
-To store sign-ups, send the form to your backend at the `// Hook up your waitlist backend here` comment in `script.js`.
+To store sign-ups, send the form to your backend at the `// Hook up your waitlist backend here` comment in `js/main.js`.
