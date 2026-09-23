@@ -63,10 +63,24 @@
     if (lockedTo && performance.now() - lockedAt > 250) setTimeout(unlock, 50);
   });
 
+  const scrollBar = $("#scrollBar");
+  const mobileCta = $("#mobileCta");
+  const heroEl = $("#home");
+  const joinEl = $("#join");
+  function updateScrollExtras() {
+    const max = document.documentElement.scrollHeight - window.innerHeight;
+    scrollBar.style.setProperty("--p", max > 0 ? (window.scrollY / max).toFixed(4) : 0);
+    // sticky join button: after the hero, hidden while the real form is on screen
+    const j = joinEl.getBoundingClientRect();
+    const formVisible = j.top < window.innerHeight && j.bottom > 0;
+    mobileCta.classList.toggle("show", window.scrollY > heroEl.offsetHeight * 0.7 && !formVisible);
+  }
+
   let ticking = false;
   const onScroll = () => {
     ticking = false;
     nav.classList.toggle("scrolled", window.scrollY > 10);
+    updateScrollExtras();
     if (lockedTo) return;
     const line = window.innerHeight * 0.4;
     const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
@@ -278,8 +292,10 @@
     }
     // Hook up your waitlist backend here, e.g.
     // fetch("/api/waitlist", { method: "POST", body: new FormData(form) })
-    msg.textContent = "You're on the list. See you out there.";
+    msg.textContent = "You're in 🎉 See you out there.";
     $(".pass").classList.add("done");
+    shareBtn.hidden = false;
+    confetti();
     form.reset();
   });
   email.addEventListener("input", () => {
@@ -537,6 +553,127 @@
       }, 3200);
     }, { threshold: 0.3 }).observe(feed);
   }
+
+  /* ---------------- Vibe check → picks an avatar ---------------- */
+  $$(".vc-opt").forEach((opt) =>
+    opt.addEventListener("click", () => {
+      const i = Number(opt.dataset.avatar);
+      $$(".vc-opt").forEach((o) => o.setAttribute("aria-pressed", String(o === opt)));
+      $$(".avatar", grid)[i]?.click();
+      const res = $("#vcResult");
+      res.textContent = `it's giving ${AVATARS[i].label.toLowerCase()} energy ✨`;
+      if (!reduceMotion) { res.classList.remove("pop"); void res.offsetWidth; res.classList.add("pop"); }
+    })
+  );
+  $$(".vc-opt").forEach((o) => o.setAttribute("aria-pressed", "false"));
+
+  /* ---------------- Crew stories (demo) ---------------- */
+  const homeName = featured ? featured.name : "the block";
+  const STORIES = [
+    { person: "Aarav", img: "assets/run.jpg", pos: "30% 45%", ago: "2h", caption: "POV: 7am run club and <em>nobody</em> skipped" },
+    { person: "Meera", img: "assets/places.jpg", pos: "60% 40%", ago: "5h", caption: "pull-up bar arc, week 3. <em>we're so back</em>" },
+    { person: "Rohan", img: "assets/hero.jpg", pos: "35% 50%", ago: "8h", caption: `claimed ${homeName}. again. <em>👑</em>` },
+    { person: "Diya", img: "assets/crew.jpg", pos: "50% 65%", ago: "1d", caption: "came for cardio, <em>stayed for the crew</em>" },
+    { person: "Kabir", img: "assets/run.jpg", pos: "85% 40%", ago: "1d", caption: "sunset 5K hits <em>different</em>" },
+  ];
+  const storyRow = $("#storyRow");
+  const storyModal = $("#storyModal");
+  const storyFrame = $("#storyFrame");
+  const storyBars = $("#storyBars");
+  let storyIdx = 0;
+  let storyTimer = null;
+  const STORY_MS = 4500;
+
+  storyRow.innerHTML = STORIES.map((st, i) => `<li><button class="story-btn" type="button" data-story="${i}" aria-label="Open ${st.person}'s story">
+      <span class="story-ring"><span style="background-image:url('${st.img}');background-position:${st.pos}"></span></span>${st.person}</button></li>`).join("");
+  storyBars.innerHTML = STORIES.map(() => "<span><i></i></span>").join("");
+
+  const showStory = (i) => {
+    if (i < 0) i = 0;
+    if (i >= STORIES.length) { storyModal.close(); return; }
+    storyIdx = i;
+    const st = STORIES[i];
+    storyFrame.style.backgroundImage = `url('${st.img}')`;
+    storyFrame.style.backgroundPosition = st.pos;
+    $("#storyFace").setAttribute("style", faceStyle(FACES[st.person]));
+    $("#storyName").textContent = st.person;
+    $("#storyAgo").textContent = st.ago;
+    $("#storyCaption").innerHTML = st.caption;
+    $$("span", storyBars).forEach((b, k) => {
+      b.className = k < i ? "done" : "";
+      if (k === i) { void b.offsetWidth; b.className = "on"; }
+    });
+    $(`.story-btn[data-story="${i}"]`)?.classList.add("seen");
+    clearTimeout(storyTimer);
+    if (!reduceMotion) storyTimer = setTimeout(() => showStory(storyIdx + 1), STORY_MS);
+  };
+  $$(".story-btn", storyRow).forEach((b) =>
+    b.addEventListener("click", () => {
+      storyModal.style.setProperty("--dur", `${STORY_MS}ms`);
+      storyModal.showModal();
+      showStory(Number(b.dataset.story));
+    })
+  );
+  $(".story-nav.prev").addEventListener("click", () => showStory(storyIdx - 1));
+  $(".story-nav.next").addEventListener("click", () => showStory(storyIdx + 1));
+  storyModal.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowRight") showStory(storyIdx + 1);
+    if (e.key === "ArrowLeft") showStory(storyIdx - 1);
+  });
+  storyModal.addEventListener("close", () => clearTimeout(storyTimer));
+  storyModal.addEventListener("click", (e) => { if (e.target === storyModal) storyModal.close(); });
+
+  /* ---------------- Hype reactions ---------------- */
+  $$(".hype").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      const on = btn.getAttribute("aria-pressed") !== "true";
+      const n = $(".hype-n", btn);
+      btn.setAttribute("aria-pressed", String(on));
+      n.textContent = Number(n.textContent) + (on ? 1 : -1);
+      if (reduceMotion || !on) return;
+      btn.classList.remove("pop"); void btn.offsetWidth; btn.classList.add("pop");
+      for (let k = 0; k < 3; k++) {
+        const e = document.createElement("span");
+        e.className = "float-emoji";
+        e.textContent = "🔥";
+        e.style.left = `${btn.offsetLeft + 8}px`;
+        e.style.top = `${btn.offsetTop}px`;
+        e.style.setProperty("--dx", `${(k - 1) * 18}px`);
+        e.style.animationDelay = `${k * 0.08}s`;
+        btn.parentElement.appendChild(e);
+        setTimeout(() => e.remove(), 1200);
+      }
+    })
+  );
+
+  /* ---------------- Confetti + share after joining ---------------- */
+  const confetti = () => {
+    if (reduceMotion) return;
+    const layer = document.createElement("div");
+    layer.className = "confetti";
+    const colors = ["var(--lime)", "var(--pink)", "var(--purple)", "var(--yellow)", "#fff"];
+    for (let k = 0; k < 70; k++) {
+      const c = document.createElement("i");
+      c.style.left = `${Math.random() * 100}%`;
+      c.style.setProperty("--c", colors[k % colors.length]);
+      c.style.setProperty("--dx", `${(Math.random() - 0.5) * 240}px`);
+      c.style.setProperty("--rot", `${360 + Math.random() * 720}deg`);
+      c.style.setProperty("--t", `${1.4 + Math.random() * 1.2}s`);
+      c.style.setProperty("--delay", `${Math.random() * 0.3}s`);
+      layer.appendChild(c);
+    }
+    document.body.appendChild(layer);
+    setTimeout(() => layer.remove(), 3200);
+  };
+  const shareBtn = $("#shareBtn");
+  shareBtn.addEventListener("click", async () => {
+    const data = { title: "Squirrel Social", text: "Fitness hits different together. Join the founding crew with me 👇", url: location.href.split("#")[0] };
+    try {
+      if (navigator.share) { await navigator.share(data); return; }
+      await navigator.clipboard.writeText(`${data.text} ${data.url}`);
+      shareBtn.textContent = "Link copied ✓";
+    } catch (_) { /* share sheet dismissed */ }
+  });
 
   /* ---------------- Launch countdown ---------------- */
   const LAUNCH = new Date(2026, 9, 2, 0, 0, 0); // 02 / 10 / 26, visitor's local time

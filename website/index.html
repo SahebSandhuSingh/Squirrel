@@ -18,6 +18,7 @@
 <body>
   <a class="skip-link" href="#what">Skip to content</a>
   <div class="grain" aria-hidden="true"></div>
+  <div class="scroll-progress" aria-hidden="true"><i id="scrollBar"></i></div>
 
   <!-- Icon sprite: <svg class="i"><use href="#i-name"/></svg> -->
   <svg class="sprite" aria-hidden="true" focusable="false">
@@ -84,6 +85,7 @@
           <a href="#join" class="btn btn-lime" data-join>Join early access <span class="arrow">→</span></a>
           <button class="btn btn-ghost" id="watchVideo">Watch video <span class="play" aria-hidden="true">▶</span></button>
         </div>
+        <p class="cta-note">free to join · takes 10 sec · zero gym-bro energy required</p>
 
         <div class="ticker" aria-label="Example of in-app activity">
           <span class="live-dot" aria-hidden="true"></span>
@@ -126,6 +128,10 @@
       <span class="tape tape-r1" aria-hidden="true"></span>
       <div class="torn-edge" aria-hidden="true"></div>
     </section>
+
+    <div class="marquee m-lime" aria-hidden="true">
+      <div class="marquee-track"><div class="marquee-group"><span>walking counts</span><i aria-hidden="true">✦</i><span>touch grass (literally)</span><i aria-hidden="true">✦</i><span>no gym-bro energy required</span><i aria-hidden="true">✦</i><span>your city = your map</span><i aria-hidden="true">✦</i><span>streaks &gt; excuses</span><i aria-hidden="true">✦</i><span>bring your bestie</span><i aria-hidden="true">✦</i></div><div class="marquee-group"><span>walking counts</span><i aria-hidden="true">✦</i><span>touch grass (literally)</span><i aria-hidden="true">✦</i><span>no gym-bro energy required</span><i aria-hidden="true">✦</i><span>your city = your map</span><i aria-hidden="true">✦</i><span>streaks &gt; excuses</span><i aria-hidden="true">✦</i><span>bring your bestie</span><i aria-hidden="true">✦</i></div></div>
+    </div>
 
     <!-- ================= 2. WHAT IS THIS? ================= -->
     <section class="section what" id="what" aria-labelledby="whatTitle">
@@ -214,7 +220,7 @@
               <li><svg class="i"><use href="#i-bike"/></svg>Cycle</li>
               <li><svg class="i"><use href="#i-ball"/></svg>Play</li>
             </ul>
-            <p>Anything that gets you moving.</p>
+            <p>Anything that gets you moving. <span class="aside">(yes, walking counts)</span></p>
             <div class="step-ui" aria-hidden="true"><span class="chip chip-xp">+250 XP</span><span class="chip">32 min · logged</span></div>
           </div>
         </li>
@@ -404,6 +410,10 @@
       </div>
     </section>
 
+    <div class="marquee m-pink rev" aria-hidden="true">
+      <div class="marquee-track"><div class="marquee-group"><span>claim your block</span><i aria-hidden="true">✦</i><span>defend it</span><i aria-hidden="true">✦</i><span>flex it</span><i aria-hidden="true">✦</i><span>repeat</span><i aria-hidden="true">✦</i><span>your crew is waiting</span><i aria-hidden="true">✦</i><span>main character energy</span><i aria-hidden="true">✦</i></div><div class="marquee-group"><span>claim your block</span><i aria-hidden="true">✦</i><span>defend it</span><i aria-hidden="true">✦</i><span>flex it</span><i aria-hidden="true">✦</i><span>repeat</span><i aria-hidden="true">✦</i><span>your crew is waiting</span><i aria-hidden="true">✦</i><span>main character energy</span><i aria-hidden="true">✦</i></div></div>
+    </div>
+
     <!-- ================= 7. AVATARS ================= -->
     <section class="section avatars" id="avatars" aria-labelledby="avatarTitle">
       <div class="avatars-top">
@@ -416,6 +426,17 @@
           <svg class="crown" viewBox="0 0 40 30" aria-hidden="true"><path d="M3 26 L6 6 L14 16 L20 3 L26 16 L34 6 L37 26 Z"/></svg>
           <svg class="doodle swoosh" viewBox="0 0 80 24" aria-hidden="true"><path d="M4 20 C24 16 44 10 76 4"/><path d="M14 22 C30 18 46 14 62 12"/></svg>
         </div>
+      </div>
+      <div class="vibe-check" role="group" aria-labelledby="vcTitle">
+        <p class="vc-q" id="vcTitle"><span class="brush">Vibe check:</span> what's your move?</p>
+        <div class="vc-options">
+          <button type="button" class="vc-opt" data-avatar="0"><span aria-hidden="true">🏃</span>running laps</button>
+          <button type="button" class="vc-opt" data-avatar="1"><span aria-hidden="true">🏋️</span>lifting heavy</button>
+          <button type="button" class="vc-opt" data-avatar="2"><span aria-hidden="true">⚽</span>weekend games</button>
+          <button type="button" class="vc-opt" data-avatar="3"><span aria-hidden="true">🌅</span>5am club</button>
+          <button type="button" class="vc-opt" data-avatar="4"><span aria-hidden="true">🌙</span>late-night miles</button>
+        </div>
+        <p class="vc-result" id="vcResult" aria-live="polite"></p>
       </div>
       <div class="avatar-row">
         <div class="avatar-grid" id="avatarGrid" role="listbox" aria-label="Choose your avatar"></div>
@@ -484,12 +505,17 @@
         </li>
       </ul>
 
+      <div class="stories">
+        <p class="wall-head"><span class="brush">Crew stories</span><span class="demo-tag">Demo</span></p>
+        <ul class="story-row" id="storyRow" aria-label="Crew stories"></ul>
+      </div>
+
       <div class="crew-wall">
         <p class="wall-head"><span class="brush">Crew wall</span><span class="demo-tag">Example posts</span></p>
         <ul class="wall">
-          <li><i class="face" style="--fx:87;--fy:808" aria-hidden="true"></i><p><b>Aarav</b> completed a 5K</p><span class="chip chip-xp">+420 XP</span></li>
-          <li><i class="face" style="--fx:180;--fy:808" aria-hidden="true"></i><p><b>Meera</b> joined a head-to-head</p><span class="chip chip-pink">vs Rohan</span></li>
-          <li><i class="face" style="--fx:273;--fy:808" aria-hidden="true"></i><p><b>Rohan</b> defended <span data-city="featured.name">Riverside</span></p><span class="chip chip-yellow"><svg class="i"><use href="#i-trophy"/></svg>Territory</span></li>
+          <li><i class="face" style="--fx:87;--fy:808" aria-hidden="true"></i><p><b>Aarav</b> completed a 5K</p><span class="chip chip-xp">+420 XP</span><button class="hype" type="button" aria-pressed="false" aria-label="Hype Aarav's post"><span aria-hidden="true">🔥</span><span class="hype-n">24</span></button></li>
+          <li><i class="face" style="--fx:180;--fy:808" aria-hidden="true"></i><p><b>Meera</b> joined a head-to-head</p><span class="chip chip-pink">vs Rohan</span><button class="hype" type="button" aria-pressed="false" aria-label="Hype Meera's post"><span aria-hidden="true">🔥</span><span class="hype-n">17</span></button></li>
+          <li><i class="face" style="--fx:273;--fy:808" aria-hidden="true"></i><p><b>Rohan</b> defended <span data-city="featured.name">Riverside</span></p><span class="chip chip-yellow"><svg class="i"><use href="#i-trophy"/></svg>Territory</span><button class="hype" type="button" aria-pressed="false" aria-label="Hype Rohan's post"><span aria-hidden="true">🔥</span><span class="hype-n">41</span></button></li>
         </ul>
       </div>
     </section>
@@ -524,7 +550,7 @@
           <figcaption class="brush">Real places.<br/>Real meetups.</figcaption>
           <svg class="doodle pink-arrow" viewBox="0 0 70 40" aria-hidden="true"><path d="M4 34 C24 28 40 20 62 8"/><path d="M48 6 L63 7 L58 20"/></svg>
         </figure>
-        <p class="places-copy">Your neighbourhood becomes part of the game.</p>
+        <p class="places-copy">Your neighbourhood becomes part of the game. <span class="aside">touch grass, literally.</span></p>
         <ul class="place-chips" aria-label="Places that count">
           <li><svg class="i"><use href="#i-tree"/></svg>Parks</li>
           <li><svg class="i"><use href="#i-campus"/></svg>Campuses</li>
@@ -565,6 +591,10 @@
         </li>
       </ol>
     </section>
+
+    <div class="marquee m-purple" aria-hidden="true">
+      <div class="marquee-track"><div class="marquee-group"><span>02 · 10 · 26</span><i aria-hidden="true">✦</i><span>founding crews only</span><i aria-hidden="true">✦</i><span>be early</span><i aria-hidden="true">✦</i><span>tell the group chat</span><i aria-hidden="true">✦</i><span>first territories drop day one</span><i aria-hidden="true">✦</i></div><div class="marquee-group"><span>02 · 10 · 26</span><i aria-hidden="true">✦</i><span>founding crews only</span><i aria-hidden="true">✦</i><span>be early</span><i aria-hidden="true">✦</i><span>tell the group chat</span><i aria-hidden="true">✦</i><span>first territories drop day one</span><i aria-hidden="true">✦</i></div></div>
+    </div>
 
     <!-- ================= BIG VISUAL ================= -->
     <section class="strip" aria-label="Small steps, bigger crews">
@@ -611,6 +641,7 @@
               <button class="btn btn-lime" type="submit">Join early access <span class="arrow">→</span></button>
             </div>
             <small id="joinMsg" aria-live="polite">No spam. Just movement, people and good vibes.</small>
+            <button class="btn btn-outline btn-sm share-btn" type="button" id="shareBtn" hidden>Tell your crew <span class="arrow">→</span></button>
           </form>
           <ul class="pass-perks">
             <li><svg class="i"><use href="#i-check"/></svg>First in when your city opens</li>
@@ -724,6 +755,22 @@
       <span>Made for people who move.</span>
     </div>
   </footer>
+
+  <dialog class="story-modal" id="storyModal" aria-label="Crew story">
+    <div class="story-frame" id="storyFrame">
+      <div class="story-bars" id="storyBars"></div>
+      <div class="story-top">
+        <i class="face" id="storyFace" aria-hidden="true"></i>
+        <b id="storyName"></b><span id="storyAgo">2h</span>
+        <form method="dialog"><button class="story-x" aria-label="Close story">×</button></form>
+      </div>
+      <p class="story-caption brush" id="storyCaption"></p>
+      <button class="story-nav prev" type="button" aria-label="Previous story"></button>
+      <button class="story-nav next" type="button" aria-label="Next story"></button>
+    </div>
+  </dialog>
+
+  <a href="#join" class="btn btn-lime mobile-cta" id="mobileCta" data-join>Join the crew <span class="arrow">→</span></a>
 
   <dialog class="modal" id="videoModal" aria-label="Squirrel Social video">
     <form method="dialog" class="modal-close-form"><button class="modal-x" aria-label="Close">×</button></form>

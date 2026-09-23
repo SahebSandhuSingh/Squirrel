@@ -27,6 +27,20 @@ The page tells the story in order: **hook → what it is → how it works → wh
 | Early access | `#join` | Email form on a founding-member pass |
 | FAQ | `#faq` | 10 questions |
 
+### Fun layer
+
+Small interactive touches aimed at a younger, mobile-first crowd:
+
+- **Marquee tape strips** between sections (pause on hover)
+- **Vibe check** in the avatar section: one tap picks the matching avatar
+- **Crew stories**: story rings that open a full-screen, tap-through viewer (edit `STORIES` in `js/main.js`)
+- **🔥 hype** reactions on crew wall posts
+- **Confetti** and a **Tell your crew** share button (Web Share API, falls back to copying the link) after joining
+- **Sticky "Join the crew" button** on phones, hidden while the form is on screen
+- **Scroll progress bar** and lime text selection
+
+All motion stops when the visitor has reduced motion turned on.
+
 ### The demo city (`js/city.js`)
 
 The site is city-agnostic. Every place name, map shape and location-based sample on the page comes from one dataset, `window.SquirrelCity` in `js/city.js` — a **fictional** "Demo City" (Riverside, West End, Old Town, North District, …). `js/main.js` never names a place itself; it reads:
