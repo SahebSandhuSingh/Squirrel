@@ -303,9 +303,11 @@ function Sneaker({ x, y, dir, rot, color }: { x: number; y: number; dir: number;
   );
 }
 
-function HandShape({ p, r, kind, skin, dark, dir }: { p: Pt; r: number; kind: HandKind; skin: string; dark: string; dir: number }) {
+function HandShape({ p, r: r0, kind, skin, dark, dir }: { p: Pt; r: number; kind: HandKind; skin: string; dark: string; dir: number }) {
   const [x, y] = p;
+  let r = r0;
   if (kind === 'open') {
+    r = r0 * 1.2;
     return (
       <G>
         <Ellipse cx={x} cy={y - 1} rx={r * 1.05} ry={r * 1.35} fill={skin} />

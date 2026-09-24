@@ -1,5 +1,5 @@
 import React from 'react';
-import { Animated, StyleSheet } from 'react-native';
+import { Animated } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { art } from './palette';
@@ -379,7 +379,7 @@ export const CityMap = React.memo(function CityMap(props: {
   const dash = [ROUTE_LEN, ROUTE_LEN];
 
   return (
-    <Svg width="100%" height="100%" viewBox="0 0 400 600" preserveAspectRatio="xMidYMid slice" style={[StyleSheet.absoluteFill, style]}>
+    <Svg width="100%" height="100%" viewBox="0 0 400 600" preserveAspectRatio="xMidYMid slice" style={style}>
       <Defs>
         <LinearGradient id={`${uid}park`} x1="0" y1="0" x2="1" y2="1">
           <Stop offset="0" stopColor="#0F3A2C" />
@@ -561,7 +561,7 @@ export const RunRoute = React.memo(function RunRoute(props: { progress?: Animate
   const hw = Math.max(5, widthAt(head.y) * 0.42);
 
   return (
-    <Svg width="100%" height="100%" viewBox="0 0 400 700" preserveAspectRatio="xMidYMid slice" style={[StyleSheet.absoluteFill, style]}>
+    <Svg width="100%" height="100%" viewBox="0 0 400 700" preserveAspectRatio="xMidYMid slice" style={style}>
       <Defs>
         <LinearGradient id={`${uid}fade`} x1="0" y1="0" x2="0" y2="1">
           <Stop offset="0" stopColor={art.pink} stopOpacity={0.35} />
