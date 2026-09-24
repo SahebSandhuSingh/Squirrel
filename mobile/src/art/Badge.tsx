@@ -326,8 +326,8 @@ const BADGES: Record<BadgeKind, BadgeDef> = {
     R: 40,
     emblem: ({ main, detail }, cy) => (
       <G>
-        <Path d={leaves(60, cy, 25, 120, 245, 7, 8, 2.6)} fill={main} />
-        <Path d={leaves(60, cy, 25, 60, -65, 7, 8, 2.6)} fill={main} />
+        <Path d={leaves(60, cy, 25.5, 118, 250, 6, 11, 3.6)} fill={main} />
+        <Path d={leaves(60, cy, 25.5, 62, -70, 6, 11, 3.6)} fill={main} />
         <Path d={star(60, cy - 1, 14, 6)} fill={main} />
         <Path d={circ(60, cy - 1, 3)} fill={detail} />
       </G>

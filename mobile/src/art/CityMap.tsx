@@ -413,6 +413,11 @@ export const CityMap = React.memo(function CityMap(props: {
       <Path d={geo.windows[1]} fill={art.pinkHi} opacity={0.55} />
       <Path d={geo.windows[2]} fill={art.cyan} opacity={0.5} />
 
+      {/* pink neon avenues */}
+      {geo.avenues.map((d, i) => (
+        <Neon key={i} d={d} color={art.pink} w={i < 2 ? 1 : 0.85} />
+      ))}
+
       {/* parks */}
       {geo.parks.map((d, i) => (
         <G key={i}>
@@ -423,11 +428,6 @@ export const CityMap = React.memo(function CityMap(props: {
       <Path d={geo.trees[0]} fill="#1B6B49" />
       <Path d={geo.trees[1]} fill="#26875C" />
       <Ellipse cx={POND.cx} cy={POND.cy} rx={POND.rx} ry={POND.ry} fill="#0D3B4E" stroke="#1FA3B8" strokeOpacity={0.6} strokeWidth={1.5} />
-
-      {/* pink neon avenues */}
-      {geo.avenues.map((d, i) => (
-        <Neon key={i} d={d} color={art.pink} w={i < 2 ? 1 : 0.85} />
-      ))}
 
       {/* water */}
       <Path d={geo.river.body} fill={`url(#${uid}water)`} />
@@ -573,8 +573,8 @@ export const RunRoute = React.memo(function RunRoute(props: { progress?: Animate
         </RadialGradient>
       </Defs>
       {/* whole route, faint */}
-      <Path d={shapes.full} fill={art.pink} opacity={0.12} />
-      {shapes.ahead ? <Path d={shapes.ahead} fill="#FFFFFF" opacity={0.35} /> : null}
+      <Path d={shapes.full} fill={art.pink} opacity={0.2} />
+      {shapes.ahead ? <Path d={shapes.ahead} fill={art.pinkHi} opacity={0.6} /> : null}
       {/* completed part: glow + body + hot core */}
       {shapes.glow ? <Path d={shapes.glow} fill={art.pink} opacity={0.16} /> : null}
       {shapes.done ? <Path d={shapes.done} fill={`url(#${uid}fade)`} /> : null}

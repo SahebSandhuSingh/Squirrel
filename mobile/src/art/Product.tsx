@@ -348,7 +348,7 @@ const draw: Record<ProductKind, (x: Ctx) => React.ReactElement> = {
       <Piece id={`${uid}i3`} t={a} s={0.35} d={circ(34, 46, 9)}>
         <Path d="M34 39.5 L35.9 44 L40.6 44.2 L37 47.2 L38.2 51.8 L34 49.2 L29.8 51.8 L31 47.2 L27.4 44.2 L32.1 44 Z" fill={art.white} />
       </Piece>
-      <Cord d="M48 24 L56 21 M49 30 L57 27 M50 36 L58 33 M53 42 L61 40 M58 46 L66 45" color={w.base} outline={c.outline} w={2.1} />
+      <Cord d="M41 22 L49 20 M42 28 L50 26 M43 34 L51 32 M45 40 L53 38 M51 45 L59 44" color={w.base} outline={c.outline} w={2.1} />
       <Piece id={`${uid}i4`} t={w} s={0.5} d="M14 74 H112 V86 C112 90 110 92 106 92 H20 C16 92 14 90 14 86 Z">
         <Seam d="M14 81 H112" color={a.base} w={2.8} o={1} />
         <Path d="M14 89 H112 V93 H14 Z" fill={k.base} />
@@ -522,28 +522,26 @@ const draw: Record<ProductKind, (x: Ctx) => React.ReactElement> = {
   ),
 
   earbuds: ({ uid, c, a, k }) => {
-    const bud = 'M-11 0 a11 11 0 1 0 22 0 a11 11 0 1 0 -22 0 Z M-5 5 L-4.5 30 C-4.5 34 4.5 34 4.5 30 L5 5 Z';
+    const bud = 'M-12.5 0 a12.5 12.5 0 1 0 25 0 a12.5 12.5 0 1 0 -25 0 Z M-6.5 6 L-6 22 C-6 28 6 28 6 22 L6.5 6 Z';
+    const oneBud = (tf: string, id: string) => (
+      <G transform={tf}>
+        <Path d={ell(10, -4, 5.5, 6.5)} fill={k.base} stroke={c.outline} strokeWidth={1.6} />
+        <Piece id={id} t={c} s={0.45} d={bud}>
+          <Path d="M-6.5 16 H6.5 V19 H-6.5 Z" fill={a.base} />
+        </Piece>
+      </G>
+    );
     return (
       <G>
-        <Piece id={`${uid}r0`} t={c} s={0.6} d="M22 60 C22 50 30 46 42 46 H78 C90 46 98 50 98 60 C88 64 32 64 22 60 Z" />
-        <Piece id={`${uid}r1`} t={c} d="M22 66 C22 60 30 58 42 58 H78 C90 58 98 60 98 66 V84 C98 97 88 104 76 104 H44 C32 104 22 97 22 84 Z">
-          <Seam d="M22 69 C40 72 80 72 98 69" color={c.outline} o={0.5} />
+        <Piece id={`${uid}r0`} t={c} s={0.6} d="M22 62 C22 52 30 48 42 48 H78 C90 48 98 52 98 62 C88 66 32 66 22 62 Z" />
+        <Path d="M26 63 C40 59 80 59 94 63 C80 67 40 67 26 63 Z" fill={k.base} stroke={c.outline} strokeWidth={1.4} />
+        {oneBud('translate(42 40) rotate(-16)', `${uid}r2`)}
+        {oneBud('translate(78 40) rotate(16) scale(-1 1)', `${uid}r3`)}
+        <Piece id={`${uid}r1`} t={c} d="M22 68 C22 64 30 62 42 62 H78 C90 62 98 64 98 68 V84 C98 97 88 104 76 104 H44 C32 104 22 97 22 84 Z">
+          <Seam d="M22 71 C40 74 80 74 98 71" color={c.outline} o={0.5} />
         </Piece>
-        <Path d="M26 61 C40 57 80 57 94 61 C80 65 40 65 26 61 Z" fill={k.base} stroke={c.outline} strokeWidth={1.4} />
-        <Circle cx={60} cy={84} r={5} fill={a.base} opacity={0.25} />
-        <Circle cx={60} cy={84} r={2.4} fill={a.base} />
-        <G transform="translate(38 30) rotate(-18)">
-          <Path d={ell(9, -3, 5, 6)} fill={k.base} stroke={c.outline} strokeWidth={1.6} />
-          <Piece id={`${uid}r2`} t={c} s={0.45} d={bud}>
-            <Path d="M-4.5 22 H4.5 V25 H-4.5 Z" fill={a.base} />
-          </Piece>
-        </G>
-        <G transform="translate(82 30) rotate(18) scale(-1 1)">
-          <Path d={ell(9, -3, 5, 6)} fill={k.base} stroke={c.outline} strokeWidth={1.6} />
-          <Piece id={`${uid}r3`} t={c} s={0.45} d={bud}>
-            <Path d="M-4.5 22 H4.5 V25 H-4.5 Z" fill={a.base} />
-          </Piece>
-        </G>
+        <Circle cx={60} cy={86} r={5} fill={a.base} opacity={0.25} />
+        <Circle cx={60} cy={86} r={2.4} fill={a.base} />
       </G>
     );
   },
