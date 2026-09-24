@@ -157,11 +157,11 @@ export function placesForCity(cityId: string): Place[] {
   return [
     { id: 'pl-run', name: 'Sunset Run', meta: '2.4 km', kind: 'Runs', icon: 'run-fast', color: '#FF35B5', x: 0.3, y: 0.12, eventId: events[0]?.id },
     { id: 'pl-gym', name: city.venues.gyms[0].split(',')[0], meta: '0.8 km', kind: 'Gyms', icon: 'dumbbell', color: '#FFD43B', x: 0.06, y: 0.34 },
-    { id: 'pl-yoga', name: 'Yoga Meet', meta: 'Today, 6 PM', kind: 'Events', icon: 'yoga', color: '#B57BFF', x: 0.55, y: 0.24, eventId: events[2]?.id },
+    { id: 'pl-yoga', name: 'Yoga Meet', meta: 'Today, 6 PM', kind: 'Events', icon: 'yoga', color: '#B57BFF', x: 0.5, y: 0.22, eventId: events[2]?.id },
     { id: 'pl-cafe', name: 'Healthy Cafe', meta: '1.1 km', kind: 'Cafes', icon: 'coffee', color: '#3DF0A0', x: 0.16, y: 0.58 },
     { id: 'pl-comm', name: 'Community Run', meta: '120 people', kind: 'Events', icon: 'account-group', color: '#FF35B5', x: 0.5, y: 0.8, eventId: events[7]?.id },
     { id: 'pl-gym2', name: city.venues.gyms[1].split(',')[0], meta: '2.2 km', kind: 'Gyms', icon: 'weight-lifter', color: '#FFD43B', x: 0.66, y: 0.46 },
-    { id: 'pl-run2', name: city.venues.runs[1], meta: '3.6 km loop', kind: 'Runs', icon: 'map-marker-path', color: '#35DFFF', x: 0.08, y: 0.08 },
+    { id: 'pl-run2', name: city.venues.runs[1], meta: '3.6 km loop', kind: 'Runs', icon: 'map-marker-path', color: '#35DFFF', x: 0.56, y: 0.0 },
     { id: 'pl-cafe2', name: city.venues.cafes[1].split(',')[0], meta: '1.9 km', kind: 'Cafes', icon: 'cup', color: '#3DF0A0', x: 0.62, y: 0.64 },
     { id: 'pl-hiit', name: 'HIIT Takeover', meta: 'Tomorrow, 7 PM', kind: 'Events', icon: 'lightning-bolt', color: '#FF7A45', x: 0.24, y: 0.72, eventId: events[5]?.id },
   ];

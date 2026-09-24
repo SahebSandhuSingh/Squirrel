@@ -12,10 +12,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0A0610",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1C0C2E"
       },
       "package": "in.squirrelsocial.app"
     },
@@ -24,10 +22,15 @@
       "bundler": "metro"
     },
     "scheme": "squirrelsocial",
-    "backgroundColor": "#0A0610",
+    "backgroundColor": "#07050D",
     "plugins": [
       "expo-router",
       "expo-font"
-    ]
+    ],
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#07050D"
+    }
   }
 }

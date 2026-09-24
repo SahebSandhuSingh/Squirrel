@@ -326,6 +326,7 @@ const BADGES: Record<BadgeKind, BadgeDef> = {
     R: 40,
     emblem: ({ main, detail }, cy) => (
       <G>
+        <Path d={`M${f(60 + Math.cos(2.06) * 25.5)} ${f(cy + Math.sin(2.06) * 25.5)} A25.5 25.5 0 0 1 ${f(60 + Math.cos(4.36) * 25.5)} ${f(cy + Math.sin(4.36) * 25.5)} M${f(60 + Math.cos(1.08) * 25.5)} ${f(cy + Math.sin(1.08) * 25.5)} A25.5 25.5 0 0 0 ${f(60 + Math.cos(-1.22) * 25.5)} ${f(cy + Math.sin(-1.22) * 25.5)}`} stroke={main} strokeWidth={2} fill="none" strokeLinecap="round" />
         <Path d={leaves(60, cy, 25.5, 118, 250, 6, 11, 3.6)} fill={main} />
         <Path d={leaves(60, cy, 25.5, 62, -70, 6, 11, 3.6)} fill={main} />
         <Path d={star(60, cy - 1, 14, 6)} fill={main} />

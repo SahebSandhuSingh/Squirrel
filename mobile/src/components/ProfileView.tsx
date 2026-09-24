@@ -53,7 +53,7 @@ export function ProfileView({ user, isMe }: { user: User; isMe: boolean }) {
     [userPosts, user.id],
   );
   const savedPosts = posts.filter((p) => saved.has(p.id));
-  const nextReward = levelRewards.find((r) => r.level > lvl);
+  const nextReward = levelRewards.find((r) => r.level > lvl && r.kind === 'trail') ?? levelRewards.find((r) => r.level > lvl);
   const badges = achievements.filter((a) => a.progress >= 1);
 
   return (

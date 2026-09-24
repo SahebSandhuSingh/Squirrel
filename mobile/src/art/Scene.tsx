@@ -86,7 +86,7 @@ const NIGHT: Mood = {
     [1, '#52165A'],
   ],
   far: ['#241238', '#3A1650'],
-  mid: ['#180B2A', '#221036'],
+  mid: ['#22103A', '#2E1646'],
   near: ['#0D0718', '#0A0512'],
   haze: art.magenta,
   water: [
@@ -100,7 +100,7 @@ const NIGHT: Mood = {
     [art.amber, 3],
     [art.violet, 1],
   ],
-  lit: 0.46,
+  lit: 0.58,
 };
 
 const DAWN: Mood = {
@@ -226,7 +226,7 @@ function cityEl(
   hy: number,
   o: { scale?: number; valley?: number; valleyX?: number; layers?: 2 | 3; lit?: number; x0?: number; x1?: number } = {},
 ): City {
-  const hmax = clamp(hy * 0.78, 50, 250) * (o.scale ?? 1);
+  const hmax = clamp(hy * 0.72, 50, 200) * (o.scale ?? 1);
   const lit = o.lit ?? m.lit;
   const v = o.valley ?? 0.45;
   const base = { valleyX: o.valleyX, x0: o.x0, x1: o.x1 };
@@ -262,7 +262,7 @@ function cityEl(
           maxH: hmax * 0.4,
           wMin: 20,
           wMax: 42,
-          valley: v * 0.3,
+          valley: v * 0.7,
           win: { w: 2.3, h: 3.1, sx: 5.4, sy: 7.2, lit, palette: m.win },
         })
       : undefined;
@@ -380,6 +380,9 @@ function moonEl(c: Ctx, cx: number, cy: number, r: number): Node {
   );
 }
 
+/** Sun centre so its cut-lines clear the skyline valley. */
+const sunY = (hy: number, hmax: number, R: number) => Math.max(R * 0.75, hy - hmax * 0.3 - R * 0.8);
+
 /** Figure scale: people ~ this many units tall /100. */
 const figScale = (c: Ctx) => clamp(c.H * 0.28, 60, 118) / 100;
 
@@ -398,9 +401,9 @@ function palmsSides(c: Ctx, base: number, h: number, fill: string, count = 3): N
 function citySunset(c: Ctx): Node {
   const { H } = c;
   const hy = H * 0.63;
-  const R = clamp(hy * 0.42, 48, 125);
-  const sunY = hy - R * 0.5;
-  const city = cityEl(c, SUNSET, hy, { valley: 0.55 });
+  const R = clamp(hy * 0.38, 48, 118);
+  const city = cityEl(c, SUNSET, hy, { valley: 0.6 });
+  const sy = sunY(hy, city.hmax, R);
   const pTop = H - clamp(H * 0.12, 26, 80);
   const pal = clamp(H * 0.55, 110, 330);
   const lamps: [number, number, number][] = [];
@@ -414,8 +417,8 @@ function citySunset(c: Ctx): Node {
     <G>
       {skyEl(c, SUNSET.sky, hy)}
       {starsEl(c, 26, hy * 0.35, 0.6)}
-      {sunEl(c, 200, sunY, R, { cut: true })}
-      {cloudsEl(c, sunY - R * 0.9, sunY + R * 0.4, [art.magenta, art.purple], 6)}
+      {sunEl(c, 200, sy, R, { cut: true })}
+      {cloudsEl(c, sy - R * 0.9, sy + R * 0.4, [art.magenta, art.purple], 6)}
       {city.el}
       <Rect x={-2} y={hy} width={404} height={H - hy + 2} fill={c.lin(SUNSET.water)} />
       {city.near && reflectEl(city.near, hy + 1, '#12081E', 0.7)}
@@ -435,7 +438,7 @@ function citySunset(c: Ctx): Node {
 function cityNight(c: Ctx): Node {
   const { H } = c;
   const hy = H * 0.66;
-  const city = cityEl(c, NIGHT, hy, { valley: 0.25, valleyX: 120 });
+  const city = cityEl(c, NIGHT, hy, { valley: 0.25, valleyX: 120, lit: 0.7 });
   const roadY = H - clamp(H * 0.17, 34, 120);
   const deck = clamp(H * 0.025, 5, 14);
   // neon signs on tallest near/mid towers
@@ -444,6 +447,7 @@ function cityNight(c: Ctx): Node {
   const pinkSign: string[] = [];
   const cyanSign: string[] = [];
   const signs = pool.slice(0, 3);
+  const billboardLegs: string[] = [];
   signs.forEach((t, i) => {
     if (i === 0) {
       const sh = Math.min(12, t.h * 0.12);
@@ -454,9 +458,11 @@ function cityNight(c: Ctx): Node {
       cyanSign.push(rectD(t.x + t.w - 3, t.y + 8, 6, sh));
       for (let k = 1; k < 5; k++) cyanSign.push(`M${f(t.x + t.w - 1)} ${f(t.y + 8 + (sh * k) / 5)}h2`);
     } else {
-      pinkSign.push(circleD(t.x + t.w / 2, t.y - 8, 5));
-      pinkSign.push(`M${f(t.x + t.w / 2)} ${f(t.y - 3)}v3`);
-      cyanSign.push(`M${f(t.x + 1)} ${f(t.y + 2)}v${f(t.h * 0.6)}M${f(t.x + t.w - 1)} ${f(t.y + 2)}v${f(t.h * 0.6)}`);
+      const bw = Math.min(30, t.w + 6);
+      const bx = t.x + t.w / 2 - bw / 2;
+      cyanSign.push(rectD(bx, t.y - 16, bw, 11));
+      pinkSign.push(`M${f(bx + 4)} ${f(t.y - 12.5)}h${f(bw * 0.55)}M${f(bx + 4)} ${f(t.y - 8.5)}h${f(bw * 0.35)}`);
+      billboardLegs.push(`M${f(bx + 4)} ${f(t.y - 5)}v6M${f(bx + bw - 4)} ${f(t.y - 5)}v6`);
     }
   });
   // light trails
@@ -488,6 +494,7 @@ function cityNight(c: Ctx): Node {
       {moonEl(c, 320, clamp(hy * 0.22, 40, 150), clamp(hy * 0.06, 11, 24))}
       <Rect x={-2} y={hy * 0.45} width={404} height={hy * 0.55} fill={c.lin([[0, art.magenta, 0], [1, art.pink, 0.28]])} />
       {city.el}
+      <Path d={billboardLegs.join('')} stroke="#0A0512" strokeWidth={1.6} />
       <Glow d={pinkSign.join('')} color={art.pink} core={art.pinkHi} w={1.1} />
       <Glow d={cyanSign.join('')} color={art.cyan} core="#CFF8FF" w={1.1} />
       <Rect x={-2} y={hy} width={404} height={H - hy + 2} fill={c.lin(NIGHT.water)} />
@@ -510,7 +517,7 @@ function cityDawn(c: Ctx): Node {
   const hy = H * 0.64;
   const R = clamp(hy * 0.3, 40, 95);
   const sunX = 250;
-  const city = cityEl(c, DAWN, hy, { valley: 0.35, valleyX: sunX });
+  const city = cityEl(c, DAWN, hy, { valley: 0.55, valleyX: sunX });
   const stepH = clamp(H * 0.045, 9, 28);
   const sTop = H - stepH * 3.2;
   const mist = c.lin([
@@ -521,7 +528,7 @@ function cityDawn(c: Ctx): Node {
   return (
     <G>
       {skyEl(c, DAWN.sky, hy)}
-      {sunEl(c, sunX, hy - R * 0.2, R, { top: '#FFF6D8', bottom: '#FFA98A', glow: '#FFD2A8', glowR: 3.2 })}
+      {sunEl(c, sunX, hy - city.hmax * 0.3 - R * 0.35, R, { top: '#FFF6D8', bottom: '#FFA98A', glow: '#FFD2A8', glowR: 3.2 })}
       {cloudsEl(c, hy * 0.25, hy * 0.7, ['#F7C4D8', '#B89AD8'], 5)}
       <G>
         <SkylineLayer sky={city.far} fill={c.lin([[0, DAWN.far[0]], [1, DAWN.far[1]]])} winOpacity={0.4} />
@@ -549,14 +556,14 @@ function cityDawn(c: Ctx): Node {
 function runScene(c: Ctx): Node {
   const { H } = c;
   const hy = H * 0.5;
-  const R = clamp(hy * 0.45, 40, 110);
+  const R = clamp(hy * 0.4, 40, 105);
   const sunX = 250;
-  const city = cityEl(c, SUNSET, hy, { valley: 0.5, valleyX: sunX, scale: 0.85 });
+  const city = cityEl(c, SUNSET, hy, { valley: 0.6, valleyX: sunX, scale: 0.85 });
   // road centre line: bottom-left -> vanishing point on horizon (right)
   const P0: Pt = [-20, H * 0.93];
   const C1: Pt = [190, H * 0.9];
   const P1: Pt = [352, hy + 3];
-  const near = clamp(H * 0.3, 64, 230);
+  const near = clamp(H * 0.46, 96, 330);
   const top: Pt[] = [];
   const bot: Pt[] = [];
   const route: Pt[] = [];
@@ -580,18 +587,18 @@ function runScene(c: Ctx): Node {
     poles.push(rectD(p[0] - w * 0.012 - 0.3, p[1] - lh, w * 0.024 + 0.6, lh));
     lamps.push([p[0], p[1] - lh, Math.max(0.6, w * 0.02)]);
   }
-  const s = figScale(c);
-  const ts = [0.2, 0.3, 0.41, 0.52];
+  const s = figScale(c) * 1.15;
+  const ts = [0.17, 0.26, 0.35, 0.44];
   const poses: PoseName[] = ['runA', 'runB', 'runC', 'runA'];
   const runners = ts.map((t, i) => {
     const p = quad(P0, C1, P1, t);
     const w = lerp(near, 2, Math.pow(t, 0.7));
-    const k = (w / near) * 1.05;
+    const k = lerp(1.08, 0.78, (t - 0.17) / 0.27);
     return (
       <Person
         key={i}
         x={p[0] + (c.r() - 0.5) * 8}
-        y={p[1] + w * (i % 2 ? 0.14 : 0.3)}
+        y={p[1] + w * (i % 2 ? 0.08 : 0.22)}
         s={s * k}
         pose={poses[(i + Math.floor(c.r() * 4)) % 4]}
         hair={hairFor(c)}
@@ -602,7 +609,7 @@ function runScene(c: Ctx): Node {
   return (
     <G>
       {skyEl(c, SUNSET.sky, hy)}
-      {sunEl(c, sunX, hy - R * 0.45, R, { cut: true })}
+      {sunEl(c, sunX, sunY(hy, city.hmax, R), R, { cut: true })}
       {cloudsEl(c, hy * 0.3, hy * 0.8, [art.magenta, art.purple], 5)}
       {city.el}
       <Rect x={-2} y={hy} width={404} height={H - hy + 2} fill={c.lin(SUNSET.water)} />
@@ -654,6 +661,8 @@ function yogaScene(c: Ctx): Node {
     { x: 326, pose: 'lungeUp', mat: art.yellow, flip: true },
   ];
   const treeH = clamp(H * 0.48, 110, 300);
+  const farTree = treeD(c.r, 352, hc + 4, treeH * 0.6);
+  const nearTree = treeD(c.r, 30, hc + 30, treeH);
   const tufts: string[] = [];
   for (let i = 0; i < 40; i++) {
     const x = c.r() * 400;
@@ -669,13 +678,13 @@ function yogaScene(c: Ctx): Node {
       {birdsEl(c, 120, hy * 0.4, 4, clamp(H / 400, 0.7, 1.4), '#2A0E45')}
       {city.el}
       <Rect x={-2} y={hy} width={404} height={H - hy + 2} fill={c.lin([[0, '#E8806A'], [1, '#7A2A5A']])} />
-      <Path d={treeD(c.r, 352, hc + 4, treeH * 0.6)} fill={art.amber} opacity={0.55} transform="translate(-1.5 -1)" />
-      <Path d={treeD(c.r, 352, hc + 4, treeH * 0.6)} fill="#1A1622" />
+      <Path d={farTree} fill={art.amber} opacity={0.55} transform="translate(-1.5 -1)" />
+      <Path d={farTree} fill="#1A1622" />
       <Path d={hill} fill={c.lin([[0, '#5A5A2A'], [0.25, '#2A3420'], [1, '#0C120C']])} />
       <Glow d={crest} color={art.amber} core={art.sunTop} w={1} op={0.7} />
       <Path d={tufts.join('')} stroke="#0C140C" strokeWidth={1} opacity={0.8} />
-      <Path d={treeD(c.r, 30, hc + 30, treeH)} fill={art.amber} opacity={0.5} transform="translate(2 -1.5)" />
-      <Path d={treeD(c.r, 30, hc + 30, treeH)} fill="#0E120E" />
+      <Path d={nearTree} fill={art.amber} opacity={0.5} transform="translate(2 -1.5)" />
+      <Path d={nearTree} fill="#0E120E" />
       {people.map((p, i) => {
         const y = gy + (i % 2) * 4;
         const mw = (p.pose === 'downDog' || p.pose === 'lungeUp' || p.pose === 'warrior' ? 34 : 22) * s;
@@ -694,7 +703,7 @@ function yogaScene(c: Ctx): Node {
 function gymScene(c: Ctx): Node {
   const { H } = c;
   const floorY = H * 0.7;
-  const s = figScale(c);
+  const s = figScale(c) * 1.1;
   const fh = 100 * s;
   const signY = clamp(floorY * 0.34, fh * 0.35, floorY - fh * 1.25);
   const bricks: string[] = [];
@@ -767,8 +776,8 @@ function gymScene(c: Ctx): Node {
   ));
   const barbell = (
     <G>
-      <Path d="M-40 -104h80" stroke="#3A3048" strokeWidth={2.6} strokeLinecap="round" />
-      <Path d={rectD(-38, -116, 7, 24) + rectD(31, -116, 7, 24) + rectD(-31, -112, 4, 16) + rectD(27, -112, 4, 16)} fill="#140A20" stroke={art.pink} strokeWidth={0.8} />
+      <Path d="M-56 -104h112" stroke="#4A4058" strokeWidth={3} strokeLinecap="round" />
+      <Path d={rectD(-52, -122, 9, 36) + rectD(43, -122, 9, 36) + rectD(-42, -116, 6, 24) + rectD(36, -116, 6, 24)} fill="#140A20" stroke={art.pink} strokeWidth={1} />
     </G>
   );
   return (
@@ -795,7 +804,8 @@ function gymScene(c: Ctx): Node {
       <Path d={dRack} fill={steel} />
       <Path d={dbs.join('')} fill="#120A1C" />
       <Path d={dbHi.join('')} stroke={art.pink} strokeWidth={1} strokeLinecap="round" />
-      <Path d={circleD(250, lifterY - 6, 6) + circleD(268, lifterY - 5, 5) + circleD(140, lifterY - 6, 6)} fill="#140A20" stroke={art.cyan} strokeWidth={0.6} />
+      <Path d={[[268, 1], [296, 0.8], [128, 1]].map(([x, k]) => circleD(x, lifterY - 10 * k * s, 10 * k * s)).join('')} fill="#140A20" stroke={art.cyan} strokeWidth={0.7} />
+      <Path d={[[268, 1], [296, 0.8], [128, 1]].map(([x, k]) => `M${f(x - 6 * k * s)} ${f(lifterY - 17 * k * s)}a${f(6 * k * s)} ${f(6 * k * s)} 0 1 1 ${f(12 * k * s)} 0`).join('')} stroke="#140A20" strokeWidth={2.2 * s} fill="none" />
       <Path d={ellipseD(200, lifterY + 2, 70 * s, 8 * s)} fill={art.cyan} opacity={0.12} />
       <Person x={200} y={lifterY} s={s} pose="press" rim={art.pink} hair="short" reflect={0.14}>
         {barbell}
@@ -1014,11 +1024,11 @@ function brunchScene(c: Ctx): Node {
   const { H } = c;
   const edge = H - clamp(H * 0.08, 14, 44);
   const land = H / 400 < 0.8;
-  const u = land ? clamp(H / 300, 0.6, 1) : 1;
+  const u = land ? clamp(H / 245, 0.6, 1) : 1.2;
   const cy = (edge - 10) / 2 + 5;
   const pos = land
-    ? { toast: [98, cy + 6], bowl: [228, cy + 4], coffee: [336, cy - 34 * u], juice: [340, cy + 44 * u], extra: [170, cy + 70 * u] }
-    : { toast: [122, cy - 72], bowl: [276, cy - 40], coffee: [112, cy + 92], juice: [286, cy + 104], extra: [206, cy + 170] };
+    ? { toast: [86, cy + 4], bowl: [226, cy + 2], coffee: [340, cy - 44 * u], juice: [344, cy + 52 * u], extra: [150, cy + 78 * u] }
+    : { toast: [200 - 85 * u, cy - 75 * u], bowl: [200 + 80 * u, cy - 50 * u], coffee: [200 - 90 * u, cy + 95 * u], juice: [200 + 86 * u, cy + 106 * u], extra: [206, cy + 42 * u] };
   const P = (k: keyof typeof pos): Pt => [pos[k][0], pos[k][1]];
   const shadow: string[] = [];
   // ---- toast plate
@@ -1047,13 +1057,18 @@ function brunchScene(c: Ctx): Node {
   const bR = 64 * u;
   shadow.push(circleD(bx + 5 * u, by + 8 * u, bR));
   const berries: Pt[] = [];
-  const granola: Pt[] = [];
-  for (let i = 0; i < 16; i++) {
-    const a = c.r() * Math.PI * 2;
-    const rr = Math.sqrt(c.r()) * bR * 0.5;
-    berries.push([bx - bR * 0.2 + Math.cos(a) * rr * 0.6, by + bR * 0.25 + Math.sin(a) * rr * 0.5]);
+  for (let i = 0; i < 6; i++) berries.push([bx - bR * 0.55 + i * bR * 0.16, by + bR * 0.48 + Math.abs(i - 2.5) * -2 * u]);
+  const band: Pt[] = [];
+  for (let i = 0; i < 46; i++) band.push([bx + (c.r() - 0.5) * bR * 1.5, by - bR * 0.12 + (c.r() - 0.5) * bR * 0.22]);
+  const straws: string[] = [];
+  for (let i = 0; i < 4; i++) {
+    const hx = bx - bR * 0.45 + i * bR * 0.3;
+    const hy2 = by + bR * 0.18;
+    const q = 6.5 * u;
+    straws.push(`M${f(hx)} ${f(hy2 + q)}C${f(hx - q * 1.6)} ${f(hy2)} ${f(hx - q)} ${f(hy2 - q)} ${f(hx)} ${f(hy2 - q * 0.4)}C${f(hx + q)} ${f(hy2 - q)} ${f(hx + q * 1.6)} ${f(hy2)} ${f(hx)} ${f(hy2 + q)}Z`);
   }
-  for (let i = 0; i < 26; i++) granola.push([bx + bR * 0.3 + (c.r() - 0.5) * bR * 0.5, by - bR * 0.1 + (c.r() - 0.5) * bR * 0.9]);
+  const seedsS: Pt[] = [];
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) seedsS.push([bx - bR * 0.45 + i * bR * 0.3 + (j - 1) * 2.4 * u, by + bR * 0.18 + (j % 2) * 2 * u]);
   const banana: string[] = [];
   const bananaIn: string[] = [];
   for (let i = 0; i < 5; i++) {
@@ -1062,16 +1077,15 @@ function brunchScene(c: Ctx): Node {
     banana.push(circleD(x, y, 8 * u));
     bananaIn.push(circleD(x, y, 3 * u));
   }
-  const kiwi = circleD(bx + bR * 0.45, by + bR * 0.35, 11 * u) + circleD(bx + bR * 0.15, by + bR * 0.55, 10 * u);
-  const kiwiIn = circleD(bx + bR * 0.45, by + bR * 0.35, 4 * u) + circleD(bx + bR * 0.15, by + bR * 0.55, 3.5 * u);
+  const kiwi = circleD(bx + bR * 0.5, by + bR * 0.38, 11 * u) + circleD(bx + bR * 0.3, by + bR * 0.6, 10 * u);
+  const kiwiIn = circleD(bx + bR * 0.5, by + bR * 0.38, 4 * u) + circleD(bx + bR * 0.3, by + bR * 0.6, 3.5 * u);
   const kiwiSeeds: Pt[] = [];
   for (const [kx, ky, kr] of [
-    [bx + bR * 0.45, by + bR * 0.35, 7 * u],
-    [bx + bR * 0.15, by + bR * 0.55, 6.5 * u],
+    [bx + bR * 0.5, by + bR * 0.38, 7 * u],
+    [bx + bR * 0.3, by + bR * 0.6, 6.5 * u],
   ]) {
     for (let i = 0; i < 8; i++) kiwiSeeds.push([kx + Math.cos((i / 8) * 6.28) * kr * 0.8, ky + Math.sin((i / 8) * 6.28) * kr * 0.8]);
   }
-  const straw = circleD(bx - bR * 0.2, by + bR * 0.05, 9 * u) + circleD(bx + bR * 0.02, by + bR * 0.02, 8 * u);
   // ---- coffee
   const [cx, cy2] = P('coffee');
   const cR = 30 * u;
@@ -1092,8 +1106,6 @@ function brunchScene(c: Ctx): Node {
     segs.push(`M${f(ex)} ${f(ey)}l${f(Math.cos(a) * oR * 0.78)} ${f(Math.sin(a) * oR * 0.78)}`);
   }
   shadow.push(circleD(ex + 3 * u, ey + 5 * u, oR));
-  const scatter: Pt[] = [];
-  for (let i = 0; i < 7; i++) scatter.push([lerp(40, 360, c.r()), lerp(20, edge - 14, c.r())]);
   const cutX = land ? 30 : 38;
   const cutlery = `M${f(cutX)} ${f(ty - 50 * u)}v${f(110 * u)}M${f(cutX + 9 * u)} ${f(ty - 50 * u)}v${f(110 * u)}`;
   const grain: string[] = [];
@@ -1126,13 +1138,15 @@ function brunchScene(c: Ctx): Node {
       {/* smoothie bowl */}
       <Circle cx={bx} cy={by} r={bR} fill="#1E5A6A" />
       <Circle cx={bx} cy={by} r={bR * 0.86} fill={c.rad([[0, '#FF4FA8'], [1, '#A0186A']])} />
-      <Path d={dotsD(granola)} stroke="#D89A48" strokeWidth={4 * u} strokeLinecap="round" />
+      <Path d={dotsD(band)} stroke="#D89A48" strokeWidth={4.2 * u} strokeLinecap="round" />
+      <Path d={dotsD(band.slice(0, 16))} stroke="#F4ECF8" strokeWidth={2.2 * u} strokeLinecap="round" />
       <Path d={banana.join('')} fill="#FFF0B8" />
       <Path d={bananaIn.join('')} fill="#F0D080" />
       <Path d={kiwi} fill="#7ACB3A" />
       <Path d={kiwiIn} fill="#E8F8C0" />
       <Path d={dotsD(kiwiSeeds)} stroke="#1A1A10" strokeWidth={1.4 * u} strokeLinecap="round" />
-      <Path d={straw} fill="#FF3B5C" />
+      <Path d={straws.join('')} fill="#FF2E55" />
+      <Path d={dotsD(seedsS)} stroke={art.sunTop} strokeWidth={1.2 * u} strokeLinecap="round" />
       <Path d={dotsD(berries)} stroke="#3A3AB8" strokeWidth={8 * u} strokeLinecap="round" />
       <Path d={dotsD(berries.map((p): Pt => [p[0] - 1.5 * u, p[1] - 1.5 * u]))} stroke="#8A8AF0" strokeWidth={2 * u} strokeLinecap="round" />
       {/* coffee */}
@@ -1152,7 +1166,6 @@ function brunchScene(c: Ctx): Node {
       <Circle cx={ex} cy={ey} r={oR} fill={art.orange} />
       <Circle cx={ex} cy={ey} r={oR * 0.84} fill={art.amber} />
       <Path d={segs.join('')} stroke="#FFE8B0" strokeWidth={1.4 * u} />
-      <Path d={dotsD(scatter)} stroke="#3A3AB8" strokeWidth={7 * u} strokeLinecap="round" />
       {/* neon table edge */}
       <Rect x={-2} y={edge} width={404} height={H - edge + 2} fill={art.night0} />
       <Glow d={`M-4 ${f(edge)}h408`} color={art.pink} core={art.pinkHi} w={2} />
@@ -1164,8 +1177,8 @@ function brunchScene(c: Ctx): Node {
 function crewScene(c: Ctx): Node {
   const { H } = c;
   const hy = H * 0.64;
-  const R = clamp(hy * 0.4, 45, 115);
-  const city = cityEl(c, SUNSET, hy, { valley: 0.5 });
+  const R = clamp(hy * 0.38, 45, 110);
+  const city = cityEl(c, SUNSET, hy, { valley: 0.6 });
   const s = figScale(c);
   const yP = H * 0.78;
   const yF = yP + (H - yP) * 0.62;
@@ -1184,7 +1197,7 @@ function crewScene(c: Ctx): Node {
     <G>
       {skyEl(c, SUNSET.sky, hy)}
       {starsEl(c, 20, hy * 0.3, 0.5)}
-      {sunEl(c, 200, hy - R * 0.45, R, { cut: true })}
+      {sunEl(c, 200, sunY(hy, city.hmax, R), R, { cut: true })}
       {cloudsEl(c, hy * 0.3, hy * 0.75, [art.magenta, art.purple], 5)}
       {city.el}
       <Rect x={-2} y={yP - 10} width={404} height={H - yP + 12} fill={c.lin([[0, '#1C0C2C'], [1, art.night0]])} />
@@ -1214,7 +1227,7 @@ function cyclingScene(c: Ctx): Node {
   const hy = H * 0.55;
   const R = clamp(hy * 0.4, 42, 110);
   const sunX = 140;
-  const city = cityEl(c, SUNSET, hy, { valley: 0.5, valleyX: sunX, scale: 0.8 });
+  const city = cityEl(c, SUNSET, hy, { valley: 0.6, valleyX: sunX, scale: 0.8 });
   const yD = H * 0.76;
   const dT = clamp(H * 0.035, 7, 18);
   const px = 300;
@@ -1252,7 +1265,7 @@ function cyclingScene(c: Ctx): Node {
   return (
     <G>
       {skyEl(c, SUNSET.sky, hy)}
-      {sunEl(c, sunX, hy - R * 0.4, R, { cut: true })}
+      {sunEl(c, sunX, sunY(hy, city.hmax, R), R, { cut: true })}
       {cloudsEl(c, hy * 0.3, hy * 0.8, [art.magenta, art.purple], 5)}
       {city.el}
       <Rect x={-2} y={hy} width={404} height={H - hy + 2} fill={c.lin(SUNSET.water)} />
@@ -1305,7 +1318,7 @@ function lakeScene(c: Ctx): Node {
   const farH = hillsD(c, hy, amp, hy - amp * 0.15, 70);
   const nearH = hillsD(c, hy, amp * 0.5, hy, 55);
   const tiny = skyline(c.r, { x0: 20, x1: 150, base: hy - amp * 0.05, minH: 6, maxH: amp * 0.45, wMin: 5, wMax: 11 });
-  const yS = H * 0.8;
+  const yS = H * 0.74;
   const shore = `M-10 ${f(yS)}Q140 ${f(yS - 12)} 260 ${f(yS - 4)}T410 ${f(yS + 2)}L410 ${f(H + 2)}L-10 ${f(H + 2)}Z`;
   const pathTop = yS + (H - yS) * 0.28;
   const path = `M-10 ${f(pathTop + 6)}Q160 ${f(pathTop - 8)} 410 ${f(pathTop + 2)}L410 ${f(pathTop + 2 + (H - yS) * 0.28)}Q160 ${f(pathTop + (H - yS) * 0.22)} -10 ${f(pathTop + 6 + (H - yS) * 0.3)}Z`;
@@ -1343,7 +1356,7 @@ function lakeScene(c: Ctx): Node {
       <Path d={path} fill={c.lin([[0, '#6A4A7A'], [1, '#3A2650']])} />
       <Path d={reeds.join('')} stroke="#120A20" strokeWidth={1.4} fill="none" strokeLinecap="round" />
       <Path d={treeD(c.r, 372, yS + 6, clamp(H * 0.4, 90, 260))} fill="#140C22" />
-      <Person x={210} y={pathTop + (H - yS) * 0.15} s={s} pose="runA" flip hair="pony" rim={art.amber} light={1} />
+      <Person x={210} y={pathTop + (H - yS) * 0.2} s={s} pose="runA" flip hair="pony" rim={art.amber} light={1} />
       {vignetteEl(c, 0.3)}
     </G>
   );

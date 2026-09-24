@@ -57,21 +57,24 @@ export function FadeIn({ children, index = 0, delay = 0, style, from = 14 }: { c
   );
 }
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 /** Pressable that springs down slightly when touched. */
-export function PressScale({ children, style, scaleTo = 0.97, haptic = true, onPress, ...rest }: PressableProps & { children: React.ReactNode; style?: StyleProp<ViewStyle>; scaleTo?: number; haptic?: boolean }) {
+export function PressScale({ children, style, scaleTo = 0.97, haptic = true, onPress, ...rest }: Omit<PressableProps, 'style'> & { children: React.ReactNode; style?: StyleProp<ViewStyle>; scaleTo?: number; haptic?: boolean }) {
   const s = useRef(new Animated.Value(1)).current;
   const to = (v: number) => Animated.spring(s, { toValue: v, useNativeDriver: NATIVE, speed: 40, bounciness: 6 }).start();
   return (
-    <Pressable
+    <AnimatedPressable
       {...rest}
       onPressIn={() => to(scaleTo)}
       onPressOut={() => to(1)}
       onPress={(e) => {
         if (haptic) tap();
         onPress?.(e);
-      }}>
-      <Animated.View style={[style, { transform: [{ scale: s }] }]}>{children}</Animated.View>
-    </Pressable>
+      }}
+      style={[style, { transform: [{ scale: s }] }]}>
+      {children}
+    </AnimatedPressable>
   );
 }
 

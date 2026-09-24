@@ -122,7 +122,7 @@ export default function LevelUp() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
+  root: { flex: 1, backgroundColor: colors.bg, overflow: 'hidden' },
   col: { flex: 1, paddingHorizontal: 16, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' },
   gains: { flexDirection: 'row', gap: 8, marginTop: 10 },
   gain: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(7,5,13,0.7)', borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: colors.line },

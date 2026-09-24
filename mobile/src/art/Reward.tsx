@@ -107,21 +107,25 @@ const SHOE_SOLE = 'M12 75 L110 71 C113 77 112 86 106 90 C102 92 98 92 94 92 L24 
 
 const draw: Record<RewardArtKind, (uid: string) => React.ReactElement> = {
   outfit: (uid) => {
-    const body = 'M20 58 C20 54 23 52 27 52 H93 C97 52 100 54 100 58 V96 C100 100 97 102 93 102 H27 C23 102 20 100 20 96 Z';
-    const hood = 'M34 56 C33 38 46 28 60 28 C74 28 87 38 86 56 C76 61 44 61 34 56 Z';
+    const pants = 'M14 84 C14 81 16 80 19 80 H101 C104 80 106 81 106 84 V100 C106 103 104 104 101 104 H19 C16 104 14 103 14 100 Z';
+    const body = 'M20 50 C20 47 22 46 25 46 H95 C98 46 100 47 100 50 V82 C100 85 98 86 95 86 H25 C22 86 20 85 20 82 Z';
+    const hood = 'M34 48 C34 36 45 29 60 29 C75 29 86 36 86 48 L82 58 C73 63 47 63 38 58 Z';
     return (
       <G>
-        <Shaded id={`${uid}b`} d={body} fill={art.purple} shade="#4B1C9A" hi={art.violet} rim={art.pink} />
-        <Path d="M20 64 L38 64 L42 102 M100 64 L82 64 L78 102" stroke={INK} strokeWidth={1.8} strokeOpacity={0.55} fill="none" />
-        <Path d="M20 91 H100 V96 C100 100 97 102 93 102 H27 C23 102 20 100 20 96 Z" fill={art.pink} stroke={INK} strokeWidth={2} />
-        <Path d="M46 76 H74 L78 90 H42 Z" fill="none" stroke={INK} strokeWidth={1.8} strokeOpacity={0.6} strokeLinejoin="round" />
-        <Shaded id={`${uid}h`} d={hood} fill={art.purple} shade="#4B1C9A" hi={art.violet} s={0.7} rim={art.pink} />
-        <Path d="M43 53 C43 41 51 35 60 35 C69 35 77 41 77 53 C70 57 50 57 43 53 Z" fill="#2A0F52" stroke={INK} strokeWidth={1.8} />
-        <Path d="M54 57 L52 72 M66 57 L68 72" stroke={INK} strokeWidth={4} strokeLinecap="round" />
-        <Path d="M54 57 L52 72 M66 57 L68 72" stroke="#FFFFFF" strokeWidth={2} strokeLinecap="round" />
-        <Path d="M50.3 71 h3.4 v5 h-3.4 Z M66.3 71 h3.4 v5 h-3.4 Z" fill={art.pink} stroke={INK} strokeWidth={1.2} />
-        <Sparkles pts={[[98, 30, 9], [18, 40, 5.5], [106, 52, 4], [26, 22, 3.5]]} />
-        <Sparkles pts={[[88, 18, 3.5]]} color={art.cyan} />
+        <Shaded id={`${uid}p`} d={pants} fill={art.pink} shade={art.magenta} hi={art.pinkHi} s={0.5} rim={art.cyan} />
+        <Path d="M14 94 H106" stroke="#FFFFFF" strokeWidth={2.6} />
+        <Path d="M60 82 V104" stroke={INK} strokeWidth={1.6} strokeOpacity={0.4} />
+        <Shaded id={`${uid}b`} d={body} fill={art.purple} shade="#4B1C9A" hi={art.violet} s={0.7} rim={art.pink} />
+        <Path d="M20 55 H36 L40 86 M100 55 H84 L80 86" stroke={INK} strokeWidth={1.8} strokeOpacity={0.5} fill="none" />
+        <Path d="M20 78 H37.5 L38.5 86 H25 C22 86 20 85 20 82 Z M100 78 H82.5 L81.5 86 H95 C98 86 100 85 100 82 Z" fill={art.pink} stroke={INK} strokeWidth={1.6} strokeLinejoin="round" />
+        <Path d="M46 68 H74 L77 82 H43 Z" fill="none" stroke={INK} strokeWidth={1.8} strokeOpacity={0.55} strokeLinejoin="round" />
+        <Shaded id={`${uid}h`} d={hood} fill={art.purple} shade="#4B1C9A" hi={art.violet} s={0.5} rim={art.pink} />
+        <Path d="M42 46 C46 40 74 40 78 46 C73 53 47 53 42 46 Z" fill="#2A0F52" stroke={INK} strokeWidth={1.8} />
+        <Path d="M54 51 L52 67 M66 51 L68 67" stroke={INK} strokeWidth={4} strokeLinecap="round" />
+        <Path d="M54 51 L52 67 M66 51 L68 67" stroke="#FFFFFF" strokeWidth={2} strokeLinecap="round" />
+        <Path d="M50.3 66 h3.4 v5 h-3.4 Z M66.3 66 h3.4 v5 h-3.4 Z" fill={art.pink} stroke={INK} strokeWidth={1.2} />
+        <Sparkles pts={[[100, 26, 9], [18, 34, 5.5], [108, 62, 4], [28, 18, 3.5]]} />
+        <Sparkles pts={[[88, 14, 3.5]]} color={art.cyan} />
       </G>
     );
   },
@@ -272,7 +276,7 @@ const draw: Record<RewardArtKind, (uid: string) => React.ReactElement> = {
           </LinearGradient>
         </Defs>
         {/* light beams */}
-        <Path d="M26 60 L4 4 L40 4 L44 60 Z M52 60 L50 0 L70 0 L68 60 Z M76 60 L80 4 L116 4 L94 60 Z" fill={`url(#${uid}l)`} opacity={0.55} />
+        <Path d="M32 58 L14 10 L38 6 L46 58 Z M53 58 L50 0 L70 0 L67 58 Z M74 58 L82 6 L106 10 L88 58 Z" fill={`url(#${uid}l)`} opacity={0.6} />
         <Path d="M22 60 C40 52 80 52 98 60 L98 64 H22 Z" fill={art.pinkHi} />
         <Path d="M30 58 C44 52 76 52 90 58" stroke="#FFFFFF" strokeWidth={3} strokeLinecap="round" fill="none" opacity={0.9} />
         <G transform="translate(0 -6) rotate(-6 18 54)">

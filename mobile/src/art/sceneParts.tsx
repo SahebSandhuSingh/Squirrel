@@ -305,12 +305,12 @@ export function palmD(r: Rng, x: number, base: number, h: number, lean: number):
     const c: Pt = [top[0] + dx * L * 0.55, top[1] + dy * L * 0.5 - L * 0.12];
     const upper: Pt[] = [];
     const lower: Pt[] = [];
-    const S = 9;
+    const S = 16;
     for (let i = 0; i <= S; i++) {
       const t = i / S;
       const p = quad(top, c, tip, t);
       upper.push(p);
-      const wv = L * 0.11 * Math.sin(Math.PI * Math.min(1, t * 1.15)) * (i % 2 ? 1.7 : 0.55);
+      const wv = L * 0.1 * Math.sin(Math.PI * Math.min(1, t * 1.1)) * (i % 2 ? 1.6 : 0.7);
       lower.push([p[0] - dx * wv * 0.35, p[1] + wv]);
     }
     parts.push(polyD([...upper, ...lower.reverse()]));
@@ -362,7 +362,7 @@ export const POSES = {
   runA: { lean: 12, armA: [45, 125], armB: [-50, 15], legA: [58, 10], legB: [-28, -100] },
   runB: { lean: 10, armA: [-40, 30], armB: [40, 120], legA: [28, 2], legB: [-38, -80] },
   runC: { lean: 14, armA: [60, 140], armB: [-60, 0], legA: [70, 20], legB: [-20, -115], lift: 3 },
-  sprint: { lean: 26, tilt: -12, armA: [80, 160], armB: [-75, -10], legA: [88, 20], legB: [-35, -95], lift: 2 },
+  sprint: { lean: 16, tilt: -8, armA: [70, 150], armB: [-65, -5], legA: [72, 5], legB: [-38, -72], lift: 8 },
   stand: { armA: [8, 6], armB: [-6, -4], legA: [4, 2], legB: [-3, -2] },
   standF: { front: true, armA: [14, 8], armB: [-14, -8], legA: [5, 2], legB: [-5, -2] },
   armsUp: { front: true, armA: [155, 170], armB: [-155, -170], legA: [10, 6], legB: [-10, -6] },
@@ -445,8 +445,8 @@ export function buildFigure(pose: Pose, hair: Hair = 'short'): Figure {
   }
   const T = (p: Pt): Pt => [p[0], p[1] + dy];
 
-  const ws = fr ? 9.5 : 6.5;
-  const wh = fr ? 7 : 6;
+  const ws = fr ? 11 : 8;
+  const wh = fr ? 8 : 7;
   const hipLow = add(hip0, u, -3);
   const torso = polyD([
     T(add(shC, perp, ws)),
@@ -468,7 +468,7 @@ export function buildFigure(pose: Pose, hair: Hair = 'short'): Figure {
   } else if (hair === 'cap') {
     hairD = fr ? rectD(hd[0] - 8, hd[1] - 4, 16, 2.4) : polyD([[hd[0] - 2, hd[1] - 5], [hd[0] + 11, hd[1] - 4], [hd[0] + 10, hd[1] - 2.2], [hd[0] - 1, hd[1] - 2.5]]);
   }
-  const body = torso + circleD(hd[0], hd[1], 7) + hairD;
+  const body = torso + circleD(hd[0], hd[1], 7.6) + hairD;
   const seg = (a: Pt, b: Pt) => `M${f(T(a)[0])} ${f(T(a)[1])}L${f(T(b)[0])} ${f(T(b)[1])}`;
   const thigh = seg(lA[0], lA[1]) + seg(lB[0], lB[1]);
   const shin = lineD([T(lA[1]), T(lA[2]), T(lA[3])]) + lineD([T(lB[1]), T(lB[2]), T(lB[3])]);
@@ -488,10 +488,10 @@ function FigureShape({ fig, color, extra = 0 }: { fig: Figure; color: string; ex
   const s = { stroke: color, fill: 'none', strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   return (
     <G>
-      <Path d={fig.thigh} {...s} strokeWidth={10.5 + extra} />
-      <Path d={fig.shin} {...s} strokeWidth={7 + extra} />
-      <Path d={fig.upper} {...s} strokeWidth={6 + extra} />
-      <Path d={fig.fore} {...s} strokeWidth={4.8 + extra} />
+      <Path d={fig.thigh} {...s} strokeWidth={12.5 + extra} />
+      <Path d={fig.shin} {...s} strokeWidth={8.4 + extra} />
+      <Path d={fig.upper} {...s} strokeWidth={7.4 + extra} />
+      <Path d={fig.fore} {...s} strokeWidth={5.6 + extra} />
       <Path d={fig.body} fill={color} stroke={extra ? color : 'none'} strokeWidth={extra} strokeLinejoin="round" />
     </G>
   );

@@ -42,7 +42,8 @@ export default function AvatarScreen() {
     tap();
     setLook({ ...look, ...patch });
   };
-  const stageH = Math.max(260, Math.min(height * 0.42, 420));
+  // Stage takes whatever the header, option panel (~150) and CTA (~90) leave.
+  const stageH = Math.max(250, Math.min(height - insets.top - insets.bottom - 330, 520));
   const petPose = pets.find((p) => p.id === pet);
 
   return (
@@ -103,7 +104,7 @@ export default function AvatarScreen() {
         {/* Options for the active category */}
         <View style={styles.panel}>
           <Label style={{ marginBottom: 8 }}>{cat}</Label>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 16 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 10, paddingRight: 16, alignItems: 'center' }}>
             {cat === 'Body' && (
               <>
                 {(['female', 'male'] as const).map((b) => (
@@ -167,6 +168,7 @@ export default function AvatarScreen() {
           </ScrollView>
         </View>
 
+        <View style={{ flex: 1 }} />
         <View style={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 14 }}>
           <Button
             label={editing ? 'Save Look' : 'Continue'}
@@ -215,7 +217,7 @@ const styles = StyleSheet.create({
   rail: { width: 62, height: 56, borderRadius: radius.md, backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center', gap: 2 },
   railOn: { borderColor: colors.pink, backgroundColor: 'rgba(255,53,181,0.12)' },
   railText: { color: colors.sub, fontSize: 10, fontFamily: fonts.semibold },
-  panel: { flex: 1, marginTop: 14, paddingLeft: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: 'rgba(16,9,26,0.6)' },
+  panel: { marginTop: 14, paddingBottom: 14, paddingLeft: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: 'rgba(16,9,26,0.6)' },
   opt: { width: 84, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', paddingVertical: 8 },
   optOn: { borderColor: colors.pink, backgroundColor: 'rgba(255,53,181,0.1)' },
   optText: { color: colors.sub, fontFamily: fonts.semibold, fontSize: 11, marginTop: 4, textTransform: 'capitalize' },
