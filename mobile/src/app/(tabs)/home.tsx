@@ -1,102 +1,208 @@
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useMemo } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { CityBackdrop } from '@/components/art';
-import { Coins, Display, GradientButton, Icon, IconBadge, Mascot, ProgressBar, Screen, Segmented, Tagline, tap } from '@/components/ui';
-import { useApp, type MissionTab } from '@/state/AppState';
+import { Mascot } from '@/art/Mascot';
+import { Avatar } from '@/components/Avatar';
+import { EventCard, MissionCard, SceneImage } from '@/components/cards';
+import { CityChip, TopBar } from '@/components/TopBar';
+import { Button, Card, Display, FadeIn, Icon, PressScale, Ring, Screen, SectionHeader, Tagline } from '@/components/ui';
+import { today } from '@/data/stats';
+import { users } from '@/data/users';
+import { useApp } from '@/state/AppState';
 import { colors, fonts, radius } from '@/theme';
 
-const TABS: MissionTab[] = ['Daily', 'Weekly', 'Special'];
+const greeting = () => {
+  const h = new Date().getHours();
+  return h < 5 ? 'Late night' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+};
 
-const fmt = (n: number) => (Number.isInteger(n) ? n.toLocaleString('en-IN') : n.toFixed(1));
-
-/** Home — Today's Missions. */
-export default function Missions() {
-  const { missions, logMission, claimable, claimRewards, claimed, coins, level } = useApp();
-  const [tab, setTab] = useState<MissionTab>('Daily');
+export default function Home() {
+  const { me, missions, logMission, claimed, claimable, claimRewards, events, joinedEvents, toggleEvent, city } = useApp();
+  const daily = missions.filter((m) => m.tab === 'Daily');
+  const doneCount = daily.filter((m) => m.current >= m.goal).length;
+  const upcoming = events.filter((e) => !e.online).slice(0, 5);
+  const leaders = useMemo(
+    () => [
+      ...users
+        .filter((u) => u.cityId === city.id && u.id !== me.id)
+        .sort((a, b) => b.level - a.level)
+        .slice(0, 3)
+        .map((u, i) => ({ u, rank: i + 1, xp: 4200 - i * 610 })),
+      { u: me, rank: 7, xp: 2340 },
+    ],
+    [city.id, me],
+  );
 
   const onClaim = () => {
-    const res = claimRewards();
-    router.push({ pathname: '/level-up', params: { gained: String(res.xp), leveledUp: res.leveledUp ? '1' : '0' } });
+    const r = claimRewards();
+    router.push({ pathname: '/level-up', params: { gained: String(r.xp), coins: String(r.coins), leveledUp: r.leveledUp ? '1' : '0' } });
   };
 
   return (
     <Screen>
-      <View style={styles.topRow}>
-        <Pressable style={styles.levelChip} onPress={() => router.push('/progress')}>
-          <Icon name="crown" size={16} color={colors.gold} />
-          <Text style={styles.levelText}>Lv {level}</Text>
-        </Pressable>
-        <Pressable onPress={() => router.push('/shop')}>
-          <Coins amount={coins} />
-        </Pressable>
-      </View>
+      <TopBar />
 
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
-        <Display size={46} style={{ lineHeight: 48 }}>TODAY'S{'\n'}MISSIONS</Display>
-        <Icon name="crown-outline" size={34} color={colors.gold} style={{ marginLeft: 6, marginBottom: 8 }} />
-      </View>
+      {/* Greeting */}
+      <FadeIn style={{ marginTop: 18 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={styles.hello}>{greeting()}, {me.name.split(' ')[0]} 👋</Text>
+          <CityChip />
+        </View>
+        <Display size={44} style={{ marginTop: 2 }}>Ready to <Text style={{ color: colors.pink }}>move?</Text></Display>
+      </FadeIn>
 
-      <Segmented items={TABS} value={tab} onChange={setTab} />
+      {/* Today's progress */}
+      <FadeIn index={1}>
+        <Card style={{ marginTop: 14, paddingVertical: 16 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <Text style={styles.cardTitle}>Today's progress</Text>
+            <Pressable onPress={() => router.push('/progress')} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={styles.link}>Stats</Text>
+              <Icon name="chevron-right" size={16} color={colors.pink} />
+            </Pressable>
+          </View>
+          <View style={styles.rings}>
+            <RingStat progress={today.steps.value / today.steps.goal} color={colors.green} color2={colors.cyan} icon="shoe-print" value={today.steps.value.toLocaleString('en-IN')} label="Steps" />
+            <RingStat progress={today.active.value / today.active.goal} color={colors.cyan} color2={colors.blue} icon="timer-outline" value={`${today.active.value}m`} label="Active" />
+            <RingStat progress={today.kcal.value / today.kcal.goal} color={colors.orange} color2={colors.gold} icon="fire" value={String(today.kcal.value)} label="kcal" />
+            <RingStat progress={1} color={colors.violet} color2={colors.pink} icon="lightning-bolt" value={`${today.streak}d`} label="Streak" />
+          </View>
+        </Card>
+      </FadeIn>
 
-      <View style={{ gap: 10 }}>
-        {missions[tab].map((m) => {
-          const done = m.current >= m.goal;
-          const isClaimed = claimed.has(m.id);
-          return (
-            <View key={m.id} style={[styles.mission, done && { borderColor: `${m.color}88` }]}>
-              <IconBadge icon={m.icon} color={m.color} />
-              <View style={{ flex: 1, marginHorizontal: 12 }}>
-                <Text style={styles.mTitle}>{m.title}</Text>
-                <Text style={styles.mSub}>
-                  {fmt(m.current)} / {fmt(m.goal)}
-                  {m.unit ? ` ${m.unit}` : ''}
-                </Text>
-                <ProgressBar progress={m.current / m.goal} color={m.color} style={{ marginTop: 6 }} />
+      {/* Start run CTA */}
+      <FadeIn index={2}>
+        <PressScale onPress={() => router.push('/run')} style={{ marginTop: 14 }} scaleTo={0.98}>
+          <SceneImage kind="run" seed={4} height={132} scrim="strong">
+            <View style={styles.runCta}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.kicker}>{city.venues.runs[0]} · 2.4 km loop</Text>
+                <Display size={30}>Start a run</Display>
+                <Text style={styles.runSub}>Earn up to +150 XP · 3 friends running now</Text>
               </View>
-              {done ? (
-                <View style={{ alignItems: 'center' }}>
-                  <Icon name={isClaimed ? 'check-circle' : 'gift'} size={22} color={isClaimed ? colors.green : colors.gold} />
-                  <Text style={styles.xp}>+{m.xp} XP</Text>
-                </View>
-              ) : (
-                <Pressable hitSlop={8} onPress={() => { tap(); logMission(tab, m.id); }} style={{ alignItems: 'center' }}>
-                  <Icon name="plus-circle-outline" size={22} color={colors.dim} />
-                  <Text style={styles.xp}>+{m.xp} XP</Text>
-                </Pressable>
-              )}
+              <View style={styles.playBtn}>
+                <Icon name="play" size={30} color={colors.onPink} />
+              </View>
             </View>
+          </SceneImage>
+        </PressScale>
+      </FadeIn>
+
+      {/* Missions */}
+      <SectionHeader title="Today's Missions" action={`${doneCount}/${daily.length} done`} onAction={() => router.push('/missions')} />
+      <View style={{ gap: 10 }}>
+        {daily.map((m, i) => (
+          <FadeIn key={m.id} index={i}>
+            <MissionCard mission={m} claimed={claimed.has(m.id)} onLog={() => logMission(m.id)} />
+          </FadeIn>
+        ))}
+      </View>
+      <Button
+        label={claimable.count ? `Claim rewards · +${claimable.xp} XP` : 'Claim rewards'}
+        iconLeft="gift"
+        disabled={!claimable.count}
+        onPress={onClaim}
+        style={{ marginTop: 14 }}
+      />
+      {!claimable.count && <Text style={styles.hint}>Tap + on a mission to log progress. Complete one to claim XP & coins.</Text>}
+
+      {/* Motivation */}
+      <FadeIn>
+        <SceneImage kind="city-night" seed={12} height={176} style={{ marginTop: 22 }} scrim={false}>
+          <Mascot pose="lift" size={176} animated style={{ position: 'absolute', left: -6, bottom: -10 }} />
+          <View style={{ position: 'absolute', right: 16, top: 24, alignItems: 'flex-end' }}>
+            <Tagline size={23} style={{ textAlign: 'right' }}>Discipline{'\n'}today.</Tagline>
+            <Tagline size={19} color={colors.pinkSoft} style={{ textAlign: 'right', marginTop: 4 }}>A bigger you{'\n'}tomorrow.</Tagline>
+          </View>
+        </SceneImage>
+      </FadeIn>
+
+      {/* Events */}
+      <SectionHeader title={`Happening in ${city.name}`} action="All events" onAction={() => router.push('/events')} />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingRight: 16 }} style={{ marginHorizontal: -16 }}>
+        <View style={{ width: 16 }} />
+        {upcoming.map((e) => (
+          <EventCard key={e.id} event={e} variant="hero" going={joinedEvents.has(e.id)} onToggle={() => toggleEvent(e.id)} />
+        ))}
+      </ScrollView>
+
+      {/* Leaderboard */}
+      <SectionHeader title="City Leaderboard" action="This week" onAction={() => router.push('/social')} />
+      <Card style={{ paddingVertical: 6 }}>
+        {leaders.map(({ u, rank, xp }, i) => (
+          <View key={u.id} style={[styles.leader, u.id === me.id && styles.leaderMe, i > 0 && u.id !== me.id && { borderTopWidth: 1, borderTopColor: colors.line }]}>
+            <Text style={[styles.rank, rank === 1 && { color: colors.gold }]}>#{rank}</Text>
+            <Avatar user={u} size={36} ring={rank === 1 ? colors.gold : colors.lineHi} />
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={styles.leaderName}>{u.id === me.id ? 'You' : u.name}</Text>
+              <Text style={styles.leaderSub}>LV {u.level} · {u.area}</Text>
+            </View>
+            <Text style={styles.leaderXp}>{xp.toLocaleString('en-IN')} XP</Text>
+          </View>
+        ))}
+      </Card>
+
+      {/* Friends activity */}
+      <SectionHeader title="Crew Activity" action="Feed" onAction={() => router.push('/social')} />
+      <View style={{ gap: 10 }}>
+        {[
+          { u: 'u_rhea', text: 'ran 7.2 km at 5\'42"/km', icon: 'run-fast' as const, t: '2h' },
+          { u: 'u_meera', text: 'is hosting Yoga in the Park', icon: 'yoga' as const, t: '3h' },
+          { u: 'u_zoya', text: 'unlocked the Early Bird badge', icon: 'medal' as const, t: '5h' },
+          { u: 'u_aarav', text: 'hit a new squat PR · 80 kg', icon: 'weight-lifter' as const, t: '6h' },
+        ].map((a, i) => {
+          const u = users.find((x) => x.id === a.u)!;
+          return (
+            <FadeIn key={a.u} index={i}>
+              <View style={styles.activity}>
+                <Avatar user={u} size={38} />
+                <Text style={styles.activityText} numberOfLines={2}>
+                  <Text style={{ fontFamily: fonts.bold, color: colors.text }}>{u.name.split(' ')[0]} </Text>
+                  {a.text}
+                </Text>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Icon name={a.icon} size={18} color={colors.pink} />
+                  <Text style={styles.leaderSub}>{a.t}</Text>
+                </View>
+              </View>
+            </FadeIn>
           );
         })}
-      </View>
-
-      <GradientButton
-        label={claimable > 0 ? `CLAIM REWARDS · +${claimable} XP` : 'CLAIM REWARDS'}
-        onPress={onClaim}
-        disabled={claimable === 0}
-        style={{ marginTop: 16 }}
-      />
-      {claimable === 0 && <Text style={styles.hint}>Tap + on a mission to log progress. Finish one to claim.</Text>}
-
-      <View style={styles.banner}>
-        <CityBackdrop height={170} style={StyleSheet.absoluteFill} seed={5} />
-        <Mascot size={130} style={{ position: 'absolute', left: 0, bottom: -6 }} />
-        <Tagline size={20} style={{ position: 'absolute', right: 14, top: 26, textAlign: 'right' }}>
-          DISCIPLINE{'\n'}TODAY,{'\n'}A BIGGER{'\n'}YOU TOMORROW.
-        </Tagline>
       </View>
     </Screen>
   );
 }
 
+function RingStat({ progress, color, color2, icon, value, label }: { progress: number; color: string; color2: string; icon: React.ComponentProps<typeof Icon>['name']; value: string; label: string }) {
+  return (
+    <View style={{ alignItems: 'center', flex: 1 }}>
+      <Ring progress={progress} size={62} stroke={6} color={color} color2={color2}>
+        <Icon name={icon} size={20} color={color} />
+      </Ring>
+      <Text style={styles.ringValue}>{value}</Text>
+      <Text style={styles.ringLabel}>{label}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  levelChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill },
-  levelText: { color: colors.text, fontFamily: fonts.bold, fontSize: 13 },
-  mission: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, padding: 12 },
-  mTitle: { color: colors.text, fontFamily: fonts.semibold, fontSize: 15 },
-  mSub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, marginTop: 2 },
-  xp: { color: colors.gold, fontFamily: fonts.black, fontSize: 13, marginTop: 2 },
+  hello: { color: colors.sub, fontFamily: fonts.semibold, fontSize: 15, flexShrink: 1 },
+  cardTitle: { color: colors.text, fontFamily: fonts.bold, fontSize: 15 },
+  link: { color: colors.pink, fontFamily: fonts.semibold, fontSize: 13 },
+  rings: { flexDirection: 'row', justifyContent: 'space-between' },
+  ringValue: { color: colors.text, fontFamily: fonts.display, fontSize: 18, marginTop: 6, letterSpacing: 0.3 },
+  ringLabel: { color: colors.dim, fontFamily: fonts.medium, fontSize: 11 },
+  runCta: { position: 'absolute', left: 16, right: 16, bottom: 14, flexDirection: 'row', alignItems: 'flex-end' },
+  kicker: { color: colors.cyan, fontFamily: fonts.bold, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },
+  runSub: { color: colors.sub, fontFamily: fonts.medium, fontSize: 12 },
+  playBtn: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.pink, alignItems: 'center', justifyContent: 'center', shadowColor: colors.pink, shadowOpacity: 0.8, shadowRadius: 14, shadowOffset: { width: 0, height: 0 } },
   hint: { color: colors.mute, fontSize: 12, textAlign: 'center', marginTop: 8, fontFamily: fonts.regular },
-  banner: { height: 170, marginTop: 18, borderRadius: radius.xl, overflow: 'hidden', borderWidth: 1, borderColor: colors.line },
+  leader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 4 },
+  leaderMe: { backgroundColor: 'rgba(255,53,181,0.08)', borderRadius: radius.md, marginHorizontal: -6, paddingHorizontal: 10 },
+  rank: { color: colors.dim, fontFamily: fonts.display, fontSize: 18, width: 34 },
+  leaderName: { color: colors.text, fontFamily: fonts.bold, fontSize: 14 },
+  leaderSub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 11 },
+  leaderXp: { color: colors.gold, fontFamily: fonts.bold, fontSize: 13 },
+  activity: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, padding: 10 },
+  activityText: { flex: 1, color: colors.sub, fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
 });

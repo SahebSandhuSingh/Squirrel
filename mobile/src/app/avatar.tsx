@@ -1,87 +1,224 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useState } from 'react';
-import { AvatarCircle, GradientButton, Icon, IconButton, Tagline, tap } from '@/components/ui';
-import { avatarRail, avatars, outfits } from '@/data/mock';
+import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Character, Portrait } from '@/art/Character';
+import { Mascot } from '@/art/Mascot';
+import { ProductArt } from '@/art/Product';
+import { Button, FadeIn, Icon, IconButton, Label, Tagline, tap } from '@/components/ui';
+import {
+  accessoryStyles,
+  avatarCategories,
+  bottomStyles,
+  emotes,
+  hairColors,
+  hairStyles,
+  outfitColors,
+  pets,
+  presetLooks,
+  shoeColors,
+  skinTones,
+  topStyles,
+  type AvatarCategory,
+} from '@/data/avatarOptions';
 import { useApp } from '@/state/AppState';
-import { colors, fonts, radius } from '@/theme';
+import type { AvatarLook, CharacterPose, ProductKind } from '@/types';
+import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
 
-/** "Make it You" — avatar & style picker. */
+const topProduct: Record<AvatarLook['top'], ProductKind> = { hoodie: 'hoodie', tee: 'tee', crop: 'tank', tank: 'tank', jacket: 'jacket' };
+const accProduct: Record<AvatarLook['accessory'], ProductKind | null> = { none: null, shades: 'sunglasses', cap: 'cap', headband: 'headband', headphones: 'earbuds' };
+
+/** MAKE IT YOU — persistent avatar builder. */
 export default function AvatarScreen() {
   const insets = useSafeAreaInsets();
-  const { avatar, setAvatar, outfit, setOutfit } = useApp();
-  const [rail, setRail] = useState('Outfits');
-  const current = outfits.find((o) => o.id === outfit);
+  const { height } = useWindowDimensions();
+  const { look, setLook, pet, setPet, toast } = useApp();
+  const { from } = useLocalSearchParams<{ from?: string }>();
+  const editing = from === 'profile';
+  const [cat, setCat] = useState<AvatarCategory>('Outfit');
+  const [pose, setPose] = useState<CharacterPose>('stand');
+  const set = (patch: Partial<AvatarLook>) => {
+    tap();
+    setLook({ ...look, ...patch });
+  };
+  const stageH = Math.max(260, Math.min(height * 0.42, 420));
+  const petPose = pets.find((p) => p.id === pet);
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top + 6, paddingBottom: insets.bottom + 16 }]}>
-      <View style={styles.header}>
-        <IconButton icon="chevron-left" size={30} onPress={() => router.back()} />
-        <View style={{ alignItems: 'center', flex: 1, marginRight: 30 }}>
-          <Tagline size={36} rotate={-4}>Make it You</Tagline>
-          <Text style={styles.sub}>Choose your avatar & style</Text>
-        </View>
-      </View>
-
-      <View style={styles.stage}>
-        <View style={{ gap: 12 }}>
-          {avatars.map((e, i) => (
-            <Pressable key={i} onPress={() => { tap(); setAvatar(i); }}>
-              <AvatarCircle emoji={e} size={52} ring={avatar === i ? colors.pink : colors.line} />
-            </Pressable>
-          ))}
-        </View>
-
-        <View style={styles.preview}>
-          <View style={styles.glow} />
-          <Text style={{ fontSize: 110 }}>{avatars[avatar]}</Text>
-          <Text style={{ fontSize: 110, marginTop: -34 }}>{current?.emoji}</Text>
-          <Text style={{ fontSize: 44, marginTop: -14 }}>👟👟</Text>
+    <View style={styles.root}>
+      <LinearGradient colors={['#2A0E3F', '#10091A', '#07050D']} style={StyleSheet.absoluteFill} />
+      <View style={[styles.col, { paddingTop: insets.top + 6 }]}>
+        <View style={styles.header}>
+          <IconButton icon="chevron-left" size={28} onPress={() => (router.canGoBack() ? router.back() : router.replace('/welcome'))} label="Back" />
+          <View style={{ alignItems: 'center', flex: 1 }}>
+            <Tagline size={34} rotate={-4}>Make it You</Tagline>
+            <Text style={styles.sub}>Choose your avatar & style</Text>
+          </View>
+          <IconButton
+            icon="dice-5-outline"
+            label="Randomise"
+            onPress={() => {
+              const r = <T,>(a: readonly T[]) => a[Math.floor(Math.random() * a.length)];
+              set({ skin: r(skinTones), hair: r(hairStyles), hairColor: r(hairColors), top: r(topStyles), topColor: r(outfitColors), bottom: r(bottomStyles), shoeColor: r(shoeColors), accessory: r(accessoryStyles) });
+            }}
+          />
         </View>
 
-        <View style={{ gap: 8 }}>
-          {avatarRail.map((r) => {
-            const on = rail === r.label;
-            return (
-              <Pressable key={r.label} onPress={() => { tap(); setRail(r.label); }} style={[styles.railItem, on && { borderColor: colors.pink }]}>
-                <Icon name={r.icon} size={22} color={on ? colors.pink : colors.text} />
-                <Text style={[styles.railText, on && { color: colors.pink }]}>{r.label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
+        {/* Stage */}
+        <View style={[styles.stage, { height: stageH }]}>
+          <ScrollView style={styles.presetCol} contentContainerStyle={{ gap: 10, paddingVertical: 6 }} showsVerticalScrollIndicator={false}>
+            {presetLooks.map((p, i) => {
+              const on = p.skin === look.skin && p.hair === look.hair && p.body === look.body;
+              return (
+                <Pressable key={i} onPress={() => set(p)} accessibilityLabel={`Preset ${i + 1}`}>
+                  <Portrait look={p} size={50} ring={on ? colors.pink : colors.lineHi} />
+                </Pressable>
+              );
+            })}
+          </ScrollView>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 10, paddingHorizontal: 16, paddingVertical: 14 }}>
-        {outfits.map((o) => (
-          <Pressable key={o.id} onPress={() => { tap(); setOutfit(o.id); }} style={[styles.outfit, outfit === o.id && { borderColor: colors.pink }]}>
-            <View style={[styles.swatch, { backgroundColor: o.color }]}>
-              <Text style={{ fontSize: 34 }}>{o.emoji}</Text>
-            </View>
-          </Pressable>
-        ))}
-        <View style={[styles.outfit, { justifyContent: 'center' }]}>
-          <Icon name="chevron-right" size={28} color={colors.pink} />
-        </View>
-      </ScrollView>
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end' }}>
+            <View style={styles.spot} />
+            <View style={styles.platform} />
+            <FadeIn key={pose} from={6}>
+              <Character look={look} pose={pose} height={stageH * 0.92} />
+            </FadeIn>
+            {petPose && pet !== 'pet-none' && <Mascot pose={petPose.pose} size={stageH * 0.3} animated style={{ position: 'absolute', right: -6, bottom: 0 }} />}
+          </View>
 
-      <View style={{ paddingHorizontal: 16 }}>
-        <GradientButton label="Continue" onPress={() => router.replace('/home')} />
+          <ScrollView style={styles.railCol} contentContainerStyle={{ gap: 8, paddingVertical: 6 }} showsVerticalScrollIndicator={false}>
+            {avatarCategories.map((c) => {
+              const on = cat === c.id;
+              return (
+                <Pressable key={c.id} onPress={() => { tap(); setCat(c.id); }} style={[styles.rail, on && styles.railOn]} accessibilityLabel={c.id}>
+                  <Icon name={c.icon} size={21} color={on ? colors.pink : colors.text} />
+                  <Text style={[styles.railText, on && { color: colors.pink }]} numberOfLines={1}>{c.id === 'Accessories' ? 'Extras' : c.id}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* Options for the active category */}
+        <View style={styles.panel}>
+          <Label style={{ marginBottom: 8 }}>{cat}</Label>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 16 }}>
+            {cat === 'Body' && (
+              <>
+                {(['female', 'male'] as const).map((b) => (
+                  <OptionCard key={b} on={look.body === b} onPress={() => set({ body: b })} label={b === 'female' ? 'Body A' : 'Body B'}>
+                    <Portrait look={{ ...look, body: b }} size={52} ring={false} />
+                  </OptionCard>
+                ))}
+                {skinTones.map((s) => <Swatch key={s} color={s} on={look.skin === s} onPress={() => set({ skin: s })} />)}
+              </>
+            )}
+            {cat === 'Hair' && (
+              <>
+                {hairStyles.map((h) => (
+                  <OptionCard key={h} on={look.hair === h} onPress={() => set({ hair: h })} label={h}>
+                    <Portrait look={{ ...look, hair: h }} size={52} ring={false} />
+                  </OptionCard>
+                ))}
+                {hairColors.map((c) => <Swatch key={c} color={c} on={look.hairColor === c} onPress={() => set({ hairColor: c })} />)}
+              </>
+            )}
+            {cat === 'Outfit' && (
+              <>
+                {topStyles.map((t) => (
+                  <OptionCard key={t} on={look.top === t} onPress={() => set({ top: t })} label={t}>
+                    <ProductArt kind={topProduct[t]} color={look.topColor} size={56} />
+                  </OptionCard>
+                ))}
+                {bottomStyles.map((b) => (
+                  <OptionCard key={b} on={look.bottom === b} onPress={() => set({ bottom: b })} label={b}>
+                    <ProductArt kind={b === 'shorts' ? 'shorts' : 'joggers'} color={look.bottomColor} size={56} />
+                  </OptionCard>
+                ))}
+                {outfitColors.map((c) => <Swatch key={c} color={c} on={look.topColor === c} onPress={() => set({ topColor: c })} />)}
+              </>
+            )}
+            {cat === 'Shoes' && shoeColors.map((c) => (
+              <OptionCard key={c} on={look.shoeColor === c} onPress={() => set({ shoeColor: c })} label="Runner">
+                <ProductArt kind="shoes" color={c} size={56} />
+              </OptionCard>
+            ))}
+            {cat === 'Accessories' && accessoryStyles.map((a) => (
+              <OptionCard key={a} on={look.accessory === a} onPress={() => set({ accessory: a })} label={a}>
+                {accProduct[a] ? <ProductArt kind={accProduct[a]!} size={56} /> : <Icon name="cancel" size={30} color={colors.dim} />}
+              </OptionCard>
+            ))}
+            {cat === 'Gear' && (['bottle', 'watch', 'backpack', 'gloves', 'mat'] as const).map((g) => (
+              <OptionCard key={g} on={false} onPress={() => router.push('/shop')} label={g} locked>
+                <ProductArt kind={g} size={56} />
+              </OptionCard>
+            ))}
+            {cat === 'Emotes' && emotes.map((e) => (
+              <OptionCard key={e.id} on={pose === e.pose} onPress={() => { tap(); setPose(e.pose); }} label={e.label}>
+                <Character look={look} pose={e.pose} height={62} />
+              </OptionCard>
+            ))}
+            {cat === 'Pets' && pets.map((p) => (
+              <OptionCard key={p.id} on={pet === p.id} onPress={() => { tap(); setPet(p.id); }} label={p.label}>
+                {p.id === 'pet-none' ? <Icon name="cancel" size={30} color={colors.dim} /> : <Mascot pose={p.pose} size={58} />}
+              </OptionCard>
+            ))}
+          </ScrollView>
+        </View>
+
+        <View style={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 14 }}>
+          <Button
+            label={editing ? 'Save Look' : 'Continue'}
+            icon={editing ? 'check' : 'arrow-right'}
+            onPress={() => {
+              if (editing) {
+                toast('Look saved', 'check-circle', colors.green);
+                router.back();
+              } else router.replace('/home');
+            }}
+          />
+        </View>
       </View>
     </View>
   );
 }
 
+function OptionCard({ children, on, onPress, label, locked }: { children: React.ReactNode; on: boolean; onPress: () => void; label: string; locked?: boolean }) {
+  return (
+    <Pressable onPress={onPress} style={[styles.opt, on && styles.optOn]} accessibilityLabel={label}>
+      <View style={{ height: 62, alignItems: 'center', justifyContent: 'center' }}>{children}</View>
+      <Text style={[styles.optText, on && { color: colors.pink }]} numberOfLines={1}>{label}</Text>
+      {locked && <Icon name="lock" size={12} color={colors.dim} style={{ position: 'absolute', top: 6, right: 6 }} />}
+    </Pressable>
+  );
+}
+
+function Swatch({ color, on, onPress }: { color: string; on: boolean; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={[styles.swatchWrap, on && { borderColor: colors.pink }]} accessibilityLabel={`Colour ${color}`}>
+      <View style={[styles.swatch, { backgroundColor: color }]} />
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
+  col: { flex: 1, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 },
-  sub: { color: colors.dim, fontFamily: fonts.medium, marginTop: 4 },
-  stage: { flex: 1, flexDirection: 'row', paddingHorizontal: 16, paddingTop: 16, alignItems: 'center' },
-  preview: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  glow: { position: 'absolute', width: 220, height: 220, borderRadius: 110, backgroundColor: colors.purple, opacity: 0.25 },
-  railItem: { width: 62, height: 58, borderRadius: radius.md, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center', gap: 2 },
-  railText: { color: colors.text, fontSize: 10, fontFamily: fonts.medium },
-  outfit: { width: 78, height: 84, borderRadius: radius.md, borderWidth: 2, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
-  swatch: { width: 60, height: 66, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center' },
+  sub: { color: colors.sub, fontFamily: fonts.medium, marginTop: 2, fontSize: 13 },
+  stage: { flexDirection: 'row', paddingHorizontal: 12, marginTop: 8 },
+  presetCol: { flexGrow: 0, width: 58 },
+  railCol: { flexGrow: 0, width: 64 },
+  spot: { position: 'absolute', bottom: 10, width: 230, height: 230, borderRadius: 115, backgroundColor: colors.purple, opacity: 0.22 },
+  platform: { position: 'absolute', bottom: 0, width: 170, height: 26, borderRadius: 85, backgroundColor: 'rgba(255,53,181,0.18)', borderWidth: 1.5, borderColor: 'rgba(255,53,181,0.5)' },
+  rail: { width: 62, height: 56, borderRadius: radius.md, backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center', gap: 2 },
+  railOn: { borderColor: colors.pink, backgroundColor: 'rgba(255,53,181,0.12)' },
+  railText: { color: colors.sub, fontSize: 10, fontFamily: fonts.semibold },
+  panel: { flex: 1, marginTop: 14, paddingLeft: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: 'rgba(16,9,26,0.6)' },
+  opt: { width: 84, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', paddingVertical: 8 },
+  optOn: { borderColor: colors.pink, backgroundColor: 'rgba(255,53,181,0.1)' },
+  optText: { color: colors.sub, fontFamily: fonts.semibold, fontSize: 11, marginTop: 4, textTransform: 'capitalize' },
+  swatchWrap: { width: 46, height: 46, borderRadius: 23, borderWidth: 2, borderColor: 'transparent', alignItems: 'center', justifyContent: 'center', alignSelf: 'center' },
+  swatch: { width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
 });

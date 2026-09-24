@@ -1,78 +1,62 @@
-import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import { RunnersArt } from '@/components/art';
-import { Chips, Coins, Header, Icon, Screen, Segmented, Tagline, tap } from '@/components/ui';
-import { shopItems, type ShopItem } from '@/data/mock';
+import { useMemo, useState } from 'react';
+import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { router } from 'expo-router';
+import { Character } from '@/art/Character';
+import { SceneImage, ShopItemCard } from '@/components/cards';
+import { Chips, Coins, FadeIn, Header, Screen, Segmented, Tagline } from '@/components/ui';
+import { shopItems, type ShopTab } from '@/data/shop';
 import { useApp } from '@/state/AppState';
-import { colors, fonts, radius } from '@/theme';
+import { colors, fonts, MAX_WIDTH } from '@/theme';
 
-const TABS = ['Outfits', 'Gear', 'Accessories', 'Stickers'] as const;
-const CATS = ['All', 'Hoodies', 'Tees', 'Shoes', 'Bags'] as const;
-type Tab = (typeof TABS)[number];
-type Cat = (typeof CATS)[number];
+const TABS: ShopTab[] = ['Outfits', 'Gear', 'Accessories', 'Stickers'];
 
-/** Shop — spend coins on avatar gear. */
+/** SHOP — gamified cosmetic store. */
 export default function Shop() {
-  const { coins, owned, buy } = useApp();
-  const [tab, setTab] = useState<Tab>('Outfits');
-  const [cat, setCat] = useState<Cat>('All');
-
+  const { width } = useWindowDimensions();
+  const { coins, owned, equipped, level, look } = useApp();
+  const [tab, setTab] = useState<ShopTab>('Outfits');
+  const [cat, setCat] = useState('All');
+  const cats = useMemo(() => ['All', ...Array.from(new Set(shopItems.filter((i) => i.tab === tab).map((i) => i.category)))], [tab]);
   const items = shopItems.filter((i) => i.tab === tab && (cat === 'All' || i.category === cat));
-
-  const onBuy = (item: ShopItem) => {
-    tap();
-    if (owned.has(item.id)) return;
-    if (coins < item.price) {
-      Alert.alert('Not enough coins', 'Complete missions to earn more coins.');
-      return;
-    }
-    Alert.alert(`Buy ${item.name}?`, `${item.price.toLocaleString('en-IN')} coins`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Buy', onPress: () => buy(item.id, item.price) },
-    ]);
-  };
+  const cols = Math.min(width, MAX_WIDTH) >= 400 ? 3 : 3;
+  const cardW = (Math.min(width, MAX_WIDTH) - 32 - (cols - 1) * 10) / cols;
 
   return (
     <Screen tabBar={false}>
-      <Header title="SHOP" back right={<Coins amount={coins} size={18} />} />
-      <Segmented items={TABS} value={tab} onChange={setTab} />
+      <Header back title="Shop" right={<Coins amount={coins} size={17} />} />
+      <Segmented items={TABS} value={tab} onChange={(t) => { setTab(t); setCat('All'); }} />
 
-      <View style={styles.hero}>
-        <RunnersArt height={150} seed={99} />
-        <Tagline size={30} style={{ position: 'absolute', left: 16, top: 18 }}>
-          WEAR{'\n'}YOUR{'\n'}PROGRESS
-        </Tagline>
-        <Icon name="tshirt-crew" size={96} color="#1A1020" style={{ position: 'absolute', right: 14, top: 22 }} />
+      <SceneImage kind="rooftop" seed={99} height={170} scrim={false}>
+        <View style={{ position: 'absolute', left: 16, top: 16 }}>
+          <Tagline size={30} rotate={-5}>Wear{'\n'}your{'\n'}progress</Tagline>
+        </View>
+        <View style={{ position: 'absolute', right: 12, bottom: -6 }}>
+          <Character look={look} pose="flex" height={176} />
+        </View>
+        <View style={styles.drop}>
+          <Text style={styles.dropText}>NEW DROP · Sunset Collection</Text>
+        </View>
+      </SceneImage>
+
+      {cats.length > 2 && <Chips items={cats} value={cat} onChange={setCat} />}
+
+      <View style={[styles.grid, cats.length <= 2 && { marginTop: 14 }]}>
+        {items.map((it, i) => (
+          <FadeIn key={it.id} index={i} style={{ width: cardW }}>
+            <ShopItemCard item={it} owned={owned.has(it.id)} equipped={equipped.has(it.id)} locked={level < it.levelRequired && !owned.has(it.id)} onPress={() => router.push({ pathname: '/item/[id]', params: { id: it.id } })} />
+          </FadeIn>
+        ))}
       </View>
 
-      {tab === 'Outfits' && <Chips items={CATS} value={cat} onChange={setCat} />}
-
-      <View style={styles.grid}>
-        {items.map((item) => {
-          const has = owned.has(item.id);
-          return (
-            <Pressable key={item.id} onPress={() => onBuy(item)} style={({ pressed }) => [styles.item, { opacity: pressed ? 0.8 : 1 }, has && { borderColor: colors.green }]}>
-              <Icon name={item.icon} size={56} color={item.color} />
-              <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-              {has ? <Text style={styles.owned}>Owned</Text> : <Coins amount={item.price} size={13} />}
-            </Pressable>
-          );
-        })}
-        {items.length === 0 && <Text style={styles.empty}>Nothing here yet — check back soon.</Text>}
-      </View>
-
-      <Tagline size={22} style={{ textAlign: 'center', marginTop: 12 }}>
-        LOOK GOOD. FEEL GOOD.
-      </Tagline>
+      <Tagline size={22} style={{ textAlign: 'center', marginTop: 20 }}>Look good. Feel good.</Tagline>
+      <Text style={styles.foot}>Coins come from missions, runs and events. No real money, ever.</Text>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  hero: { borderRadius: radius.xl, overflow: 'hidden', borderWidth: 1, borderColor: colors.line, marginBottom: 4 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 10, marginTop: 8 },
-  item: { width: '31.5%', backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, alignItems: 'center', paddingVertical: 12, gap: 4 },
-  itemName: { color: colors.dim, fontSize: 11, fontFamily: fonts.medium, paddingHorizontal: 4 },
-  owned: { color: colors.green, fontFamily: fonts.bold, fontSize: 13 },
-  empty: { color: colors.dim, width: '100%', textAlign: 'center', marginVertical: 20, fontFamily: fonts.regular },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  drop: { position: 'absolute', left: 16, bottom: 14, backgroundColor: colors.gold, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
+  dropText: { color: colors.onCyan, fontFamily: fonts.black, fontSize: 10, letterSpacing: 0.6 },
+  foot: { color: colors.mute, fontFamily: fonts.regular, fontSize: 12, textAlign: 'center', marginTop: 8 },
 });
