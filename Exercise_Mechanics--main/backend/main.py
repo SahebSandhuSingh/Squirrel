@@ -13,6 +13,7 @@ Layout:
     workouts/    validated lifecycle catalog + per-exercise config/FSM/rules
     training/    live setup-flow WS (/ws/setup) + baseline capture orchestration
     users/       user REST (create · profile · skill)
+    partners/    Partner Hunt: preferences, matching, blocks, behind the Run Module's XP gate
 
 Run from the project root:
     uvicorn backend.main:app --reload
@@ -26,6 +27,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from backend.engine.loader import validate_enabled_exercises
+from backend.partners.router import router as partners_router
 from backend.reports.router import router as reports_router
 from backend.sessions.router import router as sessions_router
 from backend.training.builders import validate_training_builders
@@ -65,6 +67,7 @@ app.include_router(users_router)
 app.include_router(workouts_router)
 app.include_router(sessions_router)
 app.include_router(reports_router)
+app.include_router(partners_router)
 app.include_router(setup_ws_router)
 
 # Mounted last so /ws + /api take precedence. html=True serves index.html at /.
