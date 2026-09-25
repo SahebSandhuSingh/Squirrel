@@ -1,0 +1,67 @@
+import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useFonts } from 'expo-font';
+import { Anton_400Regular } from '@expo-google-fonts/anton';
+import {
+  BarlowCondensed_500Medium,
+  BarlowCondensed_600SemiBold,
+  BarlowCondensed_700Bold,
+  BarlowCondensed_700Bold_Italic,
+  BarlowCondensed_800ExtraBold_Italic,
+} from '@expo-google-fonts/barlow-condensed';
+import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_900Black } from '@expo-google-fonts/inter';
+import { AppStateProvider } from '@/state/AppState';
+import { AuthProvider } from '@/auth/AuthProvider';
+import { ToastHost } from '@/components/Toast';
+// Defines the background-location task at startup so the OS can deliver run fixes
+// to it even when no screen is mounted (see logic/runTracker).
+import '@/logic/runTracker';
+import { colors } from '@/theme';
+
+const sheet = { presentation: 'transparentModal', animation: 'fade', contentStyle: { backgroundColor: 'transparent' } } as const;
+
+export default function RootLayout() {
+  const [loaded] = useFonts({
+    Anton_400Regular,
+    BarlowCondensed_500Medium,
+    BarlowCondensed_600SemiBold,
+    BarlowCondensed_700Bold,
+    BarlowCondensed_700Bold_Italic,
+    BarlowCondensed_800ExtraBold_Italic,
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+    Inter_900Black,
+  });
+
+  if (!loaded) return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
+
+  return (
+    <SafeAreaProvider>
+      <AuthProvider>
+      <AppStateProvider>
+        <StatusBar style="dark" />
+        <View style={{ flex: 1, backgroundColor: colors.bg }}>
+          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg }, animation: 'slide_from_right' }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="welcome" options={{ animation: 'fade' }} />
+            <Stack.Screen name="sign-in" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
+            <Stack.Screen name="run" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="level-up" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
+            <Stack.Screen name="highlight/[id]" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
+            <Stack.Screen name="create" options={sheet} />
+            <Stack.Screen name="city" options={sheet} />
+            <Stack.Screen name="item/[id]" options={sheet} />
+            <Stack.Screen name="compose" options={{ animation: 'slide_from_bottom' }} />
+          </Stack>
+          <ToastHost />
+        </View>
+      </AppStateProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
+  );
+}
