@@ -13,6 +13,7 @@ Layout:
     workouts/    validated lifecycle catalog + per-exercise config/FSM/rules
     training/    live setup-flow WS (/ws/setup) + baseline capture orchestration
     users/       user REST (create · profile · skill)
+    profiles/    sign-up details: age, gender, activities, measurements/BMI, physique, habits, consent
     partners/    Partner Hunt: preferences, matching, blocks, behind the Run Module's XP gate
 
 Run from the project root:
@@ -28,6 +29,7 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.engine.loader import validate_enabled_exercises
 from backend.partners.router import router as partners_router
+from backend.profiles.router import router as profiles_router
 from backend.reports.router import router as reports_router
 from backend.sessions.router import router as sessions_router
 from backend.training.builders import validate_training_builders
@@ -64,6 +66,7 @@ async def _no_cache_html(request, call_next):
 
 # API + WS routes are registered BEFORE the catch-all static mount so /api and /ws win.
 app.include_router(users_router)
+app.include_router(profiles_router)
 app.include_router(workouts_router)
 app.include_router(sessions_router)
 app.include_router(reports_router)

@@ -222,6 +222,31 @@ Running without a volume is survivable rather than broken: a browser holding a c
 server no longer has gets a 404 on session creation, and `demoSession.ts` recovers by creating a
 fresh profile. History and saved baselines are lost, a demo still runs.
 
+## Sign-up profile details
+
+Onboarding (`POST /api/users`) accepts optional sign-up questions alongside the original fields,
+and each one can be answered or changed later. The code is in `backend/profiles/`. The frontend
+doesn't ask these questions yet; today's onboarding payload is still accepted unchanged.
+
+| Question | Where it lives | Rule |
+|---|---|---|
+| Age | `profile.json` → `date_of_birth` | Only the date of birth is stored; age is always worked out from it |
+| Gender | `profile.json` → `gender` | One of `female`, `male`, `non_binary`, `other`, `undisclosed` |
+| Activities | `activities.json` | Codes from `GET /api/activity-types`; tracked exercises use their workout slugs |
+| BMI | `measurements.json` (history) | Never stored: latest height × latest weight. `GET /api/users/{id}` returns the latest values |
+| Fitness level, activity level, goal | `skill.json`, `fitness.json` | Fitness level *is* the dashboard skill level, with no second copy |
+| Physique (body type, body fat, waist) | `physique.json`, `measurements.json` | **Needs `physique` consent** |
+| Habits (workout times, sleep, diet, smoking, alcohol) | `habits.json` | **Needs `habits` consent** |
+
+Consent is an append-only log (`consents.json`, `POST /api/users/{id}/consents`). Withdrawing it
+erases that category's data. If the log can't be read, consent is treated as not given:
+sensitive data is hidden and not saved, and the log is never overwritten. Sensitive questions
+always offer a "prefer not to say" answer.
+
+Routes: `GET /api/users/{id}/details` (everything, with age and BMI derived);
+`PUT /api/users/{id}/details/{fitness|activities|physique|habits}`;
+`GET|POST /api/users/{id}/measurements`; `GET|POST /api/users/{id}/consents`.
+
 ## Layout
 
 | Path | What it holds |
