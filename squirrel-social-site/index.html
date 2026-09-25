@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Squirrel Social — Fitness Hits Different Together</title>
+  <meta name="description" content="Squirrel Social is a social fitness game built around real-world movement. Move, challenge friends, earn XP and claim territory in your city. Landing 02/10/26." />
+  <meta name="theme-color" content="#060606" />
+  <meta property="og:title" content="Squirrel Social — Fitness Hits Different Together" />
+  <meta property="og:description" content="Your city is your playground. Move. Challenge friends. Claim your territory." />
+  <meta property="og:image" content="assets/hero.jpg" />
+  <link rel="icon" href="assets/favicon.png" type="image/png" />
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Knewave&family=Permanent+Marker&family=Oswald:wght@500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <a class="skip-link" href="#what">Skip to content</a>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="scroll-progress" aria-hidden="true"><i id="scrollBar"></i></div>
+
+  <!-- Icon sprite: <svg class="i"><use href="#i-name"/></svg> -->
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 22s-7-7-7-12a7 7 0 0 1 14 0c0 5-7 12-7 12z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+    <symbol id="i-flame" viewBox="0 0 24 24"><path d="M12 2c1 4 6 6 6 12a6 6 0 0 1-12 0c0-3 2-5 3-6 0 2 1 3 2 3 0-3-1-6 1-9z"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
+    <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M7 4h10v4a5 5 0 0 1-10 0zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4M12 13v4M8 21h8M9 17h6"/></symbol>
+    <symbol id="i-run" viewBox="0 0 24 24"><circle cx="15" cy="4" r="2"/><path d="M7 21l3-6 3 2v5M5 12l3-4 5 1 2 4 4 1M10 15l2-6"/></symbol>
+    <symbol id="i-walk" viewBox="0 0 24 24"><circle cx="13" cy="4" r="2"/><path d="M9 21l2-6 3 3v3M8 12l3-4 3 1 2 4M11 15l1-6"/></symbol>
+    <symbol id="i-lift" viewBox="0 0 24 24"><path d="M3 10v4M6 7v10M18 7v10M21 10v4M6 12h12"/></symbol>
+    <symbol id="i-yoga" viewBox="0 0 24 24"><circle cx="12" cy="4" r="2"/><path d="M12 7v6M5 10l7 3 7-3M7 20l5-7 5 7M5 20h14"/></symbol>
+    <symbol id="i-bike" viewBox="0 0 24 24"><circle cx="6" cy="17" r="3.5"/><circle cx="18" cy="17" r="3.5"/><path d="M6 17l4-8h5l3 8M10 9l2 8M14 6h3"/></symbol>
+    <symbol id="i-ball" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7l4 3-1.5 5h-5L8 10zM12 3v4M16 10l4.5-1.5M14.5 15l2.5 4M9.5 15 7 19M8 10 3.5 8.5"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></symbol>
+    <symbol id="i-swords" viewBox="0 0 24 24"><path d="M4 4l10 10M20 4 10 14M7 17l-3 3M17 17l3 3M5 14l5 5M19 14l-5 5"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4M5 4h12l-2.5 4L17 12H5"/></symbol>
+    <symbol id="i-tree" viewBox="0 0 24 24"><path d="M12 22v-6M6 16h12L12 3z"/></symbol>
+    <symbol id="i-campus" viewBox="0 0 24 24"><path d="M2 9l10-5 10 5-10 5zM6 11v5c3 2.5 9 2.5 12 0v-5"/></symbol>
+    <symbol id="i-rooftop" viewBox="0 0 24 24"><path d="M3 21V10l5-3v14M8 21V4h8v17M16 21V9l5 3v9M2 21h20"/></symbol>
+    <symbol id="i-street" viewBox="0 0 24 24"><path d="M6 21 9 3M18 21 15 3M12 5v2M12 11v2M12 17v2"/></symbol>
+    <symbol id="i-badge" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-4 3-7 7-7s7 3 7 7M16 4.5a3.5 3.5 0 0 1 0 7M18 13c2.5 1 4 3.5 4 7"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
+    <symbol id="i-crown" viewBox="0 0 40 30"><path d="M3 26 L6 6 L14 16 L20 3 L26 16 L34 6 L37 26 Z"/></symbol>
+  </svg>
+
+  <!-- ================= NAV ================= -->
+  <header class="nav" id="top">
+    <a href="#home" class="brand" aria-label="Squirrel Social home">
+      <img src="assets/logo.png" alt="" width="50" height="45" />
+      <span>Squirrel Social</span>
+    </a>
+    <nav class="nav-links" id="navLinks" aria-label="Primary">
+      <a href="#home" class="active" aria-current="page">Home</a>
+      <a href="#how">How it works</a>
+      <a href="#challenges">Challenges</a>
+      <a href="#territory">Territory</a>
+      <a href="#community">Community</a>
+      <a href="#faq">FAQ</a>
+      <a href="#join" class="btn btn-lime nav-menu-cta" data-join>Join early access <span class="arrow">→</span></a>
+    </nav>
+    <a href="#join" class="btn btn-lime btn-sm nav-cta" data-join>Join early access <span class="arrow">→</span></a>
+    <button class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false" aria-controls="navLinks">
+      <span></span><span></span><span></span>
+    </button>
+  </header>
+
+  <main>
+    <!-- ================= 1. HERO — the hook ================= -->
+    <section class="hero" id="home">
+      <div class="hero-photo" aria-hidden="true"></div>
+
+      <div class="hero-copy">
+        <h1 class="hero-title">
+          <span class="l1">Fitness</span>
+          <span class="l2">Hits different</span>
+          <span class="l3">Together</span>
+          <svg class="crown hero-crown" viewBox="0 0 40 30" aria-hidden="true"><path d="M3 26 L6 6 L14 16 L20 3 L26 16 L34 6 L37 26 Z"/></svg>
+        </h1>
+        <p class="lead"><strong>Your city is your playground.</strong> Move. Challenge friends. Claim your territory.</p>
+        <div class="hero-actions">
+          <a href="#join" class="btn btn-lime" data-join>Join early access <span class="arrow">→</span></a>
+          <button class="btn btn-ghost" id="watchVideo">Watch video <span class="play" aria-hidden="true">▶</span></button>
+        </div>
+        <p class="cta-note">free to join · takes 10 sec</p>
+
+        <div class="ticker" aria-label="Example of in-app activity">
+          <span class="live-dot" aria-hidden="true"></span>
+          <span class="demo-tag">Demo feed</span>
+          <div class="ticker-window">
+            <p class="ticker-item" id="tickerItem">
+              <i class="face" style="--fx:87;--fy:808" aria-hidden="true"></i>
+              <span><b>Aarav</b> just completed a 5K</span>
+              <span class="chip chip-loc"><svg class="i"><use href="#i-pin"/></svg><span data-city="featured.name">Riverside</span></span>
+              <span class="chip chip-xp">+420 XP</span>
+            </p>
+          </div>
+        </div>
+
+        <div class="proof">
+          <p class="proof-head">The crew so far <span class="demo-tag">Pre-launch preview figures</span></p>
+          <dl class="stats">
+            <div class="stat lime"><dt>Early sign-ups</dt><dd data-count="2" data-suffix="K+">2K+</dd></div>
+            <div class="stat pink"><dt>Cities asking for us</dt><dd data-count="50" data-suffix="+">50+</dd></div>
+            <div class="stat pink"><dt>Challenges ready</dt><dd data-count="100" data-suffix="+">100+</dd></div>
+            <div class="stat lime"><dt>On the waitlist</dt><dd data-count="5" data-suffix="K+">5K+</dd></div>
+          </dl>
+        </div>
+      </div>
+
+      <p class="brush mpc" aria-hidden="true">Move<br/>Play<br/>Connect
+        <svg class="crown" viewBox="0 0 40 30"><path d="M3 26 L6 6 L14 16 L20 3 L26 16 L34 6 L37 26 Z"/></svg>
+      </p>
+
+      <div class="phone-wrap">
+        <img class="phone" src="assets/phone.jpg" alt="Squirrel Social app: a live run with friends on the map — 28:16, 3.2 km, 8'48&quot; pace" width="480" height="1011" />
+      </div>
+
+      <p class="scribble note-same" aria-hidden="true">Same<br/>parks.<br/>Different<br/>people.</p>
+      <svg class="doodle spark" viewBox="0 0 40 40" aria-hidden="true"><path d="M8 34 L14 8 M20 34 L22 4 M30 34 L36 12"/></svg>
+      <p class="scribble note-real" aria-hidden="true">Real<br/>people.<br/>Real<br/>movement.</p>
+      <svg class="doodle curl-arrow" viewBox="0 0 60 90" aria-hidden="true"><path d="M44 86 C10 70 6 34 30 10"/><path d="M18 14 L31 8 L34 22"/></svg>
+
+      <span class="tape tape-l1" aria-hidden="true"></span>
+      <span class="tape tape-r1" aria-hidden="true"></span>
+      <div class="torn-edge" aria-hidden="true"></div>
+    </section>
+
+    <div class="marquee m-lime" aria-hidden="true">
+      <div class="marquee-track"><div class="marquee-group"><span>walking counts</span><i aria-hidden="true">✦</i><span>touch grass (literally)</span><i aria-hidden="true">✦</i><span>your city = your map</span><i aria-hidden="true">✦</i><span>streaks &gt; excuses</span><i aria-hidden="true">✦</i><span>bring your bestie</span><i aria-hidden="true">✦</i></div><div class="marquee-group"><span>walking counts</span><i aria-hidden="true">✦</i><span>touch grass (literally)</span><i aria-hidden="true">✦</i><span>your city = your map</span><i aria-hidden="true">✦</i><span>streaks &gt; excuses</span><i aria-hidden="true">✦</i><span>bring your bestie</span><i aria-hidden="true">✦</i></div></div>
+    </div>
+
+    <!-- ================= 2. WHAT IS THIS? ================= -->
+    <section class="section what" id="what" aria-labelledby="whatTitle">
+      <div class="what-head">
+        <p class="kicker">01 — What is this?</p>
+        <h2 class="brush what-title" id="whatTitle">
+          <span>This isn't</span>
+          <span>another</span>
+          <span class="strike">fitness tracker.<svg class="strike-line" viewBox="0 0 300 30" preserveAspectRatio="none" aria-hidden="true"><path d="M4 20 C80 8 170 24 296 10"/></svg></span>
+        </h2>
+        <p class="what-sub">Squirrel turns <mark>real-world movement</mark> into a social game.</p>
+      </div>
+
+      <ol class="pillars">
+        <li class="pillar" data-tilt>
+          <span class="tape tape-card" aria-hidden="true"></span>
+          <span class="pillar-num" aria-hidden="true">01</span>
+          <svg class="pillar-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-bolt"/></svg>
+          <h3 class="brush">Track</h3>
+          <p>Your movement becomes XP, streaks and progress.</p>
+          <p class="pillar-ui"><span class="chip chip-xp">+250 XP</span><span class="chip"><svg class="i"><use href="#i-flame"/></svg>Day 7</span></p>
+        </li>
+        <li class="pillar" data-tilt>
+          <span class="tape tape-card" aria-hidden="true"></span>
+          <span class="pillar-num" aria-hidden="true">02</span>
+          <svg class="pillar-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-swords"/></svg>
+          <h3 class="brush">Compete</h3>
+          <p>Challenge friends, beat rivals and climb the leaderboard.</p>
+          <p class="pillar-ui"><span class="chip">You vs Rohan</span><span class="chip chip-pink">#2 → #1</span></p>
+        </li>
+        <li class="pillar" data-tilt>
+          <span class="tape tape-card" aria-hidden="true"></span>
+          <span class="pillar-num" aria-hidden="true">03</span>
+          <svg class="pillar-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-flag"/></svg>
+          <h3 class="brush">Claim</h3>
+          <p>Move through real places and compete for territory.</p>
+          <p class="pillar-ui"><span class="chip chip-loc"><svg class="i"><use href="#i-pin"/></svg><span data-city="featured.name">Riverside</span></span><span class="chip chip-yellow"><span data-city="featured.control">82%</span>&nbsp;yours</span></p>
+        </li>
+        <li class="pillar" data-tilt>
+          <span class="tape tape-card" aria-hidden="true"></span>
+          <span class="pillar-num" aria-hidden="true">04</span>
+          <svg class="pillar-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users"/></svg>
+          <h3 class="brush">Connect</h3>
+          <p>Meet people who move like you and build your crew.</p>
+          <p class="pillar-ui"><span class="chip">Crew of 4</span><span class="chip chip-orange">3 going</span></p>
+        </li>
+      </ol>
+    </section>
+
+    <!-- ================= 3. HOW IT WORKS ================= -->
+    <section class="section how" id="how">
+      <p class="kicker">02 — How does it work?</p>
+      <h2 class="brush section-title">How it <span class="pink">works</span>
+        <svg class="doodle zig" viewBox="0 0 120 30" aria-hidden="true"><path d="M4 24 L40 10 L46 20 L84 6 L90 16 L116 8"/></svg>
+      </h2>
+      <ol class="steps">
+        <li class="card step">
+          <span class="num pink">01</span>
+          <svg class="ico pink" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="15" r="8"/><path d="M8 42c0-9 7-15 16-15s16 6 16 15z"/></svg>
+          <div>
+            <h3>Create<br/>your profile</h3>
+            <p>Set your goals and find your movement style.</p>
+            <div class="step-ui" aria-hidden="true">
+              <span class="mini-profile"><span><b>Level 01</b><small>The Runner</small></span></span>
+              <span class="chip">Goal · 3 runs / wk</span>
+            </div>
+          </div>
+        </li>
+        <li class="card step">
+          <span class="num purple">02</span>
+          <svg class="ico purple" viewBox="0 0 48 48" aria-hidden="true"><path d="M28 3 L10 27 H23 L19 45 L38 19 H25 Z"/></svg>
+          <div>
+            <h3>Pick a<br/>challenge</h3>
+            <ul class="step-list">
+              <li>Daily goals.</li>
+              <li>Head-to-head battles.</li>
+              <li>Territory missions.</li>
+            </ul>
+            <div class="step-ui" aria-hidden="true">
+              <span class="chip chip-purple">3 / 5 challenges</span>
+              <span class="seg-bar" style="--n:5;--on:3"><i></i><i></i><i></i><i></i><i></i></span>
+            </div>
+          </div>
+        </li>
+        <li class="card step">
+          <span class="num lime">03</span>
+          <svg class="ico lime" viewBox="0 0 48 48" aria-hidden="true"><rect x="4" y="18" width="5" height="12" rx="1.5"/><rect x="10" y="13" width="6" height="22" rx="1.5"/><rect x="32" y="13" width="6" height="22" rx="1.5"/><rect x="39" y="18" width="5" height="12" rx="1.5"/><path d="M16 24h16" stroke-width="4"/></svg>
+          <div>
+            <h3>Move<br/>IRL</h3>
+            <ul class="move-tags" aria-label="Activities that count">
+              <li><svg class="i"><use href="#i-run"/></svg>Run</li>
+              <li><svg class="i"><use href="#i-walk"/></svg>Walk</li>
+              <li><svg class="i"><use href="#i-lift"/></svg>Lift</li>
+              <li><svg class="i"><use href="#i-bike"/></svg>Cycle</li>
+              <li><svg class="i"><use href="#i-ball"/></svg>Play</li>
+            </ul>
+            <p>Anything that gets you moving. <span class="aside">(yes, walking counts)</span></p>
+            <div class="step-ui" aria-hidden="true"><span class="chip chip-xp">+250 XP</span><span class="chip">32 min · logged</span></div>
+          </div>
+        </li>
+        <li class="card step">
+          <span class="num yellow">04</span>
+          <svg class="ico yellow" viewBox="0 0 48 48" aria-hidden="true"><path d="M5 38 L8 12 L18 24 L24 8 L30 24 L40 12 L43 38 Z"/><path d="M8 43h32"/></svg>
+          <div>
+            <h3>Earn +<br/>level up</h3>
+            <p>Earn XP, build streaks, unlock rewards and grow your crew.</p>
+            <div class="step-ui" aria-hidden="true">
+              <span class="chip chip-orange"><svg class="i"><use href="#i-flame"/></svg>7 day streak</span>
+              <span class="chip chip-yellow">Level 08</span>
+            </div>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <!-- ================= 5. CHALLENGES ================= -->
+    <section class="section battles" id="challenges" aria-labelledby="battleTitle">
+      <p class="kicker">03 — Why is it fun?</p>
+      <h2 class="brush battle-title" id="battleTitle">Choose<br/><span class="pink">your battle.</span></h2>
+      <p class="scribble battle-note" aria-hidden="true">3 ways<br/>to win</p>
+
+      <div class="battle-grid">
+        <!-- Daily goal -->
+        <article class="battle b-daily" data-tilt>
+          <span class="tape tape-card" aria-hidden="true"></span>
+          <p class="battle-type"><svg class="i"><use href="#i-target"/></svg>Daily goal</p>
+          <div class="ring-wrap">
+            <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+              <circle class="ring-bg" cx="60" cy="60" r="50"/>
+              <circle class="ring-fg" cx="60" cy="60" r="50" style="--p:.6"/>
+            </svg>
+            <p class="ring-label"><span class="brush">30</span><small>min</small></p>
+          </div>
+          <p class="battle-copy">Complete 30 minutes of movement today.</p>
+          <p class="battle-foot"><span class="mono-sm">18 / 30 min done</span><span class="stamp">+250 XP</span></p>
+        </article>
+
+        <!-- Head-to-head -->
+        <article class="battle b-h2h" data-tilt>
+          <p class="battle-type"><svg class="i"><use href="#i-swords"/></svg>Head-to-head</p>
+          <div class="versus">
+            <div class="fighter me">
+              <img src="assets/you.jpg" alt="" width="72" height="72" loading="lazy" />
+              <b>You</b>
+              <span class="f-steps"><span id="h2hMe">8,420</span> steps</span>
+            </div>
+            <span class="vs brush" aria-hidden="true">vs</span>
+            <div class="fighter them">
+              <i class="face" style="--fx:273;--fy:808;--s:72" aria-hidden="true"></i>
+              <b>Rohan</b>
+              <span class="f-steps"><span id="h2hThem">7,890</span> steps</span>
+            </div>
+          </div>
+          <div class="tug" aria-hidden="true"><i id="h2hBar" style="--me:.52"></i></div>
+          <p class="h2h-status" id="h2hStatus" aria-live="polite">You're winning</p>
+          <p class="battle-foot"><span class="mono-sm">Winner gets</span><span class="stamp stamp-pink">+500 XP</span></p>
+        </article>
+
+        <!-- Territory -->
+        <article class="battle b-terr" data-tilt>
+          <p class="battle-type"><svg class="i"><use href="#i-flag"/></svg>Territory</p>
+          <p class="terr-name brush" data-city="featured.name">Riverside</p>
+          <div class="terr-control">
+            <p><span>Your crew</span><b><span data-count="82" data-suffix="%" data-city-count="featured.control">82%</span></b></p>
+            <span class="bar bar-yellow" aria-hidden="true"><i style="--fill:0.82" data-city-fill="featured.control"></i></span>
+          </div>
+          <p class="battle-foot"><span class="mono-sm"><span data-city="featured.xpToClaim">2,340</span> XP to claim</span><span class="stamp stamp-yellow">Claim it</span></p>
+        </article>
+      </div>
+    </section>
+
+    <!-- ================= 6. TERRITORY ================= -->
+    <section class="territory" id="territory" aria-labelledby="terrTitle">
+      <div class="territory-inner">
+        <div class="terr-copy">
+          <p class="kicker">04 — What can I compete for?</p>
+          <h2 class="brush terr-title" id="terrTitle">Own<br/><span class="lime">your</span><br/>block.</h2>
+          <p class="terr-sub">Every run leaves a mark.</p>
+          <ol class="terr-steps">
+            <li><span>01</span>Move through real places.</li>
+            <li><span>02</span>Build XP.</li>
+            <li><span>03</span>Claim territory.</li>
+            <li><span>04</span>Defend it.</li>
+          </ol>
+        </div>
+
+        <div class="terr-map-wrap">
+          <div class="terr-map" id="terrMap">
+            <div class="live-map" role="img" aria-label="Live run map: route through the city with four friends on it"></div>
+          </div>
+
+          <div class="zone-card" id="zoneCard" aria-live="polite">
+            <p class="zc-status" id="zcStatus">Your crew</p>
+            <p class="zc-name brush" id="zcName">Riverside</p>
+            <div class="zc-bar"><span class="bar" aria-hidden="true"><i id="zcFill" style="--fill:.82"></i></span><b id="zcPct">82%</b></div>
+            <p class="zc-meta" id="zcMeta">2,340 XP to claim · Defended by 14 movers</p>
+          </div>
+
+          <ul class="map-legend" aria-label="Map legend">
+            <li class="lg-yours">Your crew</li>
+            <li class="lg-rival">Rival crew</li>
+            <li class="lg-contested">Contested</li>
+            <li class="lg-route">Your run</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= 8. COMMUNITY ================= -->
+    <section class="crew" aria-label="Good people move different">
+      <p class="brush crew-note">Good<br/>people<br/>move<br/><span class="lime">different</span></p>
+      <svg class="doodle crew-line" viewBox="0 0 120 20" aria-hidden="true"><path d="M4 16 C40 10 80 6 116 4"/></svg>
+      <span class="tape tape-r2" aria-hidden="true"></span>
+    </section>
+
+    <section class="section community" id="community" aria-labelledby="crewTitle">
+      <div class="community-head">
+        <p class="kicker">05 — Who is here?</p>
+        <h2 class="brush crew-title" id="crewTitle">Find<br/><span class="pink">your</span><br/>crew.</h2>
+        <p class="crew-sub">Real people near you, moving the way you like to move. Follow them, challenge them, run with them.</p>
+      </div>
+
+      <ul class="profiles">
+        <li class="profile" data-tilt style="--accent: var(--lime)">
+          <i class="face" style="--fx:87;--fy:808;--s:64" aria-hidden="true"></i>
+          <h3>Aarav</h3>
+          <p class="pf-streak"><svg class="i"><use href="#i-flame"/></svg>12 day streak</p>
+          <p class="pf-sport"><svg class="i"><use href="#i-run"/></svg>Running</p>
+          <p class="pf-lvl">Lvl 14 · <span data-city="member:Aarav">Riverside</span></p>
+          <button class="follow" type="button" aria-pressed="false" aria-label="Follow Aarav">Follow</button>
+        </li>
+        <li class="profile" data-tilt style="--accent: var(--pink)">
+          <i class="face" style="--fx:180;--fy:808;--s:64" aria-hidden="true"></i>
+          <h3>Meera</h3>
+          <p class="pf-streak"><svg class="i"><use href="#i-flame"/></svg>8 day streak</p>
+          <p class="pf-sport"><svg class="i"><use href="#i-yoga"/></svg>Yoga</p>
+          <p class="pf-lvl">Lvl 09 · <span data-city="member:Meera">North District</span></p>
+          <button class="follow" type="button" aria-pressed="false" aria-label="Follow Meera">Follow</button>
+        </li>
+        <li class="profile" data-tilt style="--accent: var(--purple)">
+          <i class="face" style="--fx:273;--fy:808;--s:64" aria-hidden="true"></i>
+          <h3>Rohan</h3>
+          <p class="pf-streak"><svg class="i"><use href="#i-flame"/></svg>21 day streak</p>
+          <p class="pf-sport"><svg class="i"><use href="#i-lift"/></svg>Strength</p>
+          <p class="pf-lvl">Lvl 17 · <span data-city="member:Rohan">Old Town</span></p>
+          <button class="follow" type="button" aria-pressed="false" aria-label="Follow Rohan">Follow</button>
+        </li>
+        <li class="profile" data-tilt style="--accent: var(--yellow)">
+          <i class="face" style="--fx:365;--fy:808;--s:64" aria-hidden="true"></i>
+          <h3>Diya</h3>
+          <p class="pf-streak"><svg class="i"><use href="#i-flame"/></svg>5 day streak</p>
+          <p class="pf-sport"><svg class="i"><use href="#i-bike"/></svg>Cycling</p>
+          <p class="pf-lvl">Lvl 06 · <span data-city="member:Diya">Lake District</span></p>
+          <button class="follow" type="button" aria-pressed="false" aria-label="Follow Diya">Follow</button>
+        </li>
+        <li class="profile profile-you">
+          <span class="you-plus" aria-hidden="true"><svg class="i"><use href="#i-plus"/></svg></span>
+          <h3>Your spot</h3>
+          <p class="pf-lvl">Crews are forming now.</p>
+          <a class="btn btn-lime btn-sm" href="#join" data-join>Claim it <span class="arrow">→</span></a>
+        </li>
+      </ul>
+
+      <div class="stories">
+        <p class="wall-head"><span class="brush">Crew stories</span><span class="demo-tag">Demo</span></p>
+        <ul class="story-row" id="storyRow" aria-label="Crew stories"></ul>
+      </div>
+
+      <div class="crew-wall">
+        <p class="wall-head"><span class="brush">Crew wall</span><span class="demo-tag">Example posts</span></p>
+        <ul class="wall">
+          <li><i class="face" style="--fx:87;--fy:808" aria-hidden="true"></i><p><b>Aarav</b> completed a 5K</p><span class="chip chip-xp">+420 XP</span><button class="hype" type="button" aria-pressed="false" aria-label="Hype Aarav's post"><span aria-hidden="true">🔥</span><span class="hype-n">24</span></button></li>
+          <li><i class="face" style="--fx:180;--fy:808" aria-hidden="true"></i><p><b>Meera</b> joined a head-to-head</p><span class="chip chip-pink">vs Rohan</span><button class="hype" type="button" aria-pressed="false" aria-label="Hype Meera's post"><span aria-hidden="true">🔥</span><span class="hype-n">17</span></button></li>
+          <li><i class="face" style="--fx:273;--fy:808" aria-hidden="true"></i><p><b>Rohan</b> defended <span data-city="featured.name">Riverside</span></p><span class="chip chip-yellow"><svg class="i"><use href="#i-trophy"/></svg>Territory</span><button class="hype" type="button" aria-pressed="false" aria-label="Hype Rohan's post"><span aria-hidden="true">🔥</span><span class="hype-n">41</span></button></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ================= 10–11. LEADERBOARD + PLACES ================= -->
+    <section class="section board-places" aria-labelledby="whoTitle">
+      <div class="board-col">
+        <h2 class="brush who-title" id="whoTitle">Who's<br/><span class="lime">moving?</span></h2>
+        <p class="who-sub">Your city is competitive.</p>
+        <div class="leaderboard">
+          <h3 class="lb-title">Leaderboard <span class="demo-tag">Sample data</span></h3>
+          <div class="lb-tabs" role="tablist" aria-label="Leaderboard period">
+            <button role="tab" class="on" data-range="week" aria-selected="true">This week</button>
+            <button role="tab" data-range="month" aria-selected="false">This month</button>
+            <button role="tab" data-range="all" aria-selected="false">All time</button>
+          </div>
+          <ol class="lb-list" id="lbList" aria-live="polite"></ol>
+        </div>
+      </div>
+      <div class="places-col">
+        <figure class="places">
+          <img src="assets/places.jpg" alt="Friends doing pull-ups outdoors at sunset" loading="lazy" width="900" height="450" />
+          <figcaption class="brush">Real places.<br/>Real meetups.</figcaption>
+          <svg class="doodle pink-arrow" viewBox="0 0 70 40" aria-hidden="true"><path d="M4 34 C24 28 40 20 62 8"/><path d="M48 6 L63 7 L58 20"/></svg>
+        </figure>
+        <p class="places-copy">Your neighbourhood becomes part of the game. <span class="aside">touch grass, literally.</span></p>
+        <ul class="place-chips" aria-label="Places that count">
+          <li><svg class="i"><use href="#i-tree"/></svg>Parks</li>
+          <li><svg class="i"><use href="#i-campus"/></svg>Campuses</li>
+          <li><svg class="i"><use href="#i-rooftop"/></svg>Rooftops</li>
+          <li><svg class="i"><use href="#i-street"/></svg>Streets</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ================= 12. WHY SQUIRREL ================= -->
+    <section class="section why" id="why" aria-labelledby="whyTitle">
+      <h2 class="kicker" id="whyTitle">06 — Why Squirrel?</h2>
+      <ol class="why-list">
+        <li class="why-row">
+          <span class="why-num" aria-hidden="true">01</span>
+          <div class="why-text">
+            <h3 class="brush">Move with<br/><span class="lime">people.</span></h3>
+            <p>Fitness is easier when someone else is waiting for you.</p>
+          </div>
+          <div class="why-pic pic-run" aria-hidden="true"></div>
+        </li>
+        <li class="why-row flip">
+          <span class="why-num" aria-hidden="true">02</span>
+          <div class="why-text">
+            <h3 class="brush">Play your<br/><span class="pink">city.</span></h3>
+            <p>Parks, campuses and streets become part of the game.</p>
+          </div>
+          <div class="why-pic pic-places" aria-hidden="true"></div>
+        </li>
+        <li class="why-row">
+          <span class="why-num" aria-hidden="true">03</span>
+          <div class="why-text">
+            <h3 class="brush">Build your<br/><span class="yellow">crew.</span></h3>
+            <p>Meet people through what you actually enjoy doing.</p>
+          </div>
+          <div class="why-pic pic-crew" aria-hidden="true"></div>
+        </li>
+      </ol>
+    </section>
+
+
+    <!-- ================= 13. LAUNCH ================= -->
+    <section class="launch" id="launch" aria-labelledby="launchTitle">
+      <div class="launch-inner">
+        <p class="kicker dark">07 — What is launching?</p>
+        <h2 class="brush launch-title" id="launchTitle">We're<br/>landing<br/>October 2.</h2>
+        <p class="launch-date" aria-label="Launch date: 2 October 2026"><span>02</span><i>/</i><span>10</span><i>/</i><span>26</span></p>
+        <div class="launch-bottom">
+          <p class="launch-firsts">First crews.<br/>First challenges.<br/>First territories.</p>
+          <div class="countdown" id="countdown" aria-label="Time until launch">
+            <div><b id="cdDays">00</b><span>Days</span></div>
+            <div><b id="cdHours">00</b><span>Hrs</span></div>
+            <div><b id="cdMins">00</b><span>Min</span></div>
+            <div><b id="cdSecs">00</b><span>Sec</span></div>
+          </div>
+          <a href="#join" class="btn btn-black" data-join>Join the founding community <span class="arrow">→</span></a>
+        </div>
+        <p class="launch-sticker" aria-hidden="true">Founding<br/>crews<br/>wanted</p>
+      </div>
+    </section>
+
+    <!-- ================= 14. EARLY ACCESS ================= -->
+    <section class="section join" id="join" aria-labelledby="joinTitle">
+      <div class="join-copy">
+        <p class="kicker">08 — Join</p>
+        <h2 class="brush join-title" id="joinTitle">Get in<br/>before<br/><span class="lime">everyone else.</span></h2>
+        <p class="join-sub">Join the founding community and be there when your city goes live.</p>
+        <p class="scribble join-scribble" aria-hidden="true">Better habits.<br/>Brighter people.</p>
+      </div>
+
+      <div class="pass">
+        <div class="pass-main">
+          <p class="pass-top"><span>Founding member pass</span><span>02 / 10 / 26</span></p>
+          <form class="join-form" id="joinForm" novalidate>
+            <label for="email">Be part of something real.</label>
+            <div class="join-row">
+              <input id="email" type="email" name="email" placeholder="Your email" autocomplete="email" required />
+              <button class="btn btn-lime" type="submit">Join early access <span class="arrow">→</span></button>
+            </div>
+            <small id="joinMsg" aria-live="polite">No spam. Just movement, people and good vibes.</small>
+            <button class="btn btn-outline btn-sm share-btn" type="button" id="shareBtn" hidden>Tell your crew <span class="arrow">→</span></button>
+          </form>
+          <ul class="pass-perks">
+            <li><svg class="i"><use href="#i-check"/></svg>First in when your city opens</li>
+            <li><svg class="i"><use href="#i-check"/></svg>Founding crew badge</li>
+            <li><svg class="i"><use href="#i-check"/></svg>Shape the first challenges</li>
+          </ul>
+        </div>
+        <div class="pass-stub" aria-hidden="true">
+          <span>Admit</span><b class="brush">One</b><span>Founding crew</span>
+        </div>
+      </div>
+
+      <div class="shows-up">
+        <svg class="smile" viewBox="0 0 50 50" aria-hidden="true"><circle cx="25" cy="25" r="21"/><circle cx="18" cy="20" r="2.2" class="fill"/><circle cx="32" cy="20" r="2.2" class="fill"/><path d="M15 29 C19 36 31 36 35 29"/></svg>
+        <div>
+          <p class="brush">A community<br/>that shows up.</p>
+          <div class="joined">
+            <span class="faces" aria-hidden="true"><i class="face" style="--fx:87;--fy:808"></i><i class="face" style="--fx:180;--fy:808"></i><i class="face" style="--fx:273;--fy:808"></i><i class="face" style="--fx:365;--fy:808"></i></span>
+            <small>5K+ on the waitlist <span class="muted">(preview figure)</span></small>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 15. FAQ ================= -->
+    <section class="section faq" id="faq">
+      <h2 class="brush section-title">Got <span class="lime">questions?</span></h2>
+      <div class="faq-list">
+        <details class="card">
+          <summary>What is Squirrel Social?</summary>
+          <p>A social fitness game built around real-world movement. You move IRL, and the app turns it into XP, challenges, leaderboards and territory — with real people around you.</p>
+        </details>
+        <details class="card">
+          <summary>Who can use it?</summary>
+          <p>Anyone who moves. Runners, walkers, lifters, cyclists, yoga people, weekend footballers. If you can move, you can play.</p>
+        </details>
+        <details class="card">
+          <summary>Do I need to be fit?</summary>
+          <p>Nope. Challenges scale to your goals, and a 20-minute walk counts. Beginners and athletes play on the same map.</p>
+        </details>
+        <details class="card">
+          <summary>What kinds of challenges are there?</summary>
+          <p>Three: daily goals you set for yourself, head-to-head battles against friends, and territory missions you take on with your crew.</p>
+        </details>
+        <details class="card">
+          <summary>How does XP work?</summary>
+          <p>Every activity earns XP based on effort and consistency, not just speed. Streaks and challenges add bonuses. XP levels you up and unlocks badges and rewards.</p>
+        </details>
+        <details class="card">
+          <summary>What is territory?</summary>
+          <p>Neighbourhoods, parks and campuses are zones on the map. Move there to build control for your crew. Most control claims the zone — until someone takes it back.</p>
+        </details>
+        <details class="card">
+          <summary>Can I create challenges with friends?</summary>
+          <p>Yes. Pick a goal, set the time frame, invite your friends. The leaderboard does the trash talk for you.</p>
+        </details>
+        <details class="card">
+          <summary>Can I join a crew?</summary>
+          <p>Join a crew near you or start your own and invite your people. Crews share XP, meetups and territory.</p>
+        </details>
+        <details class="card">
+          <summary>When does Squirrel Social launch?</summary>
+          <p>October 2, 2026. Founding community members get in first.</p>
+        </details>
+        <details class="card">
+          <summary>Is Squirrel Social free?</summary>
+          <p>Joining early access is free. We'll share full details on plans before launch — founding members hear first.</p>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <!-- ================= 16. FOOTER ================= -->
+  <footer class="footer">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <a href="#home" class="brand" aria-label="Squirrel Social home">
+          <img src="assets/logo.png" alt="" width="50" height="45" loading="lazy" />
+          <span>Squirrel Social</span>
+        </a>
+        <p class="brush footer-motto">Move. <span class="lime">Play.</span> <span class="pink">Connect.</span></p>
+      </div>
+      <nav class="footer-col" aria-label="Product">
+        <h2>Product</h2>
+        <ul>
+          <li><a href="#how">How it works</a></li>
+          <li><a href="#challenges">Challenges</a></li>
+          <li><a href="#territory">Territories</a></li>
+          <li><a href="#community">Community</a></li>
+          <li><a href="#faq">FAQ</a></li>
+        </ul>
+      </nav>
+      <div class="footer-col">
+        <h2>Social</h2>
+        <ul>
+          <li><a href="https://www.instagram.com/joinsquirrelsocial/" target="_blank" rel="noopener">Instagram</a></li>
+          <li><a href="https://www.linkedin.com/company/squirrel-social/" target="_blank" rel="noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h2>Contact</h2>
+        <ul>
+          <li><a href="mailto:info@squirrelsocial.in">info@squirrelsocial.in</a></li>
+        </ul>
+        <h2 class="footer-launch-h">Launch</h2>
+        <p class="footer-launch brush">02 / 10 / 26</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© <span id="year">2026</span> Squirrel Social</span>
+      <span>Made for people who move.</span>
+    </div>
+  </footer>
+
+  <dialog class="story-modal" id="storyModal" aria-label="Crew story">
+    <div class="story-frame" id="storyFrame">
+      <div class="story-bars" id="storyBars"></div>
+      <div class="story-top">
+        <i class="face" id="storyFace" aria-hidden="true"></i>
+        <b id="storyName"></b><span id="storyAgo">2h</span>
+        <form method="dialog"><button class="story-x" aria-label="Close story">×</button></form>
+      </div>
+      <p class="story-caption brush" id="storyCaption"></p>
+      <button class="story-nav prev" type="button" aria-label="Previous story"></button>
+      <button class="story-nav next" type="button" aria-label="Next story"></button>
+    </div>
+  </dialog>
+
+  <a href="#join" class="btn btn-lime mobile-cta" id="mobileCta" data-join>Join the crew <span class="arrow">→</span></a>
+
+  <dialog class="modal" id="videoModal" aria-label="Squirrel Social video">
+    <form method="dialog" class="modal-close-form"><button class="modal-x" aria-label="Close">×</button></form>
+    <div class="video-slot">
+      <iframe id="videoFrame" data-src="https://www.instagram.com/reel/DdsAyCBsIMH/embed/" title="Squirrel Social on Instagram" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen loading="lazy"></iframe>
+    </div>
+    <a class="video-link" href="https://www.instagram.com/reel/DdsAyCBsIMH/" target="_blank" rel="noopener">Watch on Instagram ↗</a>
+  </dialog>
+
+  <script src="js/city.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
