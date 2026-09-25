@@ -10,7 +10,7 @@ import {
   TIME_OPTIONS, blockPartner, fetchPartnerMatches, fetchPartnerStatus, partnerView, preferenceErrors,
   savePartnerPreferences, toggle,
   type PartnerMatch, type PartnerPreferences, type PartnerStatus, type PartnerView, type PreferenceErrors,
-} from './partnerHunt'
+} from './partnerHuntApi'
 
 const activityLabel = (v: string) => ACTIVITY_OPTIONS.find((o) => o.value === v)?.label ?? v
 const timeLabel = (v: string) => TIME_OPTIONS.find((o) => o.value === v)?.label ?? v

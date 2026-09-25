@@ -8,7 +8,7 @@ import {
   DEFAULT_PREFERENCES, PartnerHuntApiError, fetchPartnerMatches, partnerView, preferenceErrors,
   preferencesPayload, savePartnerPreferences, toggle,
   type PartnerMatch, type PartnerPreferences, type PartnerStatus,
-} from './partnerHunt'
+} from './partnerHuntApi'
 import { MatchCard, PartnerBoard, PartnerHuntScreen, type PartnerHuntScreenProps } from './PartnerHunt'
 
 const PREFS: PartnerPreferences = {
