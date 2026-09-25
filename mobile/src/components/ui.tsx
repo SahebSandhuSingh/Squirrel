@@ -20,7 +20,7 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
-import { colors, fonts, gradients, MAX_WIDTH, radius } from '@/theme';
+import { colors, DISPLAY_SKEW, fonts, gradients, MAX_WIDTH, radius } from '@/theme';
 import type { IconName } from '@/data/icons';
 
 export const Icon = MaterialCommunityIcons;
@@ -119,7 +119,7 @@ export function AnimatedNumber({ value, style, format = (n) => Math.round(n).toL
 
 export function Display({ children, size = 34, color = colors.text, style, numberOfLines }: { children: React.ReactNode; size?: number; color?: string; style?: StyleProp<TextStyle>; numberOfLines?: number }) {
   return (
-    <Text numberOfLines={numberOfLines} style={[{ fontFamily: fonts.display, fontSize: size, lineHeight: size * 1.08, color, letterSpacing: 0.2, textTransform: 'uppercase' }, style]}>
+    <Text numberOfLines={numberOfLines} style={[{ fontFamily: fonts.display, fontSize: size, lineHeight: size * 1.14, color, letterSpacing: 0.4, textTransform: 'uppercase', transform: [{ skewX: DISPLAY_SKEW }] }, style]}>
       {children}
     </Text>
   );
@@ -132,7 +132,7 @@ export function Tagline({ children, size = 20, color = colors.text, rotate = -6,
       style={[
         { fontFamily: fonts.script, fontSize: size, lineHeight: size * 1.18, color, transform: [{ rotate: `${rotate}deg` }] },
         { textTransform: 'uppercase' },
-        glow && { textShadowColor: 'rgba(215,255,31,0.6)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
+        glow && { textShadowColor: 'rgba(255,122,26,0.6)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
         style,
       ]}>
       {children}

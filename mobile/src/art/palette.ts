@@ -18,6 +18,8 @@ export const art = {
   // neon
   pink: '#FF2D9B',
   lime: '#D7FF1F',
+  /** UI route / 'yours' colour (matches theme primary). */
+  route: '#FF7A1A',
   pinkHi: '#FF7FD6',
   purple: '#8A3FFC',
   violet: '#B57BFF',

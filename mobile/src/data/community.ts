@@ -28,15 +28,15 @@ type CrewTemplate = Omit<Crew, 'id' | 'cityId' | 'name' | 'memberIds'> & { name:
 
 const CREW_TEMPLATES: CrewTemplate[] = [
   { name: (c) => `${c.name} Runners`, members: 1200, scope: 'Nearby', interest: 'running', icon: 'run-fast', color: '#3DF0A0', scene: 'run', tagline: 'Weekend long runs, all paces welcome.', meets: 'Sat & Sun · 6:00 AM' },
-  { name: () => 'Lifting Squirrels', members: 857, scope: 'Nearby', interest: 'gym', icon: 'weight-lifter', color: '#FFD21F', scene: 'gym', tagline: 'Strength first. Ego never.', meets: 'Mon/Wed/Fri · 7:00 PM' },
-  { name: () => 'Yoga Vibes', members: 640, scope: 'Nearby', interest: 'yoga', icon: 'yoga', color: '#FF6FBF', scene: 'yoga', tagline: 'Sunset flows in the park.', meets: 'Tue & Thu · 6:30 PM' },
-  { name: () => 'No Sugar Club', members: 412, scope: 'Online', interest: 'nutrition', icon: 'food-apple', color: '#D7FF1F', scene: 'brunch', tagline: '30-day no-sugar challenges & recipes.', meets: 'Daily check-ins' },
-  { name: () => 'Early Birds', members: 1100, scope: 'Nearby', interest: 'running', icon: 'weather-sunset-up', color: '#FF8A1F', scene: 'lake', tagline: 'Up before the sun. Every day.', meets: 'Daily · 5:30 AM' },
-  { name: (c) => `${c.name} Night Riders`, members: 530, scope: 'Nearby', interest: 'cycling', icon: 'bike', color: '#C084FC', scene: 'cycling', tagline: 'City loops after dark, lights on.', meets: 'Fri · 9:00 PM' },
-  { name: () => 'Campus Sweat Society', members: 318, scope: 'Campus', interest: 'hiit', icon: 'lightning-bolt', color: '#FF2D9B', scene: 'hiit', tagline: 'Between-lecture HIIT and track days.', meets: 'Mon–Fri · 4:30 PM' },
+  { name: () => 'Lifting Squirrels', members: 857, scope: 'Nearby', interest: 'gym', icon: 'weight-lifter', color: '#FFD23F', scene: 'gym', tagline: 'Strength first. Ego never.', meets: 'Mon/Wed/Fri · 7:00 PM' },
+  { name: () => 'Yoga Vibes', members: 640, scope: 'Nearby', interest: 'yoga', icon: 'yoga', color: '#FF9A4D', scene: 'yoga', tagline: 'Sunset flows in the park.', meets: 'Tue & Thu · 6:30 PM' },
+  { name: () => 'No Sugar Club', members: 412, scope: 'Online', interest: 'nutrition', icon: 'food-apple', color: '#3B6BFF', scene: 'brunch', tagline: '30-day no-sugar challenges & recipes.', meets: 'Daily check-ins' },
+  { name: () => 'Early Birds', members: 1100, scope: 'Nearby', interest: 'running', icon: 'weather-sunset-up', color: '#FF5FA2', scene: 'lake', tagline: 'Up before the sun. Every day.', meets: 'Daily · 5:30 AM' },
+  { name: (c) => `${c.name} Night Riders`, members: 530, scope: 'Nearby', interest: 'cycling', icon: 'bike', color: '#B69CFF', scene: 'cycling', tagline: 'City loops after dark, lights on.', meets: 'Fri · 9:00 PM' },
+  { name: () => 'Campus Sweat Society', members: 318, scope: 'Campus', interest: 'hiit', icon: 'lightning-bolt', color: '#FF7A1A', scene: 'hiit', tagline: 'Between-lecture HIIT and track days.', meets: 'Mon–Fri · 4:30 PM' },
   { name: () => 'Stair Climbers Anonymous', members: 204, scope: 'Campus', interest: 'climbing', icon: 'stairs-up', color: '#5FB8FF', scene: 'stadium', tagline: 'Stadium stairs. Zero elevators.', meets: 'Wed · 6:00 AM' },
   { name: () => 'Walk & Talk', members: 960, scope: 'Online', interest: 'walking', icon: 'walk', color: '#3DF0A0', scene: 'city-dawn', tagline: '10k steps a day, voice-note buddies.', meets: 'Async · daily' },
-  { name: (c) => `${c.name} Rooftop Stretch`, members: 275, scope: 'Nearby', interest: 'yoga', icon: 'human-handsup', color: '#FFD21F', scene: 'rooftop', tagline: 'Mobility + city views.', meets: 'Sun · 7:00 PM' },
+  { name: (c) => `${c.name} Rooftop Stretch`, members: 275, scope: 'Nearby', interest: 'yoga', icon: 'human-handsup', color: '#FFD23F', scene: 'rooftop', tagline: 'Mobility + city views.', meets: 'Sun · 7:00 PM' },
 ];
 
 export function crewsForCity(cityId: string): Crew[] {
@@ -155,14 +155,14 @@ export function placesForCity(cityId: string): Place[] {
   const city = cityById(cityId);
   const events = eventsForCity(cityId).filter((e) => !e.online);
   return [
-    { id: 'pl-run', name: 'Sunset Run', meta: '2.4 km', kind: 'Runs', icon: 'run-fast', color: '#FF2D9B', x: 0.3, y: 0.12, eventId: events[0]?.id },
-    { id: 'pl-gym', name: city.venues.gyms[0].split(',')[0], meta: '0.8 km', kind: 'Gyms', icon: 'dumbbell', color: '#FFD21F', x: 0.06, y: 0.34 },
-    { id: 'pl-yoga', name: 'Yoga Meet', meta: 'Today, 6 PM', kind: 'Events', icon: 'yoga', color: '#C084FC', x: 0.5, y: 0.22, eventId: events[2]?.id },
+    { id: 'pl-run', name: 'Sunset Run', meta: '2.4 km', kind: 'Runs', icon: 'run-fast', color: '#FF7A1A', x: 0.3, y: 0.12, eventId: events[0]?.id },
+    { id: 'pl-gym', name: city.venues.gyms[0].split(',')[0], meta: '0.8 km', kind: 'Gyms', icon: 'dumbbell', color: '#FFD23F', x: 0.06, y: 0.34 },
+    { id: 'pl-yoga', name: 'Yoga Meet', meta: 'Today, 6 PM', kind: 'Events', icon: 'yoga', color: '#B69CFF', x: 0.5, y: 0.22, eventId: events[2]?.id },
     { id: 'pl-cafe', name: 'Healthy Cafe', meta: '1.1 km', kind: 'Cafes', icon: 'coffee', color: '#3DF0A0', x: 0.16, y: 0.58 },
-    { id: 'pl-comm', name: 'Community Run', meta: '120 people', kind: 'Events', icon: 'account-group', color: '#FF2D9B', x: 0.5, y: 0.8, eventId: events[7]?.id },
-    { id: 'pl-gym2', name: city.venues.gyms[1].split(',')[0], meta: '2.2 km', kind: 'Gyms', icon: 'weight-lifter', color: '#FFD21F', x: 0.66, y: 0.46 },
-    { id: 'pl-run2', name: city.venues.runs[1], meta: '3.6 km loop', kind: 'Runs', icon: 'map-marker-path', color: '#D7FF1F', x: 0.56, y: 0.0 },
+    { id: 'pl-comm', name: 'Community Run', meta: '120 people', kind: 'Events', icon: 'account-group', color: '#FF7A1A', x: 0.5, y: 0.8, eventId: events[7]?.id },
+    { id: 'pl-gym2', name: city.venues.gyms[1].split(',')[0], meta: '2.2 km', kind: 'Gyms', icon: 'weight-lifter', color: '#FFD23F', x: 0.66, y: 0.46 },
+    { id: 'pl-run2', name: city.venues.runs[1], meta: '3.6 km loop', kind: 'Runs', icon: 'map-marker-path', color: '#3B6BFF', x: 0.56, y: 0.0 },
     { id: 'pl-cafe2', name: city.venues.cafes[1].split(',')[0], meta: '1.9 km', kind: 'Cafes', icon: 'cup', color: '#3DF0A0', x: 0.62, y: 0.64 },
-    { id: 'pl-hiit', name: 'HIIT Takeover', meta: 'Tomorrow, 7 PM', kind: 'Events', icon: 'lightning-bolt', color: '#FF8A1F', x: 0.24, y: 0.72, eventId: events[5]?.id },
+    { id: 'pl-hiit', name: 'HIIT Takeover', meta: 'Tomorrow, 7 PM', kind: 'Events', icon: 'lightning-bolt', color: '#FF5FA2', x: 0.24, y: 0.72, eventId: events[5]?.id },
   ];
 }

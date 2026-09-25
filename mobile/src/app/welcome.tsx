@@ -24,7 +24,7 @@ export default function Welcome() {
     <View style={styles.root}>
       <Scene kind="city-sunset" seed={7} aspect={width / height} style={StyleSheet.absoluteFill} />
       <Scrim style={{ top: '38%' }} strong />
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(6,6,6,0.35)' }]} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(7,9,15,0.35)' }]} />
 
       <View style={[styles.content, { paddingTop: insets.top + 12, paddingBottom: 8 }]}>
         <Wordmark size={30} />

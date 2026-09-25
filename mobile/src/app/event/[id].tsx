@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
   host: { color: colors.sub, fontFamily: fonts.medium, fontSize: 14 },
   col: { paddingHorizontal: 16, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center', marginTop: 16 },
   divider: { height: 1, backgroundColor: colors.line, marginVertical: 12 },
-  rowIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,53,181,0.12)', alignItems: 'center', justifyContent: 'center' },
+  rowIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,122,26,0.12)', alignItems: 'center', justifyContent: 'center' },
   rowTitle: { color: colors.text, fontFamily: fonts.bold, fontSize: 15 },
   rowSub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, marginTop: 1 },
   body: { color: colors.sub, fontFamily: fonts.regular, fontSize: 15, lineHeight: 22 },

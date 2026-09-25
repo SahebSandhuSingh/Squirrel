@@ -209,7 +209,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         return currentCoins - item.price;
       });
       if (result === 'ok') {
-        toast(`Unlocked ${item.name}`, 'lock-open-variant', '#FFD21F');
+        toast(`Unlocked ${item.name}`, 'lock-open-variant', '#FFD23F');
       }
       return result;
     },
@@ -257,7 +257,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     city,
     setCity: (id) => {
       setCityId(id);
-      toast(`Exploring ${cityById(id).name}`, 'map-marker-radius', '#D7FF1F');
+      toast(`Exploring ${cityById(id).name}`, 'map-marker-radius', '#3B6BFF');
     },
     crews,
     events,
@@ -280,7 +280,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     toggleCrew: useCallback((id: string) => {
       setJoinedCrews((s) => {
         const crew = crews.find((c) => c.id === id);
-        if (!s.has(id) && crew) toast(`You joined ${crew.name}`, 'account-group', '#D7FF1F');
+        if (!s.has(id) && crew) toast(`You joined ${crew.name}`, 'account-group', '#3B6BFF');
         return toggled(s, id);
       });
     }, [crews, toast]),
@@ -288,7 +288,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     toggleEvent: useCallback((id: string) => {
       const ev = events.find((e) => e.id === id);
       if (!joinedEvents.has(id) && ev) {
-        toast(`You're going to ${ev.title} · +${ev.xp} XP on check-in`, 'calendar-check', '#FF2D9B');
+        toast(`You're going to ${ev.title} · +${ev.xp} XP on check-in`, 'calendar-check', '#FF7A1A');
         setMissions((all) => all.map((m) => (m.id === 'w-event' ? { ...m, current: m.goal } : m)));
       }
       setJoinedEvents((s) => toggled(s, id));
@@ -296,7 +296,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     following,
     toggleFollow: useCallback((id: string) => {
       setFollowing((s) => {
-        if (!s.has(id)) toast(`Following @${users.find((u) => u.id === id)?.handle ?? ''}`, 'account-check', '#FF2D9B');
+        if (!s.has(id)) toast(`Following @${users.find((u) => u.id === id)?.handle ?? ''}`, 'account-check', '#FF7A1A');
         return toggled(s, id);
       });
     }, [toast]),
@@ -305,7 +305,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     saved,
     toggleSave: useCallback((id: string) => {
       setSaved((s) => {
-        if (!s.has(id)) toast('Saved to your collection', 'bookmark', '#FFD21F');
+        if (!s.has(id)) toast('Saved to your collection', 'bookmark', '#FFD23F');
         return toggled(s, id);
       });
     }, [toast]),
@@ -315,7 +315,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         { ...p, id: `me-${Date.now()}`, authorId: me.id, cityId, area: city.areas[0], minutesAgo: 0, likes: 0, comments: 0 },
         ...all,
       ]);
-      toast('Posted to your feed · +20 XP', 'send', '#FF2D9B');
+      toast('Posted to your feed · +20 XP', 'send', '#FF7A1A');
       setXp((x) => x + 20);
     }, [cityId, city, me.id, toast]),
     finishRun,

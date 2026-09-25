@@ -8,7 +8,7 @@ import { heatmap, recentActivities, stats, type Period } from '@/data/stats';
 import { colors, fonts, radius } from '@/theme';
 
 const PERIODS: Period[] = ['Day', 'Week', 'Month', 'Year'];
-const HEAT = ['rgba(255,255,255,0.05)', 'rgba(255,53,181,0.25)', 'rgba(255,53,181,0.45)', 'rgba(255,53,181,0.7)', '#FF2D9B'];
+const HEAT = ['rgba(255,255,255,0.05)', 'rgba(255,122,26,0.25)', 'rgba(255,122,26,0.45)', 'rgba(255,122,26,0.7)', '#FF7A1A'];
 
 /** YOUR PROGRESS — fitness-game analytics dashboard. */
 export default function Progress() {

@@ -51,7 +51,7 @@ function Confetti({ visible }: { visible: boolean }) {
       vy: 0.003 + Math.random() * 0.005,
       rot: Math.random() * Math.PI * 2,
       vr: (Math.random() - 0.5) * 0.05,
-      color: ['#FF2D9B', '#FFD21F', '#D7FF1F', '#C084FC', '#FF8A1F', '#3DF0A0'][Math.floor(Math.random() * 6)],
+      color: ['#FF7A1A', '#FFD23F', '#3B6BFF', '#B69CFF', '#FF5FA2', '#3DF0A0'][Math.floor(Math.random() * 6)],
       size: 6 + Math.random() * 10,
       delay: Math.random() * 200,
     }))

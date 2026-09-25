@@ -51,15 +51,16 @@ Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-h
 | `/city` | City picker |
 | `/notifications` | Activity notifications |
 
-## Look & feel
+## Look & feel — "Varsity Night"
 
-The app uses the same visual system as the Squirrel Social website (`squirrel-social-site`):
-- **Canvas:** near-black `#060606` with graphite cards (`#111113` / `#17171A`, border `#27272B`).
-- **Colours:** **lime `#D7FF1F`** for primary actions and "yours"; **pink `#FF2D9B`** as the secondary accent.
-- **Type:** Knewave brush headlines, Oswald uppercase labels and buttons, Space Mono section kickers, Permanent Marker scribbles.
-- **Shapes:** pill buttons, marquee "tape" strips, and the lime line-art squirrel logo (also the app icon).
+A Gen-Z / college look with GTA-style type:
+- **Canvas:** deep navy-black `#07090F`, with navy cards (`#111626` / `#182036`, border `#232B45`).
+- **Colours:** **tangerine `#FF7A1A`** for primary actions and "yours" (your territory, your rank); **electric cobalt `#3B6BFF`** as the secondary accent; lavender, mint and yellow for variety. Rival territory is violet, contested is yellow.
+- **Type:** Anton for headlines and big numbers (heavy, condensed, slanted −6° like GTA title cards). Barlow Condensed for labels, buttons and italic callouts; Inter for body text.
+  - These are free Google Fonts lookalikes: GTA's own fonts are proprietary or commercial.
+- **Brand:** the squirrel line-art mark in tangerine is the logo, app icon, splash and favicon.
 
-All tokens live in `src/theme.ts`.
+Every token lives in `src/theme.ts`, so swapping the palette again is a one-file change (plus `statusColor` in `src/data/territory.ts`).
 
 ## Backend integration (Run Module)
 
