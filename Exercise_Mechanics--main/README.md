@@ -208,6 +208,7 @@ optional and switch features on:
 | `RUN_MODULE_URL`, `RUN_MODULE_TOKEN` | Partner Hunt's XP gate (the Run Module) | Partner Hunt reports the XP service as unavailable |
 | `PARTNER_HUNT_DEV_XP` | Local testing only: a fixed XP for every user | — |
 | `MODERATION_TOKEN` | Moderator routes for reports | Moderator routes refuse every request (503) |
+| `DATABASE_URL` | PostgreSQL copy of exercise sessions (see below) | Sessions are stored on disk only, as before |
 
 **Serverless hosts (Vercel, Netlify Functions, Lambda) cannot run this.** `/ws/setup` and `/ws/train`
 are long-lived WebSockets carrying every pose frame, and the backend writes profiles, sessions and
@@ -351,6 +352,60 @@ city and no meeting preferences. The frontend doesn't show it yet.
 
 Routes: `GET /api/users/{id}/activity-matching` (status, and exactly what matches see),
 `GET /api/users/{id}/activity-matches`, `POST /api/users/{id}/activity-matches/blocks`.
+
+## PostgreSQL: exercise sessions
+
+With `DATABASE_URL` set, every exercise session is also written to PostgreSQL, one row per session
+in `exercise_sessions` (`backend/db/`). It holds only the parameters that apply to the exercises
+this backend coaches. Running measures (distance, steps, pace, speed) are left out on purpose, and
+activity-specific parameters get their own migration when they're needed.
+
+| Column | Meaning |
+|---|---|
+| `session_id` | The session's id (primary key) |
+| `user_id` | The member's id (becomes the account service's UUID later) |
+| `activity_type` | `squat`, `pushup`, `bicep_curl` or `high_knee` (references `activity_types`) |
+| `start_time`, `end_time` | When the session was started, and when its last set finished |
+| `duration_s` | Active exercise time across its sets, in seconds |
+| `calories_kcal` | Empty until calories are calculated |
+| `sets`, `reps` | Sets and reps completed (high knees: counted knee lifts) |
+| `workout_score` | The system-generated Workout Score (0–100) |
+| `activity_rating` | The member's own rating (1–5), if they gave one |
+
+**When rows are written:**
+- when a set finishes;
+- when the training connection closes;
+- when a rating is saved or removed;
+- by `python -m backend.db backfill`, which writes every stored session.
+
+A write is an upsert, so running it again just refreshes the row. The files on disk stay the source
+of truth: if the database is down, training and ratings carry on, the failure is logged, and a
+backfill catches the table up afterwards.
+
+**Schema:** migrations live in `backend/db/migrations/` and are applied automatically when the app
+starts. You can also apply them yourself with `python -m backend.db migrate`. `activity_types`
+lists the enabled exercises; enabling a new exercise means adding its row in a new migration.
+
+**Local setup (macOS):**
+
+```bash
+brew install postgresql@16 && brew services start postgresql@16
+createdb exercise_mechanics
+export DATABASE_URL=postgresql://localhost/exercise_mechanics
+python -m uvicorn backend.main:app --port 8000     # creates the tables on start
+python -m backend.db backfill                      # optional: copy existing sessions in
+```
+
+**On Render:** create a Render PostgreSQL database and set the web service's `DATABASE_URL` to its
+*Internal Database URL*.
+
+**Tests:** `backend/tests/test_database.py` runs against a real, disposable database named in
+`TEST_DATABASE_URL` (its tables are dropped and recreated) and is skipped when that isn't set.
+
+```bash
+createdb exercise_test
+TEST_DATABASE_URL=postgresql://localhost/exercise_test python -m pytest -q backend/tests
+```
 
 ## Layout
 

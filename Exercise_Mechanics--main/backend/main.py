@@ -18,6 +18,7 @@ Layout:
     activity_matching/  workout partners suggested by shared activities (opt-in, no XP gate)
     activity_rating/    the member's own rating of a session (user-generated; never feeds the Workout Score)
     moderation/         reports on members or sessions, and the moderators' review queue
+    db/                 optional PostgreSQL mirror of exercise sessions (DATABASE_URL)
 
 Run from the project root:
     uvicorn backend.main:app --reload
@@ -25,6 +26,8 @@ Run from the project root:
 
 from __future__ import annotations
 
+import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -32,6 +35,8 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.activity_matching.router import router as activity_matching_router
 from backend.activity_rating.router import router as activity_rating_router
+from backend.db import connection as db_connection
+from backend.db.migrate import migrate
 from backend.engine.loader import validate_enabled_exercises
 from backend.moderation.router import router as moderation_router
 from backend.partners.router import router as partners_router
@@ -50,7 +55,23 @@ load_catalog()
 validate_enabled_exercises()
 validate_training_builders()
 
-app = FastAPI(title="Exercise Mechanics")
+log = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    """With DATABASE_URL set, bring the schema up to date before serving. A database that is down
+    is logged, not fatal: sessions keep being stored on disk and can be backfilled later."""
+    if db_connection.enabled():
+        try:
+            applied = migrate()
+            print(f"[db] migrations {'applied: ' + ', '.join(applied) if applied else 'up to date'}")
+        except Exception:  # noqa: BLE001
+            log.exception("[db] could not run migrations; continuing without the database")
+    yield
+
+
+app = FastAPI(title="Exercise Mechanics", lifespan=_lifespan)
 
 # The UI is the Vite-built SPA in frontend-dist (run `npm run build` in frontend-react/).
 _ROOT = Path(__file__).resolve().parent.parent

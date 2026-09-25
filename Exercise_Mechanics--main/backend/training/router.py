@@ -12,12 +12,13 @@ After `setup.ready` the client reconnects to train, whose rules load the accepte
 
 from __future__ import annotations
 
-from asyncio import to_thread
+from asyncio import get_running_loop, to_thread
 from pathlib import Path
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from backend.config import user_dir
+from backend.db.exercise_sessions import sync_session
 from backend.core.frame import FrameValidationError, validate_training_frame
 from backend.sessions.store import SessionAccess, SessionAccessError, validate_session_access
 from backend.training.baseline import load_baseline_document, save_baseline
@@ -380,5 +381,23 @@ async def train_ws(websocket: WebSocket) -> None:
                 )
                 return
             await websocket.send_json(_envelope("train.status", data))
+            if _set_finished(data):
+                _mirror_to_database(access)
     except WebSocketDisconnect:
         print("[ws/train] disconnected")
+        _mirror_to_database(access)
+
+
+def _set_finished(data: dict) -> bool:
+    """True only on the one status that closes a set: a rep set's final cycle
+    (`set_cycle_completed`) or a timed set reaching its time (`set_completed`)."""
+    events = data.get("events") if isinstance(data, dict) else None
+    return isinstance(events, dict) and (
+        events.get("set_cycle_completed") is True or events.get("set_completed") is True
+    )
+
+
+def _mirror_to_database(access: SessionAccess) -> None:
+    """Refresh the session's database row off the socket's path. Fire-and-forget: sync_session never
+    raises and is a no-op without DATABASE_URL, so training never waits on, or fails with, the database."""
+    get_running_loop().run_in_executor(None, sync_session, access.user_id, access.session_id)

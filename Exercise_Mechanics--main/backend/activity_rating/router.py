@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.activity_rating import store
 from backend.core.ids import is_valid_user_id
+from backend.db.exercise_sessions import sync_session
 from backend.sessions.store import is_valid_session_id, read_session_record
 
 router = APIRouter(prefix="/api")
@@ -55,10 +56,14 @@ def get_rating(user_id: str, session_id: str) -> dict:
 @router.put("/users/{user_id}/sessions/{session_id}/activity-rating")
 def put_rating(user_id: str, session_id: str, body: ActivityRatingIn) -> dict:
     _session(user_id, session_id)
-    return {"activity_rating": store.write_rating(user_id, session_id, body.model_dump())}
+    rating = store.write_rating(user_id, session_id, body.model_dump())
+    sync_session(user_id, session_id)  # refresh the database row; a no-op without DATABASE_URL
+    return {"activity_rating": rating}
 
 
 @router.delete("/users/{user_id}/sessions/{session_id}/activity-rating")
 def delete_rating(user_id: str, session_id: str) -> dict:
     _session(user_id, session_id)
-    return {"deleted": store.delete_rating(user_id, session_id)}
+    deleted = store.delete_rating(user_id, session_id)
+    sync_session(user_id, session_id)
+    return {"deleted": deleted}
