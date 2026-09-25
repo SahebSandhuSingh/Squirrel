@@ -265,7 +265,7 @@ const BADGES: Record<BadgeKind, BadgeDef> = {
   },
   hydration: {
     shape: 'hexTall',
-    color: '#3D9BFF',
+    color: '#D8C564',
     emblem: ({ main, detail }, cy) => (
       <G transform={`translate(0 ${cy - 56})`}>
         <Path d="M60 32 C66 44 77 52 77 63 C77 73 69 80 60 80 C51 80 43 73 43 63 C43 52 54 44 60 32 Z" fill={main} />
@@ -340,7 +340,7 @@ const BADGES: Record<BadgeKind, BadgeDef> = {
 /* component                                                           */
 /* ------------------------------------------------------------------ */
 
-const INK = '#140A20';
+const INK = '#191A10';
 
 export const BadgeArt = React.memo(function BadgeArt(props: {
   kind: BadgeKind;
@@ -353,16 +353,16 @@ export const BadgeArt = React.memo(function BadgeArt(props: {
   const def = BADGES[kind] ?? BADGES.city;
   const cy = def.cy ?? 56;
   const R = def.R ?? 46;
-  const col = locked ? '#6F6780' : def.color;
+  const col = locked ? '#787A6D' : def.color;
   const pinkish = !locked && (def.color === art.pink || def.color === art.pinkHi || def.color === art.coral);
-  const rim = locked ? '#A69EB4' : pinkish ? art.cyan : art.pink;
+  const rim = locked ? '#ADAEA4' : pinkish ? art.cyan : art.pink;
 
   const outer = shapePath(def.shape, cy, R);
   const inner = shapePath(def.shape, cy, R - 9);
 
   const colors: EmblemColors = locked
-    ? { main: '#CFC8D9', detail: '#6F6780', deep: '#2A2433' }
-    : { main: '#FFF8FC', detail: mix(col, INK, 0.08), deep: mix(col, '#1C0C2E', 0.7) };
+    ? { main: '#D4D5CC', detail: '#787A6D', deep: '#2E2F28' }
+    : { main: '#FFFBF8', detail: mix(col, INK, 0.08), deep: mix(col, '#232614', 0.7) };
   if (!locked && (kind === 'streak' || kind === 'first-run')) colors.detail = art.yellow;
   if (!locked && kind === 'crew') colors.detail = art.violet;
   if (!locked && kind === 'social') colors.detail = art.pink;
@@ -389,8 +389,8 @@ export const BadgeArt = React.memo(function BadgeArt(props: {
         </LinearGradient>
         <RadialGradient id={`${uid}face`} cx="0.4" cy="0.3" r="0.8">
           <Stop offset="0" stopColor={mix(col, '#FFFFFF', 0.12)} />
-          <Stop offset="0.5" stopColor={mix(col, '#2A0B45', 0.35)} />
-          <Stop offset="1" stopColor={mix(col, '#1C0C2E', 0.72)} />
+          <Stop offset="0.5" stopColor={mix(col, '#33361A', 0.35)} />
+          <Stop offset="1" stopColor={mix(col, '#232614', 0.72)} />
         </RadialGradient>
         <ClipPath id={`${uid}co`}>
           <Path d={outer} />
@@ -405,8 +405,8 @@ export const BadgeArt = React.memo(function BadgeArt(props: {
 
         {ribbon ? (
           <G>
-            <Path d="M46 80 L36 112 L44 107 L51 113 L60 84 Z" fill={locked ? '#58506A' : art.pink} stroke={INK} strokeWidth={2} strokeLinejoin="round" />
-            <Path d="M74 80 L84 112 L76 107 L69 113 L60 84 Z" fill={locked ? '#4A4359' : art.cyan} stroke={INK} strokeWidth={2} strokeLinejoin="round" />
+            <Path d="M46 80 L36 112 L44 107 L51 113 L60 84 Z" fill={locked ? '#626457' : art.pink} stroke={INK} strokeWidth={2} strokeLinejoin="round" />
+            <Path d="M74 80 L84 112 L76 107 L69 113 L60 84 Z" fill={locked ? '#525449' : art.cyan} stroke={INK} strokeWidth={2} strokeLinejoin="round" />
             <Path d="M46 80 L42 93 L50 96 L54 83 Z M74 80 L78 93 L70 96 L66 83 Z" fill="#000000" opacity={0.25} />
           </G>
         ) : null}
@@ -444,11 +444,11 @@ export const BadgeArt = React.memo(function BadgeArt(props: {
       {locked ? (
         <G>
           <Path d="M81 90 V83 C81 76 95 76 95 83 V90" fill="none" stroke={INK} strokeWidth={7} strokeLinecap="round" />
-          <Path d="M81 90 V83 C81 76 95 76 95 83 V90" fill="none" stroke="#BDB5CA" strokeWidth={3.5} strokeLinecap="round" />
-          <Rect x={75} y={87} width={26} height={21} rx={5} fill="#3B3448" stroke={INK} strokeWidth={2.2} />
+          <Path d="M81 90 V83 C81 76 95 76 95 83 V90" fill="none" stroke="#C3C5BA" strokeWidth={3.5} strokeLinecap="round" />
+          <Rect x={75} y={87} width={26} height={21} rx={5} fill="#424339" stroke={INK} strokeWidth={2.2} />
           <Rect x={77} y={89} width={22} height={4} rx={2} fill="#FFFFFF" opacity={0.18} />
-          <Circle cx={88} cy={96} r={2.8} fill="#15101C" />
-          <Path d="M86.8 97 h2.4 l0.6 5 h-3.6 Z" fill="#15101C" />
+          <Circle cx={88} cy={96} r={2.8} fill="#181913" />
+          <Path d="M86.8 97 h2.4 l0.6 5 h-3.6 Z" fill="#181913" />
         </G>
       ) : null}
     </Svg>

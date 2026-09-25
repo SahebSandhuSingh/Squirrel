@@ -4,34 +4,34 @@
  */
 export const art = {
   // night sky -> sunset
-  night0: '#07050D',
-  night1: '#10091A',
-  night2: '#1C0C2E',
-  dusk: '#3A0F4F',
-  magenta: '#7A1466',
-  coral: '#E8466E',
+  night0: '#0A0B07',
+  night1: '#15160D',
+  night2: '#232614',
+  dusk: '#3B3F1F',
+  magenta: '#763E18',
+  coral: '#DC7252',
   orange: '#FF7A45',
   amber: '#FFB547',
   sunTop: '#FFE08A',
-  sunBottom: '#FF4DC4',
+  sunBottom: '#F89B54',
 
   // neon
-  pink: '#FF2D9B',
+  pink: '#F79035',
   lime: '#D7FF1F',
   /** UI route / 'yours' colour (matches theme primary). */
-  route: '#FF7A1A',
-  pinkHi: '#FF7FD6',
-  purple: '#8A3FFC',
-  violet: '#B57BFF',
-  cyan: '#35DFFF',
+  route: '#F28C28',
+  pinkHi: '#FAB784',
+  purple: '#C0CD6E',
+  violet: '#D5DE9C',
+  cyan: '#D7C25D',
   yellow: '#FFD43B',
-  green: '#3DF0A0',
+  green: '#9CCB7A',
 
   // buildings / silhouettes
-  building0: '#12081E',
-  building1: '#1A0C2A',
-  building2: '#241238',
-  silhouette: '#0A0512',
+  building0: '#17180D',
+  building1: '#212214',
+  building2: '#2C2E1B',
+  silhouette: '#0E0F08',
 
   // squirrel mascot
   fur: '#D9783A',
@@ -41,10 +41,10 @@ export const art = {
   nose: '#3A1A12',
 
   // neutrals
-  ink: '#0B0710',
+  ink: '#0D0E09',
   white: '#FFFFFF',
-  cloud: '#F4ECF8',
-  steel: '#8C8398',
+  cloud: '#F4F5EF',
+  steel: '#919388',
 };
 
 export const skinTones = ['#F6D3B8', '#E8B48F', '#C98A5E', '#A0643A', '#6E4127', '#4A2A1A'] as const;

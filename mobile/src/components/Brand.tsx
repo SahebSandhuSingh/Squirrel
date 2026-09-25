@@ -1,28 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import { Animated, Easing, Image, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { NATIVE } from '@/components/ui';
 import { colors, fonts } from '@/theme';
 
-/** The Squirrel Social mark from the website (assets/logo.svg): lime line-art squirrel head. */
-export function Logo({ size = 32, color = colors.primary }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 64 64" fill="none" stroke={color} strokeWidth={3.5} strokeLinejoin="round" strokeLinecap="round">
-      <Path d="M10 6 L22 20 Q32 16 42 20 L54 6 L55 30 Q55 50 32 58 Q9 50 9 30 Z" />
-      <Path d="M15 14 L20 22 M49 14 L44 22" />
-      <Path d="M18 32 Q23 27 28 32 Q23 36 18 32 Z" fill={color} />
-      <Path d="M36 32 Q41 27 46 32 Q41 36 36 32 Z" fill={color} />
-      <Path d="M28 42 L32 46 L36 42 Z" fill={color} />
-      <Path d="M24 49 Q32 54 40 49" />
-    </Svg>
-  );
+/** The Squirrel Social logo (assets/brand/logo.png — transparent cut-out of the brand artwork). */
+export function Logo({ size = 32 }: { size?: number; color?: string }) {
+  return <Image source={require('../../assets/brand/logo.png')} style={{ width: size, height: size }} resizeMode="contain" accessibilityLabel="Squirrel Social logo" />;
 }
 
 /** Logo + wordmark, as in the website's nav bar. */
 export function Wordmark({ size = 28 }: { size?: number }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-      <Logo size={size} />
+      <Logo size={size * 1.25} />
       <Text style={{ color: colors.text, fontFamily: fonts.label, fontSize: size * 0.62, letterSpacing: 1.2, textTransform: 'uppercase' }}>Squirrel Social</Text>
     </View>
   );
@@ -43,7 +33,7 @@ export function Tape({ items, color = colors.primary, rotate = -3, style }: { it
     return () => loop.stop();
   }, [w, x]);
   const text = items.map((i) => `${i}  ✦  `).join('');
-  const fg = color === colors.primary ? colors.onPrimary : '#FFFFFF';
+  const fg = color === colors.secondary ? colors.onSecondary : colors.onPrimary;
   return (
     <View style={[styles.tape, { backgroundColor: color, transform: [{ rotate: `${rotate}deg` }] }, style]} pointerEvents="none">
       <Animated.View style={{ flexDirection: 'row', transform: [{ translateX: x }] }}>

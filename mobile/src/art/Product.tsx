@@ -53,8 +53,8 @@ function useUid(): string {
 /* shading primitive                                                   */
 /* ------------------------------------------------------------------ */
 
-const INK = '#150A22';
-const SHADOW_TINT = '#2A0B45';
+const INK = '#1A1C10';
+const SHADOW_TINT = '#33361A';
 
 type Tone = { fill: string; base: string; outline: string; shade: string; hi: string; rim: string; gradId: string };
 
@@ -180,8 +180,8 @@ export const productDefaults: Record<ProductKind, { color: string; accent: strin
   hoodie: { color: art.purple, accent: art.pink },
   tee: { color: art.pink, accent: art.cyan },
   tank: { color: art.cyan, accent: art.pink },
-  jacket: { color: '#2E2658', accent: art.pink },
-  joggers: { color: '#3A3160', accent: art.pink },
+  jacket: { color: '#484C33', accent: art.pink },
+  joggers: { color: '#51543D', accent: art.pink },
   shorts: { color: art.orange, accent: art.pink },
   shoes: { color: art.pink, accent: art.cyan },
   hightops: { color: art.purple, accent: art.yellow },
@@ -195,10 +195,10 @@ export const productDefaults: Record<ProductKind, { color: string; accent: strin
   watch: { color: art.purple, accent: art.pink },
   earbuds: { color: art.cloud, accent: art.pink },
   socks: { color: art.cloud, accent: art.pink },
-  gloves: { color: '#4A3D86', accent: art.pink },
+  gloves: { color: '#6F744F', accent: art.pink },
   mat: { color: art.green, accent: art.purple },
-  dumbbell: { color: '#2A2036', accent: art.pink },
-  kettlebell: { color: '#16101E', accent: art.cyan },
+  dumbbell: { color: '#2F3126', accent: art.pink },
+  kettlebell: { color: '#1A1A13', accent: art.cyan },
   jumprope: { color: art.pink, accent: art.cloud },
   resistanceband: { color: art.green, accent: art.pink },
   basketball: { color: art.orange, accent: art.ink },
@@ -462,14 +462,14 @@ const draw: Record<ProductKind, (x: Ctx) => React.ReactElement> = {
         </ClipPath>
         <LinearGradient id={`${uid}of`} x1="0" y1="0" x2="0" y2="1">
           <Stop offset="0" stopColor={art.cyan} />
-          <Stop offset="1" stopColor="#2A7BFF" />
+          <Stop offset="1" stopColor="#D4BF55" />
         </LinearGradient>
       </Defs>
-      <Path d="M52 45 H68 C70 45 71 46 71 48 V96 C71 98 70 99 68 99 H52 C50 99 49 98 49 96 V48 C49 46 50 45 52 45 Z" fill="#1A1030" opacity={0.85} />
+      <Path d="M52 45 H68 C70 45 71 46 71 48 V96 C71 98 70 99 68 99 H52 C50 99 49 98 49 96 V48 C49 46 50 45 52 45 Z" fill="#262818" opacity={0.85} />
       <G clipPath={`url(#${uid}ow)`}>
         <Rect x={48} y={62} width={24} height={40} fill={`url(#${uid}of)`} />
-        <Rect x={48} y={62} width={24} height={2.5} fill="#B8F6FF" />
-        <Path d={`${circ(56, 78, 1.6)} ${circ(63, 86, 1.2)} ${circ(58, 91, 1)}`} fill="#DFFBFF" opacity={0.8} />
+        <Rect x={48} y={62} width={24} height={2.5} fill="#F1EAC6" />
+        <Path d={`${circ(56, 78, 1.6)} ${circ(63, 86, 1.2)} ${circ(58, 91, 1)}`} fill="#F9F5E5" opacity={0.8} />
         <Rect x={51} y={45} width={3} height={55} fill="#FFFFFF" opacity={0.28} />
       </G>
       <Path d="M52 45 H68 C70 45 71 46 71 48 V96 C71 98 70 99 68 99 H52 C50 99 49 98 49 96 V48 C49 46 50 45 52 45 Z" fill="none" stroke={INK} strokeWidth={1.6} />
@@ -520,7 +520,7 @@ const draw: Record<ProductKind, (x: Ctx) => React.ReactElement> = {
       </Piece>
       <Piece id={`${uid}w1`} t={k} s={0.6} d="M35 38 C35 31 40 26 47 26 H73 C80 26 85 31 85 38 V82 C85 89 80 94 73 94 H47 C40 94 35 89 35 82 Z" />
       <Path d="M84 50 h4 c1 0 1.5 0.5 1.5 1.5 v7 c0 1 -0.5 1.5 -1.5 1.5 h-4 Z" fill={a.base} stroke={INK} strokeWidth={1.2} />
-      <Path d="M42 40 C42 36 44 33 48 33 H72 C76 33 78 36 78 40 V80 C78 84 76 87 72 87 H48 C44 87 42 84 42 80 Z" fill="#07050D" />
+      <Path d="M42 40 C42 36 44 33 48 33 H72 C76 33 78 36 78 40 V80 C78 84 76 87 72 87 H48 C44 87 42 84 42 80 Z" fill="#0A0B07" />
       <Circle cx={60} cy={55} r={13} fill="none" stroke={a.base} strokeOpacity={0.25} strokeWidth={4.5} />
       <Circle cx={60} cy={55} r={13} fill="none" stroke={a.base} strokeWidth={4.5} strokeDasharray="62 82" strokeLinecap="round" transform="rotate(-90 60 55)" />
       <Circle cx={60} cy={55} r={7.5} fill="none" stroke={art.cyan} strokeOpacity={0.25} strokeWidth={3.5} />
@@ -725,9 +725,9 @@ export const ProductArt = React.memo(function ProductArt(props: {
       uid,
       c: makeTone(color, rim, `${uid}gc`),
       a: makeTone(accent, rimFor(accent), `${uid}ga`),
-      w: makeTone('#F6F1FA', rim, `${uid}gw`),
-      k: makeTone(mix(color, '#120A1C', 0.72), rim, `${uid}gk`),
-      rib: makeTone(mix(color, '#120A1C', 0.3), rim, `${uid}gr`),
+      w: makeTone('#F7F8F3', rim, `${uid}gw`),
+      k: makeTone(mix(color, '#16180E', 0.72), rim, `${uid}gk`),
+      rib: makeTone(mix(color, '#16180E', 0.3), rim, `${uid}gr`),
     };
   }, [uid, color, accent]);
 

@@ -25,7 +25,7 @@ export default function Notifications() {
       <View style={{ gap: 10, marginTop: 10 }}>
         {NOTES.map((n, i) => (
           <FadeIn key={n.id} index={i}>
-            <PressScale onPress={() => router.push(n.go)} style={[styles.row, n.unread && { borderColor: 'rgba(255,122,26,0.35)' }]}>
+            <PressScale onPress={() => router.push(n.go)} style={[styles.row, n.unread && { borderColor: 'rgba(227,203,143,0.35)' }]}>
               {n.user ? (
                 <Avatar user={userById(n.user)} size={44} link={false} />
               ) : (

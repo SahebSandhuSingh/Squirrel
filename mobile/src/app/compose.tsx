@@ -76,7 +76,7 @@ export default function Compose() {
 
 const styles = StyleSheet.create({
   input: { flex: 1, minHeight: 60, color: colors.text, fontFamily: fonts.regular, fontSize: 16, paddingTop: 10, textAlignVertical: 'top' },
-  actChip: { position: 'absolute', left: 10, bottom: 10, backgroundColor: 'rgba(7,5,13,0.8)', borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 6 },
+  actChip: { position: 'absolute', left: 10, bottom: 10, backgroundColor: 'rgba(14,16,11,0.8)', borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 6 },
   actText: { color: colors.text, fontFamily: fonts.semibold, fontSize: 12 },
   thumb: { borderRadius: radius.sm + 2, borderWidth: 2, borderColor: 'transparent' },
   sticker: { width: 70, height: 70, borderRadius: radius.md, borderWidth: 2, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },

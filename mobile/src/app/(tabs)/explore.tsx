@@ -156,7 +156,7 @@ function Marker({ place, active, onPress }: { place: Place; active: boolean; onP
   }, [s, place.x]);
   return (
     <Animated.View style={[styles.pinWrap, { left: `${place.x * 100}%`, top: `${27 + place.y * 46}%`, transform: [{ scale: s }] }]}>
-      <Pressable onPress={onPress} style={[styles.pin, active && { borderColor: place.color, backgroundColor: 'rgba(22,13,35,0.97)' }]} accessibilityLabel={place.name}>
+      <Pressable onPress={onPress} style={[styles.pin, active && { borderColor: place.color, backgroundColor: 'rgba(26,29,20,0.97)' }]} accessibilityLabel={place.name}>
         <View style={{ alignItems: 'center', justifyContent: 'center' }}>
           {(active || place.kind === 'Events') && <Pulse size={34} color={place.color} />}
           <View style={[styles.pinDot, { backgroundColor: place.color }]}>
@@ -173,11 +173,11 @@ function Marker({ place, active, onPress }: { place: Place; active: boolean; onP
 }
 
 const styles = StyleSheet.create({
-  top: { paddingHorizontal: 16, backgroundColor: 'rgba(7,5,13,0.55)', borderBottomLeftRadius: radius.xl, borderBottomRightRadius: radius.xl },
+  top: { paddingHorizontal: 16, backgroundColor: 'rgba(14,16,11,0.55)', borderBottomLeftRadius: radius.xl, borderBottomRightRadius: radius.xl },
   people: { backgroundColor: colors.bg2, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, marginBottom: 10, overflow: 'hidden' },
   personRow: { flexDirection: 'row', alignItems: 'center', padding: 10, borderBottomWidth: 1, borderBottomColor: colors.line },
   pinWrap: { position: 'absolute' },
-  pin: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(7,5,13,0.86)', borderRadius: radius.pill, padding: 4, paddingRight: 11, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.12)', maxWidth: 170 },
+  pin: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(14,16,11,0.86)', borderRadius: radius.pill, padding: 4, paddingRight: 11, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.12)', maxWidth: 170 },
   pinDot: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' },
   pinName: { color: colors.text, fontFamily: fonts.bold, fontSize: 12 },
   pinMeta: { color: colors.sub, fontFamily: fonts.regular, fontSize: 10 },
@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
   bottom: { position: 'absolute', left: 0, right: 0 },
   count: { color: colors.text, fontFamily: fonts.bold, fontSize: 13, textShadowColor: '#000', textShadowRadius: 6 },
   locate: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.bg2, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.line },
-  placeCard: { width: 220, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(22,13,35,0.96)', borderRadius: radius.lg, padding: 10, borderWidth: 1.5, borderColor: colors.line },
+  placeCard: { width: 220, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(26,29,20,0.96)', borderRadius: radius.lg, padding: 10, borderWidth: 1.5, borderColor: colors.line },
   placeIcon: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   pName: { color: colors.text, fontFamily: fonts.bold, fontSize: 14 },
   pMeta: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12 },

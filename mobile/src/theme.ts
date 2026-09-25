@@ -1,50 +1,51 @@
 /**
- * Design tokens — "Varsity Night": a Gen-Z / college look.
- * Deep navy-black canvas, TANGERINE as the primary action colour, electric COBALT as the
- * secondary accent, with lavender, mint and yellow for variety. Type is heavy, condensed
- * and slanted (GTA-style title cards) using free Google Fonts lookalikes.
+ * Design tokens — "Olive & Sand": earthy streetwear for a Gen-Z / college crowd.
+ * Olive-black canvas, SAND as the primary action colour, OLIVE as the secondary accent,
+ * and the logo's squirrel ORANGE for energy (routes, XP, highlights). Terracotta,
+ * mustard and sage fill out the set. Type stays heavy, condensed and slanted (GTA-style).
  */
 export const colors = {
-  bg: '#07090F',
-  bg2: '#0C1020',
-  card: '#111626',
-  cardHi: '#182036',
-  glass: 'rgba(17,22,38,0.9)',
-  line: '#232B45',
-  lineHi: '#33406A',
+  bg: '#0E100B',
+  bg2: '#14170F',
+  card: '#1A1D14',
+  cardHi: '#23271A',
+  glass: 'rgba(26,29,20,0.9)',
+  line: '#2E3322',
+  lineHi: '#434A31',
 
-  /** Primary action / "yours" colour. */
-  primary: '#FF7A1A',
-  primarySoft: '#FFA566',
-  primaryDeep: '#D95A00',
-  /** Secondary accent. */
-  secondary: '#3B6BFF',
-  pink: '#FF5FA2',
-  purple: '#7C5CFF',
-  violet: '#B69CFF',
-  blue: '#6FA8FF',
-  gold: '#FFD23F',
-  orange: '#FF7A1A',
-  coral: '#FF5C6E',
-  green: '#4BF0B5',
+  /** Primary action / "yours" colour — sand. */
+  primary: '#E3CB8F',
+  primarySoft: '#EFDDB2',
+  primaryDeep: '#BFA464',
+  /** Secondary accent — olive. */
+  secondary: '#9DB04C',
+  /** Logo orange — energy accent. */
+  orange: '#F28C28',
+  pink: '#E07A5F',
+  purple: '#6F7D3C',
+  violet: '#B4C27A',
+  blue: '#8FB3AA',
+  gold: '#E9B949',
+  coral: '#D9643A',
+  green: '#9CCB7A',
 
-  text: '#F5F7FF',
-  sub: '#C9D0E6',
-  dim: '#8E97B5',
-  mute: '#5C6585',
-  onPrimary: '#140800',
-  onSecondary: '#FFFFFF',
+  text: '#F4EFE3',
+  sub: '#D6CFBC',
+  dim: '#9E9A86',
+  mute: '#6B6957',
+  onPrimary: '#1A1608',
+  onSecondary: '#10130A',
 };
 
 export const gradients = {
-  primary: ['#FFA566', '#FF7A1A', '#E85F00'] as const,
-  secondary: ['#6F92FF', '#3B6BFF', '#2449D8'] as const,
-  purple: ['#B69CFF', '#7C5CFF', '#5634E0'] as const,
-  gold: ['#FFE580', '#FFD23F', '#F0A81C'] as const,
-  sunset: ['#2B0B3F', '#6B1553', '#D0356E', '#FF8A4C'] as const,
-  screen: ['#0C1020', '#07090F'] as const,
-  card: ['#151B2E', '#111626'] as const,
-  scrim: ['rgba(7,9,15,0)', 'rgba(7,9,15,0.65)', 'rgba(7,9,15,0.96)'] as const,
+  primary: ['#F2E2B8', '#E3CB8F', '#C9AE6C'] as const,
+  secondary: ['#B9CB6A', '#9DB04C', '#788A2E'] as const,
+  purple: ['#A7B75E', '#7E8C4A', '#5D6A30'] as const,
+  gold: ['#F3D27A', '#E9B949', '#C9951F'] as const,
+  sunset: ['#232614', '#763E18', '#DC7252', '#F89B54'] as const,
+  screen: ['#14170F', '#0E100B'] as const,
+  card: ['#1D2116', '#1A1D14'] as const,
+  scrim: ['rgba(14,16,11,0)', 'rgba(14,16,11,0.65)', 'rgba(14,16,11,0.96)'] as const,
 };
 
 /** GTA-style type: heavy condensed headlines, condensed (often italic) labels, clean body. */

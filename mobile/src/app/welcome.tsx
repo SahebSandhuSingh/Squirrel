@@ -2,9 +2,8 @@ import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Scene } from '@/art/Scene';
-import { Mascot } from '@/art/Mascot';
 import { Character } from '@/art/Character';
-import { Tape, Wordmark } from '@/components/Brand';
+import { Logo, Tape, Wordmark } from '@/components/Brand';
 import { Button, Display, FadeIn, Scrim, Tagline } from '@/components/ui';
 import { useAuth } from '@/auth/AuthProvider';
 import { useApp } from '@/state/AppState';
@@ -24,7 +23,7 @@ export default function Welcome() {
     <View style={styles.root}>
       <Scene kind="city-sunset" seed={7} aspect={width / height} style={StyleSheet.absoluteFill} />
       <Scrim style={{ top: '38%' }} strong />
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(7,9,15,0.35)' }]} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(14,16,11,0.35)' }]} />
 
       <View style={[styles.content, { paddingTop: insets.top + 12, paddingBottom: 8 }]}>
         <Wordmark size={30} />
@@ -44,7 +43,9 @@ export default function Welcome() {
         <FadeIn delay={300} style={[styles.hero, { height: heroH }]}>
           <Tagline size={15} style={styles.scribble}>Same parks.{'\n'}Different people.</Tagline>
           <Character look={look} pose="stand" height={heroH} />
-          <Mascot pose="wave" size={heroH * 0.52} animated style={{ marginLeft: -heroH * 0.08, marginBottom: -4 }} />
+          <View style={{ marginLeft: -heroH * 0.06, marginBottom: -2 }}>
+            <Logo size={heroH * 0.62} />
+          </View>
         </FadeIn>
       </View>
 

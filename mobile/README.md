@@ -51,16 +51,17 @@ Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-h
 | `/city` | City picker |
 | `/notifications` | Activity notifications |
 
-## Look & feel — "Varsity Night"
+## Look & feel — "Olive & Sand"
 
-A Gen-Z / college look with GTA-style type:
-- **Canvas:** deep navy-black `#07090F`, with navy cards (`#111626` / `#182036`, border `#232B45`).
-- **Colours:** **tangerine `#FF7A1A`** for primary actions and "yours" (your territory, your rank); **electric cobalt `#3B6BFF`** as the secondary accent; lavender, mint and yellow for variety. Rival territory is violet, contested is yellow.
+Earthy streetwear for a Gen-Z / college crowd, with GTA-style type:
+- **Canvas:** olive-black `#0E100B`, with olive cards (`#1A1D14` / `#23271A`, border `#2E3322`).
+- **Colours:** **sand `#E3CB8F`** for primary actions and "yours" (your territory, your rank); **olive `#9DB04C`** as the secondary accent; the logo's **squirrel orange `#F28C28`** for routes and energy; terracotta, mustard and sage fill out the set. Rival territory is terracotta, contested is olive.
+- **Art:** the illustration library's colours were shifted to match: warm dusk skies, olive haze and amber city lights instead of neon pink and purple.
 - **Type:** Anton for headlines and big numbers (heavy, condensed, slanted −6° like GTA title cards). Barlow Condensed for labels, buttons and italic callouts; Inter for body text.
   - These are free Google Fonts lookalikes: GTA's own fonts are proprietary or commercial.
-- **Brand:** the squirrel line-art mark in tangerine is the logo, app icon, splash and favicon.
+- **Brand:** the squirrel-with-dumbbell logo (`assets/brand/logo.png`, transparent cut-out) is used in the header, on Welcome, and as the app icon, splash and favicon.
 
-Every token lives in `src/theme.ts`, so swapping the palette again is a one-file change (plus `statusColor` in `src/data/territory.ts`).
+All UI tokens live in `src/theme.ts`; illustration colours live in `src/art/palette.ts`.
 
 ## Backend integration (Run Module)
 

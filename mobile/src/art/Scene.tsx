@@ -60,14 +60,14 @@ const SUNSET: Mood = {
     [0.88, art.orange],
     [1, art.amber],
   ],
-  far: ['#5A2A78', '#A2407E'],
-  mid: ['#2E1246', '#4C1A58'],
-  near: ['#170A26', '#0D0617'],
-  haze: '#FF6E7A',
+  far: ['#5F643D', '#9E6C44'],
+  mid: ['#36391F', '#562E1C'],
+  near: ['#1D1F11', '#12130A'],
+  haze: '#F49679',
   water: [
-    [0, '#C23A72'],
-    [0.2, '#6A1A5A'],
-    [0.6, '#2A0C3A'],
+    [0, '#BD7D3F'],
+    [0.2, '#673B1D'],
+    [0.6, '#2B2F18'],
     [1, art.night1],
   ],
   win: [
@@ -83,15 +83,15 @@ const NIGHT: Mood = {
     [0, art.night0],
     [0.45, art.night1],
     [0.78, art.night2],
-    [1, '#52165A'],
+    [1, '#572D19'],
   ],
-  far: ['#241238', '#3A1650'],
-  mid: ['#22103A', '#2E1646'],
-  near: ['#0D0718', '#0A0512'],
+  far: ['#2C2E1B', '#3E4225'],
+  mid: ['#2D2F1A', '#373A22'],
+  near: ['#13140B', '#0E0F08'],
   haze: art.magenta,
   water: [
-    [0, '#3A1048'],
-    [0.4, '#1A0A28'],
+    [0, '#462212'],
+    [0.4, '#1F2012'],
     [1, art.night0],
   ],
   win: [
@@ -105,20 +105,20 @@ const NIGHT: Mood = {
 
 const DAWN: Mood = {
   sky: [
-    [0, '#3B2C63'],
-    [0.35, '#7B6AA8'],
-    [0.62, '#C99BC6'],
+    [0, '#52553A'],
+    [0.35, '#94987A'],
+    [0.62, '#C7AD9D'],
     [0.84, '#FFBFA0'],
     [1, '#FFE3B8'],
   ],
-  far: ['#A690C4', '#D2B2D2'],
-  mid: ['#6E5A94', '#937AB0'],
-  near: ['#3A2C56', '#46345F'],
+  far: ['#B4B79D', '#D1BEB3'],
+  mid: ['#828668', '#9FA388'],
+  near: ['#494C36', '#51543F'],
   haze: '#FFF1E6',
   water: [
-    [0, '#F4C2B4'],
-    [0.3, '#A58BC0'],
-    [1, '#3A2A58'],
+    [0, '#EFC5B9'],
+    [0.3, '#AFB398'],
+    [1, '#494C35'],
   ],
   win: [
     [art.amber, 5],
@@ -421,15 +421,15 @@ function citySunset(c: Ctx): Node {
       {cloudsEl(c, sy - R * 0.9, sy + R * 0.4, [art.magenta, art.purple], 6)}
       {city.el}
       <Rect x={-2} y={hy} width={404} height={H - hy + 2} fill={c.lin(SUNSET.water)} />
-      {city.near && reflectEl(city.near, hy + 1, '#12081E', 0.7)}
+      {city.near && reflectEl(city.near, hy + 1, '#17180D', 0.7)}
       {streaksEl(c, 200, R * 0.9, hy, pTop - 10, [art.sunTop, art.pinkHi])}
       {ripplesEl(c, hy + 4, pTop, art.pinkHi, 18)}
-      <Rect x={-2} y={pTop} width={404} height={H - pTop + 2} fill={c.lin([[0, '#1C0C2C'], [1, art.night0]])} />
-      <Path d={lineD([[-5, pTop - 9], [405, pTop - 9]]) + Array.from({ length: 21 }, (_, i) => `M${i * 20} ${f(pTop - 9)}v9`).join('')} stroke="#07030C" strokeWidth={1.4} />
+      <Rect x={-2} y={pTop} width={404} height={H - pTop + 2} fill={c.lin([[0, '#222414'], [1, art.night0]])} />
+      <Path d={lineD([[-5, pTop - 9], [405, pTop - 9]]) + Array.from({ length: 21 }, (_, i) => `M${i * 20} ${f(pTop - 9)}v9`).join('')} stroke="#090A05" strokeWidth={1.4} />
       <Glow d={lineD([[-5, pTop - 10], [405, pTop - 10]])} color={art.pink} core={art.pinkHi} w={1.3} />
-      <Path d={poles.join('')} fill="#07030C" />
+      <Path d={poles.join('')} fill="#090A05" />
       {lampsEl(c, lamps, art.amber, art.sunTop)}
-      {palmsSides(c, H + 4, pal, '#07030C', 4)}
+      {palmsSides(c, H + 4, pal, '#090A05', 4)}
       {vignetteEl(c, 0.5)}
     </G>
   );
@@ -469,7 +469,7 @@ function cityNight(c: Ctx): Node {
   const lanes: [string, string, number][] = [
     [art.pink, art.pinkHi, roadY - 5.5],
     [art.coral, art.pinkHi, roadY - 3.2],
-    [art.cyan, '#CFF8FF', roadY - 1.2],
+    [art.cyan, '#F5F1D9', roadY - 1.2],
   ];
   const trailEls = lanes.map(([col, core, y], li) => {
     const d: string[] = [];
@@ -494,18 +494,18 @@ function cityNight(c: Ctx): Node {
       {moonEl(c, 320, clamp(hy * 0.22, 40, 150), clamp(hy * 0.06, 11, 24))}
       <Rect x={-2} y={hy * 0.45} width={404} height={hy * 0.55} fill={c.lin([[0, art.magenta, 0], [1, art.pink, 0.28]])} />
       {city.el}
-      <Path d={billboardLegs.join('')} stroke="#0A0512" strokeWidth={1.6} />
+      <Path d={billboardLegs.join('')} stroke="#0E0F08" strokeWidth={1.6} />
       <Glow d={pinkSign.join('')} color={art.pink} core={art.pinkHi} w={1.1} />
-      <Glow d={cyanSign.join('')} color={art.cyan} core="#CFF8FF" w={1.1} />
+      <Glow d={cyanSign.join('')} color={art.cyan} core="#F5F1D9" w={1.1} />
       <Rect x={-2} y={hy} width={404} height={H - hy + 2} fill={c.lin(NIGHT.water)} />
-      {city.near && reflectEl(city.near, hy + 1, '#07040C', 0.8, 0.45)}
+      {city.near && reflectEl(city.near, hy + 1, '#090A06', 0.8, 0.45)}
       <Path d={reflNeon.join('')} stroke={art.pinkHi} strokeWidth={1.2} strokeLinecap="round" opacity={0.6} />
       {ripplesEl(c, hy + 3, roadY, art.cyan, 14, 0.16)}
-      <Path d={pillars.join('')} fill="#07040C" />
-      <Rect x={-2} y={roadY - 9} width={404} height={deck + 9} fill="#0B0614" />
+      <Path d={pillars.join('')} fill="#090A06" />
+      <Rect x={-2} y={roadY - 9} width={404} height={deck + 9} fill="#10100A" />
       <Path d={lineD([[-2, roadY - 9], [404, roadY - 9]])} stroke={art.violet} strokeWidth={0.8} opacity={0.6} />
       {trailEls}
-      <Rect x={-2} y={roadY} width={404} height={deck} fill="#140A22" />
+      <Rect x={-2} y={roadY} width={404} height={deck} fill="#1A1C10" />
       <Glow d={lineD([[-2, roadY + deck * 0.5], [404, roadY + deck * 0.5]])} color={art.purple} core={art.violet} w={0.8} op={0.8} />
       {vignetteEl(c, 0.5)}
     </G>
@@ -529,7 +529,7 @@ function cityDawn(c: Ctx): Node {
     <G>
       {skyEl(c, DAWN.sky, hy)}
       {sunEl(c, sunX, hy - city.hmax * 0.3 - R * 0.35, R, { top: '#FFF6D8', bottom: '#FFA98A', glow: '#FFD2A8', glowR: 3.2 })}
-      {cloudsEl(c, hy * 0.25, hy * 0.7, ['#F7C4D8', '#B89AD8'], 5)}
+      {cloudsEl(c, hy * 0.25, hy * 0.7, ['#F5DEC6', '#C4C8AA'], 5)}
       <G>
         <SkylineLayer sky={city.far} fill={c.lin([[0, DAWN.far[0]], [1, DAWN.far[1]]])} winOpacity={0.4} />
         <Rect x={-2} y={hy - city.hmax * 0.6} width={404} height={city.hmax * 0.5} fill={mist} />
@@ -538,16 +538,16 @@ function cityDawn(c: Ctx): Node {
         {city.near && <SkylineLayer sky={city.near} fill={c.lin([[0, DAWN.near[0]], [1, DAWN.near[1]]])} />}
       </G>
       <Rect x={-2} y={hy} width={404} height={H - hy + 2} fill={c.lin(DAWN.water)} />
-      {city.near && reflectEl(city.near, hy + 1, '#5A4880', 0.55, 0.3)}
+      {city.near && reflectEl(city.near, hy + 1, '#6E7256', 0.55, 0.3)}
       <Rect x={-2} y={hy - 6} width={404} height={22} fill={mist} />
       {streaksEl(c, sunX, R * 0.8, hy, sTop, ['#FFF1D0', '#FFB9A0'], 0.8)}
       {ripplesEl(c, hy + 4, sTop, art.white, 14, 0.2)}
-      {birdsEl(c, sunX - 70, hy * 0.45, 5, clamp(H / 400, 0.7, 1.4), '#3A2C56')}
-      <Rect x={-2} y={sTop} width={404} height={stepH} fill="#6A5488" />
-      <Rect x={-2} y={sTop + stepH} width={404} height={stepH} fill="#4E3C6C" />
-      <Rect x={-2} y={sTop + stepH * 2} width={404} height={H} fill="#332650" />
+      {birdsEl(c, sunX - 70, hy * 0.45, 5, clamp(H / 400, 0.7, 1.4), '#494C36')}
+      <Rect x={-2} y={sTop} width={404} height={stepH} fill="#787B61" />
+      <Rect x={-2} y={sTop + stepH} width={404} height={stepH} fill="#5D6048" />
+      <Rect x={-2} y={sTop + stepH * 2} width={404} height={H} fill="#434630" />
       <Path d={`M-2 ${f(sTop)}h404M-2 ${f(sTop + stepH)}h404M-2 ${f(sTop + stepH * 2)}h404`} stroke="#FFD2B8" strokeWidth={0.8} opacity={0.45} />
-      <Path d={palmD(c.r, 372, sTop + 2, clamp(H * 0.42, 90, 260), -16) + palmD(c.r, 30, sTop + 2, clamp(H * 0.3, 70, 190), 10)} fill="#2A1E44" />
+      <Path d={palmD(c.r, 372, sTop + 2, clamp(H * 0.42, 90, 260), -16) + palmD(c.r, 30, sTop + 2, clamp(H * 0.3, 70, 190), 10)} fill="#383A27" />
       {vignetteEl(c, 0.3)}
     </G>
   );
@@ -613,16 +613,16 @@ function runScene(c: Ctx): Node {
       {cloudsEl(c, hy * 0.3, hy * 0.8, [art.magenta, art.purple], 5)}
       {city.el}
       <Rect x={-2} y={hy} width={404} height={H - hy + 2} fill={c.lin(SUNSET.water)} />
-      {city.near && reflectEl(city.near, hy + 1, '#12081E', 0.6)}
+      {city.near && reflectEl(city.near, hy + 1, '#17180D', 0.6)}
       {streaksEl(c, sunX, R * 0.8, hy, H, [art.sunTop, art.pinkHi], 1.4)}
-      <Path d={polyD([...top, ...[...bot].reverse()])} fill={c.lin([[0, '#3A1646'], [0.5, '#1C0B28'], [1, '#0B0612']], [0.7, 0, 0.2, 1])} />
-      <Path d={polyD([...top.map((p): Pt => [p[0], p[1] - 3]), ...[...top].reverse()])} fill="#0B0612" />
+      <Path d={polyD([...top, ...[...bot].reverse()])} fill={c.lin([[0, '#442518'], [0.5, '#1F2112'], [1, '#0E0F09']], [0.7, 0, 0.2, 1])} />
+      <Path d={polyD([...top.map((p): Pt => [p[0], p[1] - 3]), ...[...top].reverse()])} fill="#0E0F09" />
       <Glow d={lineD(top.map((p): Pt => [p[0], p[1] - 3]))} color={art.pink} core={art.pinkHi} w={0.9} op={0.8} />
-      <Path d={poles.join('')} fill="#07030C" />
+      <Path d={poles.join('')} fill="#090A05" />
       {lampsEl(c, lamps, art.amber, art.sunTop)}
       <Glow d={lineD(route)} color={art.pink} core={art.pinkHi} w={2.2} />
       {runners}
-      <Path d={palmD(c.r, 16, H + 6, clamp(H * 0.62, 120, 340), 22)} fill="#07030C" />
+      <Path d={palmD(c.r, 16, H + 6, clamp(H * 0.62, 120, 340), 22)} fill="#090A05" />
       {vignetteEl(c, 0.45)}
     </G>
   );
@@ -634,13 +634,13 @@ function yogaScene(c: Ctx): Node {
   const R = clamp(hy * 0.26, 32, 80);
   const sunX = 300;
   const sky: Stops = [
-    [0, '#2A0E45'],
+    [0, '#34371C'],
     [0.35, art.magenta],
     [0.65, art.coral],
     [0.86, art.orange],
     [1, art.sunTop],
   ];
-  const golden: Mood = { ...SUNSET, far: ['#8A3A6E', '#D86A6A'], mid: ['#5A2258', '#8A3A62'], lit: 0.12 };
+  const golden: Mood = { ...SUNSET, far: ['#875E3D', '#D08872'], mid: ['#583724', '#87603D'], lit: 0.12 };
   const city = cityEl(c, golden, hy, { layers: 2, scale: 0.55, valley: 0.3, valleyX: sunX });
   const hc = H * 0.77;
   const hill = `M-10 ${f(hc + 8)}Q110 ${f(hc - 14)} 205 ${f(hc - 4)}Q300 ${f(hc + 6)} 410 ${f(hc - 2)}L410 ${f(H + 2)}L-10 ${f(H + 2)}Z`;
@@ -675,11 +675,11 @@ function yogaScene(c: Ctx): Node {
       {skyEl(c, sky, hy)}
       {sunEl(c, sunX, hy - R * 0.3, R, { top: '#FFF3C4', bottom: art.orange, glow: art.amber, glowR: 3.4 })}
       <Path d={rays.join('')} fill={art.sunTop} opacity={0.07} />
-      {birdsEl(c, 120, hy * 0.4, 4, clamp(H / 400, 0.7, 1.4), '#2A0E45')}
+      {birdsEl(c, 120, hy * 0.4, 4, clamp(H / 400, 0.7, 1.4), '#34371C')}
       {city.el}
-      <Rect x={-2} y={hy} width={404} height={H - hy + 2} fill={c.lin([[0, '#E8806A'], [1, '#7A2A5A']])} />
+      <Rect x={-2} y={hy} width={404} height={H - hy + 2} fill={c.lin([[0, '#DF8C73'], [1, '#774E2D']])} />
       <Path d={farTree} fill={art.amber} opacity={0.55} transform="translate(-1.5 -1)" />
-      <Path d={farTree} fill="#1A1622" />
+      <Path d={farTree} fill="#1E1F19" />
       <Path d={hill} fill={c.lin([[0, '#5A5A2A'], [0.25, '#2A3420'], [1, '#0C120C']])} />
       <Glow d={crest} color={art.amber} core={art.sunTop} w={1} op={0.7} />
       <Path d={tufts.join('')} stroke="#0C140C" strokeWidth={1} opacity={0.8} />
@@ -723,7 +723,7 @@ function gymScene(c: Ctx): Node {
   const lifterY = floorY + (H - floorY) * 0.5;
   const rackBase = floorY + (H - floorY) * 0.18;
   const rackH = fh * 1.3;
-  const steel = '#2A2238';
+  const steel = '#313227';
   const rack =
     rectD(34, rackBase - rackH, 6, rackH) +
     rectD(96, rackBase - rackH, 6, rackH) +
@@ -776,36 +776,36 @@ function gymScene(c: Ctx): Node {
   ));
   const barbell = (
     <G>
-      <Path d="M-56 -104h112" stroke="#4A4058" strokeWidth={3} strokeLinecap="round" />
-      <Path d={rectD(-52, -122, 9, 36) + rectD(43, -122, 9, 36) + rectD(-42, -116, 6, 24) + rectD(36, -116, 6, 24)} fill="#140A20" stroke={art.pink} strokeWidth={1} />
+      <Path d="M-56 -104h112" stroke="#505246" strokeWidth={3} strokeLinecap="round" />
+      <Path d={rectD(-52, -122, 9, 36) + rectD(43, -122, 9, 36) + rectD(-42, -116, 6, 24) + rectD(36, -116, 6, 24)} fill="#191A10" stroke={art.pink} strokeWidth={1} />
     </G>
   );
   return (
     <G>
-      <Rect x={-2} y={-2} width={404} height={floorY + 4} fill={c.lin([[0, '#1A0A2A'], [0.6, '#2A1040'], [1, '#1A0A28']])} />
-      <Path d={bricks.join('')} stroke="#45205E" strokeWidth={0.7} opacity={0.55} />
-      <Path d={windows(12) + windows(316)} fill={c.lin([[0, '#1A1040'], [1, '#4A1A5A']])} />
+      <Rect x={-2} y={-2} width={404} height={floorY + 4} fill={c.lin([[0, '#202212'], [0.6, '#31341C'], [1, '#1F2012']])} />
+      <Path d={bricks.join('')} stroke="#4A4E30" strokeWidth={0.7} opacity={0.55} />
+      <Path d={windows(12) + windows(316)} fill={c.lin([[0, '#31341C'], [1, '#572E1D']])} />
       <Path d={dotsD(cityDots)} stroke={art.amber} strokeWidth={1.6} strokeLinecap="round" opacity={0.8} />
-      <Path d={mullD(12) + mullD(316)} stroke="#0A0512" strokeWidth={2.4} fill="none" />
+      <Path d={mullD(12) + mullD(316)} stroke="#0E0F08" strokeWidth={2.4} fill="none" />
       <Ellipse cx={200} cy={signY} rx={160} ry={110 * sc} fill={c.rad([[0, art.pink, 0.4], [1, art.pink, 0]])} />
       {beams}
-      <Glow d={ring} color={art.cyan} core="#CFF8FF" w={1.4} />
+      <Glow d={ring} color={art.cyan} core="#F5F1D9" w={1.4} />
       <Glow d={sign} color={art.pink} core={art.pinkHi} w={2} />
-      <Rect x={-2} y={floorY} width={404} height={H - floorY + 2} fill={c.lin([[0, '#1A0C28'], [1, art.night0]])} />
-      <Path d={floorLines.join('')} stroke="#2E1A44" strokeWidth={0.8} />
+      <Rect x={-2} y={floorY} width={404} height={H - floorY + 2} fill={c.lin([[0, '#1F2113'], [1, art.night0]])} />
+      <Path d={floorLines.join('')} stroke="#373A25" strokeWidth={0.8} />
       <G transform={`translate(0 ${f(floorY)}) scale(1 -0.5) translate(0 ${f(-floorY)})`} opacity={0.35}>
         <Path d={sign} stroke={art.pink} strokeWidth={3} fill="none" transform={`translate(0 ${f(-(floorY - signY) * 1.1)})`} />
       </G>
-      <Glow d={`M-2 ${f(floorY)}h404`} color={art.cyan} core="#CFF8FF" w={0.9} op={0.8} />
+      <Glow d={`M-2 ${f(floorY)}h404`} color={art.cyan} core="#F5F1D9" w={0.9} op={0.8} />
       <Path d={rack} fill={steel} />
       <Path d={`M40 ${f(rackBase - rackH)}v${f(rackH)}M102 ${f(rackBase - rackH)}v${f(rackH)}`} stroke={art.cyan} strokeWidth={0.8} opacity={0.7} />
-      <Path d={rackBar} stroke="#4A4058" strokeWidth={2.4} />
-      <Path d={plates} fill="#120A1C" stroke={art.cyan} strokeWidth={0.8} />
+      <Path d={rackBar} stroke="#505246" strokeWidth={2.4} />
+      <Path d={plates} fill="#16180E" stroke={art.cyan} strokeWidth={0.8} />
       <Path d={dRack} fill={steel} />
-      <Path d={dbs.join('')} fill="#120A1C" />
+      <Path d={dbs.join('')} fill="#16180E" />
       <Path d={dbHi.join('')} stroke={art.pink} strokeWidth={1} strokeLinecap="round" />
-      <Path d={[[268, 1], [296, 0.8], [128, 1]].map(([x, k]) => circleD(x, lifterY - 10 * k * s, 10 * k * s)).join('')} fill="#140A20" stroke={art.cyan} strokeWidth={0.7} />
-      <Path d={[[268, 1], [296, 0.8], [128, 1]].map(([x, k]) => `M${f(x - 6 * k * s)} ${f(lifterY - 17 * k * s)}a${f(6 * k * s)} ${f(6 * k * s)} 0 1 1 ${f(12 * k * s)} 0`).join('')} stroke="#140A20" strokeWidth={2.2 * s} fill="none" />
+      <Path d={[[268, 1], [296, 0.8], [128, 1]].map(([x, k]) => circleD(x, lifterY - 10 * k * s, 10 * k * s)).join('')} fill="#191A10" stroke={art.cyan} strokeWidth={0.7} />
+      <Path d={[[268, 1], [296, 0.8], [128, 1]].map(([x, k]) => `M${f(x - 6 * k * s)} ${f(lifterY - 17 * k * s)}a${f(6 * k * s)} ${f(6 * k * s)} 0 1 1 ${f(12 * k * s)} 0`).join('')} stroke="#191A10" strokeWidth={2.2 * s} fill="none" />
       <Path d={ellipseD(200, lifterY + 2, 70 * s, 8 * s)} fill={art.cyan} opacity={0.12} />
       <Person x={200} y={lifterY} s={s} pose="press" rim={art.pink} hair="short" reflect={0.14}>
         {barbell}
@@ -848,14 +848,14 @@ function hiitScene(c: Ctx): Node {
   for (let x = 12; x < 400; x += 22) track.push([x, 6]);
   return (
     <G>
-      <Rect x={-2} y={-2} width={404} height={floorY + 4} fill={c.lin([[0, '#12081E'], [1, '#22103A']])} />
-      <Path d={panels.join('')} fill={c.lin([[0, '#2E1C4E'], [0.5, '#1E1234'], [1, '#2A1446']])} />
+      <Rect x={-2} y={-2} width={404} height={floorY + 4} fill={c.lin([[0, '#17180D'], [1, '#2D2F1A']])} />
+      <Path d={panels.join('')} fill={c.lin([[0, '#3E4228'], [0.5, '#292C1B'], [1, '#363A21']])} />
       <Path d={sheen.join('')} fill={art.white} opacity={0.05} />
-      <Path d={frames.join('')} stroke="#46306A" strokeWidth={2} fill="none" />
+      <Path d={frames.join('')} stroke="#585C3F" strokeWidth={2} fill="none" />
       <Path d={dotsD(track)} stroke={art.white} strokeWidth={3} strokeLinecap="round" opacity={0.8} />
-      <Rect x={-2} y={floorY} width={404} height={H - floorY + 2} fill={c.lin([[0, '#2A1234'], [1, '#0B0612']])} />
-      <Path d={planks.join('')} stroke="#1A0A22" strokeWidth={1} />
-      <Glow d={`M-2 ${f(floorY)}h404`} color={art.cyan} core="#CFF8FF" w={1} />
+      <Rect x={-2} y={floorY} width={404} height={H - floorY + 2} fill={c.lin([[0, '#292C1B'], [1, '#0E0F09']])} />
+      <Path d={planks.join('')} stroke="#1A1C10" strokeWidth={1} />
+      <Glow d={`M-2 ${f(floorY)}h404`} color={art.cyan} core="#F5F1D9" w={1} />
       {beams}
       <Person x={105} y={fy} s={s} pose="tuckJump" hair="pony" rim={art.pinkHi} reflect={0.16} />
       <Person x={205} y={fy + 4} s={s * 1.05} pose="jack" hair="bun" rim={art.cyan} reflect={0.16} />
@@ -959,7 +959,7 @@ function cafeScene(c: Ctx): Node {
   const tTop = gy - 50 * s;
   const sitter = (x: number, flip: boolean, hair: Hair, rim: string) => (
     <Person x={x} y={gy + 24 * s - 22 * s} s={s} pose="sit" flip={flip} hair={hair} rim={rim} shadow={false}>
-      <Path d="M-8 -48h14M-6 -48l-2 26M4 -48l2 26M-8 -48l-4 -30" stroke="#07030C" strokeWidth={2.5} fill="none" strokeLinecap="round" />
+      <Path d="M-8 -48h14M-6 -48l-2 26M4 -48l2 26M-8 -48l-4 -30" stroke="#090A05" strokeWidth={2.5} fill="none" strokeLinecap="round" />
     </Person>
   );
   const [pdA, plA] = leafClump(26, yb + 4, clamp(B * 0.28, 50, 130), c.r);
@@ -974,45 +974,45 @@ function cafeScene(c: Ctx): Node {
   const warm = c.lin([
     [0, '#FFD38A'],
     [0.55, '#FFA15A'],
-    [1, '#E0567A'],
+    [1, '#DA9F5C'],
   ]);
   return (
     <G>
       {skyEl(c, [[0, art.night1], [0.5, art.dusk], [1, art.coral]], roof + 4)}
       {starsEl(c, 20, roof * 0.6, 0.6)}
-      <SkylineLayer sky={nearSky} fill="#1A0C2A" winOpacity={0.7} />
-      <Rect x={-2} y={roof} width={404} height={yb - roof + 2} fill={c.lin([[0, '#2A1236'], [1, '#1A0A24']])} />
-      <Path d={bricks.join('')} stroke="#3E1C4E" strokeWidth={0.7} opacity={0.6} />
-      <Rect x={-2} y={roof - 4} width={404} height={6} fill="#12081E" />
+      <SkylineLayer sky={nearSky} fill="#212214" winOpacity={0.7} />
+      <Rect x={-2} y={roof} width={404} height={yb - roof + 2} fill={c.lin([[0, '#2B2D1B'], [1, '#1C1D10']])} />
+      <Path d={bricks.join('')} stroke="#3E4228" strokeWidth={0.7} opacity={0.6} />
+      <Rect x={-2} y={roof - 4} width={404} height={6} fill="#17180D" />
       <Rect x={wx1} y={wy1} width={wx2 - wx1} height={wy2 - wy1} fill={warm} />
       <Rect x={306} y={wy1 + 4} width={46} height={yb - wy1 - 4} fill={warm} opacity={0.85} />
-      <Path d={shelves.join('')} stroke="#6A2A3A" strokeWidth={2} opacity={0.6} />
-      <Path d={jars.join('')} fill="#8A3A4A" opacity={0.55} />
-      <Path d={pend.join('')} stroke="#4A1A2A" strokeWidth={1.2} fill="#4A1A2A" />
+      <Path d={shelves.join('')} stroke="#674C2D" strokeWidth={2} opacity={0.6} />
+      <Path d={jars.join('')} fill="#845040" opacity={0.55} />
+      <Path d={pend.join('')} stroke="#48331C" strokeWidth={1.2} fill="#48331C" />
       {lampsEl(c, bulbs, art.sunTop, art.white)}
-      <Rect x={wx1} y={counterY} width={wx2 - wx1} height={wy2 - counterY} fill="#5A2238" />
+      <Rect x={wx1} y={counterY} width={wx2 - wx1} height={wy2 - counterY} fill="#583E24" />
       <Path d={`M${wx1} ${f(counterY)}h${wx2 - wx1}`} stroke={art.sunTop} strokeWidth={1.2} opacity={0.8} />
-      <Path d={cups} fill="#3A1426" />
+      <Path d={cups} fill="#382616" />
       <Path d={cupsHi} fill={art.pink} />
       <Path d={`M74 ${f(counterY - 12)}l3 -7M154 ${f(counterY - 14)}l-2 -7`} stroke={art.green} strokeWidth={1.4} strokeLinecap="round" />
-      <Path d={rectD(wx1, wy1, wx2 - wx1, wy2 - wy1) + `M${f((wx1 + wx2) / 2)} ${f(wy1)}V${f(wy2)}` + rectD(306, wy1 + 4, 46, yb - wy1 - 4)} stroke="#1A0A1E" strokeWidth={4} fill="none" />
-      <Path d={`M344 ${f((wy1 + yb) / 2)}v14`} stroke="#1A0A1E" strokeWidth={2.4} strokeLinecap="round" />
+      <Path d={rectD(wx1, wy1, wx2 - wx1, wy2 - wy1) + `M${f((wx1 + wx2) / 2)} ${f(wy1)}V${f(wy2)}` + rectD(306, wy1 + 4, 46, yb - wy1 - 4)} stroke="#1D110B" strokeWidth={4} fill="none" />
+      <Path d={`M344 ${f((wy1 + yb) / 2)}v14`} stroke="#1D110B" strokeWidth={2.4} strokeLinecap="round" />
       <Path d={pinkS.join('')} fill={art.pink} />
       <Path d={creamS.join('')} fill={art.cloud} />
       <Path d={polyD([[topL, ya1], [topR, ya1], [lerp(topR, botR, 0.4), lerp(ya1, ya2, 0.4)], [lerp(topL, botL, 0.4), lerp(ya1, ya2, 0.4)]])} fill={art.night0} opacity={0.35} />
-      <Glow d={cupSign} color={art.cyan} core="#CFF8FF" w={1.6} />
+      <Glow d={cupSign} color={art.cyan} core="#F5F1D9" w={1.6} />
       <Glow d={steam} color={art.pink} core={art.pinkHi} w={1.3} />
       <Glow d={leaf} color={art.green} core="#C8FFE4" w={1.4} />
-      <Rect x={-2} y={yb} width={404} height={H - yb + 2} fill={c.lin([[0, '#2E1630'], [1, art.night0]])} />
+      <Rect x={-2} y={yb} width={404} height={H - yb + 2} fill={c.lin([[0, '#2F1F17'], [1, art.night0]])} />
       <Path d={polyD([[wx1, yb], [wx2, yb], [wx2 + 40, H + 2], [wx1 - 40, H + 2]])} fill={c.lin([[0, art.amber, 0.35], [1, art.amber, 0]])} />
       <Path d={`M-2 ${f(yb)}h404`} stroke={art.sunTop} strokeWidth={0.8} opacity={0.35} />
-      <Path d={pots} fill="#3A1A1A" />
+      <Path d={pots} fill="#38231C" />
       <Path d={pdA + pdB} fill="#15402C" />
       <Path d={plA + plB} fill="#2E7A4E" />
       {sitter(tx - 42 * s, false, 'pony', art.pinkHi)}
       {sitter(tx + 42 * s, true, 'short', art.cyan)}
-      <Path d={`M${f(tx)} ${f(tTop)}V${f(gy)}M${f(tx - 12 * s)} ${f(gy)}h${f(24 * s)}`} stroke="#07030C" strokeWidth={3} strokeLinecap="round" />
-      <Path d={ellipseD(tx, tTop, 24 * s, 3.2 * s)} fill="#07030C" stroke={art.amber} strokeWidth={0.8} />
+      <Path d={`M${f(tx)} ${f(tTop)}V${f(gy)}M${f(tx - 12 * s)} ${f(gy)}h${f(24 * s)}`} stroke="#090A05" strokeWidth={3} strokeLinecap="round" />
+      <Path d={ellipseD(tx, tTop, 24 * s, 3.2 * s)} fill="#090A05" stroke={art.amber} strokeWidth={0.8} />
       <Path d={rectD(tx - 12 * s, tTop - 10 * s, 6 * s, 9 * s) + rectD(tx + 6 * s, tTop - 8 * s, 6 * s, 7 * s)} fill={art.pink} />
       <Path d={`M${f(tx - 8 * s)} ${f(tTop - 10 * s)}l${f(2 * s)} ${f(-5 * s)}`} stroke={art.green} strokeWidth={1.2} />
       {vignetteEl(c, 0.45)}
@@ -1115,14 +1115,14 @@ function brunchScene(c: Ctx): Node {
   }
   return (
     <G>
-      <Rect x={-2} y={-2} width={404} height={H + 4} fill={c.rad([[0, '#2E1A3E'], [0.7, '#180C24'], [1, art.night0]], 0.5, 0.4, 0.8)} />
-      <Path d={grain.join('')} stroke="#3A2248" strokeWidth={1} fill="none" opacity={0.45} />
+      <Rect x={-2} y={-2} width={404} height={H + 4} fill={c.rad([[0, '#333523'], [0.7, '#1C1E12'], [1, art.night0]], 0.5, 0.4, 0.8)} />
+      <Path d={grain.join('')} stroke="#3C3E2B" strokeWidth={1} fill="none" opacity={0.45} />
       <Rect x={-2} y={edge - H * 0.3} width={404} height={H * 0.3} fill={c.lin([[0, art.pink, 0], [1, art.pink, 0.22]])} />
       <Path d={shadow.join('')} fill="#000" opacity={0.4} />
       <Path d={cutlery} stroke={art.steel} strokeWidth={3 * u} strokeLinecap="round" opacity={0.9} />
       {/* toast plate */}
       <Circle cx={tx} cy={ty} r={plR} fill={art.cloud} />
-      <Circle cx={tx} cy={ty} r={plR * 0.8} fill="none" stroke="#D8CAE4" strokeWidth={1.5} />
+      <Circle cx={tx} cy={ty} r={plR * 0.8} fill="none" stroke="#DCDED0" strokeWidth={1.5} />
       <G transform={toastRot}>
         <Path d={crust} fill="#B8743A" />
         <Path d={crust} fill="#E8B070" transform={`translate(${f(tx * 0.1)} ${f(ty * 0.1)}) scale(0.9)`} />
@@ -1131,24 +1131,24 @@ function brunchScene(c: Ctx): Node {
         <Path d={avoHi.join('')} fill="#B6E06A" />
       </G>
       <Path d={radish} fill={art.pink} />
-      <Path d={radishIn} fill="#FFE4F4" />
+      <Path d={radishIn} fill="#FEF0E5" />
       <Path d={egg} fill={art.white} />
       <Path d={yolk} fill={art.amber} />
       <Path d={dotsD(flakes)} stroke={art.coral} strokeWidth={2.2 * u} strokeLinecap="round" />
       {/* smoothie bowl */}
-      <Circle cx={bx} cy={by} r={bR} fill="#1E5A6A" />
-      <Circle cx={bx} cy={by} r={bR * 0.86} fill={c.rad([[0, '#FF4FA8'], [1, '#A0186A']])} />
+      <Circle cx={bx} cy={by} r={bR} fill="#4B5533" />
+      <Circle cx={bx} cy={by} r={bR * 0.86} fill={c.rad([[0, '#F8A356'], [1, '#9B561D']])} />
       <Path d={dotsD(band)} stroke="#D89A48" strokeWidth={4.2 * u} strokeLinecap="round" />
-      <Path d={dotsD(band.slice(0, 16))} stroke="#F4ECF8" strokeWidth={2.2 * u} strokeLinecap="round" />
+      <Path d={dotsD(band.slice(0, 16))} stroke="#F4F5EF" strokeWidth={2.2 * u} strokeLinecap="round" />
       <Path d={banana.join('')} fill="#FFF0B8" />
       <Path d={bananaIn.join('')} fill="#F0D080" />
       <Path d={kiwi} fill="#7ACB3A" />
       <Path d={kiwiIn} fill="#E8F8C0" />
       <Path d={dotsD(kiwiSeeds)} stroke="#1A1A10" strokeWidth={1.4 * u} strokeLinecap="round" />
-      <Path d={straws.join('')} fill="#FF2E55" />
+      <Path d={straws.join('')} fill="#EF673E" />
       <Path d={dotsD(seedsS)} stroke={art.sunTop} strokeWidth={1.2 * u} strokeLinecap="round" />
-      <Path d={dotsD(berries)} stroke="#3A3AB8" strokeWidth={8 * u} strokeLinecap="round" />
-      <Path d={dotsD(berries.map((p): Pt => [p[0] - 1.5 * u, p[1] - 1.5 * u]))} stroke="#8A8AF0" strokeWidth={2 * u} strokeLinecap="round" />
+      <Path d={dotsD(berries)} stroke="#84955D" strokeWidth={8 * u} strokeLinecap="round" />
+      <Path d={dotsD(berries.map((p): Pt => [p[0] - 1.5 * u, p[1] - 1.5 * u]))} stroke="#DCD19E" strokeWidth={2 * u} strokeLinecap="round" />
       {/* coffee */}
       <Circle cx={cx} cy={cy2} r={cR * 1.45} fill={art.cloud} />
       <Path d={rectD(cx + cR * 0.85, cy2 - 5 * u, 16 * u, 10 * u)} fill={art.white} />
@@ -1200,9 +1200,9 @@ function crewScene(c: Ctx): Node {
       {sunEl(c, 200, sunY(hy, city.hmax, R), R, { cut: true })}
       {cloudsEl(c, hy * 0.3, hy * 0.75, [art.magenta, art.purple], 5)}
       {city.el}
-      <Rect x={-2} y={yP - 10} width={404} height={H - yP + 12} fill={c.lin([[0, '#1C0C2C'], [1, art.night0]])} />
-      <Path d={tank} fill="#0E0718" />
-      <Rect x={-2} y={yP - 12} width={404} height={6} fill="#0B0614" />
+      <Rect x={-2} y={yP - 10} width={404} height={H - yP + 12} fill={c.lin([[0, '#222414'], [1, art.night0]])} />
+      <Path d={tank} fill="#13140B" />
+      <Rect x={-2} y={yP - 12} width={404} height={6} fill="#10100A" />
       <Glow d={`M-4 ${f(yP - 12)}h408`} color={art.pink} core={art.pinkHi} w={1.4} />
       <Path d={dotsD(conf[0])} stroke={art.pinkHi} strokeWidth={2.6} strokeLinecap="round" />
       <Path d={dotsD(conf[1])} stroke={art.cyan} strokeWidth={2.2} strokeLinecap="round" />
@@ -1269,16 +1269,16 @@ function cyclingScene(c: Ctx): Node {
       {cloudsEl(c, hy * 0.3, hy * 0.8, [art.magenta, art.purple], 5)}
       {city.el}
       <Rect x={-2} y={hy} width={404} height={H - hy + 2} fill={c.lin(SUNSET.water)} />
-      {city.near && reflectEl(city.near, hy + 1, '#12081E', 0.6)}
+      {city.near && reflectEl(city.near, hy + 1, '#17180D', 0.6)}
       {streaksEl(c, sunX, R * 0.8, hy, H, [art.sunTop, art.pinkHi], 1.2)}
       <G transform={`translate(0 ${f(yD + dT)}) scale(1 -0.45) translate(0 ${f(-(yD + dT))})`} opacity={0.35}>
-        <Path d={pylon} fill="#07030C" />
+        <Path d={pylon} fill="#090A05" />
       </G>
-      <Path d={cables.join('')} stroke="#FFC0E6" strokeWidth={0.8} opacity={0.65} />
-      <Path d={pylon} fill="#0B0614" />
+      <Path d={cables.join('')} stroke="#FCDDC3" strokeWidth={0.8} opacity={0.65} />
+      <Path d={pylon} fill="#10100A" />
       <Path d={`M${px + 3} ${f(yT)}L${px + 14} ${f(yD)}`} stroke={art.pinkHi} strokeWidth={1} opacity={0.7} />
-      <Path d={posts.join('') + `M-2 ${f(yD - 8)}h404`} stroke="#07030C" strokeWidth={1.3} />
-      <Rect x={-2} y={yD} width={404} height={dT} fill="#0B0614" />
+      <Path d={posts.join('') + `M-2 ${f(yD - 8)}h404`} stroke="#090A05" strokeWidth={1.3} />
+      <Rect x={-2} y={yD} width={404} height={dT} fill="#10100A" />
       <Glow d={`M-4 ${f(yD + dT * 0.6)}h408`} color={art.pink} core={art.pinkHi} w={1.2} />
       <Path d={Array.from({ length: 14 }, (_, i) => `M${f(i * 30 + c.r() * 10)} ${f(yD + dT + 6 + c.r() * 20)}h${f(6 + c.r() * 10)}`).join('')} stroke={art.pinkHi} strokeWidth={1.2} opacity={0.4} strokeLinecap="round" />
       {riders}
@@ -1308,9 +1308,9 @@ function lakeScene(c: Ctx): Node {
   const R = clamp(hy * 0.2, 24, 60);
   const sunX = 240;
   const sky: Stops = [
-    [0, '#2E1F58'],
-    [0.35, '#7A4A9A'],
-    [0.62, '#E07A9A'],
+    [0, '#464A2D'],
+    [0.35, '#81865E'],
+    [0.62, '#DCAF7E'],
     [0.84, '#FFB08A'],
     [1, '#FFE0A8'],
   ];
@@ -1338,24 +1338,24 @@ function lakeScene(c: Ctx): Node {
     <G>
       {skyEl(c, sky, hy)}
       {sunEl(c, sunX, hy - R * 0.6, R, { top: '#FFFBE8', bottom: '#FFC08A', glow: '#FFC6A0', glowR: 4 })}
-      {cloudsEl(c, hy * 0.2, hy * 0.7, ['#F7B4CC', '#9A7AC8'], 5)}
-      {birdsEl(c, 120, hy * 0.4, 5, clamp(H / 400, 0.7, 1.4), '#3A2A5A')}
-      <Path d={farH} fill={c.lin([[0, '#A07AB8'], [1, '#D8A0B8']])} />
-      <Path d={tiny.body} fill="#8A6AA8" />
+      {cloudsEl(c, hy * 0.2, hy * 0.7, ['#F4D6B7', '#AFB48E'], 5)}
+      {birdsEl(c, 120, hy * 0.4, 5, clamp(H / 400, 0.7, 1.4), '#4B4E36')}
+      <Path d={farH} fill={c.lin([[0, '#A4A88A'], [1, '#D6BCA2']])} />
+      <Path d={tiny.body} fill="#94987A" />
       <Rect x={-2} y={hy - amp * 0.4} width={404} height={amp * 0.45} fill={mist} />
-      <Path d={nearH} fill={c.lin([[0, '#5A3A7E'], [1, '#7A4E8E']])} />
-      <Rect x={-2} y={hy} width={404} height={H - hy + 2} fill={c.lin([[0, '#F4B8A8'], [0.4, '#9A6AA8'], [1, '#2A1A48']])} />
+      <Path d={nearH} fill={c.lin([[0, '#686D4B'], [1, '#7A7E5E']])} />
+      <Rect x={-2} y={hy} width={404} height={H - hy + 2} fill={c.lin([[0, '#EEBDAE'], [0.4, '#A67E6C'], [1, '#393C26']])} />
       <G transform={`translate(0 ${f(hy)}) scale(1 -0.8) translate(0 ${f(-hy)})`} opacity={0.45}>
-        <Path d={farH} fill="#B08AC4" />
-        <Path d={nearH} fill="#5A3A7E" />
+        <Path d={farH} fill="#B2B698" />
+        <Path d={nearH} fill="#686D4B" />
       </G>
       {streaksEl(c, sunX, R * 1.3, hy, yS, ['#FFF4D0', '#FFC0A0'], 1)}
       {ripplesEl(c, hy + 3, yS, art.white, 20, 0.25)}
       <Rect x={-2} y={hy - 4} width={404} height={16} fill={mist} />
-      <Path d={shore} fill={c.lin([[0, '#2A1840'], [1, '#120A20']])} />
-      <Path d={path} fill={c.lin([[0, '#6A4A7A'], [1, '#3A2650']])} />
-      <Path d={reeds.join('')} stroke="#120A20" strokeWidth={1.4} fill="none" strokeLinecap="round" />
-      <Path d={treeD(c.r, 372, yS + 6, clamp(H * 0.4, 90, 260))} fill="#140C22" />
+      <Path d={shore} fill={c.lin([[0, '#333622'], [1, '#191A10']])} />
+      <Path d={path} fill={c.lin([[0, '#6B6E56'], [1, '#434630']])} />
+      <Path d={reeds.join('')} stroke="#191A10" strokeWidth={1.4} fill="none" strokeLinecap="round" />
+      <Path d={treeD(c.r, 372, yS + 6, clamp(H * 0.4, 90, 260))} fill="#1B1C12" />
       <Person x={210} y={pathTop + (H - yS) * 0.2} s={s} pose="runA" flip hair="pony" rim={art.amber} light={1} />
       {vignetteEl(c, 0.3)}
     </G>
@@ -1393,18 +1393,18 @@ function rooftopScene(c: Ctx): Node {
       {moonEl(c, 90, clamp(hy * 0.2, 30, 140), clamp(hy * 0.05, 10, 22))}
       <Rect x={-2} y={hy * 0.5} width={404} height={hy * 0.5} fill={c.lin([[0, art.magenta, 0], [1, art.pink, 0.25]])} />
       {city.el}
-      <Rect x={-2} y={yP - 10} width={404} height={H - yP + 12} fill={c.lin([[0, '#1A0C2A'], [1, art.night0]])} />
-      <Path d={Array.from({ length: 12 }, (_, i) => `M${200 + (i - 6) * 40} ${f(yP)}L${200 + (i - 6) * 110} ${f(H + 2)}`).join('')} stroke="#2A1640" strokeWidth={0.8} />
-      <Rect x={-2} y={yP - 12} width={404} height={6} fill="#0B0614" />
-      <Glow d={`M-4 ${f(yP - 12)}h408`} color={art.cyan} core="#CFF8FF" w={1.2} />
-      <Path d={poles} fill="#0B0614" />
-      <Path d={strands.map((st) => lineD(st)).join('')} stroke="#0B0614" strokeWidth={1} fill="none" />
+      <Rect x={-2} y={yP - 10} width={404} height={H - yP + 12} fill={c.lin([[0, '#212214'], [1, art.night0]])} />
+      <Path d={Array.from({ length: 12 }, (_, i) => `M${200 + (i - 6) * 40} ${f(yP)}L${200 + (i - 6) * 110} ${f(H + 2)}`).join('')} stroke="#333621" strokeWidth={0.8} />
+      <Rect x={-2} y={yP - 12} width={404} height={6} fill="#10100A" />
+      <Glow d={`M-4 ${f(yP - 12)}h408`} color={art.cyan} core="#F5F1D9" w={1.2} />
+      <Path d={poles} fill="#10100A" />
+      <Path d={strands.map((st) => lineD(st)).join('')} stroke="#10100A" strokeWidth={1} fill="none" />
       <Path d={dotsD(warm)} stroke={art.amber} strokeWidth={11} strokeLinecap="round" opacity={0.2} />
       <Path d={dotsD(pink)} stroke={art.pink} strokeWidth={11} strokeLinecap="round" opacity={0.25} />
       <Path d={dotsD(warm)} stroke="#FFE7A8" strokeWidth={3.4} strokeLinecap="round" />
       <Path d={dotsD(pink)} stroke={art.pinkHi} strokeWidth={3.4} strokeLinecap="round" />
       <Path d={polyD([[80, yF + 2], [160, yF + 2], [168, yF - 4], [88, yF - 4]]) + polyD([[240, yF + 2], [330, yF + 2], [336, yF - 4], [246, yF - 4]])} fill={art.purple} opacity={0.8} />
-      <Path d={pots} fill="#2A1430" />
+      <Path d={pots} fill="#2F1D15" />
       <Path d={plD} fill="#15402C" />
       <Path d={plL} fill="#2E7A4E" />
       <Person x={120} y={yF} s={s} pose="sideStretch" hair="bun" rim={art.cyan} />
@@ -1422,7 +1422,7 @@ function stadiumScene(c: Ctx): Node {
   const sky: Stops = [
     [0, art.night0],
     [0.6, art.night1],
-    [1, '#40185A'],
+    [1, '#454A28'],
   ];
   const city = skyline(c.r, { base: yS + 12, minH: 20, maxH: clamp(yS * 0.6, 30, 200), wMin: 14, wMax: 30, win: { w: 1.8, h: 2.4, sx: 4.6, sy: 6, lit: 0.35, palette: NIGHT.win } });
   const stands = `M-10 ${f(yS + 8)}Q200 ${f(yS - 10)} 410 ${f(yS + 8)}L410 ${f(yT)}L-10 ${f(yT)}Z`;
@@ -1474,29 +1474,29 @@ function stadiumScene(c: Ctx): Node {
     <G>
       {skyEl(c, sky, yT)}
       {starsEl(c, 50, yS * 0.8)}
-      <Path d={city.body} fill="#1A0C2C" />
+      <Path d={city.body} fill="#222414" />
       {city.win.map(([col, d]) => (
         <Path key={col} d={d} fill={col} opacity={0.7} />
       ))}
       <Rect x={-2} y={yS - 30} width={404} height={40} fill={c.lin([[0, art.magenta, 0], [1, art.magenta, 0.4]])} />
-      <Path d={stands} fill={c.lin([[0, '#1E1030'], [1, '#2C1444']])} />
-      <Path d={rows.join('')} stroke="#12081E" strokeWidth={1.2} />
+      <Path d={stands} fill={c.lin([[0, '#262818'], [1, '#353820']])} />
+      <Path d={rows.join('')} stroke="#17180D" strokeWidth={1.2} />
       <Path d={dotsD(crowd[0])} stroke={art.pinkHi} strokeWidth={1.8} strokeLinecap="round" opacity={0.55} />
       <Path d={dotsD(crowd[1])} stroke={art.cyan} strokeWidth={1.8} strokeLinecap="round" opacity={0.45} />
       <Path d={dotsD(crowd[2])} stroke={art.cloud} strokeWidth={1.8} strokeLinecap="round" opacity={0.35} />
       <Glow d={`M-10 ${f(yS + 8)}Q200 ${f(yS - 10)} 410 ${f(yS + 8)}`} color={art.pink} core={art.pinkHi} w={1.2} />
-      <Path d={towers.map((x) => rectD(x - 2, bankY, 4, yT - bankY)).join('')} fill="#0B0614" />
-      <Path d={towers.map((x) => rectD(x - 16, bankY - 4, 32, 20)).join('')} fill="#140A20" />
+      <Path d={towers.map((x) => rectD(x - 2, bankY, 4, yT - bankY)).join('')} fill="#10100A" />
+      <Path d={towers.map((x) => rectD(x - 16, bankY - 4, 32, 20)).join('')} fill="#191A10" />
       <G clipPath={`url(#${clipId})`}>
-        <Rect x={-2} y={yT} width={404} height={H - yT + 2} fill="#2A0C22" />
-        <Path d={ellipseD(tcx, tcy, rx0 + 8 * drx, ry0 + 8 * dry)} fill={c.lin([[0, '#C0405A'], [1, '#6A1A36']])} />
+        <Rect x={-2} y={yT} width={404} height={H - yT + 2} fill="#29190D" />
+        <Path d={ellipseD(tcx, tcy, rx0 + 8 * drx, ry0 + 8 * dry)} fill={c.lin([[0, '#B6634A'], [1, '#67431D']])} />
         <Path d={ellipseD(tcx, tcy, rx0, ry0)} fill={c.lin([[0, '#1F6A42'], [1, '#0E3A26']])} />
         <Path d={lanes.join('')} stroke={art.white} strokeWidth={1.1} fill="none" opacity={0.75} />
       </G>
       {beams}
       <Path d={dotsD(lampDots)} stroke={art.white} strokeWidth={10} strokeLinecap="round" opacity={0.18} />
       <Path d={dotsD(lampDots)} stroke="#FFF6D0" strokeWidth={4} strokeLinecap="round" />
-      <Glow d={`M${f(sx - 110 * s)} ${f(sy - 55 * s)}h${f(70 * s)}M${f(sx - 95 * s)} ${f(sy - 35 * s)}h${f(55 * s)}M${f(sx - 120 * s)} ${f(sy - 75 * s)}h${f(60 * s)}`} color={art.cyan} core="#CFF8FF" w={1} op={0.8} />
+      <Glow d={`M${f(sx - 110 * s)} ${f(sy - 55 * s)}h${f(70 * s)}M${f(sx - 95 * s)} ${f(sy - 35 * s)}h${f(55 * s)}M${f(sx - 120 * s)} ${f(sy - 75 * s)}h${f(60 * s)}`} color={art.cyan} core="#F5F1D9" w={1} op={0.8} />
       <Person x={sx} y={sy} s={s} pose="sprint" hair="pony" rim={art.cyan} />
       {vignetteEl(c, 0.45)}
     </G>
