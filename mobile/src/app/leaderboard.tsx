@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Avatar } from '@/components/Avatar';
 import { Button, Display, FadeIn, Header, Icon, Kicker, Screen, Segmented } from '@/components/ui';
-import { formatArea, leaderboardApi, shortUserId, type LeaderboardEntry, type LeaderboardWindow } from '@/api/endpoints';
+import { formatArea, isMyEntry, leaderboardApi, shortUserId, type LeaderboardEntry, type LeaderboardPage, type LeaderboardWindow } from '@/api/endpoints';
 import { useAuth } from '@/auth/AuthProvider';
 import { territoryBoard } from '@/data/territory';
 import { userById } from '@/data/users';
@@ -18,24 +18,28 @@ type Row = { key: string; rank: number; name: string; areaText: string; userId?:
 const demoRows = (w: LeaderboardWindow): Row[] =>
   territoryBoard[DEMO[w]].map((r, i) => ({ key: r.userId, rank: i + 1, name: r.name, areaText: `${r.km2.toFixed(1)} km²`, userId: r.userId, me: r.me }));
 
-const liveRow = (e: LeaderboardEntry, meId?: string): Row => ({
+type Me = LeaderboardPage['me'];
+
+const liveRow = (e: LeaderboardEntry, mine: boolean): Row => ({
   key: e.user_id,
   rank: e.rank,
-  name: e.user_id === meId ? 'You' : shortUserId(e.user_id),
+  name: mine ? 'You' : shortUserId(e.user_id),
   areaText: formatArea(e.score),
-  me: e.user_id === meId,
+  me: mine,
   live: true,
 });
+
+const pinnedMeRow = (me: NonNullable<Me>): Row => ({ key: 'me', rank: me.rank, name: 'You', areaText: formatArea(me.score), me: true, live: true });
 
 /** City leaderboard ranked by territory area (GET /v1/leaderboard?scope=global&metric=area&window=…). */
 export default function Leaderboard() {
   const { city, me } = useApp();
-  const { mode } = useAuth();
+  const { mode, userId } = useAuth();
   const [tab, setTab] = useState<(typeof TABS)[number]>('Weekly');
   const [rows, setRows] = useState<Row[]>(demoRows('weekly'));
   const [meRow, setMeRow] = useState<Row | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
-  const [meId, setMeId] = useState<string | undefined>();
+  const [pageMe, setPageMe] = useState<Me>(null);
   const [source, setSource] = useState<'demo' | 'live' | 'error'>('demo');
   const [loading, setLoading] = useState(false);
 
@@ -51,11 +55,10 @@ export default function Leaderboard() {
       .get(w)
       .then((page) => {
         if (cancelled) return;
-        const mine = page.me?.user_id;
-        setMeId(mine);
-        const list = page.entries.map((e) => liveRow(e, mine));
-        setRows(list);
-        setMeRow(page.me && !page.entries.some((e) => e.user_id === mine) ? liveRow(page.me, mine) : null);
+        const mine = page.entries.map((e) => isMyEntry(e, userId, page.me));
+        setPageMe(page.me);
+        setRows(page.entries.map((e, i) => liveRow(e, mine[i])));
+        setMeRow(page.me && !mine.some(Boolean) ? pinnedMeRow(page.me) : null);
         setCursor(page.next_cursor);
         setSource('live');
       })
@@ -64,15 +67,16 @@ export default function Leaderboard() {
     return () => {
       cancelled = true;
     };
-  }, [tab, mode]);
+  }, [tab, mode, userId]);
 
   const loadMore = async () => {
     if (!cursor) return;
     setLoading(true);
     try {
       const page = await leaderboardApi.get(WINDOW[tab], cursor);
-      setRows((r) => [...r, ...page.entries.map((e) => liveRow(e, meId))]);
-      if (page.entries.some((e) => e.user_id === meId)) setMeRow(null);
+      const mine = page.entries.map((e) => isMyEntry(e, userId, pageMe));
+      setRows((r) => [...r, ...page.entries.map((e, i) => liveRow(e, mine[i]))]);
+      if (mine.some(Boolean)) setMeRow(null);
       setCursor(page.next_cursor);
     } catch {
       setSource('error');

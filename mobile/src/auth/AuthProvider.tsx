@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { setApiToken } from '@/api/client';
+import { jwtSubject } from '@/auth/jwt';
 import { API_CONFIGURED, AUTH_CONFIGURED, AUTH_URL } from '@/api/config';
 
 /**
@@ -17,6 +18,8 @@ type Mode = 'loading' | 'signed-out' | 'demo' | 'live';
 type AuthState = {
   mode: Mode;
   email: string | null;
+  /** Signed-in user's id (JWT `sub`), when live and the token carries one. */
+  userId: string | null;
   apiConfigured: boolean;
   authConfigured: boolean;
   signIn: (email: string, password: string) => Promise<void>;
@@ -39,6 +42,7 @@ const Ctx = createContext<AuthState | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [mode, setMode] = useState<Mode>('loading');
   const [email, setEmail] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -46,6 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const [t, e] = await Promise.all([store.get(KEY), store.get(EMAIL_KEY)]);
         if (t && API_CONFIGURED) {
           setApiToken(t);
+          setUserId(jwtSubject(t));
           setEmail(e);
           setMode('live');
         } else setMode('signed-out');
@@ -58,6 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInWithToken = useCallback(async (t: string) => {
     await store.set(KEY, t);
     setApiToken(t);
+    setUserId(jwtSubject(t));
     setMode('live');
   }, []);
 
@@ -78,12 +84,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(async () => {
     await Promise.all([store.del(KEY), store.del(EMAIL_KEY)]);
     setApiToken(null);
+    setUserId(null);
     setEmail(null);
     setMode('signed-out');
   }, []);
 
   return (
-    <Ctx.Provider value={{ mode, email, apiConfigured: API_CONFIGURED, authConfigured: AUTH_CONFIGURED, signIn, signInWithToken, continueDemo: () => setMode('demo'), signOut }}>
+    <Ctx.Provider value={{ mode, email, userId, apiConfigured: API_CONFIGURED, authConfigured: AUTH_CONFIGURED, signIn, signInWithToken, continueDemo: () => setMode('demo'), signOut }}>
       {children}
     </Ctx.Provider>
   );

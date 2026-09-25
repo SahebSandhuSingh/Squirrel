@@ -51,6 +51,9 @@ export default function Run() {
   const [photos, setPhotos] = useState(0);
   const [summary, setSummary] = useState<(FinishRunResult & { verdict: Outcome; reason: string; km: number; time: string; pace: string; uploadNote?: string; areaText?: string }) | null>(null);
   const [stage, setStage] = useState<keyof typeof STAGE_TEXT>('uploading');
+  const [canSkipWait, setCanSkipWait] = useState(false);
+  const pollAbort = useRef<AbortController | null>(null);
+  useEffect(() => () => pollAbort.current?.abort(), []);
   const progress = useRef(new Animated.Value(0.62)).current;
   const pop = useRef(new Animated.Value(0)).current;
   const lastKmMarker = useRef(0);
@@ -161,7 +164,20 @@ export default function Run() {
       setPhase('uploading');
       try {
         const before = await xpApi.me().catch(() => null);
-        const r: RunSummary = await submitRun(startedAt.current, track.points, { onStage: setStage });
+        // Finalisation can take minutes under queue load; after 15s of verifying, offer "Don't wait".
+        const ctrl = new AbortController();
+        pollAbort.current = ctrl;
+        let skipTimer: ReturnType<typeof setTimeout> | undefined;
+        const r: RunSummary = await submitRun(startedAt.current, track.points, {
+          signal: ctrl.signal,
+          onStage: (st) => {
+            setStage(st);
+            if (st === 'polling') skipTimer = setTimeout(() => setCanSkipWait(true), 15_000);
+          },
+        }).finally(() => {
+          clearTimeout(skipTimer);
+          setCanSkipWait(false);
+        });
         // The server recomputes distance and moving time; prefer its numbers.
         if (r.stats?.distance_m != null) kmFinal = +(r.stats.distance_m / 1000).toFixed(2);
         if (r.stats?.moving_time_s != null) {
@@ -340,6 +356,9 @@ export default function Run() {
         <View style={styles.overlayFull}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.countSub, { marginTop: 14 }]}>{STAGE_TEXT[stage]}</Text>
+          {canSkipWait && (
+            <Button label="Don't wait" variant="secondary" size="md" onPress={() => pollAbort.current?.abort()} style={{ marginTop: 18 }} />
+          )}
         </View>
       )}
 

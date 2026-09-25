@@ -24,18 +24,18 @@ import type { Fix } from '@/logic/track';
 // Types
 // ---------------------------------------------------------------------------
 
-export type RunStatus = 'active' | 'finishing' | 'finalized' | 'flagged' | 'rejected';
+export type RunStatus = 'active' | 'paused' | 'finishing' | 'finalized' | 'flagged' | 'rejected';
 export const TERMINAL_STATUSES: RunStatus[] = ['finalized', 'flagged', 'rejected'];
 
 export type RunCreated = { run_id: string };
 
 export type RunPoint = { seq: number; lat: number; lng: number; recorded_at: string; accuracy_m: number };
 
-/** ASSUMPTION: stat keys. The contract only says `stats{}`; the app reads these if present. */
-export type RunStats = { distance_m?: number; moving_time_s?: number; elapsed_time_s?: number; avg_pace_s_per_km?: number; [k: string]: number | undefined };
+/** Server-recomputed stats. Pace isn't sent: derive it from distance and moving time. */
+export type RunStats = { distance_m: number; moving_time_s: number; elapsed_time_s: number };
 
-/** ASSUMPTION: territory shape. `null` when nothing was captured. Flagged runs still grant territory. */
-export type RunTerritory = { area_m2?: number; cells?: number; [k: string]: unknown } | null;
+/** Territory captured by the run; `null` when nothing was captured. Flagged runs still grant territory. */
+export type RunTerritory = { id: string; area_m2: number; claimed_at: string; geometry: unknown } | null;
 
 export type RunRejection = { reason: string; [k: string]: unknown } | null;
 
@@ -46,8 +46,12 @@ export type RunSummary = {
   stats: RunStats;
   territory: RunTerritory;
   rejection: RunRejection;
-  score: number | null;
+  score: RunScore;
 };
+
+/** Anti-cheat score. `band` is the verdict: accept | pending | reject. */
+export type ScoreBand = 'accept' | 'pending' | 'reject';
+export type RunScore = { aggregate: number; band: ScoreBand | (string & {}); decisive_layer: string | null } | null;
 
 export type XpBreakdownLine = { reason: string; xp: number };
 export type XpSummary = { xp: number; updated_at: string; breakdown: XpBreakdownLine[] };
@@ -55,13 +59,18 @@ export type XpSummary = { xp: number; updated_at: string; breakdown: XpBreakdown
 export type LeaderboardWindow = 'daily' | 'weekly' | 'alltime';
 /** No display names: the Run Module stores no profiles by design. `score` = area for metric=area. */
 export type LeaderboardEntry = { rank: number; user_id: string; score: number };
-export type LeaderboardPage = { entries: LeaderboardEntry[]; me: LeaderboardEntry | null; next_cursor: string | null };
+/** `me` has no user_id: match the signed-in user's own id (JWT `sub`) against entries instead. */
+export type LeaderboardPage = { entries: LeaderboardEntry[]; me: { rank: number; score: number } | null; next_cursor: string | null };
 
 // ---------------------------------------------------------------------------
 // Retry helpers
 // ---------------------------------------------------------------------------
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((r) => {
+    const t = setTimeout(r, ms);
+    signal?.addEventListener('abort', () => { clearTimeout(t); r(); }, { once: true });
+  });
 
 /** Retries 429s (honouring Retry-After) and transient network / 5xx errors with backoff. */
 async function withRetry<T>(fn: () => Promise<T>, attempts = 4): Promise<T> {
@@ -118,16 +127,21 @@ export const leaderboardApi = {
 
 /**
  * Poll GET /v1/runs/:id until the finish worker reaches a terminal status.
- * Backoff 1s → 2s → 4s → 8s (cap), ~60s budget. Returns the last summary either way;
- * a non-terminal status means "still processing — check back later".
+ * Backoff 1s → 2s → 4s → 8s (cap). Finalisation time depends on worker queue load, so the
+ * budget is 5 min (same as the Android client); `signal` stops early. Returns the last
+ * summary either way — a non-terminal status means "still processing, check back later".
  */
-export async function pollRun(runId: string, { budgetMs = 60000, onTick }: { budgetMs?: number; onTick?: (s: RunSummary) => void } = {}): Promise<RunSummary> {
+export async function pollRun(
+  runId: string,
+  { budgetMs = 5 * 60_000, onTick, signal }: { budgetMs?: number; onTick?: (s: RunSummary) => void; signal?: AbortSignal } = {},
+): Promise<RunSummary> {
   const deadline = Date.now() + budgetMs;
   let delay = 1000;
   let last = await runsApi.get(runId);
   onTick?.(last);
-  while (!TERMINAL_STATUSES.includes(last.status) && Date.now() < deadline) {
-    await sleep(Math.min(delay, Math.max(0, deadline - Date.now())));
+  while (!TERMINAL_STATUSES.includes(last.status) && Date.now() < deadline && !signal?.aborted) {
+    await sleep(Math.min(delay, Math.max(0, deadline - Date.now())), signal);
+    if (signal?.aborted) break;
     delay = Math.min(8000, delay * 2);
     last = await runsApi.get(runId);
     onTick?.(last);
@@ -140,7 +154,11 @@ export async function pollRun(runId: string, { budgetMs = 60000, onTick }: { bud
  * idempotency keys) → finish (async) → poll until terminal. XP is NOT on the run —
  * call xpApi.me() afterwards.
  */
-export async function submitRun(startedAt: number, fixes: Fix[], opts: { onStage?: (s: 'uploading' | 'finishing' | 'polling') => void } = {}): Promise<RunSummary> {
+export async function submitRun(
+  startedAt: number,
+  fixes: Fix[],
+  opts: { onStage?: (s: 'uploading' | 'finishing' | 'polling') => void; signal?: AbortSignal } = {},
+): Promise<RunSummary> {
   const points = toRunPoints(fixes);
   const { run_id } = await runsApi.create(new Date(startedAt).toISOString());
   opts.onStage?.('uploading');
@@ -148,7 +166,7 @@ export async function submitRun(startedAt: number, fixes: Fix[], opts: { onStage
   opts.onStage?.('finishing');
   await runsApi.finish(run_id);
   opts.onStage?.('polling');
-  return pollRun(run_id);
+  return pollRun(run_id, { signal: opts.signal });
 }
 
 // ---------------------------------------------------------------------------
@@ -164,8 +182,15 @@ export function rejectionText(r: RunRejection): string {
   return REJECTION_TEXT[r.reason] ?? `Rejected: ${r.reason.replace(/_/g, ' ')}.`;
 }
 
-/** ASSUMPTION: area scores are square metres. */
+/** ASSUMPTION: leaderboard area scores are square metres. */
 export const formatArea = (m2: number) => (m2 >= 100000 ? `${(m2 / 1e6).toFixed(2)} km²` : `${Math.round(m2).toLocaleString('en-IN')} m²`);
+
+/**
+ * Is this leaderboard entry the signed-in user? `page.me` carries no user_id, so match the
+ * token's own id (JWT `sub`). Only if the token has no `sub`, fall back to `me`'s rank + score.
+ */
+export const isMyEntry = (e: LeaderboardEntry, userId: string | null, me: LeaderboardPage['me']) =>
+  userId ? e.user_id === userId : !!me && e.rank === me.rank && e.score === me.score;
 
 /** No profile service yet: show a short, stable handle for a user id. */
 export const shortUserId = (id: string) => `Runner ${id.replace(/-/g, '').slice(0, 6)}`;
