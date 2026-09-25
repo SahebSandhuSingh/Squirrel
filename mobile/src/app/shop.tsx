@@ -8,7 +8,7 @@ import { shopItems, type ShopTab } from '@/data/shop';
 import { useApp } from '@/state/AppState';
 import { colors, fonts, MAX_WIDTH } from '@/theme';
 
-const TABS: ShopTab[] = ['Outfits', 'Gear', 'Accessories', 'Stickers'];
+const TABS: ShopTab[] = ['Outfits', 'Gear', 'Accessories', 'Pets', 'Stickers'];
 
 /** SHOP — gamified cosmetic store. */
 export default function Shop() {
@@ -24,7 +24,7 @@ export default function Shop() {
   return (
     <Screen tabBar={false}>
       <Header back title="Shop" right={<Coins amount={coins} size={17} />} />
-      <Segmented items={TABS} value={tab} onChange={(t) => { setTab(t); setCat('All'); }} />
+      <Segmented items={TABS} labels={{ Accessories: 'Extras' }} value={tab} onChange={(t) => { setTab(t); setCat('All'); }} />
 
       <SceneImage kind="rooftop" seed={99} height={170} scrim={false}>
         <View style={{ position: 'absolute', left: 16, top: 16 }}>

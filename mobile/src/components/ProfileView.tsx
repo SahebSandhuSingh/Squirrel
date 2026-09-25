@@ -55,6 +55,7 @@ export function ProfileView({ user, isMe }: { user: User; isMe: boolean }) {
   const savedPosts = posts.filter((p) => saved.has(p.id));
   const nextReward = levelRewards.find((r) => r.level > lvl && r.kind === 'trail') ?? levelRewards.find((r) => r.level > lvl);
   const badges = achievements.filter((a) => a.progress >= 1);
+  const equippedItems = [...equipped].map((id) => shopItemById(id)).filter((it): it is NonNullable<ReturnType<typeof shopItemById>> => Boolean(it));
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ paddingBottom: (isMe ? TAB_BAR_SPACE : 30) + insets.bottom }} showsVerticalScrollIndicator={false}>
@@ -176,16 +177,16 @@ export function ProfileView({ user, isMe }: { user: User; isMe: boolean }) {
           <Pressable onPress={() => router.push('/shop')} style={[styles.badgeRow, { marginTop: 10 }]}>
             <View style={{ flex: 1 }}>
               <Text style={styles.sectionLabel}>Equipped</Text>
-              <View style={{ flexDirection: 'row', marginTop: 6, gap: 6 }}>
-                {[...equipped].map((id) => shopItemById(id)).filter(Boolean).slice(0, 5).map((it) => (
-                  <View key={it!.id} style={styles.equip}>
-                    <ItemArt item={it!} size={40} />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }} contentContainerStyle={{ gap: 6 }}>
+                {equippedItems.map((it) => (
+                  <View key={it.id} style={styles.equip}>
+                    <ItemArt item={it} size={40} />
                   </View>
                 ))}
                 <View style={[styles.equip, { borderStyle: 'dashed' }]}>
                   <Icon name="plus" size={20} color={colors.dim} />
                 </View>
-              </View>
+              </ScrollView>
             </View>
             <Icon name="chevron-right" size={22} color={colors.dim} />
           </Pressable>

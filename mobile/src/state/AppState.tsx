@@ -15,11 +15,13 @@ type BuyResult = 'ok' | 'owned' | 'coins' | 'level';
 
 type AppState = {
   // identity
-  me: User;
+  me: User & { look: AvatarLook };
   look: AvatarLook;
   setLook: (l: AvatarLook) => void;
   pet: string;
   setPet: (id: string) => void;
+  gear: string;
+  setGear: (id: string) => void;
   // city
   city: City;
   setCity: (id: string) => void;
@@ -76,6 +78,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const me = userById(CURRENT_USER_ID);
   const [look, setLook] = useState<AvatarLook>(me.look);
   const [pet, setPet] = useState('pet-nutty');
+  const [gear, setGear] = useState('none');
   const [cityId, setCityId] = useState(me.cityId ?? DEFAULT_CITY_ID);
   // Level 13 with 750 / 2000 into it, matching the design.
   const [xp, setXp] = useState(12 * XP_PER_LEVEL + 750);
@@ -106,24 +109,31 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 
   const addXp = useCallback(
     (gain: number, coinGain = 0) => {
-      const before = Math.floor(xp / XP_PER_LEVEL);
-      const after = Math.floor((xp + gain) / XP_PER_LEVEL);
-      setXp(xp + gain);
+      let leveledUp = false;
+      setXp((prevXp) => {
+        const before = Math.floor(prevXp / XP_PER_LEVEL);
+        const after = Math.floor((prevXp + gain) / XP_PER_LEVEL);
+        leveledUp = after > before;
+        return prevXp + gain;
+      });
       if (coinGain) setCoins((c) => c + coinGain);
-      return { leveledUp: after > before };
+      return { leveledUp };
     },
-    [xp],
+    [],
   );
 
   const logMission = useCallback(
     (id: string) => {
-      const m = missions.find((x) => x.id === id);
-      if (!m || m.current >= m.goal) return;
-      const next = Math.min(m.goal, +(m.current + m.step).toFixed(2));
-      setMissions(missions.map((x) => (x.id === id ? { ...x, current: next } : x)));
-      if (next >= m.goal) toast(`Mission complete: ${m.title}`, 'check-decagram', '#3DF0A0');
+      setMissions((currentMissions) => {
+        const m = currentMissions.find((x) => x.id === id);
+        if (!m || m.current >= m.goal) return currentMissions;
+        const next = Math.min(m.goal, +(m.current + m.step).toFixed(2));
+        const updated = currentMissions.map((x) => (x.id === id ? { ...x, current: next } : x));
+        if (next >= m.goal) toast(`Mission complete: ${m.title}`, 'check-decagram', '#3DF0A0');
+        return updated;
+      });
     },
-    [missions, toast],
+    [toast],
   );
 
   const ready = useMemo(() => missions.filter((m) => m.current >= m.goal && !claimed.has(m.id)), [missions, claimed]);
@@ -133,10 +143,30 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   );
 
   const claimRewards = useCallback(() => {
-    const res = addXp(claimable.xp, claimable.coins);
-    setClaimed((c) => new Set([...c, ...ready.map((m) => m.id)]));
-    return { xp: claimable.xp, coins: claimable.coins, leveledUp: res.leveledUp };
-  }, [addXp, claimable, ready]);
+    let claimableXp = 0;
+    let claimableCoins = 0;
+    let readyMissions: string[] = [];
+    
+    setMissions((currentMissions) => {
+      const claimedSet = new Set(claimed);
+      readyMissions = currentMissions
+        .filter((m) => m.current >= m.goal && !claimedSet.has(m.id))
+        .map((m) => m.id);
+      claimableXp = readyMissions.reduce((s, id) => {
+        const m = currentMissions.find((x) => x.id === id);
+        return s + (m?.xp ?? 0);
+      }, 0);
+      claimableCoins = readyMissions.reduce((s, id) => {
+        const m = currentMissions.find((x) => x.id === id);
+        return s + (m?.coins ?? 0);
+      }, 0);
+      return currentMissions;
+    });
+    
+    setClaimed((c) => new Set([...c, ...readyMissions]));
+    const res = addXp(claimableXp, claimableCoins);
+    return { xp: claimableXp, coins: claimableCoins, leveledUp: res.leveledUp };
+  }, [claimed, addXp]);
 
   const level = Math.floor(xp / XP_PER_LEVEL) + 1;
 
@@ -144,15 +174,33 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     (id: string): BuyResult => {
       const item = shopItemById(id);
       if (!item) return 'owned';
-      if (owned.has(id)) return 'owned';
-      if (level < item.levelRequired) return 'level';
-      if (coins < item.price) return 'coins';
-      setCoins(coins - item.price);
-      setOwned(new Set([...owned, id]));
-      toast(`Unlocked ${item.name}`, 'lock-open-variant', '#FFD43B');
-      return 'ok';
+      // Use functional updates to avoid stale closure
+      let result: BuyResult = 'ok';
+      setOwned((currentOwned) => {
+        if (currentOwned.has(id)) {
+          result = 'owned';
+          return currentOwned;
+        }
+        return new Set([...currentOwned, id]);
+      });
+      setCoins((currentCoins) => {
+        const currentLevel = Math.floor(xp / XP_PER_LEVEL) + 1;
+        if (currentLevel < item.levelRequired) {
+          result = 'level';
+          return currentCoins;
+        }
+        if (currentCoins < item.price) {
+          result = 'coins';
+          return currentCoins;
+        }
+        return currentCoins - item.price;
+      });
+      if (result === 'ok') {
+        toast(`Unlocked ${item.name}`, 'lock-open-variant', '#FFD43B');
+      }
+      return result;
     },
-    [coins, level, owned, toast],
+    [xp, toast],
   );
 
   const finishRun = useCallback(
@@ -178,6 +226,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setLook,
     pet,
     setPet,
+    gear,
+    setGear,
     city,
     setCity: (id) => {
       setCityId(id);
@@ -201,41 +251,47 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     buy,
     toggleEquip: (id) => setEquipped((s) => toggled(s, id)),
     joinedCrews,
-    toggleCrew: (id) => {
-      const crew = crews.find((c) => c.id === id);
-      if (!joinedCrews.has(id) && crew) toast(`You joined ${crew.name}`, 'account-group', '#35DFFF');
-      setJoinedCrews(toggled(joinedCrews, id));
-    },
+    toggleCrew: useCallback((id: string) => {
+      setJoinedCrews((s) => {
+        const crew = crews.find((c) => c.id === id);
+        if (!s.has(id) && crew) toast(`You joined ${crew.name}`, 'account-group', '#35DFFF');
+        return toggled(s, id);
+      });
+    }, [crews, toast]),
     joinedEvents,
-    toggleEvent: (id) => {
+    toggleEvent: useCallback((id: string) => {
       const ev = events.find((e) => e.id === id);
       if (!joinedEvents.has(id) && ev) {
         toast(`You're going to ${ev.title} · +${ev.xp} XP on check-in`, 'calendar-check', '#FF35B5');
         setMissions((all) => all.map((m) => (m.id === 'w-event' ? { ...m, current: m.goal } : m)));
       }
-      setJoinedEvents(toggled(joinedEvents, id));
-    },
+      setJoinedEvents((s) => toggled(s, id));
+    }, [events, joinedEvents, toast]),
     following,
-    toggleFollow: (id) => {
-      if (!following.has(id)) toast(`Following @${users.find((u) => u.id === id)?.handle ?? ''}`, 'account-check', '#FF35B5');
-      setFollowing(toggled(following, id));
-    },
+    toggleFollow: useCallback((id: string) => {
+      setFollowing((s) => {
+        if (!s.has(id)) toast(`Following @${users.find((u) => u.id === id)?.handle ?? ''}`, 'account-check', '#FF35B5');
+        return toggled(s, id);
+      });
+    }, [toast]),
     liked,
-    toggleLike: (id) => setLiked((s) => toggled(s, id)),
+    toggleLike: useCallback((id: string) => setLiked((s) => toggled(s, id)), []),
     saved,
-    toggleSave: (id) => {
-      if (!saved.has(id)) toast('Saved to your collection', 'bookmark', '#FFD43B');
-      setSaved(toggled(saved, id));
-    },
+    toggleSave: useCallback((id: string) => {
+      setSaved((s) => {
+        if (!s.has(id)) toast('Saved to your collection', 'bookmark', '#FFD43B');
+        return toggled(s, id);
+      });
+    }, [toast]),
     posts,
-    addPost: (p) => {
+    addPost: useCallback((p) => {
       setPosts((all) => [
         { ...p, id: `me-${Date.now()}`, authorId: me.id, cityId, area: city.areas[0], minutesAgo: 0, likes: 0, comments: 0 },
         ...all,
       ]);
       toast('Posted to your feed · +20 XP', 'send', '#FF35B5');
       setXp((x) => x + 20);
-    },
+    }, [cityId, city, me.id, toast]),
     finishRun,
     toasts,
     toast,

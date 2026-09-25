@@ -197,6 +197,15 @@ export const productDefaults: Record<ProductKind, { color: string; accent: strin
   socks: { color: art.cloud, accent: art.pink },
   gloves: { color: '#4A3D86', accent: art.pink },
   mat: { color: art.green, accent: art.purple },
+  dumbbell: { color: '#2A2036', accent: art.pink },
+  kettlebell: { color: '#16101E', accent: art.cyan },
+  jumprope: { color: art.pink, accent: art.cloud },
+  resistanceband: { color: art.green, accent: art.pink },
+  basketball: { color: art.orange, accent: art.ink },
+  football: { color: art.cloud, accent: art.pink },
+  tennisracket: { color: art.yellow, accent: art.purple },
+  chain: { color: art.yellow, accent: art.cloud },
+  wristband: { color: art.pink, accent: art.cyan },
 };
 
 /* ------------------------------------------------------------------ */
@@ -608,6 +617,87 @@ const draw: Record<ProductKind, (x: Ctx) => React.ReactElement> = {
         />
       </Piece>
       <Piece id={`${uid}m2`} t={a} s={0.3} d="M36 36 h8 v52 h-8 Z M64 36 h8 v52 h-8 Z" />
+    </G>
+  ),
+
+  dumbbell: ({ uid, c, a, k }) => (
+    <G transform="rotate(-32 60 60)">
+      <Piece id={`${uid}d0`} t={k} d={`${ell(38, 60, 10, 22)}`} />
+      <Piece id={`${uid}d1`} t={c} s={0.6} d={`${ell(38, 60, 6, 15)}`} />
+      <Piece id={`${uid}d2`} t={k} d={`${ell(82, 60, 10, 22)}`} />
+      <Piece id={`${uid}d3`} t={c} s={0.6} d={`${ell(82, 60, 6, 15)}`} />
+      <Piece id={`${uid}d4`} t={a} s={0.4} d="M44 54 H76 V66 H44 Z">
+        <Seam d="M52 54 V66 M60 54 V66 M68 54 V66" color={a.outline} o={0.4} />
+      </Piece>
+    </G>
+  ),
+
+  kettlebell: ({ uid, c, a }) => (
+    <G>
+      <Piece id={`${uid}k0`} t={a} s={0.4} d="M46 26 C46 18 52 13 60 13 C68 13 74 18 74 26 V34 H64 V27 C64 24 62 22 60 22 C58 22 56 24 56 27 V34 H46 Z" />
+      <Piece id={`${uid}k1`} t={c} d="M60 34 C82 34 92 52 92 70 C92 92 78 106 60 106 C42 106 28 92 28 70 C28 52 38 34 60 34 Z">
+        <Path d="M42 46 C48 40 54 37 60 37" fill="none" stroke={c.hi} strokeOpacity={0.5} strokeWidth={4} strokeLinecap="round" />
+      </Piece>
+      <Path d={tailMark(52, 68, 0.9)} fill={a.base} stroke={a.outline} strokeWidth={1.2} />
+    </G>
+  ),
+
+  jumprope: ({ uid, c, a, k }) => (
+    <G>
+      <Path d="M30 30 C10 50 10 90 40 96 C70 102 78 66 60 58 C46 52 40 70 54 74" fill="none" stroke={k.outline} strokeWidth={9} strokeLinecap="round" />
+      <Path d="M30 30 C10 50 10 90 40 96 C70 102 78 66 60 58 C46 52 40 70 54 74" fill="none" stroke={c.base} strokeWidth={5.5} strokeLinecap="round" />
+      <Piece id={`${uid}j0`} t={a} s={0.4} d="M18 16 C18 10 22 6 30 6 C38 6 40 12 36 16 L30 30 L22 26 Z" />
+      <Piece id={`${uid}j1`} t={a} s={0.4} d="M46 74 C46 68 50 64 58 64 C66 64 68 70 64 74 L58 88 L50 84 Z" />
+    </G>
+  ),
+
+  resistanceband: ({ uid, c, a }) => (
+    <G>
+      <Path d={ell(60, 60, 46, 30)} fill="none" stroke={c.outline} strokeWidth={13} />
+      <Path d={ell(60, 60, 46, 30)} fill="none" stroke={c.base} strokeWidth={8.5} />
+      <Path d="M20 60 C20 42 38 32 60 32" fill="none" stroke={a.base} strokeOpacity={0.55} strokeWidth={3} strokeLinecap="round" />
+      <Circle cx={14} cy={60} r={9} fill={a.base} stroke={a.outline} strokeWidth={2} />
+      <Circle cx={106} cy={60} r={9} fill={a.base} stroke={a.outline} strokeWidth={2} />
+    </G>
+  ),
+
+  basketball: ({ uid, c, a }) => (
+    <G>
+      <Piece id={`${uid}b0`} t={c} d={circ(60, 62, 40)} />
+      <Path d="M60 22 V102 M20 62 H100 M28 32 C40 46 40 78 28 92 M92 32 C80 46 80 78 92 92" fill="none" stroke={a.outline} strokeWidth={2.6} strokeLinecap="round" />
+    </G>
+  ),
+
+  football: ({ uid, c, a }) => (
+    <G>
+      <Piece id={`${uid}f0`} t={c} d={ell(60, 62, 40, 28)} />
+      <Path d="M22 62 H98 M40 50 L40 74 M50 46 L50 78 M70 46 L70 78 M80 50 L80 74" fill="none" stroke={a.outline} strokeWidth={2.4} strokeLinecap="round" />
+      <Path d={`${circ(40, 50, 1.6)} ${circ(50, 46, 1.6)} ${circ(70, 46, 1.6)} ${circ(80, 50, 1.6)} ${circ(40, 74, 1.6)} ${circ(50, 78, 1.6)} ${circ(70, 78, 1.6)} ${circ(80, 74, 1.6)}`} fill={a.base} />
+    </G>
+  ),
+
+  tennisracket: ({ uid, c, a, k }) => (
+    <G transform="rotate(-24 60 60)">
+      <Piece id={`${uid}r0`} t={c} d={ell(58, 40, 26, 32)} />
+      <Piece id={`${uid}r1`} t={k} s={0.5} rim={false} d={ell(58, 40, 19, 25)} />
+      <Path d="M39 40 H77 M58 15 V65 M45 22 L71 58 M71 22 L45 58" fill="none" stroke={a.base} strokeWidth={1.4} strokeOpacity={0.85} />
+      <Piece id={`${uid}r2`} t={a} s={0.4} d="M53 68 H63 L68 108 C68 112 65 115 58 115 C51 115 48 112 48 108 Z" />
+    </G>
+  ),
+
+  chain: ({ uid, a, k }) => (
+    <G>
+      <Path d={ell(60, 58, 40, 26)} fill="none" stroke={k.outline} strokeWidth={7} />
+      <Path d={ell(60, 58, 40, 26)} fill="none" stroke={a.base} strokeWidth={4} strokeDasharray="6 4" />
+      <Path d={tailMark(48, 68, 1.05)} fill={a.base} stroke={a.outline} strokeWidth={1.3} />
+    </G>
+  ),
+
+  wristband: ({ uid, c, a }) => (
+    <G>
+      <Piece id={`${uid}wb0`} t={c} d="M24 46 H96 C100 46 102 50 102 60 C102 70 100 74 96 74 H24 C20 74 18 70 18 60 C18 50 20 46 24 46 Z">
+        <Seam d="M24 52 H96 M24 68 H96" color={a.base} w={3} o={0.9} />
+      </Piece>
     </G>
   ),
 };

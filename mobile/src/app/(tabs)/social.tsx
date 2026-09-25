@@ -25,7 +25,7 @@ export default function Social() {
   }, [posts, feed, following, me.id, city.id]);
 
   const storyUsers = users.filter((u) => u.id !== me.id).slice(0, 8);
-  const suggested = users.filter((u) => u.id !== me.id && !following.has(u.id));
+  const suggested = users.filter((u) => u.id !== me.id && !following.has(u.id)).slice(0, 5);
   const myCrews = crews.filter((c) => joinedCrews.has(c.id));
 
   return (
@@ -65,51 +65,54 @@ export default function Social() {
         </Text>
       )}
 
-      {list.length === 0 && (
+      {/* Suggested users section (only for For You feed) */}
+      {feed === 'For You' && suggested.length > 0 && (
+        <View style={{ marginBottom: 16 }}>
+          <SectionHeader title="Suggested for you" action="See all" onAction={() => router.push('/crews')} />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -16 }} contentContainerStyle={{ gap: 10, paddingHorizontal: 16 }}>
+            {suggested.map((u) => (
+              <UserChip key={u.id} user={u} following={following.has(u.id)} onFollow={() => toggleFollow(u.id)} />
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {list.length === 0 ? (
         <EmptyState
           art={<Mascot pose="sleep" size={140} />}
           title="Quiet around here"
-          body={feed === 'Nearby' ? `No posts in ${city.name} yet. Be the first to post a run!` : 'Follow people to fill your feed.'}
+          body={feed === 'Nearby' ? `No posts in ${city.name} yet. Be the first to post a run!` : feed === 'Following' ? 'Follow people to fill your feed.' : 'No posts yet. Be the first to share!'}
           action="Create a post"
           onAction={() => router.push('/compose')}
         />
+      ) : (
+        <>
+          {list.map((p, i) => (
+            <React.Fragment key={p.id}>
+              <FadeIn index={i}>
+                <SocialPost post={p} />
+              </FadeIn>
+
+              {i === 2 && (
+                <PressScale onPress={() => router.push('/crews')} style={{ marginBottom: 16 }} scaleTo={0.98}>
+                  <SceneImage kind="crew" seed={21} height={140} scrim="strong">
+                    <View style={{ position: 'absolute', left: 16, right: 16, bottom: 14, flexDirection: 'row', alignItems: 'flex-end' }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.kicker}>{myCrews.length ? `${myCrews.length} crew${myCrews.length > 1 ? 's' : ''} joined` : 'Better together'}</Text>
+                        <Display size={26}>Find your crew</Display>
+                        <Text style={styles.sub}>{crews.length} crews in {city.name} & online</Text>
+                      </View>
+                      <View style={styles.arrow}>
+                        <Icon name="arrow-right" size={22} color={colors.onPink} />
+                      </View>
+                    </View>
+                  </SceneImage>
+                </PressScale>
+              )}
+            </React.Fragment>
+          ))}
+        </>
       )}
-
-      {list.map((p, i) => (
-        <React.Fragment key={p.id}>
-          <FadeIn index={i}>
-            <SocialPost post={p} />
-          </FadeIn>
-
-          {i === 1 && suggested.length > 0 && (
-            <View style={{ marginBottom: 16 }}>
-              <SectionHeader title="Suggested for you" action="See all" onAction={() => router.push('/crews')} style={{ marginTop: 4 }} />
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -16 }} contentContainerStyle={{ gap: 10, paddingHorizontal: 16 }}>
-                {suggested.map((u) => (
-                  <UserChip key={u.id} user={u} following={following.has(u.id)} onFollow={() => toggleFollow(u.id)} />
-                ))}
-              </ScrollView>
-            </View>
-          )}
-
-          {i === 3 && (
-            <PressScale onPress={() => router.push('/crews')} style={{ marginBottom: 16 }} scaleTo={0.98}>
-              <SceneImage kind="crew" seed={21} height={140} scrim="strong">
-                <View style={{ position: 'absolute', left: 16, right: 16, bottom: 14, flexDirection: 'row', alignItems: 'flex-end' }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.kicker}>{myCrews.length ? `${myCrews.length} crew${myCrews.length > 1 ? 's' : ''} joined` : 'Better together'}</Text>
-                    <Display size={26}>Find your crew</Display>
-                    <Text style={styles.sub}>{crews.length} crews in {city.name} & online</Text>
-                  </View>
-                  <View style={styles.arrow}>
-                    <Icon name="arrow-right" size={22} color={colors.onPink} />
-                  </View>
-                </View>
-              </SceneImage>
-            </PressScale>
-          )}
-        </React.Fragment>
-      ))}
     </Screen>
   );
 }

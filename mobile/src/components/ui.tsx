@@ -60,7 +60,7 @@ export function FadeIn({ children, index = 0, delay = 0, style, from = 14 }: { c
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 /** Pressable that springs down slightly when touched. */
-export function PressScale({ children, style, scaleTo = 0.97, haptic = true, onPress, ...rest }: Omit<PressableProps, 'style'> & { children: React.ReactNode; style?: StyleProp<ViewStyle>; scaleTo?: number; haptic?: boolean }) {
+export function PressScale({ children, style, scaleTo = 0.97, haptic = true, onPress, accessibilityLabel, accessibilityRole = 'button', accessibilityState, ...rest }: Omit<PressableProps, 'style'> & { children: React.ReactNode; style?: StyleProp<ViewStyle>; scaleTo?: number; haptic?: boolean }) {
   const s = useRef(new Animated.Value(1)).current;
   const to = (v: number) => Animated.spring(s, { toValue: v, useNativeDriver: NATIVE, speed: 40, bounciness: 6 }).start();
   return (
@@ -72,6 +72,9 @@ export function PressScale({ children, style, scaleTo = 0.97, haptic = true, onP
         if (haptic) tap();
         onPress?.(e);
       }}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole={accessibilityRole}
+      accessibilityState={accessibilityState}
       style={[style, { transform: [{ scale: s }] }]}>
       {children}
     </AnimatedPressable>
@@ -160,7 +163,7 @@ export function SectionHeader({ title, action, onAction, style }: { title: strin
 
 type BtnVariant = 'primary' | 'secondary' | 'ghost' | 'cyan' | 'gold';
 
-export function Button({ label, onPress, icon, iconLeft, variant = 'primary', size = 'lg', style, disabled }: { label: string; onPress?: () => void; icon?: IconName; iconLeft?: IconName; variant?: BtnVariant; size?: 'sm' | 'md' | 'lg'; style?: StyleProp<ViewStyle>; disabled?: boolean }) {
+export function Button({ label, onPress, icon, iconLeft, variant = 'primary', size = 'lg', style, disabled, accessibilityLabel }: { label: string; onPress?: () => void; icon?: IconName; iconLeft?: IconName; variant?: BtnVariant; size?: 'sm' | 'md' | 'lg'; style?: StyleProp<ViewStyle>; disabled?: boolean; accessibilityLabel?: string }) {
   const pad = size === 'lg' ? 17 : size === 'md' ? 12 : 8;
   const fs = size === 'lg' ? 20 : size === 'md' ? 16 : 13;
   const filled = variant === 'primary' || variant === 'cyan' || variant === 'gold';
@@ -177,6 +180,9 @@ export function Button({ label, onPress, icon, iconLeft, variant = 'primary', si
     <PressScale
       disabled={disabled}
       onPress={onPress}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
       style={[
         { borderRadius: radius.md, opacity: disabled ? 0.45 : 1 },
         filled && variant === 'primary' && !disabled && styles.glow,
@@ -207,9 +213,9 @@ export function IconButton({ icon, onPress, size = 22, color = colors.text, badg
 }
 
 /** Small toggle button: "Join" → "Joined", "Follow" → "Following". */
-export function TogglePill({ on, onPress, labelOff, labelOn, color = colors.cyan, style }: { on: boolean; onPress: () => void; labelOff: string; labelOn: string; color?: string; style?: StyleProp<ViewStyle> }) {
+export function TogglePill({ on, onPress, labelOff, labelOn, color = colors.cyan, style, accessibilityLabel }: { on: boolean; onPress: () => void; labelOff: string; labelOn: string; color?: string; style?: StyleProp<ViewStyle>; accessibilityLabel?: string }) {
   return (
-    <PressScale onPress={onPress} style={[styles.pill, on ? styles.pillOn : { backgroundColor: color }, style]}>
+    <PressScale onPress={onPress} accessibilityLabel={accessibilityLabel} accessibilityRole="button" accessibilityState={{ selected: on }} style={[styles.pill, on ? styles.pillOn : { backgroundColor: color }, style]}>
       {on && <Icon name="check" size={14} color={colors.sub} style={{ marginRight: 4 }} />}
       <Text style={[styles.pillText, { color: on ? colors.sub : color === colors.pink ? colors.onPink : colors.onCyan }]}>{on ? labelOn : labelOff}</Text>
     </PressScale>
@@ -238,17 +244,17 @@ export function Chips<T extends string>({ items, value, onChange, icons, style }
         const on = i === value;
         const ic = icons?.[i];
         return (
-          <Pressable key={i} onPress={() => { tap(); onChange(i); }} style={[styles.chip, on && styles.chipOn]}>
+          <PressScale key={i} onPress={() => { tap(); onChange(i); }} accessibilityLabel={i} accessibilityRole="button" accessibilityState={{ selected: on }} style={[styles.chip, on && styles.chipOn]}>
             {ic && <Icon name={ic} size={15} color={on ? colors.onCyan : colors.dim} style={{ marginRight: 5 }} />}
             <Text style={[styles.chipText, on && { color: colors.onCyan }]}>{i}</Text>
-          </Pressable>
+          </PressScale>
         );
       })}
     </ScrollView>
   );
 }
 
-export function Segmented<T extends string>({ items, value, onChange, accent = 'pink', style }: { items: readonly T[]; value: T; onChange: (v: T) => void; accent?: 'pink' | 'cyan'; style?: StyleProp<ViewStyle> }) {
+export function Segmented<T extends string>({ items, value, onChange, accent = 'pink', style, labels }: { items: readonly T[]; value: T; onChange: (v: T) => void; accent?: 'pink' | 'cyan'; style?: StyleProp<ViewStyle>; labels?: Partial<Record<T, string>> }) {
   const [w, setW] = useState(0);
   const idx = Math.max(0, items.indexOf(value));
   const x = useRef(new Animated.Value(idx)).current;
@@ -266,9 +272,9 @@ export function Segmented<T extends string>({ items, value, onChange, accent = '
       {items.map((i) => {
         const on = i === value;
         return (
-          <Pressable key={i} onPress={() => { tap(); onChange(i); }} style={styles.segItem}>
-            <Text style={[styles.segText, on && { color: accent === 'cyan' ? colors.onCyan : colors.onPink }]}>{i}</Text>
-          </Pressable>
+          <PressScale key={i} onPress={() => { tap(); onChange(i); }} accessibilityLabel={i} accessibilityRole="button" accessibilityState={{ selected: on }} style={styles.segItem}>
+            <Text numberOfLines={1} style={[styles.segText, on && { color: accent === 'cyan' ? colors.onCyan : colors.onPink }]}>{labels?.[i] ?? i}</Text>
+          </PressScale>
         );
       })}
     </View>

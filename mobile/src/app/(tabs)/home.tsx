@@ -65,7 +65,7 @@ export default function Home() {
             <RingStat progress={today.steps.value / today.steps.goal} color={colors.green} color2={colors.cyan} icon="shoe-print" value={today.steps.value.toLocaleString('en-IN')} label="Steps" />
             <RingStat progress={today.active.value / today.active.goal} color={colors.cyan} color2={colors.blue} icon="timer-outline" value={`${today.active.value}m`} label="Active" />
             <RingStat progress={today.kcal.value / today.kcal.goal} color={colors.orange} color2={colors.gold} icon="fire" value={String(today.kcal.value)} label="kcal" />
-            <RingStat progress={1} color={colors.violet} color2={colors.pink} icon="lightning-bolt" value={`${today.streak}d`} label="Streak" />
+            <RingStat progress={Math.min(1, today.streak / 14)} color={colors.violet} color2={colors.pink} icon="lightning-bolt" value={`${today.streak}d`} label="Streak" />
           </View>
         </Card>
       </FadeIn>
@@ -76,7 +76,7 @@ export default function Home() {
           <SceneImage kind="run" seed={4} height={132} scrim="strong">
             <View style={styles.runCta}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.kicker}>{city.venues.runs[0]} · 2.4 km loop</Text>
+                <Text style={styles.kicker}>{city.venues?.runs?.[0] ?? 'City Loop'} · 2.4 km loop</Text>
                 <Display size={30}>Start a run</Display>
                 <Text style={styles.runSub}>Earn up to +150 XP · 3 friends running now</Text>
               </View>

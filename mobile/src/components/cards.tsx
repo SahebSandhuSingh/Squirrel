@@ -6,6 +6,7 @@ import { Scene } from '@/art/Scene';
 import { ProductArt } from '@/art/Product';
 import { StickerArt } from '@/art/Sticker';
 import { RewardArt } from '@/art/Reward';
+import { Mascot } from '@/art/Mascot';
 import { Avatar, AvatarStack } from '@/components/Avatar';
 import { Card, CoinIcon, Icon, IconBadge, NATIVE, PressScale, ProgressBar, Scrim, TogglePill, tap } from '@/components/ui';
 import type { Crew, EventItem } from '@/data/community';
@@ -165,7 +166,8 @@ export function SocialPost({ post }: { post: Post }) {
   const author = post.authorId === me.id ? me : userById(post.authorId);
   const isLiked = liked.has(post.id);
   const heart = useRef(new Animated.Value(0)).current;
-  const lastTap = useRef(0);
+  const lastTap = useRef<number>(0);
+  const baseLikes = useRef(post.likes);
 
   const like = () => {
     tap('impact');
@@ -208,7 +210,9 @@ export function SocialPost({ post }: { post: Post }) {
       <Pressable
         onPress={() => {
           const now = Date.now();
-          if (now - lastTap.current < 300 && !isLiked) like();
+          if (now - lastTap.current < 300 && !isLiked) {
+            like();
+          }
           lastTap.current = now;
         }}>
         <SceneImage kind={post.scene} seed={post.seed} aspect={1.2} style={{ borderRadius: 0 }} scrim={false}>
@@ -228,7 +232,7 @@ export function SocialPost({ post }: { post: Post }) {
       <View style={styles.actions}>
         <Pressable onPress={like} style={styles.action} hitSlop={6} accessibilityLabel={isLiked ? 'Unlike' : 'Like'}>
           <Icon name={isLiked ? 'heart' : 'heart-outline'} size={24} color={isLiked ? colors.pink : colors.text} />
-          <Text style={styles.count}>{(post.likes + (isLiked ? 1 : 0)).toLocaleString('en-IN')}</Text>
+          <Text style={styles.count}>{(baseLikes.current + (isLiked ? 1 : 0)).toLocaleString('en-IN')}</Text>
         </Pressable>
         <Pressable onPress={() => router.push({ pathname: '/post/[id]', params: { id: post.id } })} style={styles.action} hitSlop={6} accessibilityLabel="Comments">
           <Icon name="comment-outline" size={22} color={colors.text} />
@@ -328,7 +332,16 @@ export function StatCard({ stat }: { stat: Stat }) {
 // ---------------------------------------------------------------------------
 
 export function ItemArt({ item, size }: { item: ShopItem; size: number }) {
-  return item.art.type === 'product' ? <ProductArt kind={item.art.kind} color={item.art.color} accent={item.art.accent} size={size} /> : <StickerArt kind={item.art.kind} size={size} />;
+  if (item.art.type === 'product') return <ProductArt kind={item.art.kind} color={item.art.color} accent={item.art.accent} size={size} />;
+  if (item.art.type === 'pet') {
+    return (
+      <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+        <View style={{ position: 'absolute', width: size * 0.82, height: size * 0.82, borderRadius: size, backgroundColor: item.art.glow, opacity: 0.25 }} />
+        <Mascot pose={item.art.pose} accessory={item.art.accessory} size={size * 0.86} />
+      </View>
+    );
+  }
+  return <StickerArt kind={item.art.kind} size={size} />;
 }
 
 export function ShopItemCard({ item, owned, locked, equipped, onPress, style }: { item: ShopItem; owned: boolean; locked: boolean; equipped?: boolean; onPress: () => void; style?: StyleProp<ViewStyle> }) {

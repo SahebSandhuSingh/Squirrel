@@ -1,6 +1,21 @@
 import type { AccessoryStyle, AvatarLook, BottomStyle, HairStyle, TopStyle } from '@/types';
 import { hairColors, skinTones } from '@/art/palette';
 import type { IconName } from '@/data/icons';
+import { shopItems, type ShopItem } from '@/data/shop';
+
+/**
+ * Data-driven avatar catalogs. `shopItems` (src/data/shop.ts) is the single
+ * source of truth for anything ownable — it already carries id / name /
+ * category / rarity / levelRequired ("unlockCondition") / art (asset) /
+ * description, so these are thin, typed selectors over it rather than a
+ * duplicate catalog. Swapping this for a backend later just means pointing
+ * these selectors at an API response shaped the same way.
+ */
+export const outfitSets = (): ShopItem[] => shopItems.filter((i) => i.tab === 'Outfits' && i.category === 'Sets');
+export const shoeCatalog = (): ShopItem[] => shopItems.filter((i) => i.tab === 'Outfits' && i.category === 'Shoes');
+export const gearCatalog = (): ShopItem[] => shopItems.filter((i) => i.tab === 'Gear');
+export const accessoryExtras = (): ShopItem[] => shopItems.filter((i) => i.tab === 'Accessories');
+export const petCatalog = (): ShopItem[] => shopItems.filter((i) => i.tab === 'Pets');
 
 export type AvatarCategory = 'Body' | 'Hair' | 'Outfit' | 'Shoes' | 'Accessories' | 'Gear' | 'Emotes' | 'Pets';
 
@@ -48,3 +63,9 @@ export const presetLooks: AvatarLook[] = [
   { body: 'male', skin: skinTones[1], hair: 'curly', hairColor: hairColors[1], top: 'jacket', topColor: '#FF7A45', bottom: 'joggers', bottomColor: '#1B1524', shoeColor: '#FF35B5', accessory: 'shades' },
   { body: 'male', skin: skinTones[5], hair: 'buzz', hairColor: hairColors[0], top: 'hoodie', topColor: '#FF35B5', bottom: 'joggers', bottomColor: '#16101E', shoeColor: '#FFFFFF', accessory: 'headphones' },
 ];
+
+/**
+ * Named roster for the character rail — reuses the 10-look `demoLooks` set
+ * already drawn in art/Character.tsx (was unused elsewhere). Index-matched.
+ */
+export const characterNames = ['Nova', 'Blaze', 'Coco', 'Ace', 'Rook', 'Storm', 'Juno', 'Kato', 'Mira', 'Dex'];

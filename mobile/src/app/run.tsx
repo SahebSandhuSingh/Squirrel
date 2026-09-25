@@ -29,6 +29,7 @@ export default function Run() {
   const [result, setResult] = useState<{ xp: number; leveledUp: boolean } | null>(null);
   const progress = useRef(new Animated.Value(0.62)).current;
   const pop = useRef(new Animated.Value(0)).current;
+  const lastKmMarker = useRef(0);
 
   // 3-2-1 countdown
   useEffect(() => {
@@ -55,6 +56,18 @@ export default function Run() {
   }, [phase]);
 
   const km = sec / PACE;
+
+  // Haptic feedback on km milestones
+  useEffect(() => {
+    if (phase !== 'running') return;
+    const currentKm = Math.floor(km);
+    if (currentKm > lastKmMarker.current && currentKm > 0) {
+      lastKmMarker.current = currentKm;
+      tap('success');
+      toast(`${currentKm} km! 🎉`, 'flag-checkered', colors.gold);
+    }
+  }, [km, phase, toast]);
+
   useEffect(() => {
     Animated.timing(progress, { toValue: Math.min(1, 0.55 + (km % 1) * 0.45), duration: 900, useNativeDriver: false }).start();
   }, [km, progress]);
@@ -96,7 +109,7 @@ export default function Run() {
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 }}>
           <View style={styles.chip}>
             <Icon name="map-marker-path" size={14} color={colors.pink} />
-            <Text style={styles.chipText}>{city.venues.runs[0]} loop</Text>
+            <Text style={styles.chipText}>{city.venues?.runs?.[0] ?? 'City Loop'} loop</Text>
           </View>
           <View style={styles.mini}>
             <CityMap seed={4} route routeProgress={progress} style={StyleSheet.absoluteFill} />
@@ -138,17 +151,26 @@ export default function Run() {
           <Pressable style={[styles.side, music && { borderColor: colors.cyan }]} onPress={() => { tap(); setMusic((m) => !m); }} accessibilityLabel="Music">
             <Icon name={music ? 'music' : 'music-off'} size={26} color={music ? colors.cyan : colors.text} />
           </Pressable>
-          <Pressable
-            onPress={() => { tap('impact'); setPhase((p) => (p === 'running' ? 'paused' : 'running')); }}
-            onLongPress={finish}
-            disabled={phase === 'countdown'}
-            accessibilityLabel={phase === 'running' ? 'Pause' : 'Resume'}
-            style={({ pressed }) => [styles.pauseWrap, { transform: [{ scale: pressed ? 0.94 : 1 }] }]}>
-            {phase === 'running' && <Pulse size={104} color={colors.pink} />}
-            <LinearGradient colors={gradients.pink} style={styles.pause}>
-              <Icon name={phase === 'running' ? 'pause' : 'play'} size={48} color={colors.onPink} />
-            </LinearGradient>
-          </Pressable>
+          <View style={{ position: 'relative' }}>
+            <Pressable
+              onPress={() => { tap('impact'); setPhase((p) => (p === 'running' ? 'paused' : 'running')); }}
+              onLongPress={finish}
+              disabled={phase === 'countdown'}
+              accessibilityLabel={phase === 'running' ? 'Pause' : 'Resume'}
+              accessibilityHint="Long press to finish run"
+              style={({ pressed }) => [styles.pauseWrap, { transform: [{ scale: pressed ? 0.94 : 1 }] }]}>
+              {phase === 'running' && <Pulse size={104} color={colors.pink} />}
+              <LinearGradient colors={gradients.pink} style={styles.pause}>
+                <Icon name={phase === 'running' ? 'pause' : 'play'} size={48} color={colors.onPink} />
+              </LinearGradient>
+            </Pressable>
+            {phase === 'running' && (
+              <View style={styles.longPressHint}>
+                <Icon name="timer-sand" size={12} color={colors.onPink} />
+                <Text style={styles.longPressText}>Hold to finish</Text>
+              </View>
+            )}
+          </View>
           <Pressable
             style={styles.side}
             onPress={() => {
@@ -168,7 +190,7 @@ export default function Run() {
         {phase === 'paused' ? (
           <Button label="Finish run" variant="secondary" size="md" iconLeft="flag-checkered" onPress={finish} style={{ marginTop: 14 }} />
         ) : (
-          <Text style={styles.hint}>Hold the button to finish</Text>
+          <Text style={styles.hint}>Pause run, then hold center button to finish</Text>
         )}
       </View>
 
@@ -235,6 +257,9 @@ const styles = StyleSheet.create({
   photoBadge: { position: 'absolute', top: -2, right: -2, minWidth: 20, height: 20, borderRadius: 10, backgroundColor: colors.cyan, alignItems: 'center', justifyContent: 'center' },
   photoBadgeText: { color: colors.onCyan, fontFamily: fonts.bold, fontSize: 11 },
   hint: { color: colors.mute, fontSize: 12, fontFamily: fonts.medium, textAlign: 'center', marginTop: 14 },
+  longPressHint: { position: 'absolute', bottom: -36, left: '50%', transform: [{ translateX: -50 }], flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(7,5,13,0.9)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill, borderWidth: 1, borderColor: 'rgba(255,53,181,0.3)' },
+  longPressText: { color: colors.onPink, fontFamily: fonts.semibold, fontSize: 10 },
+  longPressIcon: { color: colors.onPink },
   countdown: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(7,5,13,0.82)', alignItems: 'center', justifyContent: 'center', padding: 24 },
   countText: { color: colors.pink, fontFamily: fonts.display, fontSize: 160, textShadowColor: colors.pink, textShadowRadius: 30 },
   countSub: { color: colors.sub, fontFamily: fonts.semibold, fontSize: 16, letterSpacing: 2, textTransform: 'uppercase' },

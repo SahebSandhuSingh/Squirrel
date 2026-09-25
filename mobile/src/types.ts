@@ -60,7 +60,18 @@ export type ProductKind =
   | 'earbuds'
   | 'socks'
   | 'gloves'
-  | 'mat';
+  | 'mat'
+  // Gear (avatar customization — dumbbell, kettlebell, jump rope, ball sports, racket)
+  | 'dumbbell'
+  | 'kettlebell'
+  | 'jumprope'
+  | 'resistanceband'
+  | 'basketball'
+  | 'football'
+  | 'tennisracket'
+  // Extra jewelry-style accessories
+  | 'chain'
+  | 'wristband';
 
 export type BadgeKind =
   | 'city'

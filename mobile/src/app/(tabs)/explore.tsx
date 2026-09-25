@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { CityMap } from '@/art/CityMap';
@@ -21,17 +21,29 @@ export default function Explore() {
   const { places, city, joinedEvents, toggleEvent, events } = useApp();
   const [filter, setFilter] = useState<Filter>('All');
   const [q, setQ] = useState('');
+  const [debouncedQ, setDebouncedQ] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
   const [showRoute, setShowRoute] = useState(true);
   const listRef = useRef<ScrollView>(null);
   const route = useRef(new Animated.Value(0)).current;
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     route.setValue(0);
     Animated.timing(route, { toValue: 1, duration: 2200, easing: Easing.inOut(Easing.cubic), useNativeDriver: false }).start();
-  }, [route, city.id, showRoute]);
+  }, [city.id, showRoute]);
 
-  const term = q.trim().toLowerCase();
+  const handleSearchChange = useCallback((text: string) => {
+    setQ(text);
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => setDebouncedQ(text.trim().toLowerCase()), 300);
+  }, []);
+
+  useEffect(() => {
+    return () => { if (debounceTimer.current) clearTimeout(debounceTimer.current); };
+  }, []);
+
+  const term = debouncedQ;
   const visible = useMemo(
     () => places.filter((p) => (filter === 'All' || p.kind === filter) && (!term || p.name.toLowerCase().includes(term) || p.kind.toLowerCase().includes(term))),
     [places, filter, term],
@@ -78,7 +90,7 @@ export default function Explore() {
           </View>
         </View>
         <View style={{ marginTop: 10 }}>
-          <SearchBar placeholder="Search gyms, runs, cafes, people..." value={q} onChangeText={setQ} />
+          <SearchBar placeholder="Search gyms, runs, cafes, people..." value={q} onChangeText={handleSearchChange} />
         </View>
         <Chips items={FILTERS} value={filter} onChange={setFilter} icons={FILTER_ICONS} />
         {people.length > 0 && (

@@ -11,14 +11,24 @@ import { colors, fonts, radius } from '@/theme';
 /** Shop item sheet: preview, rarity, buy / equip. */
 export default function ItemSheet() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { owned, equipped, buy, toggleEquip, coins, level, toast } = useApp();
+  const { owned, equipped, buy, toggleEquip, coins, level, toast, look, setLook, pet, setPet, gear, setGear } = useApp();
   const item = shopItemById(id);
   if (!item) return <Sheet><Text style={{ color: colors.text }}>Item not found.</Text></Sheet>;
   const has = owned.has(item.id);
-  const isEquipped = equipped.has(item.id);
+  const isPet = item.tab === 'Pets';
+  const isGear = item.tab === 'Gear';
+  const isEquipped = isPet ? pet === item.id : isGear ? gear === item.id : equipped.has(item.id);
   const locked = level < item.levelRequired;
   const short = coins < item.price;
   const rc = rarityColor[item.rarity];
+
+  const onEquip = () => {
+    if (isPet) { setPet(isEquipped ? 'pet-none' : item.id); router.back(); return; }
+    if (isGear) { setGear(isEquipped ? 'none' : item.id); router.back(); return; }
+    if (item.lookPatch && !isEquipped) setLook({ ...look, ...item.lookPatch });
+    toggleEquip(item.id);
+    router.back();
+  };
 
   const onBuy = () => {
     const r = buy(item.id);
@@ -52,7 +62,7 @@ export default function ItemSheet() {
         </View>
       </View>
       {has ? (
-        <Button label={isEquipped ? 'Unequip' : 'Equip'} variant={isEquipped ? 'secondary' : 'cyan'} iconLeft={isEquipped ? 'close' : 'check'} onPress={() => { toggleEquip(item.id); router.back(); }} style={{ marginTop: 18 }} />
+        <Button label={isEquipped ? 'Unequip' : 'Equip'} variant={isEquipped ? 'secondary' : 'cyan'} iconLeft={isEquipped ? 'close' : 'check'} onPress={onEquip} style={{ marginTop: 18 }} />
       ) : (
         <Button
           label={locked ? `Unlocks at level ${item.levelRequired}` : short ? `Need ${(item.price - coins).toLocaleString('en-IN')} more` : `Unlock for ${item.price.toLocaleString('en-IN')}`}
