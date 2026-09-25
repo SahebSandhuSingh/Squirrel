@@ -255,6 +255,32 @@ Routes: `GET /api/users/{id}/details` (everything, with age and BMI derived);
 `PUT /api/users/{id}/details/{fitness|activities|physique|habits}`;
 `GET|POST /api/users/{id}/measurements`; `GET|POST /api/users/{id}/consents`.
 
+## Workout Score
+
+Every exercise report (`GET /api/users/{id}/sessions/{sid}/report` and `.../exercises/{ex}/report`)
+carries a `workout_score`: one 0–100 number with feedback, built only from what pose detection and
+rep analysis captured (`backend/reports/workout_score.py`). The frontend doesn't show it yet.
+
+| Part | Weight | From |
+|---|---|---|
+| Technique | 40% | Each rep's technique score: 100 minus penalties for flagged form faults |
+| Depth | 25% | Each rep's depth factor against the exercise's full-range gate |
+| Completion | 20% | Reps done ÷ reps planned (timed: sets completed ÷ planned) |
+| Consistency | 15% | Steadiness of rep scores and rep tempo (timed: left/right balance) |
+
+- A rep's form score is already technique × depth, so the two are kept separate here and depth is
+  counted once. A part that couldn't be measured is left out and the weights are rescaled.
+- Grades: 90+ Excellent · 75+ Strong · 60+ Solid · 40+ Building · below 40 Getting started.
+- Feedback: a headline, up to two strengths, and one focus (the weakest part below 85) with a fix.
+  A technique focus names the costliest form fault and its coaching text from the exercise
+  templates. `trend` compares with the last earlier session of the same exercise.
+- At least 3 tracked reps are needed. If most reps had incomplete tracking, the score is marked
+  `provisional`.
+- `correct_pct` counts reps with form 80+ **and** full depth. The report also carries
+  `activity_metrics` (`reps`, `correct_pct`, `avg_depth`, `workout_score`), the `metrics` object
+  for the shared `activity_sessions` row in the Integration Contract.
+- Session overviews and `/progress` sessions carry `workout_score` too.
+
 ## Layout
 
 | Path | What it holds |
