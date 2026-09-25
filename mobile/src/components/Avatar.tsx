@@ -34,7 +34,7 @@ export function Avatar({
       <Portrait look={l} size={size} ring={ring} />
       {level != null && (
         <View style={{ position: 'absolute', bottom: -4, alignSelf: 'center', backgroundColor: colors.purple, borderRadius: 8, paddingHorizontal: 5, borderWidth: 1.5, borderColor: colors.bg }}>
-          <Text style={{ color: '#fff', fontFamily: fonts.bold, fontSize: Math.max(9, size * 0.16) }}>LV {level}</Text>
+          <Text style={{ color: colors.onPrimary, fontFamily: fonts.bold, fontSize: Math.max(9, size * 0.16) }}>LV {level}</Text>
         </View>
       )}
       {online && <View style={{ position: 'absolute', right: 1, bottom: 1, width: size * 0.24, height: size * 0.24, borderRadius: size, backgroundColor: colors.green, borderWidth: 2, borderColor: colors.bg }} />}

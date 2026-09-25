@@ -1,51 +1,50 @@
 /**
- * Design tokens — "Olive & Sand": earthy streetwear for a Gen-Z / college crowd.
- * Olive-black canvas, SAND as the primary action colour, OLIVE as the secondary accent,
- * and the logo's squirrel ORANGE for energy (routes, XP, highlights). Terracotta,
- * mustard and sage fill out the set. Type stays heavy, condensed and slanted (GTA-style).
+ * Design tokens — "Blackout": orange, black and white. High-contrast streetwear energy
+ * for a Gen-Z / college crowd. Pure-black canvas, blaze ORANGE for every action and
+ * everything that's "yours", crisp WHITE as the second voice, amber for rewards.
+ * Type is heavy, condensed and slanted (GTA-style title cards).
  */
 export const colors = {
-  bg: '#0E100B',
-  bg2: '#14170F',
-  card: '#1A1D14',
-  cardHi: '#23271A',
-  glass: 'rgba(26,29,20,0.9)',
-  line: '#2E3322',
-  lineHi: '#434A31',
+  bg: '#0A0A0A',
+  bg2: '#111111',
+  card: '#161616',
+  cardHi: '#1F1F1F',
+  glass: 'rgba(22,22,22,0.9)',
+  line: '#2A2A2A',
+  lineHi: '#3D3D3D',
 
-  /** Primary action / "yours" colour — sand. */
-  primary: '#E3CB8F',
-  primarySoft: '#EFDDB2',
-  primaryDeep: '#BFA464',
-  /** Secondary accent — olive. */
-  secondary: '#9DB04C',
-  /** Logo orange — energy accent. */
-  orange: '#F28C28',
-  pink: '#E07A5F',
-  purple: '#6F7D3C',
-  violet: '#B4C27A',
-  blue: '#8FB3AA',
-  gold: '#E9B949',
-  coral: '#D9643A',
-  green: '#9CCB7A',
+  /** Primary action / "yours" colour — blaze orange. */
+  primary: '#FF6B00',
+  primarySoft: '#FF9A4D',
+  primaryDeep: '#D95500',
+  /** Secondary voice — white. */
+  secondary: '#FFFFFF',
+  orange: '#FF8A00',
+  pink: '#FF8A4C',
+  purple: '#FF6B00',
+  violet: '#BDBDBD',
+  blue: '#E0E0E0',
+  gold: '#FFB020',
+  coral: '#FF4D2E',
+  green: '#FFFFFF',
 
-  text: '#F4EFE3',
-  sub: '#D6CFBC',
-  dim: '#9E9A86',
-  mute: '#6B6957',
-  onPrimary: '#1A1608',
-  onSecondary: '#10130A',
+  text: '#FFFFFF',
+  sub: '#D4D4D4',
+  dim: '#9A9A9A',
+  mute: '#666666',
+  onPrimary: '#0A0A0A',
+  onSecondary: '#0A0A0A',
 };
 
 export const gradients = {
-  primary: ['#F2E2B8', '#E3CB8F', '#C9AE6C'] as const,
-  secondary: ['#B9CB6A', '#9DB04C', '#788A2E'] as const,
-  purple: ['#A7B75E', '#7E8C4A', '#5D6A30'] as const,
-  gold: ['#F3D27A', '#E9B949', '#C9951F'] as const,
-  sunset: ['#232614', '#763E18', '#DC7252', '#F89B54'] as const,
-  screen: ['#14170F', '#0E100B'] as const,
-  card: ['#1D2116', '#1A1D14'] as const,
-  scrim: ['rgba(14,16,11,0)', 'rgba(14,16,11,0.65)', 'rgba(14,16,11,0.96)'] as const,
+  primary: ['#FF9A4D', '#FF6B00', '#E05A00'] as const,
+  secondary: ['#FFFFFF', '#F2F2F2', '#DADADA'] as const,
+  purple: ['#FF9A4D', '#FF6B00', '#D95500'] as const,
+  gold: ['#FFD27A', '#FFB020', '#E08E00'] as const,
+  sunset: ['#1D1C1E', '#7A3E14', '#E86646', '#FF994D'] as const,
+  screen: ['#111111', '#0A0A0A'] as const,
+  card: ['#1A1A1A', '#161616'] as const,
+  scrim: ['rgba(10,10,10,0)', 'rgba(10,10,10,0.65)', 'rgba(10,10,10,0.96)'] as const,
 };
 
 /** GTA-style type: heavy condensed headlines, condensed (often italic) labels, clean body. */

@@ -13,7 +13,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0C1020"
+        "backgroundColor": "#0A0A0A"
       },
       "package": "in.squirrelsocial.app"
     },
@@ -22,7 +22,7 @@
       "bundler": "metro"
     },
     "scheme": "squirrelsocial",
-    "backgroundColor": "#07090F",
+    "backgroundColor": "#0A0A0A",
     "plugins": [
       "expo-router",
       "expo-font",
@@ -37,7 +37,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#07090F"
+      "backgroundColor": "#0A0A0A"
     }
   }
 }

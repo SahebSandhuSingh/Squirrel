@@ -132,7 +132,7 @@ export function Tagline({ children, size = 20, color = colors.text, rotate = -6,
       style={[
         { fontFamily: fonts.script, fontSize: size, lineHeight: size * 1.18, color, transform: [{ rotate: `${rotate}deg` }] },
         { textTransform: 'uppercase' },
-        glow && { textShadowColor: 'rgba(227,203,143,0.6)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
+        glow && { textShadowColor: 'rgba(255,107,0,0.6)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
         style,
       ]}>
       {children}
@@ -400,8 +400,8 @@ export function Coins({ amount, size = 15, animated = true, style }: { amount: n
 export function LevelBadge({ level, size = 'md' }: { level: number; size?: 'sm' | 'md' | 'lg' }) {
   const d = size === 'lg' ? 52 : size === 'md' ? 34 : 24;
   return (
-    <LinearGradient colors={gradients.purple} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ minWidth: d, height: d, borderRadius: d * 0.3, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#C9A8FF' }}>
-      <Text style={{ color: '#fff', fontFamily: fonts.display, fontSize: d * 0.5, lineHeight: d * 0.62 }}>{level}</Text>
+    <LinearGradient colors={gradients.purple} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ minWidth: d, height: d, borderRadius: d * 0.3, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: colors.primarySoft }}>
+      <Text style={{ color: colors.onPrimary, fontFamily: fonts.display, fontSize: d * 0.5, lineHeight: d * 0.62 }}>{level}</Text>
     </LinearGradient>
   );
 }
@@ -416,7 +416,7 @@ export function Tag({ label, icon, color = colors.primary }: { label: string; ic
 }
 
 export function Scrim({ style, strong }: { style?: StyleProp<ViewStyle>; strong?: boolean }) {
-  return <LinearGradient pointerEvents="none" colors={strong ? ['rgba(14,16,11,0.1)', 'rgba(14,16,11,0.75)', '#0E100B'] : gradients.scrim} style={[StyleSheet.absoluteFill, style]} />;
+  return <LinearGradient pointerEvents="none" colors={strong ? ['rgba(10,10,10,0.1)', 'rgba(10,10,10,0.75)', '#0A0A0A'] : gradients.scrim} style={[StyleSheet.absoluteFill, style]} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -474,8 +474,8 @@ const styles = StyleSheet.create({
   btnSecondary: { borderWidth: 1.5, borderColor: '#4A4A4F', backgroundColor: 'rgba(0,0,0,0.55)' },
   btnGhost: { backgroundColor: colors.cardHi, borderWidth: 1, borderColor: colors.line },
   iconBtn: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
-  badge: { position: 'absolute', top: -2, right: -2, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.secondary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: colors.bg },
-  badgeText: { color: '#fff', fontSize: 9, fontFamily: fonts.bold },
+  badge: { position: 'absolute', top: -2, right: -2, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: colors.bg },
+  badgeText: { color: colors.onPrimary, fontSize: 9, fontFamily: fonts.bold },
   pill: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 8, minWidth: 82 },
   pillOn: { backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: colors.lineHi },
   pillText: { fontFamily: fonts.label, fontSize: 13, letterSpacing: 1, textTransform: 'uppercase' },

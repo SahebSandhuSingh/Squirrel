@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
   statV: { color: colors.text, fontFamily: fonts.labelBold, fontSize: 22 },
   statL: { color: colors.dim, fontFamily: fonts.mono, fontSize: 10, letterSpacing: 1, textTransform: 'uppercase' },
   map: { height: 380, marginTop: 16, borderRadius: radius.lg, overflow: 'hidden', borderWidth: 1, borderColor: colors.line, backgroundColor: colors.bg2 },
-  zoneLabel: { position: 'absolute', width: 116, backgroundColor: 'rgba(14,16,11,0.88)', borderWidth: 1.5, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 4 },
+  zoneLabel: { position: 'absolute', width: 116, backgroundColor: 'rgba(10,10,10,0.88)', borderWidth: 1.5, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 4 },
   zoneName: { color: colors.text, fontFamily: fonts.label, fontSize: 12, letterSpacing: 0.8, textTransform: 'uppercase' },
   zoneMeta: { fontFamily: fonts.mono, fontSize: 9 },
   legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: 12 },

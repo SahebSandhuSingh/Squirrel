@@ -3,7 +3,8 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Scene } from '@/art/Scene';
 import { Character } from '@/art/Character';
-import { Logo, Tape, Wordmark } from '@/components/Brand';
+import { Tape, Wordmark } from '@/components/Brand';
+import { Mascot } from '@/art/Mascot';
 import { Button, Display, FadeIn, Scrim, Tagline } from '@/components/ui';
 import { useAuth } from '@/auth/AuthProvider';
 import { useApp } from '@/state/AppState';
@@ -23,10 +24,10 @@ export default function Welcome() {
     <View style={styles.root}>
       <Scene kind="city-sunset" seed={7} aspect={width / height} style={StyleSheet.absoluteFill} />
       <Scrim style={{ top: '38%' }} strong />
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(14,16,11,0.35)' }]} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(10,10,10,0.35)' }]} />
 
       <View style={[styles.content, { paddingTop: insets.top + 12, paddingBottom: 8 }]}>
-        <Wordmark size={30} />
+        <Wordmark size={30} showLogo={false} />
 
         <FadeIn style={{ marginTop: 16 }}>
           <Display size={h1} style={styles.l1}>Fitness</Display>
@@ -43,9 +44,7 @@ export default function Welcome() {
         <FadeIn delay={300} style={[styles.hero, { height: heroH }]}>
           <Tagline size={15} style={styles.scribble}>Same parks.{'\n'}Different people.</Tagline>
           <Character look={look} pose="stand" height={heroH} />
-          <View style={{ marginLeft: -heroH * 0.06, marginBottom: -2 }}>
-            <Logo size={heroH * 0.62} />
-          </View>
+          <Mascot pose="wave" size={heroH * 0.52} animated style={{ marginLeft: -heroH * 0.08, marginBottom: -4 }} />
         </FadeIn>
       </View>
 

@@ -51,15 +51,15 @@ Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-h
 | `/city` | City picker |
 | `/notifications` | Activity notifications |
 
-## Look & feel — "Olive & Sand"
+## Look & feel — "Blackout" (orange · black · white)
 
-Earthy streetwear for a Gen-Z / college crowd, with GTA-style type:
-- **Canvas:** olive-black `#0E100B`, with olive cards (`#1A1D14` / `#23271A`, border `#2E3322`).
-- **Colours:** **sand `#E3CB8F`** for primary actions and "yours" (your territory, your rank); **olive `#9DB04C`** as the secondary accent; the logo's **squirrel orange `#F28C28`** for routes and energy; terracotta, mustard and sage fill out the set. Rival territory is terracotta, contested is olive.
-- **Art:** the illustration library's colours were shifted to match: warm dusk skies, olive haze and amber city lights instead of neon pink and purple.
+High-contrast streetwear energy for a Gen-Z / college crowd, with GTA-style type:
+- **Canvas:** pure black `#0A0A0A`, with charcoal cards (`#161616` / `#1F1F1F`, border `#2A2A2A`).
+- **Colours:** **blaze orange `#FF6B00`** for every action and everything that's "yours" (your territory, your rank, your route); **white** as the second voice; amber `#FFB020` for rewards and coins. Territory: yours = orange, rival = white, contested = amber.
+- **Art:** the illustration library is recoloured to match: charcoal cities, orange sunsets and lights, neutral grey-white neon. Skin, hair and mascot fur are unchanged.
 - **Type:** Anton for headlines and big numbers (heavy, condensed, slanted −6° like GTA title cards). Barlow Condensed for labels, buttons and italic callouts; Inter for body text.
   - These are free Google Fonts lookalikes: GTA's own fonts are proprietary or commercial.
-- **Brand:** the squirrel-with-dumbbell logo (`assets/brand/logo.png`, transparent cut-out) is used in the header, on Welcome, and as the app icon, splash and favicon.
+- **Brand:** the squirrel-with-dumbbell logo (`assets/brand/logo.png`) is used in the in-app header and as the app icon, splash and favicon. The Welcome screen uses a text wordmark and the waving mascot.
 
 All UI tokens live in `src/theme.ts`; illustration colours live in `src/art/palette.ts`.
 

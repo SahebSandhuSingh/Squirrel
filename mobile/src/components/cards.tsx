@@ -48,7 +48,7 @@ export function MissionCard({ mission: m, onLog, claimed, compact }: { mission: 
   }, [done, pop]);
 
   return (
-    <View style={[styles.mission, done && { borderColor: claimed ? 'rgba(61,240,160,0.35)' : `${m.color}99`, backgroundColor: claimed ? 'rgba(61,240,160,0.05)' : colors.card }]}>
+    <View style={[styles.mission, done && { borderColor: claimed ? 'rgba(255,107,0,0.35)' : `${m.color}99`, backgroundColor: claimed ? 'rgba(255,107,0,0.05)' : colors.card }]}>
       {done && !claimed && <LinearGradient colors={[`${m.color}26`, 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />}
       <IconBadge icon={m.icon} color={m.color} size={compact ? 40 : 46} />
       <View style={{ flex: 1, marginHorizontal: 12 }}>
@@ -347,7 +347,7 @@ export function ItemArt({ item, size }: { item: ShopItem; size: number }) {
 export function ShopItemCard({ item, owned, locked, equipped, onPress, style }: { item: ShopItem; owned: boolean; locked: boolean; equipped?: boolean; onPress: () => void; style?: StyleProp<ViewStyle> }) {
   const rc = rarityColor[item.rarity];
   return (
-    <PressScale onPress={onPress} style={[styles.shopItem, owned && { borderColor: 'rgba(61,240,160,0.45)' }, style]} scaleTo={0.96}>
+    <PressScale onPress={onPress} style={[styles.shopItem, owned && { borderColor: 'rgba(255,107,0,0.45)' }, style]} scaleTo={0.96}>
       <LinearGradient colors={[`${rc}22`, 'transparent']} style={StyleSheet.absoluteFill} />
       <View style={[styles.rarity, { backgroundColor: rc }]} />
       <View style={{ opacity: locked ? 0.45 : 1 }}>
@@ -397,17 +397,17 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontFamily: fonts.bold, fontSize: 16 },
   meta: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, flexShrink: 1 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
-  heroBadge: { position: 'absolute', top: 10, left: 10, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(14,16,11,0.7)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.pill },
+  heroBadge: { position: 'absolute', top: 10, left: 10, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(10,10,10,0.7)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.pill },
   heroBadgeText: { color: colors.gold, fontFamily: fonts.bold, fontSize: 11 },
   heroTitle: { color: colors.text, fontFamily: fonts.display, fontSize: 22, letterSpacing: 0.4 },
   heroMeta: { color: colors.sub, fontFamily: fonts.medium, fontSize: 12 },
   post: { backgroundColor: colors.card, borderRadius: radius.xl, overflow: 'hidden', marginBottom: 16, borderWidth: 1, borderColor: colors.line },
   postHead: { flexDirection: 'row', alignItems: 'center', padding: 12 },
   author: { color: colors.text, fontFamily: fonts.bold, fontSize: 15 },
-  lvl: { color: colors.violet, fontFamily: fonts.bold, fontSize: 10, marginLeft: 2, backgroundColor: 'rgba(157,176,76,0.18)', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 5, overflow: 'hidden' },
+  lvl: { color: colors.violet, fontFamily: fonts.bold, fontSize: 10, marginLeft: 2, backgroundColor: 'rgba(255,255,255,0.18)', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 5, overflow: 'hidden' },
   followBtn: { borderWidth: 1, borderColor: colors.primary, borderRadius: radius.sm, paddingHorizontal: 12, paddingVertical: 5 },
   followText: { color: colors.primary, fontFamily: fonts.bold, fontSize: 12 },
-  actChip: { position: 'absolute', left: 10, bottom: 10, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(14,16,11,0.78)', borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(227,203,143,0.35)' },
+  actChip: { position: 'absolute', left: 10, bottom: 10, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(10,10,10,0.78)', borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(255,107,0,0.35)' },
   actText: { color: colors.text, fontFamily: fonts.semibold, fontSize: 12 },
   actions: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: 12, gap: 16 },
   action: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -425,7 +425,7 @@ const styles = StyleSheet.create({
   statUnit: { color: colors.dim, fontFamily: fonts.medium, fontSize: 12 },
   shopItem: { alignItems: 'center', backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, paddingTop: 12, paddingBottom: 10, paddingHorizontal: 6, gap: 3, overflow: 'hidden' },
   rarity: { position: 'absolute', top: 0, left: 16, right: 16, height: 3, borderBottomLeftRadius: 3, borderBottomRightRadius: 3 },
-  lock: { position: 'absolute', top: 8, right: 8, flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: 'rgba(14,16,11,0.8)', borderRadius: radius.pill, paddingHorizontal: 6, paddingVertical: 2 },
+  lock: { position: 'absolute', top: 8, right: 8, flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: 'rgba(10,10,10,0.8)', borderRadius: radius.pill, paddingHorizontal: 6, paddingVertical: 2 },
   lockText: { color: colors.text, fontFamily: fonts.bold, fontSize: 9 },
   itemName: { color: colors.sub, fontFamily: fonts.medium, fontSize: 11, marginTop: 2, maxWidth: '100%' },
   price: { color: colors.text, fontFamily: fonts.bold, fontSize: 13 },
