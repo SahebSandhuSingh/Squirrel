@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 10, marginTop: 14 },
   card: { width: '48.5%', height: 84, borderRadius: radius.md, overflow: 'hidden', borderWidth: 2, borderColor: colors.line },
   label: { position: 'absolute', left: 10, bottom: 8 },
-  name: { color: colors.text, fontFamily: fonts.display, fontSize: 20, letterSpacing: 0.4 },
-  country: { color: colors.sub, fontFamily: fonts.medium, fontSize: 11 },
+  name: { color: colors.onImage, fontFamily: fonts.display, fontSize: 20, letterSpacing: 0.4 },
+  country: { color: colors.onImageSub, fontFamily: fonts.medium, fontSize: 11 },
   check: { position: 'absolute', top: 8, right: 8, width: 22, height: 22, borderRadius: 11, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
 });

@@ -10,6 +10,7 @@ import { RewardCard } from '@/components/cards';
 import { Button, Display, IconButton, NATIVE, Scrim, Tagline, XPBar, Icon, tap } from '@/components/ui';
 import { levelRewards } from '@/data/rewards';
 import { useApp, XP_PER_LEVEL } from '@/state/AppState';
+import { StatusBar } from 'expo-status-bar';
 import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
 
 function Rays({ size }: { size: number }) {
@@ -51,7 +52,7 @@ function Confetti({ visible }: { visible: boolean }) {
       vy: 0.003 + Math.random() * 0.005,
       rot: Math.random() * Math.PI * 2,
       vr: (Math.random() - 0.5) * 0.05,
-      color: ['#FF6B00', '#FFB020', '#FFFFFF', '#BDBDBD', '#FF8A4C', '#F5F5F5'][Math.floor(Math.random() * 6)],
+      color: ['#2F5BFF', '#FFB020', '#FFFFFF', '#7090FF', '#FF4D8D', '#12B76A'][Math.floor(Math.random() * 6)],
       size: 6 + Math.random() * 10,
       delay: Math.random() * 200,
     }))
@@ -127,6 +128,7 @@ export default function LevelUp() {
 
   return (
     <View style={styles.root}>
+      <StatusBar style="light" />
       <Scene kind="city-night" seed={13} aspect={width / height} style={StyleSheet.absoluteFill} />
       <Scrim strong style={{ top: '30%' }} />
       <Confetti visible={isLevelUp && showConfetti.current} />
@@ -134,8 +136,8 @@ export default function LevelUp() {
         <IconButton icon="close" onPress={() => (router.canGoBack() ? router.back() : router.replace('/home'))} label="Close" />
 
         <Animated.View style={{ alignItems: 'center', opacity: title, transform: [{ scale: title.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }] }}>
-          <Tagline size={Math.min(64, width * 0.15)} color={colors.primary} rotate={-6}>{isLevelUp ? 'Level Up!' : 'Nice work!'}</Tagline>
-          <Display size={30} style={{ marginTop: -2, transform: [{ rotate: '-4deg' }] }}>Level {level}</Display>
+          <Tagline size={Math.min(64, width * 0.15)} color={colors.primarySoft} rotate={-6}>{isLevelUp ? 'Level Up!' : 'Nice work!'}</Tagline>
+          <Display size={30} color={colors.onImage} style={{ marginTop: -2, transform: [{ rotate: '-4deg' }] }}>Level {level}</Display>
           {!!gained && (
             <View style={styles.gains}>
               <View style={styles.gain}>
@@ -157,7 +159,7 @@ export default function LevelUp() {
           <Mascot pose="celebrate" accessory="crown" size={heroSize} animated />
         </View>
 
-        <XPBar value={levelXp} max={XP_PER_LEVEL} />
+        <XPBar value={levelXp} max={XP_PER_LEVEL} onImage />
 
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
           {current.map((r, i) => (
@@ -190,7 +192,7 @@ const styles = StyleSheet.create({
   gains: { flexDirection: 'row', gap: 8, marginTop: 10 },
   gain: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(10,10,10,0.7)', borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: colors.line },
   gainText: { color: colors.primary, fontFamily: fonts.bold, fontSize: 13 },
-  next: { flexDirection: 'row', alignItems: 'center', marginVertical: 14, backgroundColor: 'rgba(22,22,22,0.94)', borderRadius: radius.lg, borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)', padding: 14 },
+  next: { flexDirection: 'row', alignItems: 'center', marginVertical: 14, backgroundColor: 'rgba(255,255,255,0.97)', borderRadius: radius.lg, borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)', padding: 14 },
   nextKicker: { color: colors.violet, fontFamily: fonts.bold, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' },
   nextTitle: { color: colors.text, fontFamily: fonts.display, fontSize: 22, marginTop: 2 },
   nextSub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12 },

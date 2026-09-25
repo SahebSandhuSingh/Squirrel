@@ -48,7 +48,7 @@ export function MissionCard({ mission: m, onLog, claimed, compact }: { mission: 
   }, [done, pop]);
 
   return (
-    <View style={[styles.mission, done && { borderColor: claimed ? 'rgba(255,107,0,0.35)' : `${m.color}99`, backgroundColor: claimed ? 'rgba(255,107,0,0.05)' : colors.card }]}>
+    <View style={[styles.mission, done && { borderColor: claimed ? 'rgba(47,91,255,0.35)' : `${m.color}99`, backgroundColor: claimed ? 'rgba(47,91,255,0.05)' : colors.card }]}>
       {done && !claimed && <LinearGradient colors={[`${m.color}26`, 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />}
       <IconBadge icon={m.icon} color={m.color} size={compact ? 40 : 46} />
       <View style={{ flex: 1, marginHorizontal: 12 }}>
@@ -114,7 +114,7 @@ export function EventCard({ event, going, onToggle, variant = 'row' }: { event: 
       <PressScale onPress={open} style={{ width: 250 }} scaleTo={0.98}>
         <SceneImage kind={event.scene} seed={event.title.length} height={150} scrim="strong">
           <View style={styles.heroBadge}>
-            <Icon name={event.icon} size={13} color={colors.text} />
+            <Icon name={event.icon} size={13} color={colors.onImage} />
             <Text style={styles.heroBadgeText}>+{event.xp} XP</Text>
           </View>
           <View style={{ position: 'absolute', left: 12, right: 12, bottom: 10 }}>
@@ -347,7 +347,7 @@ export function ItemArt({ item, size }: { item: ShopItem; size: number }) {
 export function ShopItemCard({ item, owned, locked, equipped, onPress, style }: { item: ShopItem; owned: boolean; locked: boolean; equipped?: boolean; onPress: () => void; style?: StyleProp<ViewStyle> }) {
   const rc = rarityColor[item.rarity];
   return (
-    <PressScale onPress={onPress} style={[styles.shopItem, owned && { borderColor: 'rgba(255,107,0,0.45)' }, style]} scaleTo={0.96}>
+    <PressScale onPress={onPress} style={[styles.shopItem, owned && { borderColor: 'rgba(47,91,255,0.45)' }, style]} scaleTo={0.96}>
       <LinearGradient colors={[`${rc}22`, 'transparent']} style={StyleSheet.absoluteFill} />
       <View style={[styles.rarity, { backgroundColor: rc }]} />
       <View style={{ opacity: locked ? 0.45 : 1 }}>
@@ -355,7 +355,7 @@ export function ShopItemCard({ item, owned, locked, equipped, onPress, style }: 
       </View>
       {locked && (
         <View style={styles.lock}>
-          <Icon name="lock" size={12} color={colors.text} />
+          <Icon name="lock" size={12} color={colors.onImage} />
           <Text style={styles.lockText}>LV {item.levelRequired}</Text>
         </View>
       )}
@@ -390,25 +390,25 @@ const styles = StyleSheet.create({
   mSub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, marginTop: 2 },
   xp: { color: colors.gold, fontFamily: fonts.black, fontSize: 12, marginTop: 4 },
   xpSmall: { color: colors.gold, fontFamily: fonts.black, fontSize: 12 },
-  logBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: colors.lineHi, alignItems: 'center', justifyContent: 'center' },
+  logBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.cardHi, borderWidth: 1, borderColor: colors.lineHi, alignItems: 'center', justifyContent: 'center' },
   doneDot: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, padding: 10 },
-  crewIcon: { width: 54, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: 'rgba(255,255,255,0.15)' },
+  crewIcon: { width: 54, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: 'rgba(11,15,26,0.08)' },
   title: { color: colors.text, fontFamily: fonts.bold, fontSize: 16 },
   meta: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, flexShrink: 1 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
   heroBadge: { position: 'absolute', top: 10, left: 10, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(10,10,10,0.7)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.pill },
   heroBadgeText: { color: colors.gold, fontFamily: fonts.bold, fontSize: 11 },
-  heroTitle: { color: colors.text, fontFamily: fonts.display, fontSize: 22, letterSpacing: 0.4 },
-  heroMeta: { color: colors.sub, fontFamily: fonts.medium, fontSize: 12 },
+  heroTitle: { color: colors.onImage, fontFamily: fonts.display, fontSize: 22, letterSpacing: 0.4 },
+  heroMeta: { color: colors.onImageSub, fontFamily: fonts.medium, fontSize: 12 },
   post: { backgroundColor: colors.card, borderRadius: radius.xl, overflow: 'hidden', marginBottom: 16, borderWidth: 1, borderColor: colors.line },
   postHead: { flexDirection: 'row', alignItems: 'center', padding: 12 },
   author: { color: colors.text, fontFamily: fonts.bold, fontSize: 15 },
-  lvl: { color: colors.violet, fontFamily: fonts.bold, fontSize: 10, marginLeft: 2, backgroundColor: 'rgba(255,255,255,0.18)', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 5, overflow: 'hidden' },
+  lvl: { color: colors.violet, fontFamily: fonts.bold, fontSize: 10, marginLeft: 2, backgroundColor: 'rgba(47,91,255,0.1)', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 5, overflow: 'hidden' },
   followBtn: { borderWidth: 1, borderColor: colors.primary, borderRadius: radius.sm, paddingHorizontal: 12, paddingVertical: 5 },
   followText: { color: colors.primary, fontFamily: fonts.bold, fontSize: 12 },
-  actChip: { position: 'absolute', left: 10, bottom: 10, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(10,10,10,0.78)', borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(255,107,0,0.35)' },
-  actText: { color: colors.text, fontFamily: fonts.semibold, fontSize: 12 },
+  actChip: { position: 'absolute', left: 10, bottom: 10, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(10,10,10,0.78)', borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(47,91,255,0.35)' },
+  actText: { color: colors.onImage, fontFamily: fonts.semibold, fontSize: 12 },
   actions: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: 12, gap: 16 },
   action: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   count: { color: colors.text, fontFamily: fonts.semibold, fontSize: 13 },
@@ -426,7 +426,7 @@ const styles = StyleSheet.create({
   shopItem: { alignItems: 'center', backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, paddingTop: 12, paddingBottom: 10, paddingHorizontal: 6, gap: 3, overflow: 'hidden' },
   rarity: { position: 'absolute', top: 0, left: 16, right: 16, height: 3, borderBottomLeftRadius: 3, borderBottomRightRadius: 3 },
   lock: { position: 'absolute', top: 8, right: 8, flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: 'rgba(10,10,10,0.8)', borderRadius: radius.pill, paddingHorizontal: 6, paddingVertical: 2 },
-  lockText: { color: colors.text, fontFamily: fonts.bold, fontSize: 9 },
+  lockText: { color: colors.onImage, fontFamily: fonts.bold, fontSize: 9 },
   itemName: { color: colors.sub, fontFamily: fonts.medium, fontSize: 11, marginTop: 2, maxWidth: '100%' },
   price: { color: colors.text, fontFamily: fonts.bold, fontSize: 13 },
   owned: { color: colors.green, fontFamily: fonts.bold, fontSize: 12 },

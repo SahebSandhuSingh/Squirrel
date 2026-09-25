@@ -47,7 +47,7 @@ export default function Crews() {
       {list.length === 0 && <EmptyState art={<Mascot pose="sit" size={120} />} title="No crews found" body={`Nothing matches “${q}”. Start the first one in ${city.name}!`} action="Start a crew" onAction={() => setQ('')} />}
 
       <SceneImage kind="crew" seed={88} height={170} style={{ marginTop: 20 }}>
-        <Tagline size={26} style={{ position: 'absolute', left: 16, top: 22 }}>
+        <Tagline size={26} color={colors.onImage} style={{ position: 'absolute', left: 16, top: 22 }}>
           Different routes.{'\n'}Better people.
         </Tagline>
       </SceneImage>

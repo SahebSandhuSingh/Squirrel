@@ -8,6 +8,7 @@ import { Display, IconButton, Scrim } from '@/components/ui';
 import { highlightById } from '@/data/highlights';
 import { useApp } from '@/state/AppState';
 import { colors, fonts } from '@/theme';
+import { StatusBar } from 'expo-status-bar';
 
 const DURATION = 4500;
 
@@ -39,6 +40,7 @@ export default function HighlightViewer() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#000' }}>
+      <StatusBar style="light" />
       <Scene kind={s.scene} seed={s.seed} aspect={width / height} style={StyleSheet.absoluteFill} />
       <Scrim strong style={{ top: '55%' }} />
       <View style={[styles.bars, { top: insets.top + 8 }]}>
@@ -59,7 +61,7 @@ export default function HighlightViewer() {
         <Pressable style={{ flex: 2 }} onPress={() => (i < count - 1 ? setI(i + 1) : router.back())} accessibilityLabel="Next" />
       </View>
       <View style={[styles.caption, { bottom: insets.bottom + 36 }]} pointerEvents="none">
-        <Display size={38}>{s.caption}</Display>
+        <Display size={38} color={colors.onImage}>{s.caption}</Display>
         <Text style={styles.meta}>{s.meta}</Text>
       </View>
     </View>
@@ -71,8 +73,8 @@ const styles = StyleSheet.create({
   track: { flex: 1, height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.3)', overflow: 'hidden' },
   fill: { height: '100%', backgroundColor: '#fff' },
   head: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', alignItems: 'center', gap: 10, zIndex: 2 },
-  name: { color: colors.text, fontFamily: fonts.bold, fontSize: 15 },
+  name: { color: colors.onImage, fontFamily: fonts.bold, fontSize: 15 },
   nav: { ...StyleSheet.absoluteFill, flexDirection: 'row', zIndex: 1 },
   caption: { position: 'absolute', left: 20, right: 20, zIndex: 2 },
-  meta: { color: colors.sub, fontFamily: fonts.medium, fontSize: 14, marginTop: 4 },
+  meta: { color: colors.onImageSub, fontFamily: fonts.medium, fontSize: 14, marginTop: 4 },
 });

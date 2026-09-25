@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "in.squirrelsocial.app"
@@ -13,7 +13,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0A0A0A"
+        "backgroundColor": "#2F5BFF"
       },
       "package": "in.squirrelsocial.app"
     },
@@ -22,7 +22,7 @@
       "bundler": "metro"
     },
     "scheme": "squirrelsocial",
-    "backgroundColor": "#0A0A0A",
+    "backgroundColor": "#FFFFFF",
     "plugins": [
       "expo-router",
       "expo-font",
@@ -37,7 +37,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0A0A0A"
+      "backgroundColor": "#FFFFFF"
     }
   }
 }

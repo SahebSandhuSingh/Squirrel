@@ -81,7 +81,7 @@ export default function Home() {
             <View style={styles.runCta}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.kicker}>{city.venues?.runs?.[0] ?? 'City Loop'} · 2.4 km loop</Text>
-                <Display size={30}>Start a run</Display>
+                <Display size={30} color={colors.onImage}>Start a run</Display>
                 <Text style={styles.runSub}>Earn up to +150 XP · 3 friends running now</Text>
               </View>
               <View style={styles.playBtn}>
@@ -148,7 +148,7 @@ export default function Home() {
         <SceneImage kind="city-night" seed={12} height={176} style={{ marginTop: 22 }} scrim={false}>
           <Mascot pose="lift" size={176} animated style={{ position: 'absolute', left: -6, bottom: -10 }} />
           <View style={{ position: 'absolute', right: 16, top: 24, alignItems: 'flex-end' }}>
-            <Tagline size={23} style={{ textAlign: 'right' }}>Discipline{'\n'}today.</Tagline>
+            <Tagline size={23} color={colors.onImage} style={{ textAlign: 'right' }}>Discipline{'\n'}today.</Tagline>
             <Tagline size={19} color={colors.primarySoft} style={{ textAlign: 'right', marginTop: 4 }}>A bigger you{'\n'}tomorrow.</Tagline>
           </View>
         </SceneImage>
@@ -239,12 +239,12 @@ const styles = StyleSheet.create({
   ringValue: { color: colors.text, fontFamily: fonts.display, fontSize: 18, marginTop: 6, letterSpacing: 0.3 },
   ringLabel: { color: colors.dim, fontFamily: fonts.medium, fontSize: 11 },
   runCta: { position: 'absolute', left: 16, right: 16, bottom: 14, flexDirection: 'row', alignItems: 'flex-end' },
-  kicker: { color: colors.secondary, fontFamily: fonts.bold, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },
-  runSub: { color: colors.sub, fontFamily: fonts.medium, fontSize: 12 },
+  kicker: { color: colors.primarySoft, fontFamily: fonts.bold, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },
+  runSub: { color: colors.onImageSub, fontFamily: fonts.medium, fontSize: 12 },
   playBtn: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', shadowColor: colors.primary, shadowOpacity: 0.8, shadowRadius: 14, shadowOffset: { width: 0, height: 0 } },
   hint: { color: colors.mute, fontSize: 12, textAlign: 'center', marginTop: 8, fontFamily: fonts.regular },
   leader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 4 },
-  leaderMe: { backgroundColor: 'rgba(255,107,0,0.08)', borderRadius: radius.md, marginHorizontal: -6, paddingHorizontal: 10 },
+  leaderMe: { backgroundColor: 'rgba(47,91,255,0.08)', borderRadius: radius.md, marginHorizontal: -6, paddingHorizontal: 10 },
   rank: { color: colors.dim, fontFamily: fonts.display, fontSize: 18, width: 34 },
   leaderName: { color: colors.text, fontFamily: fonts.bold, fontSize: 14 },
   leaderSub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 11 },

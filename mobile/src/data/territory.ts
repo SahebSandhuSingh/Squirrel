@@ -66,10 +66,10 @@ export function districtsForCity(cityId: string): District[] {
 }
 
 export const statusColor: Record<TerritoryStatus, string> = {
-  yours: '#FF6B00',
-  rival: '#FFFFFF',
+  yours: '#2F5BFF',
+  rival: '#FF4D8D',
   contested: '#FFB020',
-  neutral: '#666666',
+  neutral: '#A0A8BA',
 };
 
 export const statusLabel: Record<TerritoryStatus, string> = {

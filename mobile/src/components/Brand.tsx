@@ -9,11 +9,11 @@ export function Logo({ size = 32 }: { size?: number; color?: string }) {
 }
 
 /** Logo + wordmark, as in the website's nav bar. */
-export function Wordmark({ size = 28, showLogo = true }: { size?: number; showLogo?: boolean }) {
+export function Wordmark({ size = 28, showLogo = true, color = colors.text }: { size?: number; showLogo?: boolean; color?: string }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
       {showLogo && <Logo size={size * 1.25} />}
-      <Text style={{ color: colors.text, fontFamily: showLogo ? fonts.label : fonts.display, fontSize: showLogo ? size * 0.62 : size * 0.72, letterSpacing: 1.2, textTransform: 'uppercase' }}>Squirrel Social</Text>
+      <Text style={{ color, fontFamily: showLogo ? fonts.label : fonts.display, fontSize: showLogo ? size * 0.62 : size * 0.72, letterSpacing: 1.2, textTransform: 'uppercase' }}>Squirrel Social</Text>
     </View>
   );
 }

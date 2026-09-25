@@ -69,7 +69,7 @@ export default function Leaderboard() {
 const styles = StyleSheet.create({
   source: { color: colors.dim, fontFamily: fonts.mono, fontSize: 10, marginBottom: 10, letterSpacing: 0.6, textTransform: 'uppercase' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, padding: 10 },
-  me: { backgroundColor: 'rgba(255,107,0,0.08)', borderColor: 'rgba(255,107,0,0.4)' },
+  me: { backgroundColor: 'rgba(47,91,255,0.08)', borderColor: 'rgba(47,91,255,0.4)' },
   rank: { color: colors.dim, fontFamily: fonts.monoBold, fontSize: 14, width: 26 },
   name: { flex: 1, color: colors.text, fontFamily: fonts.label, fontSize: 15, letterSpacing: 0.6, textTransform: 'uppercase' },
   area: { color: colors.primary, fontFamily: fonts.labelBold, fontSize: 16 },

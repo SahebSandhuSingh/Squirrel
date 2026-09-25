@@ -40,7 +40,7 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <AuthProvider>
       <AppStateProvider>
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
         <View style={{ flex: 1, backgroundColor: colors.bg }}>
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg }, animation: 'slide_from_right' }}>
             <Stack.Screen name="index" />

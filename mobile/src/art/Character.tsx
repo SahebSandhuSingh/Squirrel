@@ -296,8 +296,8 @@ function Sneaker({ x, y, dir, rot, color }: { x: number; y: number; dir: number;
       />
       <Path d={`M${f(x + 2 + o)},${y - 12.6} C${f(x + 7 + o)},${y - 12} ${f(x + 10 + o)},${y - 8} ${f(x + 10 + o)},${y - 4.5} L${f(x + 5 + o)},${y - 4.5}Z`} fill={dark} />
       <Ellipse cx={f(x - 0.5 + o * 0.5)} cy={y - 12} rx={3.4} ry={1.5} fill={dark} />
-      <Rect x={f(x - 10.5 + o)} y={y - 5.5} width={21} height={5.5} rx={2.4} fill="#F2F1F2" />
-      <Path d={`M${f(x - 10 + o)},${y - 2.2} L${f(x + 10.2 + o)},${y - 2.2}`} stroke="#C9C8CA" strokeWidth={0.9} />
+      <Rect x={f(x - 10.5 + o)} y={y - 5.5} width={21} height={5.5} rx={2.4} fill="#EDEEF6" />
+      <Path d={`M${f(x - 10 + o)},${y - 2.2} L${f(x + 10.2 + o)},${y - 2.2}`} stroke="#BEC1D4" strokeWidth={0.9} />
       <Path d={`M${f(x - 6 + o)},${y - 8} Q${f(x + o)},${y - 5.5} ${f(x + 6.5 + o)},${y - 8.6}`} stroke={art.white} strokeWidth={1.3} strokeLinecap="round" fill="none" opacity={0.85} />
     </G>
   );
@@ -333,8 +333,8 @@ function Dumbbell({ p }: { p: Pt }) {
   return (
     <G>
       <Path d={`M${x - 11},${y} L${x + 11},${y}`} stroke={art.steel} strokeWidth={2.4} strokeLinecap="round" />
-      <Rect x={x - 13} y={y - 6} width={5} height={12} rx={1.6} fill="#252426" />
-      <Rect x={x + 8} y={y - 6} width={5} height={12} rx={1.6} fill="#252426" />
+      <Rect x={x - 13} y={y - 6} width={5} height={12} rx={1.6} fill="#151935" />
+      <Rect x={x + 8} y={y - 6} width={5} height={12} rx={1.6} fill="#151935" />
       <Rect x={x - 9.6} y={y - 6} width={1.6} height={12} rx={0.8} fill={art.pink} />
       <Rect x={x + 11.4} y={y - 6} width={1.6} height={12} rx={0.8} fill={art.cyan} />
     </G>
@@ -534,7 +534,7 @@ function TopGarment({ look, g, uid }: TopProps) {
       d = garmentPath(g, { top: NECK_Y - 1, hem: 134, extra: 1.8, dip: 3 });
       extras = (
         <>
-          <Path d={`M56,${NECK_Y + 2} L64,${NECK_Y + 2} L65.5,134 L54.5,134Z`} fill="#F2F2F2" />
+          <Path d={`M56,${NECK_Y + 2} L64,${NECK_Y + 2} L65.5,134 L54.5,134Z`} fill="#EDEEF7" />
           <Path d={`M56,${NECK_Y + 3} L54.5,134 M64,${NECK_Y + 3} L65.5,134`} stroke={dark} strokeWidth={1.1} />
           <Path d={`M${60 - g.hh - 2},${129.5} L${60 + g.hh + 2},${129.5}`} stroke={dark} strokeWidth={5} />
           <Path d={`M${60 - g.hh},${129.5} L${60 + g.hh},${129.5}`} stroke={art.pink} strokeWidth={0.9} strokeDasharray="1.5 1.5" opacity={0.8} />
@@ -572,10 +572,10 @@ function Face({ look, expr, fx, skinDark, uid }: { look: AvatarLook; expr: Expr;
     : 'M44.6,31 C44.6,17 52,13 60,13 C68,13 75.4,17 75.4,31 C75.4,42 72,50.5 60,53.6 C48,50.5 44.6,42 44.6,31Z';
   const cid = `${uid}face`;
   const browC = shade(look.hairColor, -0.2);
-  const eye = '#1B1511';
+  const eye = '#11131B';
   const skinIdx = (skinTones as readonly string[]).indexOf(look.skin);
   const light = skinIdx >= 0 ? skinIdx < 3 : luma(look.skin) > 0.6;
-  const lip = female ? '#B2723A' : '#8E402C';
+  const lip = female ? '#3A56B2' : '#89314E';
   const bw = female ? 1.1 : 1.6;
   return (
     <G>
@@ -624,11 +624,11 @@ function Face({ look, expr, fx, skinDark, uid }: { look: AvatarLook; expr: Expr;
         {/* mouth */}
         {expr === 'grin' ? (
           <>
-            <Path d="M55.6,44.6 Q60,44 64.4,44.6 Q62.6,49.4 60,49.4 Q57.4,49.4 55.6,44.6Z" fill="#5A3616" />
+            <Path d="M55.6,44.6 Q60,44 64.4,44.6 Q62.6,49.4 60,49.4 Q57.4,49.4 55.6,44.6Z" fill="#16265A" />
             <Path d="M56.4,45 Q60,44.5 63.6,45 L63.1,46.2 Q60,45.8 56.9,46.2Z" fill={art.white} />
           </>
         ) : expr === 'open' ? (
-          <Ellipse cx={60} cy={46.4} rx={2.2} ry={2} fill="#5A3616" />
+          <Ellipse cx={60} cy={46.4} rx={2.2} ry={2} fill="#16265A" />
         ) : (
           <Path d="M56.3,45 Q60,48.6 63.7,45 Q60,46.2 56.3,45Z" fill={lip} stroke={lip} strokeWidth={0.8} strokeLinejoin="round" />
         )}
@@ -647,14 +647,14 @@ function Accessory({ look, fx }: { look: AvatarLook; fx: number }) {
       return (
         <G transform={fx ? `translate(${fx},0)` : undefined}>
           <Path d="M45,33 L49,33 M71,33 L75,33" stroke={art.pink} strokeWidth={1} />
-          <Path d="M48.6,32 L58,32 Q58.4,32 58.3,32.6 L57.6,37 Q57.2,39 55,39 L51.6,39 Q49.4,39 49,37 L48.3,32.6 Q48.3,32 48.6,32Z" fill="#151416" stroke={art.pink} strokeWidth={1.1} />
-          <Path d="M71.4,32 L62,32 Q61.6,32 61.7,32.6 L62.4,37 Q62.8,39 65,39 L68.4,39 Q70.6,39 71,37 L71.7,32.6 Q71.7,32 71.4,32Z" fill="#151416" stroke={art.pink} strokeWidth={1.1} />
+          <Path d="M48.6,32 L58,32 Q58.4,32 58.3,32.6 L57.6,37 Q57.2,39 55,39 L51.6,39 Q49.4,39 49,37 L48.3,32.6 Q48.3,32 48.6,32Z" fill="#0C0E1E" stroke={art.pink} strokeWidth={1.1} />
+          <Path d="M71.4,32 L62,32 Q61.6,32 61.7,32.6 L62.4,37 Q62.8,39 65,39 L68.4,39 Q70.6,39 71,37 L71.7,32.6 Q71.7,32 71.4,32Z" fill="#0C0E1E" stroke={art.pink} strokeWidth={1.1} />
           <Path d="M58.2,32.8 Q60,31.6 61.8,32.8" stroke={art.pink} strokeWidth={1.1} fill="none" />
           <Path d="M50.5,37.5 L53.5,33 M63.5,37.5 L66.5,33" stroke={art.cyan} strokeWidth={1} strokeLinecap="round" opacity={0.8} />
         </G>
       );
     case 'cap': {
-      const capC = luma(look.topColor) > 0.85 ? '#171717' : look.topColor;
+      const capC = luma(look.topColor) > 0.85 ? '#11131D' : look.topColor;
       const dark = clothShade(capC);
       return (
         <G>
@@ -670,8 +670,8 @@ function Accessory({ look, fx }: { look: AvatarLook; fx: number }) {
     case 'headphones':
       return (
         <G>
-          <Path d="M44.5,33 C42,4 78,4 75.5,33" stroke="#171717" strokeWidth={2.8} fill="none" strokeLinecap="round" />
-          <Path d="M47,20 C49,13 54,10 59,9.5" stroke="#3B3B3C" strokeWidth={1} fill="none" strokeLinecap="round" />
+          <Path d="M44.5,33 C42,4 78,4 75.5,33" stroke="#11131D" strokeWidth={2.8} fill="none" strokeLinecap="round" />
+          <Path d="M47,20 C49,13 54,10 59,9.5" stroke="#2F3248" strokeWidth={1} fill="none" strokeLinecap="round" />
           <Rect x={40.2} y={29.5} width={7} height={12} rx={3.2} fill={art.pink} />
           <Rect x={72.8} y={29.5} width={7} height={12} rx={3.2} fill={art.pink} />
           <Rect x={41.5} y={31.5} width={2.2} height={8} rx={1.1} fill={art.pinkHi} />
@@ -914,14 +914,14 @@ export function Portrait({ look, size = 56, ring, bg, style }: PortraitProps) {
 // ---------------------------------------------------------------------------
 
 export const demoLooks: AvatarLook[] = [
-  { body: 'female', skin: skinTones[1], hair: 'ponytail', hairColor: hairColors[5], top: 'crop', topColor: '#171717', bottom: 'leggings', bottomColor: '#171717', shoeColor: art.pink, accessory: 'shades' },
-  { body: 'male', skin: skinTones[4], hair: 'short', hairColor: hairColors[0], top: 'hoodie', topColor: art.purple, bottom: 'joggers', bottomColor: '#1E1D1F', shoeColor: art.cyan, accessory: 'headphones' },
-  { body: 'female', skin: skinTones[5], hair: 'afro', hairColor: hairColors[0], top: 'tank', topColor: art.cyan, bottom: 'shorts', bottomColor: '#171717', shoeColor: art.white, accessory: 'headband' },
-  { body: 'male', skin: skinTones[0], hair: 'buzz', hairColor: hairColors[4], top: 'tee', topColor: art.white, bottom: 'shorts', bottomColor: art.pink, shoeColor: '#171717', accessory: 'cap' },
-  { body: 'female', skin: skinTones[0], hair: 'long', hairColor: hairColors[4], top: 'jacket', topColor: art.pink, bottom: 'leggings', bottomColor: '#171717', shoeColor: art.white, accessory: 'none' },
-  { body: 'male', skin: skinTones[3], hair: 'curly', hairColor: hairColors[1], top: 'tank', topColor: art.orange, bottom: 'joggers', bottomColor: '#2B2A2C', shoeColor: art.yellow, accessory: 'none' },
+  { body: 'female', skin: skinTones[1], hair: 'ponytail', hairColor: hairColors[5], top: 'crop', topColor: '#11131D', bottom: 'leggings', bottomColor: '#11131D', shoeColor: art.pink, accessory: 'shades' },
+  { body: 'male', skin: skinTones[4], hair: 'short', hairColor: hairColors[0], top: 'hoodie', topColor: art.purple, bottom: 'joggers', bottomColor: '#161826', shoeColor: art.cyan, accessory: 'headphones' },
+  { body: 'female', skin: skinTones[5], hair: 'afro', hairColor: hairColors[0], top: 'tank', topColor: art.cyan, bottom: 'shorts', bottomColor: '#11131D', shoeColor: art.white, accessory: 'headband' },
+  { body: 'male', skin: skinTones[0], hair: 'buzz', hairColor: hairColors[4], top: 'tee', topColor: art.white, bottom: 'shorts', bottomColor: art.pink, shoeColor: '#11131D', accessory: 'cap' },
+  { body: 'female', skin: skinTones[0], hair: 'long', hairColor: hairColors[4], top: 'jacket', topColor: art.pink, bottom: 'leggings', bottomColor: '#11131D', shoeColor: art.white, accessory: 'none' },
+  { body: 'male', skin: skinTones[3], hair: 'curly', hairColor: hairColors[1], top: 'tank', topColor: art.orange, bottom: 'joggers', bottomColor: '#222434', shoeColor: art.yellow, accessory: 'none' },
   { body: 'female', skin: skinTones[2], hair: 'bun', hairColor: hairColors[2], top: 'tee', topColor: art.purple, bottom: 'shorts', bottomColor: art.cyan, shoeColor: art.pink, accessory: 'headphones' },
-  { body: 'male', skin: skinTones[5], hair: 'afro', hairColor: hairColors[6], top: 'jacket', topColor: '#171717', bottom: 'joggers', bottomColor: '#171717', shoeColor: art.pink, accessory: 'shades' },
-  { body: 'female', skin: skinTones[3], hair: 'bob', hairColor: hairColors[0], top: 'hoodie', topColor: art.pink, bottom: 'joggers', bottomColor: '#302D31', shoeColor: art.white, accessory: 'none' },
-  { body: 'male', skin: skinTones[2], hair: 'short', hairColor: hairColors[3], top: 'crop', topColor: art.green, bottom: 'shorts', bottomColor: '#171717', shoeColor: art.orange, accessory: 'cap' },
+  { body: 'male', skin: skinTones[5], hair: 'afro', hairColor: hairColors[6], top: 'jacket', topColor: '#11131D', bottom: 'joggers', bottomColor: '#11131D', shoeColor: art.pink, accessory: 'shades' },
+  { body: 'female', skin: skinTones[3], hair: 'bob', hairColor: hairColors[0], top: 'hoodie', topColor: art.pink, bottom: 'joggers', bottomColor: '#141B4A', shoeColor: art.white, accessory: 'none' },
+  { body: 'male', skin: skinTones[2], hair: 'short', hairColor: hairColors[3], top: 'crop', topColor: art.green, bottom: 'shorts', bottomColor: '#11131D', shoeColor: art.orange, accessory: 'cap' },
 ];

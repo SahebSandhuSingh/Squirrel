@@ -8,6 +8,7 @@ import { Mascot } from '@/art/Mascot';
 import { Button, Display, FadeIn, Scrim, Tagline } from '@/components/ui';
 import { useAuth } from '@/auth/AuthProvider';
 import { useApp } from '@/state/AppState';
+import { StatusBar } from 'expo-status-bar';
 import { colors, fonts, MAX_WIDTH } from '@/theme';
 
 /** Landing screen, styled after the website hero ("Fitness hits different together"). */
@@ -22,17 +23,18 @@ export default function Welcome() {
 
   return (
     <View style={styles.root}>
+      <StatusBar style="light" />
       <Scene kind="city-sunset" seed={7} aspect={width / height} style={StyleSheet.absoluteFill} />
       <Scrim style={{ top: '38%' }} strong />
       <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(10,10,10,0.35)' }]} />
 
       <View style={[styles.content, { paddingTop: insets.top + 12, paddingBottom: 8 }]}>
-        <Wordmark size={30} showLogo={false} />
+        <Wordmark size={30} showLogo={false} color={colors.onImage} />
 
         <FadeIn style={{ marginTop: 16 }}>
-          <Display size={h1} style={styles.l1}>Fitness</Display>
-          <Display size={h1 * 0.78} color={colors.primary} style={styles.l2}>Hits different</Display>
-          <Display size={h1} color={colors.secondary} style={styles.l3}>Together</Display>
+          <Display size={h1} color={colors.onImage} style={styles.l1}>Fitness</Display>
+          <Display size={h1 * 0.78} color={colors.primarySoft} style={styles.l2}>Hits different</Display>
+          <Display size={h1} color={colors.onImage} style={styles.l3}>Together</Display>
         </FadeIn>
         <FadeIn delay={180}>
           <Text style={styles.sub}>YOUR CITY IS YOUR PLAYGROUND.</Text>
@@ -42,7 +44,7 @@ export default function Welcome() {
         <View style={{ flex: 1 }} />
 
         <FadeIn delay={300} style={[styles.hero, { height: heroH }]}>
-          <Tagline size={15} style={styles.scribble}>Same parks.{'\n'}Different people.</Tagline>
+          <Tagline size={15} color={colors.onImage} style={styles.scribble}>Same parks.{'\n'}Different people.</Tagline>
           <Character look={look} pose="stand" height={heroH} />
           <Mascot pose="wave" size={heroH * 0.52} animated style={{ marginLeft: -heroH * 0.08, marginBottom: -4 }} />
         </FadeIn>
@@ -68,9 +70,9 @@ const styles = StyleSheet.create({
   l1: { transform: [{ rotate: '-3deg' }] },
   l2: { transform: [{ rotate: '-5deg' }], marginTop: -4 },
   l3: { transform: [{ rotate: '-3deg' }], marginTop: -2 },
-  sub: { color: colors.text, fontFamily: fonts.labelBold, fontSize: 18, letterSpacing: 1, marginTop: 16 },
-  mono: { color: colors.sub, fontFamily: fonts.mono, fontSize: 12, marginTop: 4 },
+  sub: { color: colors.onImage, fontFamily: fonts.labelBold, fontSize: 18, letterSpacing: 1, marginTop: 16 },
+  mono: { color: colors.onImageSub, fontFamily: fonts.mono, fontSize: 12, marginTop: 4 },
   hero: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center' },
   scribble: { position: 'absolute', right: 0, top: 0, textAlign: 'right' },
-  foot: { color: colors.dim, textAlign: 'center', fontSize: 11, fontFamily: fonts.mono, marginTop: 2 },
+  foot: { color: colors.onImageSub, textAlign: 'center', fontSize: 11, fontFamily: fonts.mono, marginTop: 2 },
 });

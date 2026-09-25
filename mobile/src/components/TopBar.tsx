@@ -47,7 +47,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   me: { flexDirection: 'row', alignItems: 'center' },
   lv: { color: colors.text, fontFamily: fonts.display, fontSize: 15, letterSpacing: 0.5 },
-  city: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 10, paddingVertical: 7, borderRadius: radius.pill, backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)', flexShrink: 1 },
+  city: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 10, paddingVertical: 7, borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, flexShrink: 1 },
   cityText: { color: colors.text, fontFamily: fonts.semibold, fontSize: 12, maxWidth: 110 },
   coins: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: radius.pill, backgroundColor: 'rgba(255,176,32,0.08)', borderWidth: 1, borderColor: 'rgba(255,176,32,0.25)' },
 });

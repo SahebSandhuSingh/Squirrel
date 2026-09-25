@@ -11,6 +11,7 @@ import { submitRun } from '@/api/endpoints';
 import { useAuth } from '@/auth/AuthProvider';
 import { addFix, emptyTrack, localVerdict, type TrackState, type Verdict } from '@/logic/track';
 import { useApp, type FinishRunResult } from '@/state/AppState';
+import { StatusBar } from 'expo-status-bar';
 import { statusColor } from '@/data/territory';
 import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
 
@@ -179,6 +180,7 @@ export default function Run() {
 
   return (
     <View style={styles.root}>
+      <StatusBar style="light" />
       <View style={{ height: heroH }}>
         <Scene kind="city-night" seed={9} aspect={width / heroH} style={StyleSheet.absoluteFill} />
         <RunRoute progress={progress} style={StyleSheet.absoluteFill} />
@@ -187,7 +189,7 @@ export default function Run() {
       <View style={[styles.overlay, { paddingTop: insets.top + 8 }]}>
         <View style={styles.header}>
           <IconButton icon="chevron-down" size={26} onPress={() => router.back()} label="Minimise" />
-          <Display size={30} style={{ flex: 1, marginLeft: 10 }}>Running</Display>
+          <Display size={30} color={colors.onImage} style={{ flex: 1, marginLeft: 10 }}>Running</Display>
           <View style={[styles.gps, { borderColor: `${gpsPill.color}88` }]} accessibilityLabel={gpsPill.text}>
             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: gpsPill.color }}>{source === 'gps' && <Pulse size={8} color={gpsPill.color} />}</View>
             <Text style={[styles.gpsText, { color: gpsPill.color }]}>{gpsPill.text}</Text>
@@ -210,7 +212,7 @@ export default function Run() {
             <CityMap seed={4} route routeProgress={progress} style={StyleSheet.absoluteFill} />
           </View>
         </View>
-        <Tagline size={30} style={styles.tagline}>Just{'\n'}one more{'\n'}km</Tagline>
+        <Tagline size={30} color={colors.onImage} style={styles.tagline}>Just{'\n'}one more{'\n'}km</Tagline>
       </View>
 
       <View style={[styles.col, { flex: 1, justifyContent: 'flex-end', paddingBottom: insets.bottom + 18 }]}>
@@ -360,10 +362,10 @@ const styles = StyleSheet.create({
   gps: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(10,10,10,0.8)', borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1 },
   gpsText: { fontFamily: fonts.label, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', backgroundColor: 'rgba(10,10,10,0.75)', borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 6, maxWidth: 230 },
-  chipText: { color: colors.text, fontFamily: fonts.label, fontSize: 12, letterSpacing: 0.6, textTransform: 'uppercase', flexShrink: 1 },
+  chipText: { color: colors.onImage, fontFamily: fonts.label, fontSize: 12, letterSpacing: 0.6, textTransform: 'uppercase', flexShrink: 1 },
   mini: { width: 92, height: 92, borderRadius: 46, overflow: 'hidden', borderWidth: 2, borderColor: colors.primary, backgroundColor: colors.bg2 },
   tagline: { position: 'absolute', right: 22, top: 210, textAlign: 'right' },
-  panel: { backgroundColor: 'rgba(17,17,19,0.95)', borderRadius: radius.xl, borderWidth: 1, borderColor: colors.line, paddingTop: 16, paddingBottom: 12, paddingHorizontal: 12 },
+  panel: { backgroundColor: colors.bg, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.line, paddingTop: 16, paddingBottom: 12, paddingHorizontal: 12 },
   km: { color: colors.text, fontFamily: fonts.labelBold, fontSize: 64, lineHeight: 76, letterSpacing: 1 },
   kmUnit: { color: colors.primary, fontFamily: fonts.labelBold, fontSize: 24 },
   next: { color: colors.dim, fontFamily: fonts.mono, fontSize: 11, textAlign: 'center' },
@@ -382,7 +384,7 @@ const styles = StyleSheet.create({
   hint: { color: colors.mute, fontSize: 11, fontFamily: fonts.mono, textAlign: 'center', marginTop: 14 },
   overlayFull: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(10,10,10,0.9)', alignItems: 'center', justifyContent: 'center', padding: 20 },
   countText: { color: colors.primary, fontFamily: fonts.display, fontSize: 150 },
-  countSub: { color: colors.sub, fontFamily: fonts.mono, fontSize: 14, letterSpacing: 2, textTransform: 'uppercase' },
+  countSub: { color: colors.onImageSub, fontFamily: fonts.mono, fontSize: 14, letterSpacing: 2, textTransform: 'uppercase' },
   summary: { width: '100%', maxWidth: 420, alignItems: 'center', backgroundColor: colors.bg2, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.line, padding: 18 },
   verdict: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1.5, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 5, marginTop: 4 },
   verdictText: { fontFamily: fonts.label, fontSize: 13, letterSpacing: 1, textTransform: 'uppercase' },

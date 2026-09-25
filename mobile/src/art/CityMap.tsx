@@ -382,17 +382,17 @@ export const CityMap = React.memo(function CityMap(props: {
     <Svg width="100%" height="100%" viewBox="0 0 400 600" preserveAspectRatio="xMidYMid slice" style={style}>
       <Defs>
         <LinearGradient id={`${uid}park`} x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor="#232625" />
-          <Stop offset="1" stopColor="#353937" />
+          <Stop offset="0" stopColor="#0F3A2C" />
+          <Stop offset="1" stopColor="#145A3E" />
         </LinearGradient>
         <LinearGradient id={`${uid}water`} x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor="#242627" />
-          <Stop offset="0.5" stopColor="#2C2E2F" />
-          <Stop offset="1" stopColor="#222325" />
+          <Stop offset="0" stopColor="#0B2F40" />
+          <Stop offset="0.5" stopColor="#0D3B4E" />
+          <Stop offset="1" stopColor="#0A2A3C" />
         </LinearGradient>
         <RadialGradient id={`${uid}vig`} cx="0.5" cy="0.5" r="0.75">
-          <Stop offset="0.55" stopColor="#111111" stopOpacity={0} />
-          <Stop offset="1" stopColor="#080808" stopOpacity={0.75} />
+          <Stop offset="0.55" stopColor="#0B0A18" stopOpacity={0} />
+          <Stop offset="1" stopColor="#05060B" stopOpacity={0.75} />
         </RadialGradient>
         <RadialGradient id={`${uid}glow`} cx="0.5" cy="0.5" r="0.5">
           <Stop offset="0" stopColor={art.purple} stopOpacity={0.22} />
@@ -401,14 +401,14 @@ export const CityMap = React.memo(function CityMap(props: {
       </Defs>
 
       {/* base */}
-      <Rect x={-20} y={-20} width={440} height={640} fill="#111111" />
+      <Rect x={-20} y={-20} width={440} height={640} fill="#0B0A18" />
       <Ellipse cx={230} cy={300} rx={260} ry={300} fill={`url(#${uid}glow)`} />
 
       {/* streets + blocks */}
-      <Path d={geo.streets} stroke="#303031" strokeWidth={1.6} fill="none" />
-      <Path d={geo.blocks[0]} fill="#1E1E1F" stroke="#1E1E1F" strokeWidth={5} strokeLinejoin="round" />
-      <Path d={geo.blocks[1]} fill="#242425" stroke="#242425" strokeWidth={5} strokeLinejoin="round" />
-      <Path d={geo.blocks[2]} fill="#2B2A2D" stroke="#2B2A2D" strokeWidth={5} strokeLinejoin="round" />
+      <Path d={geo.streets} stroke="#23273E" strokeWidth={1.6} fill="none" />
+      <Path d={geo.blocks[0]} fill="#141729" stroke="#141729" strokeWidth={5} strokeLinejoin="round" />
+      <Path d={geo.blocks[1]} fill="#181B31" stroke="#181B31" strokeWidth={5} strokeLinejoin="round" />
+      <Path d={geo.blocks[2]} fill="#1D213A" stroke="#1D213A" strokeWidth={5} strokeLinejoin="round" />
       <Path d={geo.windows[0]} fill={art.amber} opacity={0.55} />
       <Path d={geo.windows[1]} fill={art.pinkHi} opacity={0.55} />
       <Path d={geo.windows[2]} fill={art.cyan} opacity={0.5} />
@@ -421,23 +421,23 @@ export const CityMap = React.memo(function CityMap(props: {
       {/* parks */}
       {geo.parks.map((d, i) => (
         <G key={i}>
-          <Path d={d} fill="#353937" opacity={0.25} stroke="#494F4D" strokeOpacity={0.35} strokeWidth={6} strokeLinejoin="round" />
-          <Path d={d} fill={`url(#${uid}park)`} stroke="#494F4D" strokeWidth={1.2} strokeLinejoin="round" />
+          <Path d={d} fill="#145A3E" opacity={0.25} stroke="#1E7A55" strokeOpacity={0.35} strokeWidth={6} strokeLinejoin="round" />
+          <Path d={d} fill={`url(#${uid}park)`} stroke="#1E7A55" strokeWidth={1.2} strokeLinejoin="round" />
         </G>
       ))}
-      <Path d={geo.trees[0]} fill="#414543" />
-      <Path d={geo.trees[1]} fill="#545957" />
-      <Ellipse cx={POND.cx} cy={POND.cy} rx={POND.rx} ry={POND.ry} fill="#2C2E2F" stroke="#676F70" strokeOpacity={0.6} strokeWidth={1.5} />
+      <Path d={geo.trees[0]} fill="#1B6B49" />
+      <Path d={geo.trees[1]} fill="#26875C" />
+      <Ellipse cx={POND.cx} cy={POND.cy} rx={POND.rx} ry={POND.ry} fill="#0D3B4E" stroke="#1FA3B8" strokeOpacity={0.6} strokeWidth={1.5} />
 
       {/* water */}
       <Path d={geo.river.body} fill={`url(#${uid}water)`} />
-      <Path d={geo.river.north} stroke="#676F70" strokeOpacity={0.18} strokeWidth={7} fill="none" />
-      <Path d={geo.river.south} stroke="#676F70" strokeOpacity={0.18} strokeWidth={7} fill="none" />
-      <Path d={geo.river.north} stroke="#798384" strokeOpacity={0.7} strokeWidth={1.4} fill="none" />
-      <Path d={geo.river.south} stroke="#798384" strokeOpacity={0.7} strokeWidth={1.4} fill="none" />
+      <Path d={geo.river.north} stroke="#1FA3B8" strokeOpacity={0.18} strokeWidth={7} fill="none" />
+      <Path d={geo.river.south} stroke="#1FA3B8" strokeOpacity={0.18} strokeWidth={7} fill="none" />
+      <Path d={geo.river.north} stroke="#27C3D6" strokeOpacity={0.7} strokeWidth={1.4} fill="none" />
+      <Path d={geo.river.south} stroke="#27C3D6" strokeOpacity={0.7} strokeWidth={1.4} fill="none" />
       <Path
         d="M40 402 C70 392 90 380 100 368 M150 344 C170 336 186 332 196 331 M250 300 C270 296 290 284 305 270 M330 250 C350 243 370 238 392 234"
-        stroke="#949EA0"
+        stroke="#35DFFF"
         strokeOpacity={0.22}
         strokeWidth={1.2}
         strokeDasharray="6 8"
@@ -446,7 +446,7 @@ export const CityMap = React.memo(function CityMap(props: {
 
       {/* bridge + cyan boulevard */}
       <Path d={BRIDGE_D} transform="translate(2 3)" fill="#000000" opacity={0.5} />
-      <Path d={BRIDGE_D} fill="#333335" stroke="#4A4A4C" strokeWidth={1.5} strokeLinejoin="round" />
+      <Path d={BRIDGE_D} fill="#252943" stroke="#373C5F" strokeWidth={1.5} strokeLinejoin="round" />
       <Path d="M190.5 272 L192.5 374 M210 272 L212 374" stroke={art.violet} strokeWidth={1.4} strokeOpacity={0.9} />
       <Path d={`${circ(191, 290, 1.4)} ${circ(191.6, 312, 1.4)} ${circ(192, 334, 1.4)} ${circ(192.3, 356, 1.4)} ${circ(210.5, 290, 1.4)} ${circ(211, 312, 1.4)} ${circ(211.4, 334, 1.4)} ${circ(211.8, 356, 1.4)}`} fill={art.sunTop} />
       <Neon d={CYAN_AVE} color={art.cyan} w={0.9} />
@@ -460,7 +460,7 @@ export const CityMap = React.memo(function CityMap(props: {
           <AnimatedPath d={ROUTE_D} stroke={art.route} strokeOpacity={0.16} strokeWidth={16} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} strokeDashoffset={offset} />
           <AnimatedPath d={ROUTE_D} stroke={art.route} strokeOpacity={0.4} strokeWidth={8} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} strokeDashoffset={offset} />
           <AnimatedPath d={ROUTE_D} stroke={art.route} strokeWidth={4} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} strokeDashoffset={offset} />
-          <AnimatedPath d={ROUTE_D} stroke="#FFEEE1" strokeWidth={1.3} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} strokeDashoffset={offset} />
+          <AnimatedPath d={ROUTE_D} stroke="#E1E8FF" strokeWidth={1.3} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} strokeDashoffset={offset} />
 
           {/* start */}
           <Circle cx={start.x} cy={start.y} r={11} fill={art.route} opacity={0.18} />
@@ -578,7 +578,7 @@ export const RunRoute = React.memo(function RunRoute(props: { progress?: Animate
       {/* completed part: glow + body + hot core */}
       {shapes.glow ? <Path d={shapes.glow} fill={art.route} opacity={0.16} /> : null}
       {shapes.done ? <Path d={shapes.done} fill={`url(#${uid}fade)`} /> : null}
-      {shapes.core ? <Path d={shapes.core} fill="#FFF1E6" opacity={0.85} /> : null}
+      {shapes.core ? <Path d={shapes.core} fill="#E6ECFF" opacity={0.85} /> : null}
 
       {/* current position */}
       <Ellipse cx={head.x} cy={head.y} rx={hw * 3.2} ry={hw * 2.2} fill={`url(#${uid}hg)`} />

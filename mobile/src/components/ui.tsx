@@ -132,7 +132,7 @@ export function Tagline({ children, size = 20, color = colors.text, rotate = -6,
       style={[
         { fontFamily: fonts.script, fontSize: size, lineHeight: size * 1.18, color, transform: [{ rotate: `${rotate}deg` }] },
         { textTransform: 'uppercase' },
-        glow && { textShadowColor: 'rgba(255,107,0,0.6)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
+        glow && { textShadowColor: 'rgba(47,91,255,0.6)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
         style,
       ]}>
       {children}
@@ -304,7 +304,7 @@ export function ProgressBar({ progress, color = colors.primary, color2, height =
     Animated.timing(v, { toValue: p, duration: 800, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
   }, [p, v]);
   return (
-    <View style={[{ height, borderRadius: height, backgroundColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' }, style]}>
+    <View style={[{ height, borderRadius: height, backgroundColor: colors.line, overflow: 'hidden' }, style]}>
       <Animated.View style={{ width: v.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }), height: '100%', borderRadius: height, overflow: 'hidden' }}>
         <LinearGradient colors={[color, color2 ?? color]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
       </Animated.View>
@@ -312,13 +312,13 @@ export function ProgressBar({ progress, color = colors.primary, color2, height =
   );
 }
 
-export function XPBar({ value, max, style, showLabel = true }: { value: number; max: number; style?: StyleProp<ViewStyle>; showLabel?: boolean }) {
+export function XPBar({ value, max, style, showLabel = true, onImage }: { value: number; max: number; style?: StyleProp<ViewStyle>; showLabel?: boolean; onImage?: boolean }) {
   return (
     <View style={style}>
       <ProgressBar progress={value / max} color={colors.primary} color2={colors.violet} height={8} />
       {showLabel && (
-        <Text style={{ color: colors.dim, fontFamily: fonts.semibold, fontSize: 11, marginTop: 4 }}>
-          <Text style={{ color: colors.text }}>{value.toLocaleString('en-IN')}</Text> / {max.toLocaleString('en-IN')} XP
+        <Text style={{ color: onImage ? colors.onImageSub : colors.dim, fontFamily: fonts.semibold, fontSize: 11, marginTop: 4 }}>
+          <Text style={{ color: onImage ? colors.onImage : colors.text }}>{value.toLocaleString('en-IN')}</Text> / {max.toLocaleString('en-IN')} XP
         </Text>
       )}
     </View>
@@ -340,7 +340,7 @@ export function Ring({ progress, size = 64, stroke = 7, color = colors.primary, 
             <Stop offset="1" stopColor={color2 ?? color} />
           </SvgGradient>
         </Defs>
-        <Circle cx={size / 2} cy={size / 2} r={r} stroke="rgba(255,255,255,0.08)" strokeWidth={stroke} fill="none" />
+        <Circle cx={size / 2} cy={size / 2} r={r} stroke={colors.line} strokeWidth={stroke} fill="none" />
         <Circle
           cx={size / 2}
           cy={size / 2}
@@ -416,7 +416,7 @@ export function Tag({ label, icon, color = colors.primary }: { label: string; ic
 }
 
 export function Scrim({ style, strong }: { style?: StyleProp<ViewStyle>; strong?: boolean }) {
-  return <LinearGradient pointerEvents="none" colors={strong ? ['rgba(10,10,10,0.1)', 'rgba(10,10,10,0.75)', '#0A0A0A'] : gradients.scrim} style={[StyleSheet.absoluteFill, style]} />;
+  return <LinearGradient pointerEvents="none" colors={strong ? ['rgba(8,12,24,0.1)', 'rgba(8,12,24,0.75)', 'rgba(8,12,24,0.96)'] : gradients.scrim} style={[StyleSheet.absoluteFill, style]} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -471,13 +471,13 @@ export function EmptyState({ title, body, art, action, onAction }: { title: stri
 const styles = StyleSheet.create({
   glow: { shadowColor: colors.primary, shadowOpacity: 0.45, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 10 },
   btn: { borderRadius: radius.pill, paddingHorizontal: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  btnSecondary: { borderWidth: 1.5, borderColor: '#4A4A4F', backgroundColor: 'rgba(0,0,0,0.55)' },
+  btnSecondary: { borderWidth: 1.5, borderColor: colors.lineHi, backgroundColor: colors.bg },
   btnGhost: { backgroundColor: colors.cardHi, borderWidth: 1, borderColor: colors.line },
-  iconBtn: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  iconBtn: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line },
   badge: { position: 'absolute', top: -2, right: -2, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: colors.bg },
   badgeText: { color: colors.onPrimary, fontSize: 9, fontFamily: fonts.bold },
   pill: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 8, minWidth: 82 },
-  pillOn: { backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: colors.lineHi },
+  pillOn: { backgroundColor: colors.cardHi, borderWidth: 1, borderColor: colors.lineHi },
   pillText: { fontFamily: fonts.label, fontSize: 13, letterSpacing: 1, textTransform: 'uppercase' },
   search: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.glass, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, paddingLeft: 14, paddingRight: 6, height: 48 },
   searchInput: { flex: 1, color: colors.text, marginLeft: 8, fontFamily: fonts.regular, fontSize: 14, height: '100%' },
@@ -489,7 +489,7 @@ const styles = StyleSheet.create({
   segItem: { flex: 1, alignItems: 'center', paddingVertical: 10 },
   segText: { color: colors.sub, fontFamily: fonts.label, fontSize: 14, letterSpacing: 0.8, textTransform: 'uppercase' },
   card: { backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, padding: 14 },
-  tag: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: colors.line, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: radius.pill, paddingHorizontal: 11, paddingVertical: 6 },
+  tag: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card, borderRadius: radius.pill, paddingHorizontal: 11, paddingVertical: 6 },
   tagText: { color: colors.text, fontSize: 12, fontFamily: fonts.label, letterSpacing: 0.8, textTransform: 'uppercase' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 50, gap: 8 },
 });

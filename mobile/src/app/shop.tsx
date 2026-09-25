@@ -28,7 +28,7 @@ export default function Shop() {
 
       <SceneImage kind="rooftop" seed={99} height={170} scrim={false}>
         <View style={{ position: 'absolute', left: 16, top: 16 }}>
-          <Tagline size={30} rotate={-5}>Wear{'\n'}your{'\n'}progress</Tagline>
+          <Tagline size={30} rotate={-5} color={colors.onImage}>Wear{'\n'}your{'\n'}progress</Tagline>
         </View>
         <View style={{ position: 'absolute', right: 12, bottom: -6 }}>
           <Character look={look} pose="flex" height={176} />
@@ -48,7 +48,7 @@ export default function Shop() {
         ))}
       </View>
 
-      <Tagline size={22} style={{ textAlign: 'center', marginTop: 20 }}>Look good. Feel good.</Tagline>
+      <Tagline size={22} color={colors.primary} style={{ textAlign: 'center', marginTop: 20 }}>Look good. Feel good.</Tagline>
       <Text style={styles.foot}>Coins come from missions, runs and events. No real money, ever.</Text>
     </Screen>
   );

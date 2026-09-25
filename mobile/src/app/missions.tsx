@@ -66,7 +66,7 @@ export default function Missions() {
       <SceneImage kind="city-sunset" seed={31} height={170} style={{ marginTop: 22 }} scrim={false}>
         <Mascot pose="run" size={170} style={{ position: 'absolute', right: -4, bottom: -12 }} animated />
         <View style={{ position: 'absolute', left: 16, top: 26 }}>
-          <Tagline size={24}>Discipline{'\n'}today.</Tagline>
+          <Tagline size={24} color={colors.onImage}>Discipline{'\n'}today.</Tagline>
           <Tagline size={18} color={colors.primarySoft} style={{ marginTop: 6 }}>A bigger you{'\n'}tomorrow.</Tagline>
         </View>
       </SceneImage>

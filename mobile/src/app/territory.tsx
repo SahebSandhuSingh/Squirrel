@@ -80,7 +80,7 @@ export default function Territory() {
                 key={d.id}
                 onPress={() => { tap(); setSelId(d.id); }}
                 accessibilityLabel={`${d.name}, ${statusLabel[d.status]}`}
-                style={[styles.zoneLabel, { left: p.left - 58, top: p.top - 18, borderColor: statusColor[d.status] }, on && { backgroundColor: d.status === 'yours' ? colors.primary : colors.card }]}>
+                style={[styles.zoneLabel, { left: p.left - 58, top: p.top - 18, borderColor: statusColor[d.status] }, on && { backgroundColor: d.status === 'yours' ? colors.primary : colors.cardHi }]}>
                 <Text style={[styles.zoneName, on && d.status === 'yours' && { color: colors.onPrimary }]} numberOfLines={1}>{d.name}</Text>
                 <Text style={[styles.zoneMeta, { color: on && d.status === 'yours' ? colors.onPrimary : statusColor[d.status] }]} numberOfLines={1}>
                   {d.status === 'yours' ? `Your crew · ${Math.round(d.control * 100)}%` : d.status === 'rival' ? d.rivalCrew : statusLabel[d.status]}
@@ -156,8 +156,8 @@ const styles = StyleSheet.create({
   stat: { flex: 1 },
   statV: { color: colors.text, fontFamily: fonts.labelBold, fontSize: 22 },
   statL: { color: colors.dim, fontFamily: fonts.mono, fontSize: 10, letterSpacing: 1, textTransform: 'uppercase' },
-  map: { height: 380, marginTop: 16, borderRadius: radius.lg, overflow: 'hidden', borderWidth: 1, borderColor: colors.line, backgroundColor: colors.bg2 },
-  zoneLabel: { position: 'absolute', width: 116, backgroundColor: 'rgba(10,10,10,0.88)', borderWidth: 1.5, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 4 },
+  map: { height: 380, marginTop: 16, borderRadius: radius.lg, overflow: 'hidden', borderWidth: 1, borderColor: colors.line, backgroundColor: '#0A0C19' },
+  zoneLabel: { position: 'absolute', width: 116, backgroundColor: 'rgba(255,255,255,0.95)', borderWidth: 1.5, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 4 },
   zoneName: { color: colors.text, fontFamily: fonts.label, fontSize: 12, letterSpacing: 0.8, textTransform: 'uppercase' },
   zoneMeta: { fontFamily: fonts.mono, fontSize: 9 },
   legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: 12 },

@@ -11,13 +11,13 @@ import type { MascotAccessory, MascotPose } from '@/types';
 
 type Pt = readonly [number, number];
 
-const HOOD = '#171717';
-const HOOD_LIT = '#272728';
-const HOOD_HI = '#3B3B3C';
+const HOOD = '#11131D';
+const HOOD_LIT = '#1E2031';
+const HOOD_HI = '#2F3248';
 const GOLD_DARK = '#C98E12';
-const MOUTH = '#4A2D14';
-const EYE = '#1A130E';
-const LENS = '#141415';
+const MOUTH = '#14214A';
+const EYE = '#0E111A';
+const LENS = '#0C0E1D';
 const INNER_EAR = '#F4B38A';
 
 const f = (n: number) => Math.round(n * 100) / 100;
@@ -248,7 +248,7 @@ function Sneaker({ x, y, dir, rot }: { x: number; y: number; dir: number; rot: n
   const o = dir * 2.5;
   return (
     <G transform={rot ? `rotate(${rot} ${x} ${y})` : undefined}>
-      <Rect x={x - 12 + o} y={y + 2} width={24} height={6.5} rx={3.2} fill="#E4E3E4" />
+      <Rect x={x - 12 + o} y={y + 2} width={24} height={6.5} rx={3.2} fill="#DBDDEC" />
       <Path
         d={`M${x - 11 + o},${y + 4} C${x - 11 + o},${y - 7} ${x - 3 + o},${y - 9} ${x + 1 + o},${y - 8.5} C${x + 8 + o},${y - 8} ${x + 12 + o},${y - 3} ${x + 12 + o},${y + 4}Z`}
         fill={art.white}
@@ -357,7 +357,7 @@ function Eyes({ kind }: { kind: Eyes }) {
   const one = (cx: number, mirror: boolean) => (
     <G key={cx}>
       <Ellipse cx={cx} cy={72} rx={8.4} ry={ry} fill={EYE} />
-      <Ellipse cx={cx} cy={76} rx={5.6} ry={5.5} fill="#3B291D" />
+      <Ellipse cx={cx} cy={76} rx={5.6} ry={5.5} fill="#1D243B" />
       <Circle cx={cx - 2.8} cy={67.5} r={3.2} fill={art.white} />
       <Circle cx={cx + 2.6} cy={77} r={1.4} fill={art.white} />
       {kind === 'relaxed' ? (
@@ -442,7 +442,7 @@ function Sunglasses({ uid, up }: { uid: string; up: boolean }) {
       <Defs>
         <LinearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
           <Stop offset="0" stopColor={LENS} />
-          <Stop offset="1" stopColor="#323034" />
+          <Stop offset="1" stopColor="#181F4C" />
         </LinearGradient>
         <LinearGradient id={glid} x1="0" y1="0" x2="1" y2="1">
           <Stop offset="0" stopColor={art.cyan} />
@@ -561,7 +561,7 @@ function Bottle() {
       <Rect x={-3} y={-2} width={6} height={6} rx={2} fill={art.white} />
       <Rect x={-6} y={3} width={12} height={7} rx={2} fill={art.pink} />
       <Rect x={-9} y={9} width={18} height={38} rx={6} fill={art.cyan} />
-      <Rect x={-9} y={22} width={18} height={10} fill="#6D7577" />
+      <Rect x={-9} y={22} width={18} height={10} fill="#1BA8C9" />
       <Rect x={-5.5} y={12} width={3.2} height={30} rx={1.6} fill={art.white} opacity={0.55} />
     </G>
   );
@@ -574,9 +574,9 @@ function Barbell() {
       <Path d="M24,78.6 L176,78.6" stroke={art.cloud} strokeWidth={1.4} strokeLinecap="round" opacity={0.7} />
       {[false, true].map((m) => (
         <G key={m ? 'r' : 'l'} transform={m ? 'translate(200,0) scale(-1,1)' : undefined}>
-          <Rect x={26} y={58} width={12} height={44} rx={3} fill="#252426" />
+          <Rect x={26} y={58} width={12} height={44} rx={3} fill="#151935" />
           <Rect x={35} y={58} width={3} height={44} rx={1.5} fill={art.pink} />
-          <Rect x={16} y={66} width={10} height={28} rx={3} fill="#252426" />
+          <Rect x={16} y={66} width={10} height={28} rx={3} fill="#151935" />
           <Rect x={23} y={66} width={3} height={28} rx={1.5} fill={art.cyan} />
         </G>
       ))}

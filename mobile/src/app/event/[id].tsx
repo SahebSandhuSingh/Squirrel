@@ -42,7 +42,7 @@ export default function EventDetail() {
               <Icon name="star-four-points" size={13} color={colors.gold} />
               <Text style={styles.xpText}>+{event.xp} XP on check-in</Text>
             </View>
-            <Display size={40}>{event.title}</Display>
+            <Display size={40} color={colors.onImage}>{event.title}</Display>
             <Text style={styles.host}>Hosted by {event.host}</Text>
           </View>
         </View>
@@ -107,14 +107,14 @@ const styles = StyleSheet.create({
   heroText: { position: 'absolute', left: 16, right: 16, bottom: 16 },
   xp: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', backgroundColor: 'rgba(10,10,10,0.7)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill, marginBottom: 6 },
   xpText: { color: colors.gold, fontFamily: fonts.bold, fontSize: 12 },
-  host: { color: colors.sub, fontFamily: fonts.medium, fontSize: 14 },
+  host: { color: colors.onImageSub, fontFamily: fonts.medium, fontSize: 14 },
   col: { paddingHorizontal: 16, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center', marginTop: 16 },
   divider: { height: 1, backgroundColor: colors.line, marginVertical: 12 },
-  rowIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,107,0,0.12)', alignItems: 'center', justifyContent: 'center' },
+  rowIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(47,91,255,0.12)', alignItems: 'center', justifyContent: 'center' },
   rowTitle: { color: colors.text, fontFamily: fonts.bold, fontSize: 15 },
   rowSub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, marginTop: 1 },
   body: { color: colors.sub, fontFamily: fonts.regular, fontSize: 15, lineHeight: 22 },
   map: { height: 180, borderRadius: radius.lg, overflow: 'hidden', borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
   pin: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#fff' },
-  footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 12, backgroundColor: 'rgba(10,10,10,0.95)', borderTopWidth: 1, borderTopColor: colors.line },
+  footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 12, backgroundColor: 'rgba(255,255,255,0.97)', borderTopWidth: 1, borderTopColor: colors.line },
 });

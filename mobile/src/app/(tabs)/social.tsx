@@ -99,7 +99,7 @@ export default function Social() {
                     <View style={{ position: 'absolute', left: 16, right: 16, bottom: 14, flexDirection: 'row', alignItems: 'flex-end' }}>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.kicker}>{myCrews.length ? `${myCrews.length} crew${myCrews.length > 1 ? 's' : ''} joined` : 'Better together'}</Text>
-                        <Display size={26}>Find your crew</Display>
+                        <Display size={26} color={colors.onImage}>Find your crew</Display>
                         <Text style={styles.sub}>{crews.length} crews in {city.name} & online</Text>
                       </View>
                       <View style={styles.arrow}>
@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
   addStory: { position: 'absolute', right: 0, bottom: 0, width: 22, height: 22, borderRadius: 11, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.bg },
   storyName: { color: colors.sub, fontFamily: fonts.medium, fontSize: 11, marginTop: 6 },
   nearbyNote: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, marginBottom: 12 },
-  kicker: { color: colors.secondary, fontFamily: fonts.bold, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },
-  sub: { color: colors.sub, fontFamily: fonts.medium, fontSize: 12 },
+  kicker: { color: colors.primarySoft, fontFamily: fonts.bold, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },
+  sub: { color: colors.onImageSub, fontFamily: fonts.medium, fontSize: 12 },
   arrow: { width: 46, height: 46, borderRadius: radius.md, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
 });

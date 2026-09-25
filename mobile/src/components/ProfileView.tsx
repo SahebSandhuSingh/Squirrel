@@ -67,7 +67,7 @@ export function ProfileView({ user, isMe }: { user: User; isMe: boolean }) {
         <View style={[styles.topBar, { top: insets.top + 8 }]}>
           {isMe ? (
             <View style={styles.cityPill}>
-              <Icon name="map-marker" size={13} color={colors.secondary} />
+              <Icon name="map-marker" size={13} color={colors.primarySoft} />
               <Text style={styles.cityPillText}>{user.area}</Text>
             </View>
           ) : (
@@ -261,7 +261,7 @@ function AccountRow() {
         if (live) await signOut();
         router.push('/sign-in');
       }}
-      style={[styles.badgeRow, { marginTop: 16, borderColor: live ? 'rgba(255,107,0,0.4)' : colors.line }]}
+      style={[styles.badgeRow, { marginTop: 16, borderColor: live ? 'rgba(47,91,255,0.4)' : colors.line }]}
       accessibilityLabel={live ? 'Sign out' : 'Sign in to sync'}>
       <Icon name={live ? 'cloud-check-outline' : 'cloud-off-outline'} size={22} color={live ? colors.primary : colors.dim} />
       <View style={{ flex: 1, marginLeft: 10 }}>
@@ -277,7 +277,7 @@ const styles = StyleSheet.create({
   col: { paddingHorizontal: 16, width: '100%', maxWidth: MAXW, alignSelf: 'center' },
   topBar: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cityPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(10,10,10,0.6)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.pill },
-  cityPillText: { color: colors.text, fontFamily: fonts.semibold, fontSize: 12 },
+  cityPillText: { color: colors.onImage, fontFamily: fonts.semibold, fontSize: 12 },
   stats: { flex: 1, flexDirection: 'row', paddingBottom: 10, marginLeft: 6 },
   statV: { color: colors.text, fontFamily: fonts.display, fontSize: 22 },
   statL: { color: colors.dim, fontFamily: fonts.medium, fontSize: 12 },

@@ -51,15 +51,15 @@ Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-h
 | `/city` | City picker |
 | `/notifications` | Activity notifications |
 
-## Look & feel — "Blackout" (orange · black · white)
+## Look & feel — "Voltage" (white + electric blue)
 
-High-contrast streetwear energy for a Gen-Z / college crowd, with GTA-style type:
-- **Canvas:** pure black `#0A0A0A`, with charcoal cards (`#161616` / `#1F1F1F`, border `#2A2A2A`).
-- **Colours:** **blaze orange `#FF6B00`** for every action and everything that's "yours" (your territory, your rank, your route); **white** as the second voice; amber `#FFB020` for rewards and coins. Territory: yours = orange, rival = white, contested = amber.
-- **Art:** the illustration library is recoloured to match: charcoal cities, orange sunsets and lights, neutral grey-white neon. Skin, hair and mascot fur are unchanged.
+A bright, clean **light** theme for a Gen-Z / college crowd, with GTA-style type:
+- **Canvas:** white `#FFFFFF`, with soft blue-grey cards (`#F4F6FB` / `#E9EDF7`, border `#E1E6F0`) and near-black ink text `#0B0F1A`.
+- **Colours:** **electric blue `#2F5BFF`** for every action and everything that's "yours" (your territory, your rank, your route); ink as the second voice; amber `#FFB020` for coins and rewards; pink `#FF4D8D` for rivals.
+- **Art:** the city illustrations stay dark (a blue-hour city: electric-blue neon, indigo skies, amber sun and windows). Anything drawn on top of artwork uses `colors.onImage` (white) and dark `imageChip` chips, so it stays readable.
 - **Type:** Anton for headlines and big numbers (heavy, condensed, slanted −6° like GTA title cards). Barlow Condensed for labels, buttons and italic callouts; Inter for body text.
   - These are free Google Fonts lookalikes: GTA's own fonts are proprietary or commercial.
-- **Brand:** the squirrel-with-dumbbell logo (`assets/brand/logo.png`) is used in the in-app header and as the app icon, splash and favicon. The Welcome screen uses a text wordmark and the waving mascot.
+- **Brand:** the squirrel-with-dumbbell logo is the app icon (on electric blue), the splash and the favicon, and appears in the in-app header. The Welcome screen uses a text wordmark and the waving mascot.
 
 All UI tokens live in `src/theme.ts`; illustration colours live in `src/art/palette.ts`.
 

@@ -8,7 +8,7 @@ import { heatmap, recentActivities, stats, type Period } from '@/data/stats';
 import { colors, fonts, radius } from '@/theme';
 
 const PERIODS: Period[] = ['Day', 'Week', 'Month', 'Year'];
-const HEAT = ['rgba(255,255,255,0.05)', 'rgba(255,107,0,0.25)', 'rgba(255,107,0,0.45)', 'rgba(255,107,0,0.7)', '#FF6B00'];
+const HEAT = ['rgba(255,255,255,0.05)', 'rgba(47,91,255,0.25)', 'rgba(47,91,255,0.45)', 'rgba(47,91,255,0.7)', '#2F5BFF'];
 
 /** YOUR PROGRESS — fitness-game analytics dashboard. */
 export default function Progress() {
@@ -97,7 +97,7 @@ export default function Progress() {
       </View>
 
       <SceneImage kind="city-dawn" seed={77} height={160} style={{ marginTop: 20 }} scrim={false}>
-        <Tagline size={22} style={{ position: 'absolute', left: 16, top: 28 }}>
+        <Tagline size={22} color={colors.onImage} style={{ position: 'absolute', left: 16, top: 28 }}>
           Consistency{'\n'}looks good{'\n'}on you.
         </Tagline>
         <Mascot pose="drink" size={160} animated style={{ position: 'absolute', right: -4, bottom: -12 }} />

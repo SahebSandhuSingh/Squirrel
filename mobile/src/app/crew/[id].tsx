@@ -37,7 +37,7 @@ export default function CrewDetail() {
           <View style={[styles.badge, { backgroundColor: crew.color }]}>
             <Icon name={crew.icon} size={28} color={colors.onSecondary} />
           </View>
-          <Display size={36} style={{ marginTop: 10 }}>{crew.name}</Display>
+          <Display size={36} color={colors.onImage} style={{ marginTop: 10 }}>{crew.name}</Display>
           <Text style={styles.sub}>{crew.tagline}</Text>
         </View>
       </View>
@@ -79,6 +79,6 @@ const styles = StyleSheet.create({
   col: { paddingHorizontal: 16, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center', marginTop: 14 },
   heroText: { position: 'absolute', left: 16, right: 16, bottom: 14, maxWidth: MAX_WIDTH, alignSelf: 'center' },
   badge: { width: 58, height: 58, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: 'rgba(255,255,255,0.2)' },
-  sub: { color: colors.sub, fontFamily: fonts.medium, fontSize: 14 },
+  sub: { color: colors.onImageSub, fontFamily: fonts.medium, fontSize: 14 },
   member: { color: colors.sub, fontFamily: fonts.medium, fontSize: 12, marginTop: 8 },
 });

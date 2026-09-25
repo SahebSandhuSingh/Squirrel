@@ -1,50 +1,58 @@
 /**
- * Design tokens — "Blackout": orange, black and white. High-contrast streetwear energy
- * for a Gen-Z / college crowd. Pure-black canvas, blaze ORANGE for every action and
- * everything that's "yours", crisp WHITE as the second voice, amber for rewards.
+ * Design tokens — "Voltage": white + electric blue. A bright, clean LIGHT theme for a
+ * Gen-Z / college crowd. White canvas, soft blue-grey cards, ELECTRIC BLUE for every action
+ * and everything that's "yours", near-black ink for text, amber for coins/rewards.
+ * The city artwork stays dark, so anything drawn on top of it uses `onImage` (white).
  * Type is heavy, condensed and slanted (GTA-style title cards).
  */
 export const colors = {
-  bg: '#0A0A0A',
-  bg2: '#111111',
-  card: '#161616',
-  cardHi: '#1F1F1F',
-  glass: 'rgba(22,22,22,0.9)',
-  line: '#2A2A2A',
-  lineHi: '#3D3D3D',
+  bg: '#FFFFFF',
+  bg2: '#F4F6FB',
+  card: '#F4F6FB',
+  cardHi: '#E9EDF7',
+  glass: 'rgba(255,255,255,0.94)',
+  line: '#E1E6F0',
+  lineHi: '#C7CFE0',
 
-  /** Primary action / "yours" colour — blaze orange. */
-  primary: '#FF6B00',
-  primarySoft: '#FF9A4D',
-  primaryDeep: '#D95500',
-  /** Secondary voice — white. */
-  secondary: '#FFFFFF',
+  /** Primary action / "yours" colour — electric blue. */
+  primary: '#2F5BFF',
+  primarySoft: '#7090FF',
+  primaryDeep: '#1B3FD6',
+  /** Secondary voice — ink. */
+  secondary: '#0B0F1A',
   orange: '#FF8A00',
-  pink: '#FF8A4C',
-  purple: '#FF6B00',
-  violet: '#BDBDBD',
-  blue: '#E0E0E0',
+  pink: '#FF4D8D',
+  purple: '#2F5BFF',
+  violet: '#7090FF',
+  blue: '#00B2FF',
   gold: '#FFB020',
-  coral: '#FF4D2E',
-  green: '#FFFFFF',
+  coral: '#FF4D4D',
+  green: '#12B76A',
 
-  text: '#FFFFFF',
-  sub: '#D4D4D4',
-  dim: '#9A9A9A',
-  mute: '#666666',
-  onPrimary: '#0A0A0A',
-  onSecondary: '#0A0A0A',
+  text: '#0B0F1A',
+  sub: '#3A4256',
+  dim: '#6B7489',
+  mute: '#A0A8BA',
+  onPrimary: '#FFFFFF',
+  onSecondary: '#FFFFFF',
+
+  /** Text / icons drawn on top of the (dark) city artwork and photos. */
+  onImage: '#FFFFFF',
+  onImageSub: 'rgba(255,255,255,0.82)',
+  /** Dark translucent chip used on top of artwork. */
+  imageChip: 'rgba(8,12,24,0.72)',
 };
 
 export const gradients = {
-  primary: ['#FF9A4D', '#FF6B00', '#E05A00'] as const,
-  secondary: ['#FFFFFF', '#F2F2F2', '#DADADA'] as const,
-  purple: ['#FF9A4D', '#FF6B00', '#D95500'] as const,
+  primary: ['#5A7BFF', '#2F5BFF', '#1B3FD6'] as const,
+  secondary: ['#2A3142', '#0B0F1A', '#000000'] as const,
+  purple: ['#5A7BFF', '#2F5BFF', '#1B3FD6'] as const,
   gold: ['#FFD27A', '#FFB020', '#E08E00'] as const,
-  sunset: ['#1D1C1E', '#7A3E14', '#E86646', '#FF994D'] as const,
-  screen: ['#111111', '#0A0A0A'] as const,
-  card: ['#1A1A1A', '#161616'] as const,
-  scrim: ['rgba(10,10,10,0)', 'rgba(10,10,10,0.65)', 'rgba(10,10,10,0.96)'] as const,
+  sunset: ['#1D1C1E', '#1B3FD6', '#2F5BFF', '#7090FF'] as const,
+  screen: ['#FFFFFF', '#F7F9FD'] as const,
+  card: ['#FFFFFF', '#F4F6FB'] as const,
+  /** Always dark: used over artwork so white text stays legible. */
+  scrim: ['rgba(8,12,24,0)', 'rgba(8,12,24,0.6)', 'rgba(8,12,24,0.92)'] as const,
 };
 
 /** GTA-style type: heavy condensed headlines, condensed (often italic) labels, clean body. */
