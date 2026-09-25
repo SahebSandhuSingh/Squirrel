@@ -71,8 +71,8 @@ This follows the *Frontend ↔ Backend Compatibility Assessment*.
 |---|---|
 | **Install** | `package.json` pins Expo SDK 57 / expo-router 57; the stray `"undefined"` dependency is gone |
 | **Auth** | `src/auth/AuthProvider.tsx`: sign-in screen, token in SecureStore, `Authorization: Bearer` on every call. Needs an account service (`EXPO_PUBLIC_AUTH_URL`) — none exists yet. Until then: demo mode, or paste a developer token |
-| **API layer** | `src/api/`: `POST /v1/runs` → points → `/finish` → `GET /v1/runs/:id`, `GET /v1/users/me/xp`, `GET /v1/leaderboard`. **Field names are assumptions** — confirm them in `src/api/endpoints.ts` once the backend schema is shared |
-| **Runs** | Real GPS via `expo-location` (accuracy/jump filtering, auto-pause). Signed in, the run uploads and the **server's** distance, verdict and XP are shown. Without GPS (web, or permission denied), a clearly labelled demo simulation runs |
+| **API layer** | `src/api/`, matched to the verified Run Module contract: `POST /v1/runs` → `{run_id}`; points in batches of 500 with `seq` (index in the full array), `lng`, `recorded_at`, required `accuracy_m`, and a seq-range `idempotency_key`; `/finish` is async, so the app polls `GET /v1/runs/:id` with backoff until `finalized` / `flagged` / `rejected`. XP comes from `GET /v1/users/me/xp`; the leaderboard uses `scope=global&metric=area&window=…` with `me` + `next_cursor`. 429s are retried after `Retry-After`. Items still marked `ASSUMPTION` in `endpoints.ts`: the create body, the `stats` keys, the `territory` shape, and whether leaderboard score is m² |
+| **Runs** | Real GPS via `expo-location` (accuracy/jump filtering, auto-pause). Signed in, the run uploads and the **server's** distance, status and territory are shown; XP earned is the before/after difference from `/users/me/xp`. Without GPS (web, or permission denied), a clearly labelled demo simulation runs |
 | **XP** | Local estimate uses the backend's rules (50 + 10/km + 25 territory, 150/day run cap). Signed in, the server total replaces it. Levels are derived client-side (2,000 XP each) |
 | **Anti-cheat** | Run summary shows *accepted / flagged / rejected* (server verdict when live, local plausibility check otherwise) |
 | **Territory** | New `/territory` screen (zones, control %, rivals, contested, 14-day decay) and area-based leaderboard (`/leaderboard`). Demo data until the territory endpoints are wired |
@@ -115,6 +115,6 @@ assets/                App icon, splash, and PNG exports of the illustration set
 
 ## Notes
 
-- Run distance is simulated from pace. Wire in `expo-location` for real GPS.
+- Without GPS (web, or permission denied) run distance is simulated from pace.
 - The Explore map is illustrative. A real tile map (`react-native-maps`) would need a development build.
 - State is in memory and resets on reload.

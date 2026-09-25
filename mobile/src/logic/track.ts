@@ -25,7 +25,7 @@ export type TrackState = { points: Fix[]; meters: number; movingSec: number; rej
 export const emptyTrack = (): TrackState => ({ points: [], meters: 0, movingSec: 0, rejected: 0 });
 
 export function addFix(s: TrackState, f: Fix): TrackState {
-  if (f.accuracy != null && f.accuracy > MAX_ACCURACY_M) return { ...s, rejected: s.rejected + 1 };
+  if (f.accuracy == null || f.accuracy > MAX_ACCURACY_M) return { ...s, rejected: s.rejected + 1 };
   const last = s.points[s.points.length - 1];
   if (!last) return { ...s, points: [f] };
   const dt = (f.t - last.t) / 1000;

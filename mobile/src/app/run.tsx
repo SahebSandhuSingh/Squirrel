@@ -7,7 +7,7 @@ import { Scene } from '@/art/Scene';
 import { CityMap, RunRoute } from '@/art/CityMap';
 import { Mascot } from '@/art/Mascot';
 import { Button, Display, Icon, IconButton, Kicker, NATIVE, Pulse, Tagline, tap } from '@/components/ui';
-import { submitRun } from '@/api/endpoints';
+import { formatArea, rejectionText, submitRun, TERMINAL_STATUSES, xpApi, type RunSummary } from '@/api/endpoints';
 import { useAuth } from '@/auth/AuthProvider';
 import { addFix, emptyTrack, localVerdict, type TrackState, type Verdict } from '@/logic/track';
 import { useApp, type FinishRunResult } from '@/state/AppState';
@@ -23,18 +23,22 @@ const two = (n: number) => String(Math.floor(n)).padStart(2, '0');
 const fmtPace = (secPerKm: number) => (Number.isFinite(secPerKm) && secPerKm > 0 ? `${Math.floor(secPerKm / 60)}'${two(secPerKm % 60)}"` : `--'--"`);
 
 type Phase = 'countdown' | 'running' | 'paused' | 'uploading' | 'done';
+/** 'processing' = uploaded, but the server's finish worker hadn't finalised the run within the poll budget. */
+type Outcome = Verdict | 'processing';
+const STAGE_TEXT = { uploading: 'Uploading your route…', finishing: 'Closing the loop…', polling: 'Verifying your run…' } as const;
 type Source = 'pending' | 'gps' | 'demo';
 
-const VERDICT_UI: Record<Verdict, { label: string; icon: React.ComponentProps<typeof Icon>['name']; color: string }> = {
+const VERDICT_UI: Record<Outcome, { label: string; icon: React.ComponentProps<typeof Icon>['name']; color: string }> = {
   accepted: { label: 'Run accepted', icon: 'check-decagram', color: colors.primary },
   flagged: { label: 'Flagged for review', icon: 'alert-decagram', color: colors.gold },
-  rejected: { label: 'Run rejected', icon: 'close-octagon', color: colors.secondary },
+  rejected: { label: 'Run rejected', icon: 'close-octagon', color: colors.coral },
+  processing: { label: 'Still processing', icon: 'progress-clock', color: colors.dim },
 };
 
 export default function Run() {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
-  const { finishRun, toast, city, districts } = useApp();
+  const { finishRun, toast, city, districts, syncServerXp } = useApp();
   const auth = useAuth();
   const live = auth.mode === 'live';
   const [phase, setPhase] = useState<Phase>('countdown');
@@ -45,7 +49,8 @@ export default function Run() {
   const [accuracy, setAccuracy] = useState<number | null>(null);
   const [music, setMusic] = useState(true);
   const [photos, setPhotos] = useState(0);
-  const [summary, setSummary] = useState<(FinishRunResult & { verdict: Verdict; reason: string; km: number; time: string; pace: string; uploadNote?: string }) | null>(null);
+  const [summary, setSummary] = useState<(FinishRunResult & { verdict: Outcome; reason: string; km: number; time: string; pace: string; uploadNote?: string; areaText?: string }) | null>(null);
+  const [stage, setStage] = useState<keyof typeof STAGE_TEXT>('uploading');
   const progress = useRef(new Animated.Value(0.62)).current;
   const pop = useRef(new Animated.Value(0)).current;
   const lastKmMarker = useRef(0);
@@ -137,34 +142,76 @@ export default function Run() {
 
   const finish = useCallback(async () => {
     tap('success');
-    const kmFinal = +km.toFixed(2);
-    const minutes = Math.round(movingSec / 60);
-    const pace = fmtPace(paceSec);
+    let kmFinal = +km.toFixed(2);
+    let minutes = Math.round(movingSec / 60);
+    let pace = fmtPace(paceSec);
     const rejectedRatio = track.points.length ? track.rejected / (track.points.length + track.rejected) : 0;
-    let { verdict, reason } = source === 'demo' ? { verdict: 'accepted' as Verdict, reason: 'Demo run — distance is simulated.' } : localVerdict(kmFinal, movingSec, rejectedRatio);
+    const local = source === 'demo' ? { verdict: 'accepted' as Verdict, reason: 'Demo run — distance is simulated.' } : localVerdict(kmFinal, movingSec, rejectedRatio);
+    let outcome: Outcome = local.verdict;
+    let reason = local.reason;
     let serverXp: number | undefined;
     let serverLines: { label: string; xp: number }[] | undefined;
     let uploadNote: string | undefined;
+    let areaText: string | undefined;
+    let districtId: string | undefined = homeDistrict?.id; // local/demo rule: a ≥1 km run claims your home zone
+    let serverXpTotal: number | undefined;
 
     if (live && source === 'gps' && track.points.length > 1) {
+      setStage('uploading');
       setPhase('uploading');
       try {
-        const r = await submitRun(startedAt.current, track.points);
-        verdict = r.status;
-        reason = r.status_reason ?? reason;
-        serverXp = r.xp_awarded;
-        serverLines = r.xp_lines;
-        uploadNote = 'Verified by the server.';
+        const before = await xpApi.me().catch(() => null);
+        const r: RunSummary = await submitRun(startedAt.current, track.points, { onStage: setStage });
+        // The server recomputes distance and moving time; prefer its numbers.
+        if (r.stats?.distance_m != null) kmFinal = +(r.stats.distance_m / 1000).toFixed(2);
+        if (r.stats?.moving_time_s != null) {
+          minutes = Math.round(r.stats.moving_time_s / 60);
+          pace = fmtPace(kmFinal > 0 ? r.stats.moving_time_s / kmFinal : NaN);
+        }
+        const terminal = TERMINAL_STATUSES.includes(r.status);
+        outcome = !terminal ? 'processing' : r.status === 'finalized' ? 'accepted' : r.status === 'flagged' ? 'flagged' : 'rejected';
+        reason =
+          outcome === 'rejected'
+            ? rejectionText(r.rejection)
+            : outcome === 'flagged'
+              ? 'Flagged for review. Your territory still counts.'
+              : outcome === 'processing'
+                ? 'Uploaded. The server is still finishing it; check back in a minute.'
+                : 'Verified by the server.';
+        // Territory comes only from the server: finalized and flagged runs can carry it.
+        const gotTerritory = (outcome === 'accepted' || outcome === 'flagged') && r.territory != null;
+        districtId = gotTerritory ? homeDistrict?.id : undefined;
+        const area = r.territory && typeof r.territory.area_m2 === 'number' ? r.territory.area_m2 : undefined;
+        if (gotTerritory && area != null) areaText = `+${formatArea(area)} claimed`;
+        // XP lives only at /v1/users/me/xp: award = after − before.
+        const after = terminal ? await xpApi.me().catch(() => null) : null;
+        if (after) {
+          serverXpTotal = after.xp;
+          serverXp = before ? Math.max(0, after.xp - before.xp) : undefined;
+          serverLines = serverXp != null ? [{ label: 'Awarded by the server', xp: serverXp }] : undefined;
+        } else {
+          serverXp = 0;
+          serverLines = [{ label: outcome === 'processing' ? 'XP pending (still processing)' : 'XP unavailable right now', xp: 0 }];
+        }
+        uploadNote = `Run ${r.run_id.slice(0, 8)} · ${r.status}`;
       } catch (e) {
-        uploadNote = `Couldn't reach the server (${e instanceof Error ? e.message : 'error'}). XP shown is an estimate.`;
+        uploadNote = `Couldn't reach the server (${e instanceof Error ? e.message : 'error'}). XP shown is an estimate; the upload is safe to retry.`;
       }
     } else if (!live) {
       uploadNote = 'Demo mode · sign in to sync runs with the server.';
     }
-    const res = finishRun({ km: kmFinal, minutes, verdict, districtId: homeDistrict?.id, serverXp, serverLines });
-    setSummary({ ...res, verdict, reason, km: kmFinal, time, pace, uploadNote });
+    const res = finishRun({
+      km: kmFinal,
+      minutes,
+      verdict: outcome === 'processing' ? 'accepted' : outcome,
+      districtId: outcome === 'processing' ? undefined : districtId,
+      serverXp,
+      serverLines,
+    });
+    if (serverXpTotal != null) syncServerXp(serverXpTotal);
+    setSummary({ ...res, verdict: outcome, reason, km: kmFinal, time, pace, uploadNote, areaText });
     setPhase('done');
-  }, [km, movingSec, paceSec, track, source, live, finishRun, homeDistrict, time]);
+  }, [km, movingSec, paceSec, track, source, live, finishRun, homeDistrict, time, syncServerXp]);
 
   const heroH = Math.max(300, height * 0.5);
   const gpsPill =
@@ -292,7 +339,7 @@ export default function Run() {
       {phase === 'uploading' && (
         <View style={styles.overlayFull}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.countSub, { marginTop: 14 }]}>Verifying your run…</Text>
+          <Text style={[styles.countSub, { marginTop: 14 }]}>{STAGE_TEXT[stage]}</Text>
         </View>
       )}
 
@@ -326,7 +373,7 @@ export default function Run() {
               <View style={styles.captured}>
                 <Icon name="flag-variant" size={18} color={colors.onPrimary} />
                 <Text style={styles.capturedText}>
-                  {summary.captured.name}: {Math.round(summary.captured.control * 100)}% yours
+                  {summary.captured.name}: {Math.round(summary.captured.control * 100)}% yours{summary.areaText ? ` · ${summary.areaText}` : ''}
                 </Text>
               </View>
             )}

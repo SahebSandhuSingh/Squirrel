@@ -27,7 +27,7 @@ export default function Home() {
   // Signed in: the server's XP total (derived from real activity) replaces the demo figure.
   useEffect(() => {
     if (mode !== 'live') return;
-    xpApi.me().then((r) => syncServerXp(r.total)).catch(() => {});
+    xpApi.me().then((r) => syncServerXp(r.xp)).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
   const held = districts.filter((d) => d.status === 'yours');
