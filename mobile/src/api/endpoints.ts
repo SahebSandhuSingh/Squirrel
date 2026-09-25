@@ -81,6 +81,8 @@ type RetryPolicy = 'safe' | 'rate-limit-only';
  * process the request, so replaying it could create a duplicate. Only a 429 is certain to
  * have done nothing.
  */
+const MAX_RETRY_WAIT_MS = 30_000;
+
 async function withRetry<T>(fn: () => Promise<T>, policy: RetryPolicy = 'safe', attempts = 4): Promise<T> {
   let lastErr: unknown;
   for (let i = 0; i < attempts; i++) {
@@ -92,6 +94,9 @@ async function withRetry<T>(fn: () => Promise<T>, policy: RetryPolicy = 'safe', 
       if (e.status === 401) throw e;
       const retriable = e.status === 429 || (policy === 'safe' && (e.status === 0 || e.status >= 500));
       if (!retriable || i === attempts - 1) throw e;
+      // A long Retry-After would leave the upload spinner stuck; give up instead, so the
+      // run is saved and can be retried from Home later.
+      if (e.retryAfterMs != null && e.retryAfterMs > MAX_RETRY_WAIT_MS) throw e;
       await sleep(e.retryAfterMs ?? Math.min(8000, 1000 * 2 ** i));
     }
   }

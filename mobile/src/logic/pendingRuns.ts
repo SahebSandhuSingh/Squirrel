@@ -11,11 +11,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { SubmitProgress } from '@/api/endpoints';
 import type { Fix } from '@/logic/track';
 
-const KEY = 'squirrel.runs.pending';
+// One key per run, so a single oversized or corrupt entry can't take the others with it
+// (and a failed read never turns into "overwrite the list with just this run").
+const PREFIX = 'squirrel.runs.pending.';
+/** Pre-per-key format: every run in one JSON array. Migrated on first read. */
+const LEGACY_KEY = 'squirrel.runs.pending';
 
 export type PendingRun = {
   /** Same as progress.clientRunId; stable identity for the list. */
   id: string;
+  /** Account (token `sub`) that recorded the run; only that account may upload it. */
+  owner?: string | null;
   startedAt: number;
   /** Elapsed running time (ms) as measured on the device. */
   elapsedMs: number;
@@ -26,35 +32,62 @@ export type PendingRun = {
   attempts: number;
 };
 
-async function readAll(): Promise<PendingRun[]> {
+async function migrateLegacy() {
+  const raw = await AsyncStorage.getItem(LEGACY_KEY);
+  if (raw == null) return;
+  let list: unknown;
   try {
-    const raw = await AsyncStorage.getItem(KEY);
-    const list = raw ? (JSON.parse(raw) as PendingRun[]) : [];
-    return Array.isArray(list) ? list : [];
+    list = JSON.parse(raw);
+  } catch {
+    list = [];
+  }
+  if (Array.isArray(list)) {
+    for (const r of list as PendingRun[]) if (r?.id) await AsyncStorage.setItem(PREFIX + r.id, JSON.stringify(r));
+  }
+  await AsyncStorage.removeItem(LEGACY_KEY);
+}
+
+async function readAll(): Promise<PendingRun[]> {
+  await migrateLegacy().catch(() => {});
+  const keys = (await AsyncStorage.getAllKeys()).filter((k) => k.startsWith(PREFIX));
+  const out: PendingRun[] = [];
+  for (const k of keys) {
+    try {
+      const raw = await AsyncStorage.getItem(k);
+      const r = raw ? (JSON.parse(raw) as PendingRun) : null;
+      if (r?.id) out.push(r);
+    } catch {
+      // unreadable entry: skip it, but leave it on disk
+    }
+  }
+  return out.sort((a, b) => a.startedAt - b.startedAt);
+}
+
+/**
+ * Saved runs the given account may upload, oldest first. Runs saved before owners were
+ * recorded have no owner and are offered to whoever is signed in.
+ */
+export async function listPendingRuns(owner: string | null): Promise<PendingRun[]> {
+  try {
+    return (await readAll()).filter((r) => r.owner === undefined || r.owner === owner);
   } catch {
     return [];
   }
 }
 
-async function writeAll(list: PendingRun[]) {
-  await AsyncStorage.setItem(KEY, JSON.stringify(list));
-}
-
-export const listPendingRuns = readAll;
-
 export async function savePendingRun(run: PendingRun) {
-  const list = await readAll();
-  const i = list.findIndex((r) => r.id === run.id);
-  if (i >= 0) list[i] = run;
-  else list.push(run);
-  await writeAll(list);
+  await AsyncStorage.setItem(PREFIX + run.id, JSON.stringify(run));
 }
 
 export async function removePendingRun(id: string) {
-  const list = await readAll();
-  await writeAll(list.filter((r) => r.id !== id));
+  await AsyncStorage.removeItem(PREFIX + id);
 }
 
 export async function clearPendingRuns() {
-  await AsyncStorage.removeItem(KEY).catch(() => {});
+  try {
+    const keys = (await AsyncStorage.getAllKeys()).filter((k) => k.startsWith(PREFIX) || k === LEGACY_KEY);
+    await AsyncStorage.multiRemove(keys);
+  } catch {
+    // nothing to clear
+  }
 }

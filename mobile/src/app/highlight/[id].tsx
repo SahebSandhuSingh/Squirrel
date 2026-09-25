@@ -20,6 +20,9 @@ export default function HighlightViewer() {
   const { me } = useApp();
   const h = highlightById(id);
   const [i, setI] = useState(0);
+  // Bumped to replay the current slide ("previous" on the first one): setValue on a running
+  // animation stops it, and without a dependency change nothing would restart it.
+  const [replay, setReplay] = useState(0);
   const bar = useRef(new Animated.Value(0)).current;
   const count = h?.slides.length ?? 0;
 
@@ -33,9 +36,20 @@ export default function HighlightViewer() {
       else router.back();
     });
     return () => a.stop();
-  }, [i, h, count, bar]);
+  }, [i, h, count, bar, replay]);
 
-  if (!h) return null;
+  if (!h)
+    return (
+      <View style={{ flex: 1, backgroundColor: '#000', paddingTop: insets.top + 8, paddingHorizontal: 16 }}>
+        <StatusBar style="light" />
+        <View style={{ alignItems: 'flex-end' }}>
+          <IconButton icon="close" onPress={() => router.back()} label="Close" />
+        </View>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={styles.name}>This highlight isn’t available.</Text>
+        </View>
+      </View>
+    );
   const s = h.slides[i];
 
   return (
@@ -57,7 +71,7 @@ export default function HighlightViewer() {
         <IconButton icon="close" onPress={() => router.back()} label="Close" />
       </View>
       <View style={styles.nav}>
-        <Pressable style={{ flex: 1 }} onPress={() => (i > 0 ? setI(i - 1) : bar.setValue(0))} accessibilityLabel="Previous" />
+        <Pressable style={{ flex: 1 }} onPress={() => (i > 0 ? setI(i - 1) : setReplay((n) => n + 1))} accessibilityLabel="Previous" />
         <Pressable style={{ flex: 2 }} onPress={() => (i < count - 1 ? setI(i + 1) : router.back())} accessibilityLabel="Next" />
       </View>
       <View style={[styles.caption, { bottom: insets.bottom + 36 }]} pointerEvents="none">

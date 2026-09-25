@@ -20,14 +20,21 @@ export const MAX_ACCURACY_M = 30; // ignore fixes worse than this
 export const MAX_SPEED_MS = 12; // ~2'20"/km — faster than any runner; treat as a GPS jump
 export const MOVING_SPEED_MS = 0.6; // below this we count the time as paused
 
-export type TrackState = { points: Fix[]; meters: number; movingSec: number; rejected: number };
+export type TrackState = {
+  points: Fix[];
+  meters: number;
+  movingSec: number;
+  rejected: number;
+  /** Set on resume after a pause: the next fix starts a new segment and adds no distance. */
+  gap?: boolean;
+};
 
 export const emptyTrack = (): TrackState => ({ points: [], meters: 0, movingSec: 0, rejected: 0 });
 
 export function addFix(s: TrackState, f: Fix): TrackState {
   if (f.accuracy == null || f.accuracy > MAX_ACCURACY_M) return { ...s, rejected: s.rejected + 1 };
   const last = s.points[s.points.length - 1];
-  if (!last) return { ...s, points: [f] };
+  if (!last || s.gap) return { ...s, points: [...s.points, f], gap: false };
   const dt = (f.t - last.t) / 1000;
   if (dt <= 0) return s;
   const d = haversine(last, f);

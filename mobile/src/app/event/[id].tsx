@@ -5,7 +5,7 @@ import { Scene } from '@/art/Scene';
 import { CityMap } from '@/art/CityMap';
 import { Avatar, AvatarStack } from '@/components/Avatar';
 import { Button, Card, Display, EmptyState, Icon, IconButton, Scrim, SectionHeader } from '@/components/ui';
-import { eventsForCity, formatEventDate } from '@/data/community';
+import { allEvents, eventsForCity, formatEventDate } from '@/data/community';
 import { userById } from '@/data/users';
 import { useApp } from '@/state/AppState';
 import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
@@ -16,7 +16,7 @@ export default function EventDetail() {
   const { width } = useWindowDimensions();
   const { events, joinedEvents, toggleEvent, city, toast } = useApp();
   // Online events are shared across cities; fall back to looking them up by id.
-  const event = events.find((e) => e.id === id) ?? eventsForCity(city.id).find((e) => e.id === id);
+  const event = events.find((e) => e.id === id) ?? eventsForCity(city.id).find((e) => e.id === id) ?? allEvents().find((e) => e.id === id);
   if (!event) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top + 40 }}>

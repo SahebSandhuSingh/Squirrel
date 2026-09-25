@@ -13,7 +13,7 @@ const TABS: ShopTab[] = ['Outfits', 'Gear', 'Accessories', 'Pets', 'Stickers'];
 /** SHOP — gamified cosmetic store. */
 export default function Shop() {
   const { width } = useWindowDimensions();
-  const { coins, owned, equipped, level, look } = useApp();
+  const { coins, owned, equipped, level, look, pet, gear } = useApp();
   const [tab, setTab] = useState<ShopTab>('Outfits');
   const [cat, setCat] = useState('All');
   const cats = useMemo(() => ['All', ...Array.from(new Set(shopItems.filter((i) => i.tab === tab).map((i) => i.category)))], [tab]);
@@ -43,7 +43,7 @@ export default function Shop() {
       <View style={[styles.grid, cats.length <= 2 && { marginTop: 14 }]}>
         {items.map((it, i) => (
           <FadeIn key={it.id} index={i} style={{ width: cardW }}>
-            <ShopItemCard item={it} owned={owned.has(it.id)} equipped={equipped.has(it.id)} locked={level < it.levelRequired && !owned.has(it.id)} onPress={() => router.push({ pathname: '/item/[id]', params: { id: it.id } })} />
+            <ShopItemCard item={it} owned={owned.has(it.id)} equipped={it.tab === 'Pets' ? pet === it.id : it.tab === 'Gear' ? gear === it.id : equipped.has(it.id)} locked={level < it.levelRequired && !owned.has(it.id)} onPress={() => router.push({ pathname: '/item/[id]', params: { id: it.id } })} />
           </FadeIn>
         ))}
       </View>

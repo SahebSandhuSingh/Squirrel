@@ -110,16 +110,18 @@ export default function LevelUp() {
   const [showConfetti] = useState(isLevelUp);
 
   useEffect(() => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
     if (isLevelUp) {
       tap('success');
       // Trigger haptic pattern for level up
-      setTimeout(() => tap('impact'), 100);
-      setTimeout(() => tap('success'), 200);
+      timers.push(setTimeout(() => tap('impact'), 100));
+      timers.push(setTimeout(() => tap('success'), 200));
     }
     Animated.sequence([
       Animated.spring(title, { toValue: 1, useNativeDriver: NATIVE, speed: 8, bounciness: 14 }),
       Animated.stagger(140, cards.map((c) => Animated.spring(c, { toValue: 1, useNativeDriver: NATIVE, speed: 10, bounciness: 10 }))),
     ]).start();
+    return () => timers.forEach(clearTimeout);
   }, [title, cards, isLevelUp]);
 
   // Rewards for the level just reached; if none are defined for it, show the nearest earlier tier.

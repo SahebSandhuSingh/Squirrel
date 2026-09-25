@@ -94,6 +94,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setMode('signed-out');
   }, []);
 
+  const continueDemo = useCallback(() => {
+    setSessionExpired(false);
+    setMode('demo');
+  }, []);
+
   // An expired / revoked token gets a 401 from every endpoint. Drop it and send the user
   // back to sign-in instead of staying in a "live" mode where nothing works.
   useEffect(() => {
@@ -109,7 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [sessionExpired, mode]);
 
   return (
-    <Ctx.Provider value={{ mode, email, userId, apiConfigured: API_CONFIGURED, authConfigured: AUTH_CONFIGURED, sessionExpired, signIn, signInWithToken, continueDemo: () => setMode('demo'), signOut }}>
+    <Ctx.Provider value={{ mode, email, userId, apiConfigured: API_CONFIGURED, authConfigured: AUTH_CONFIGURED, sessionExpired, signIn, signInWithToken, continueDemo, signOut }}>
       {children}
     </Ctx.Provider>
   );

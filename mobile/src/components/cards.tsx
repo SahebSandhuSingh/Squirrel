@@ -123,7 +123,7 @@ export function EventCard({ event, going, onToggle, variant = 'row' }: { event: 
           </View>
         </SceneImage>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
-          <AvatarStack users={attendees} extra={event.going + (going ? 1 : 0)} size={22} />
+          <AvatarStack users={attendees} extra={Math.max(0, event.going + (going ? 1 : 0) - attendees.length)} size={22} />
           <TogglePill on={going} onPress={onToggle} labelOff="Join" labelOn="Going" color={colors.primary} style={{ minWidth: 70, paddingVertical: 6 }} />
         </View>
       </PressScale>
@@ -133,7 +133,7 @@ export function EventCard({ event, going, onToggle, variant = 'row' }: { event: 
     <PressScale onPress={open} style={styles.row} scaleTo={0.985}>
       <SceneImage kind={event.scene} seed={event.title.length} height={112} style={{ width: 118, borderRadius: radius.md }} scrim="strong">
         <View style={{ position: 'absolute', left: 6, bottom: 6 }}>
-          <AvatarStack users={attendees.slice(0, 3)} extra={event.going + (going ? 1 : 0)} size={20} />
+          <AvatarStack users={attendees.slice(0, 3)} extra={Math.max(0, event.going + (going ? 1 : 0) - Math.min(3, attendees.length))} size={20} />
         </View>
       </SceneImage>
       <View style={{ flex: 1, marginLeft: 12, alignSelf: 'stretch', justifyContent: 'space-between' }}>

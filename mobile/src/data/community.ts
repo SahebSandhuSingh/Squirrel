@@ -1,6 +1,6 @@
 import type { SceneKind } from '@/types';
 import type { IconName } from '@/data/icons';
-import { cityById, type City } from '@/data/cities';
+import { cities, cityById, type City } from '@/data/cities';
 import { users } from '@/data/users';
 
 // ---------------------------------------------------------------------------
@@ -100,6 +100,12 @@ const EVENT_TEMPLATES: EventTemplate[] = [
   { title: '30-Day No Sugar Kickoff', venue: () => 'Online · No Sugar Club', dayOffset: 2, hour: 20, online: true, going: 212, scene: 'brunch', icon: 'food-apple', xp: 60, host: 'No Sugar Club', description: 'Group call to set goals and plan your first week of meals.' },
   { title: 'Sunrise Flow (Live)', venue: () => 'Online · Yoga Vibes', dayOffset: 3, hour: 6, online: true, going: 148, scene: 'yoga', icon: 'yoga', xp: 50, host: 'Yoga Vibes', description: '30-minute wake-up flow for all levels.' },
 ];
+
+/** Every city's events (online ones once). For lists that span cities, like "My Events". */
+export function allEvents(now = new Date()): EventItem[] {
+  const seen = new Set<string>();
+  return cities.flatMap((c) => eventsForCity(c.id, now)).filter((e) => !seen.has(e.id) && !!seen.add(e.id));
+}
 
 export function eventsForCity(cityId: string, now = new Date()): EventItem[] {
   const city = cityById(cityId);

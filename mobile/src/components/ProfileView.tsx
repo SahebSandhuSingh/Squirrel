@@ -152,29 +152,33 @@ export function ProfileView({ user, isMe }: { user: User; isMe: boolean }) {
           </Card>
         </FadeIn>
 
-        {/* Highlights */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -16, marginTop: 18 }} contentContainerStyle={{ gap: 6, paddingHorizontal: 12 }}>
-          {highlights.map((h) => (
-            <StoryCircle key={h.id} label={h.label} scene={h.scene} onPress={() => router.push({ pathname: '/highlight/[id]', params: { id: h.id } })} />
-          ))}
-          {isMe && <StoryCircle label="New" isNew onPress={() => router.push('/compose')} />}
-        </ScrollView>
+        {/* Highlights (demo data belongs to the signed-in user, so only on your own profile) */}
+        {isMe && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -16, marginTop: 18 }} contentContainerStyle={{ gap: 6, paddingHorizontal: 12 }}>
+            {highlights.map((h) => (
+              <StoryCircle key={h.id} label={h.label} scene={h.scene} onPress={() => router.push({ pathname: '/highlight/[id]', params: { id: h.id } })} />
+            ))}
+            <StoryCircle label="New" isNew onPress={() => router.push('/compose')} />
+          </ScrollView>
+        )}
 
         {/* Account (backend connection) */}
         {isMe && <AccountRow />}
 
-        {/* Badges */}
-        <Pressable onPress={() => router.push('/rewards')} style={styles.badgeRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.sectionLabel}>Badges · {badges.length}/{achievements.length}</Text>
-            <View style={{ flexDirection: 'row', marginTop: 8, gap: 4 }}>
-              {badges.slice(0, 5).map((b) => (
-                <BadgeArt key={b.id} kind={b.kind} size={46} />
-              ))}
+        {/* Badges (yours only: achievements are the signed-in user's) */}
+        {isMe && (
+          <Pressable onPress={() => router.push('/rewards')} style={styles.badgeRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sectionLabel}>Badges · {badges.length}/{achievements.length}</Text>
+              <View style={{ flexDirection: 'row', marginTop: 8, gap: 4 }}>
+                {badges.slice(0, 5).map((b) => (
+                  <BadgeArt key={b.id} kind={b.kind} size={46} />
+                ))}
+              </View>
             </View>
-          </View>
-          <Icon name="chevron-right" size={22} color={colors.dim} />
-        </Pressable>
+            <Icon name="chevron-right" size={22} color={colors.dim} />
+          </Pressable>
+        )}
 
         {/* Equipped cosmetics */}
         {isMe && (

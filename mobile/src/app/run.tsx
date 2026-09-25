@@ -73,7 +73,13 @@ export default function Run() {
   const { finishRun, toast, city, districts, syncServerXp, refreshRunFlags } = useApp();
   const auth = useAuth();
   const live = auth.mode === 'live';
-  const [phase, setPhase] = useState<Phase>(resume || retry ? 'loading' : 'countdown');
+  // Coming back to a run that is still live (minimised, then reopened): pick it up where it
+  // is instead of counting down and starting over it.
+  const [phase, setPhase] = useState<Phase>(() => {
+    const live = tracker.getTrackerState().status;
+    if (!retry && live !== 'idle') return live;
+    return resume || retry ? 'loading' : 'countdown';
+  });
   const [count, setCount] = useState(3);
   const [ts, setTs] = useState(tracker.getTrackerState());
   const [, setTick] = useState(0); // 1 Hz re-render while running; the clock itself is wall-clock based
@@ -87,7 +93,7 @@ export default function Run() {
   useEffect(() => () => pollAbort.current?.abort(), []);
   const progress = useRef(new Animated.Value(0.62)).current;
   const pop = useRef(new Animated.Value(0)).current;
-  const lastKmMarker = useRef(0);
+  const lastKmMarker = useRef(Math.floor(tracker.getTrackerState().track.meters / 1000));
   const phaseRef = useRef<Phase>(phase);
   phaseRef.current = phase;
 
@@ -152,6 +158,8 @@ export default function Run() {
     tracker.restore().then((ok) => {
       if (cancelled) return;
       if (!ok) return abandonAndLeave();
+      const status = tracker.getTrackerState().status;
+      if (status === 'running') return setPhase('running'); // kept recording in the background
       setPhase('paused');
       toast('Run restored · resume when ready', 'history', colors.primary);
     });
@@ -174,7 +182,7 @@ export default function Run() {
   const homeDistrict = districts.find((d) => d.status === 'yours') ?? districts[0];
 
   // ---- upload + summary --------------------------------------------------------
-  const upload = useCallback(
+  const uploadRun = useCallback(
     async (f: Finished) => {
       const kmLocal = +(f.meters / 1000).toFixed(2);
       const movingLocal = f.movingSec;
@@ -197,7 +205,7 @@ export default function Run() {
       const uploadable = live && f.source !== 'demo' && f.fixes.length > 1;
       if (uploadable) {
         // Save first, so a crash or network failure at any point can be retried from Home.
-        const pending: PendingRun = f.pending ?? { id: '', startedAt: f.startedAt, elapsedMs: f.elapsedMs, fixes: f.fixes, progress: newSubmitProgress(), attempts: 0 };
+        const pending: PendingRun = f.pending ?? { id: '', owner: auth.userId, startedAt: f.startedAt, elapsedMs: f.elapsedMs, fixes: f.fixes, progress: newSubmitProgress(), attempts: 0 };
         if (!pending.id) pending.id = pending.progress.clientRunId;
         pending.attempts += 1;
         await savePendingRun(pending).catch(() => {});
@@ -304,7 +312,22 @@ export default function Run() {
       setSummary({ ...res, verdict: outcome, reason, km: kmFinal, time: timeText, pace, minutes, uploadNote, areaText });
       setPhase('done');
     },
-    [live, homeDistrict, finishRun, syncServerXp, refreshRunFlags],
+    [live, auth.userId, homeDistrict, finishRun, syncServerXp, refreshRunFlags],
+  );
+
+  // One upload at a time: a double-tapped Retry could otherwise create the run twice.
+  const uploading = useRef(false);
+  const upload = useCallback(
+    async (f: Finished) => {
+      if (uploading.current) return;
+      uploading.current = true;
+      try {
+        await uploadRun(f);
+      } finally {
+        uploading.current = false;
+      }
+    },
+    [uploadRun],
   );
 
   const finish = useCallback(async () => {
@@ -331,7 +354,7 @@ export default function Run() {
   useEffect(() => {
     if (!retry || phase !== 'loading') return;
     let cancelled = false;
-    listPendingRuns().then(async (list) => {
+    (live ? listPendingRuns(auth.userId) : Promise.resolve([])).then(async (list) => {
       if (cancelled) return;
       const p = list[0];
       if (!p) {
@@ -348,7 +371,7 @@ export default function Run() {
     return () => {
       cancelled = true;
     };
-  }, [retry, phase, upload, refreshRunFlags]);
+  }, [retry, phase, upload, refreshRunFlags, live, auth.userId]);
 
   const retryUpload = () => {
     const f = finishedRef.current;

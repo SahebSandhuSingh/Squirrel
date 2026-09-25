@@ -81,6 +81,11 @@ export default function AvatarScreen() {
   const petCatalogMemo = useMemo(() => petCatalog(), []);
 
   /** Owned catalog items apply instantly; locked ones open the shop sheet to unlock. */
+  /** Put on an owned outfit set / shoe: apply its look and mark it equipped (like the shop sheet does). */
+  const wear = (item: ShopItem) => {
+    setLook({ ...look, ...item.lookPatch });
+    if (!equipped.has(item.id)) toggleEquip(item.id);
+  };
   const tapCatalog = (item: ShopItem, apply: () => void) => {
     if (owned.has(item.id)) {
       tap();
@@ -112,8 +117,9 @@ export default function AvatarScreen() {
               onPress={() => {
                 const r = <T,>(a: readonly T[]) => a[Math.floor(Math.random() * a.length)];
                 set({ skin: r(skinTones), hair: r(hairStyles), hairColor: r(hairColors), top: r(topStyles), topColor: r(outfitColors), bottom: r(bottomStyles), shoeColor: r(shoeColors), accessory: r(accessoryStyles) });
-                setPet(r([...pets, ...petCatalogMemo].map(p => p.id)));
-                setGear(r(['none', ...gearCatalogMemo.map(g => g.id)]));
+                // Only from what the user owns: randomising must not hand out paid items.
+                setPet(r([...pets.map((p) => p.id), ...petCatalogMemo.filter((p) => owned.has(p.id)).map((p) => p.id)]));
+                setGear(r(['none', ...gearCatalogMemo.filter((g) => owned.has(g.id)).map((g) => g.id)]));
               }}
             />
           </View>
@@ -224,7 +230,7 @@ export default function AvatarScreen() {
             {cat === 'Outfit' && (
               <>
                 {outfitSetsMemo.map((item) => (
-                  <CatalogCard key={item.id} item={item} owned={owned.has(item.id)} level={level} onPress={() => tapCatalog(item, () => setLook({ ...look, ...item.lookPatch }))} />
+                  <CatalogCard key={item.id} item={item} owned={owned.has(item.id)} level={level} onPress={() => tapCatalog(item, () => wear(item))} />
                 ))}
                 {topStyles.map((t) => (
                   <OptionCard key={t} on={look.top === t} onPress={() => set({ top: t })} label={t}>
@@ -242,7 +248,7 @@ export default function AvatarScreen() {
             {cat === 'Shoes' && (
               <>
                 {shoeCatalogMemo.map((item) => (
-                  <CatalogCard key={item.id} item={item} owned={owned.has(item.id)} level={level} onPress={() => tapCatalog(item, () => setLook({ ...look, ...item.lookPatch }))} />
+                  <CatalogCard key={item.id} item={item} owned={owned.has(item.id)} level={level} onPress={() => tapCatalog(item, () => wear(item))} />
                 ))}
                 {shoeColors.map((c) => (
                   <OptionCard key={c} on={look.shoeColor === c} onPress={() => set({ shoeColor: c })} label="Runner">

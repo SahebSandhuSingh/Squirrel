@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Mascot } from '@/art/Mascot';
 import { EventCard } from '@/components/cards';
 import { CityChip } from '@/components/TopBar';
 import { EmptyState, FadeIn, Header, IconButton, Screen, Segmented } from '@/components/ui';
+import { allEvents } from '@/data/community';
 import { useApp } from '@/state/AppState';
 import { colors, fonts } from '@/theme';
 
@@ -15,7 +16,9 @@ type Tab = (typeof TABS)[number];
 export default function Events() {
   const { events, joinedEvents, toggleEvent, city, toast } = useApp();
   const [tab, setTab] = useState<Tab>('Nearby');
-  const list = events
+  // Joined events stay listed after switching city, so they can still be opened or left.
+  const everywhere = useMemo(() => (tab === 'My Events' ? allEvents() : []), [tab]);
+  const list = (tab === 'My Events' ? everywhere : events)
     .filter((e) => (tab === 'My Events' ? joinedEvents.has(e.id) : tab === 'Online' ? e.online : !e.online))
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
 

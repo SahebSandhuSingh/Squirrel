@@ -44,7 +44,12 @@ export type TrackerState = {
   restored: boolean;
 };
 
-type Snapshot = Pick<TrackerState, 'startedAt' | 'elapsedBase' | 'track' | 'source'>;
+type Snapshot = Pick<TrackerState, 'startedAt' | 'elapsedBase' | 'track' | 'source'> & {
+  /** Was the run recording (not paused) when the snapshot was taken? */
+  running?: boolean;
+  /** Wall-clock time of the snapshot; `elapsedBase` is measured up to this moment. */
+  savedAt?: number;
+};
 
 const initial = (): TrackerState => ({
   status: 'idle',
@@ -106,14 +111,26 @@ if (Platform.OS !== 'web' && !TaskManager.isTaskDefined(RUN_LOCATION_TASK)) {
     if (error || !data) return;
     // Locations can arrive after the app was killed and relaunched headless: restore the
     // session first so they land on the right run.
-    if (state.status === 'idle') await restore();
+    // A run that was recording when the app died keeps recording: background updates
+    // never stopped, so these fixes belong to it.
+    if (state.status === 'idle') {
+      if (await restore({ keepRunning: true })) gpsArmed = true;
+    }
     if (state.status === 'idle') return;
     ingest(data.locations ?? []);
   });
 }
 
 async function saveSnapshot() {
-  const snap: Snapshot = { startedAt: state.startedAt, elapsedBase: state.elapsedBase + (state.runningSince ? Date.now() - state.runningSince : 0), track: state.track, source: state.source };
+  const now = Date.now();
+  const snap: Snapshot = {
+    startedAt: state.startedAt,
+    elapsedBase: state.elapsedBase + (state.runningSince ? now - state.runningSince : 0),
+    track: state.track,
+    source: state.source,
+    running: state.status === 'running',
+    savedAt: now,
+  };
   await AsyncStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snap));
 }
 
@@ -126,14 +143,32 @@ export async function hasSavedRun(): Promise<boolean> {
   }
 }
 
-/** Load a saved run into the session as paused. Returns false if there was none. */
-export async function restore(): Promise<boolean> {
+/**
+ * Load a saved run into the session, paused. Returns false if there was none.
+ * A session that is already live in memory is kept as is (returns true): restoring over
+ * it would rewind the run to the last snapshot.
+ * `keepRunning` (headless background relaunch only): a snapshot taken while recording
+ * continues recording, with the clock running on from the snapshot time.
+ */
+export async function restore(opts: { keepRunning?: boolean } = {}): Promise<boolean> {
+  if (state.status !== 'idle') return true;
   try {
     const raw = await AsyncStorage.getItem(SNAPSHOT_KEY);
     if (!raw) return false;
     const snap = JSON.parse(raw) as Snapshot;
     if (!snap.startedAt || !snap.track) return false;
-    state = { ...initial(), ...snap, status: 'paused', runningSince: null, restored: true };
+    if (state.status !== 'idle') return true; // started while we were reading
+    const { running, savedAt, ...rest } = snap;
+    const keep = !!(opts.keepRunning && running);
+    state = {
+      ...initial(),
+      ...rest,
+      status: keep ? 'running' : 'paused',
+      runningSince: keep ? (savedAt ?? Date.now()) : null,
+      // A paused restore resumes later from wherever the runner is now: don't bridge the gap.
+      track: keep ? rest.track : { ...rest.track, gap: true },
+      restored: true,
+    };
     emit();
     return true;
   } catch {
@@ -179,6 +214,7 @@ async function startGps(): Promise<GpsSource> {
     // fall through to foreground watching
   }
 
+  watchSub?.remove();
   watchSub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 }, (loc) => ingest([loc]));
   return 'foreground';
 }
@@ -197,6 +233,8 @@ async function stopGps() {
 
 /** Begin a new run. Resolves once the GPS source is known. */
 export async function start(): Promise<void> {
+  // Never reset a run that is already live (e.g. minimised, then "Start a run" again).
+  if (state.status !== 'idle') return;
   if (!state.restored) state = { ...initial(), startedAt: Date.now() };
   set({ status: 'running', runningSince: Date.now(), source: 'pending' });
   const source = await startGps();
@@ -214,7 +252,8 @@ export function pause() {
 /** Continue after a pause. For a run restored from a snapshot this also re-arms GPS. */
 export function resume() {
   if (state.status !== 'paused') return;
-  set({ status: 'running', runningSince: Date.now() });
+  // Ground covered while paused isn't running: the next fix starts a new segment.
+  set({ status: 'running', runningSince: Date.now(), track: { ...state.track, gap: true } });
   if (!gpsArmed) {
     set({ source: 'pending' });
     startGps()

@@ -148,7 +148,7 @@ function useSyncedState<T>(initial: T): [T, React.MutableRefObject<T>, (v: T) =>
 
 export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const me = userById(CURRENT_USER_ID);
-  const { mode } = useAuth();
+  const { mode, userId } = useAuth();
   const [look, setLook] = useState<AvatarLook>(me.look);
   const [pet, setPet] = useState('pet-nutty');
   const [gear, setGear] = useState('none');
@@ -268,24 +268,30 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   }, [hydrated, look, pet, gear, cityId, xp, coins, missions, claimed, owned, equipped, joinedCrews, joinedEvents, following, liked, saved, posts, runXpTodayRaw, runXpDay, districtState]);
 
   // ---- run flags (pending uploads / unfinished run) ---------------------------
+  // Saved uploads belong to the account that recorded them, and only a live session can
+  // send them (retrying one in demo mode would award its XP locally, again and again).
+  const readRunFlags = useCallback(async () => {
+    const [pending, unfinished] = await Promise.all([mode === 'live' ? listPendingRuns(userId) : Promise.resolve([]), hasSavedRun()]);
+    return { pending: pending.length, unfinished };
+  }, [mode, userId]);
   const refreshRunFlags = useCallback(async () => {
-    const [pending, unfinished] = await Promise.all([listPendingRuns(), hasSavedRun()]);
-    setPendingUploads(pending.length);
-    setUnfinishedRun(unfinished);
-  }, []);
+    const f = await readRunFlags();
+    setPendingUploads(f.pending);
+    setUnfinishedRun(f.unfinished);
+  }, [readRunFlags]);
   useEffect(() => {
     let cancelled = false;
-    Promise.all([listPendingRuns(), hasSavedRun()])
-      .then(([pending, unfinished]) => {
+    readRunFlags()
+      .then((f) => {
         if (cancelled) return;
-        setPendingUploads(pending.length);
-        setUnfinishedRun(unfinished);
+        setPendingUploads(f.pending);
+        setUnfinishedRun(f.unfinished);
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [readRunFlags]);
 
   // ---- server XP -------------------------------------------------------------
   const syncServerXp = useCallback((total: number) => setXpSync(total), [setXpSync]);
@@ -425,7 +431,19 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     owned,
     equipped,
     buy,
-    toggleEquip: (id) => setEquipped((s) => toggled(s, id)),
+    toggleEquip: (id) =>
+      setEquipped((s) => {
+        const next = toggled(s, id);
+        // Outfit sets and shoes replace each other: only one per slot can be worn.
+        const item = shopItemById(id);
+        if (next.has(id) && item?.lookPatch) {
+          for (const other of next) {
+            const o = other !== id ? shopItemById(other) : undefined;
+            if (o?.lookPatch && o.tab === item.tab && o.category === item.category) next.delete(other);
+          }
+        }
+        return next;
+      }),
     joinedCrews,
     toggleCrew: useCallback(
       (id: string) => {
