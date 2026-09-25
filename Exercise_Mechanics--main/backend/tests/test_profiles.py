@@ -69,10 +69,15 @@ def _request(method: str, path: str, payload: dict | None = None) -> tuple[int, 
     return start["status"], json.loads(raw)
 
 
-def _sign_up(**extra) -> str:
-    status, body = _request("POST", "/api/users", {**CORE, **extra})
+def _sign_up(**details) -> str:
+    """Page 1 (core fields), then page 2 (the optional questions) when any are given."""
+    status, body = _request("POST", "/api/users", CORE)
     assert status == 200, body
-    return body["user_id"]
+    user_id = body["user_id"]
+    if details:
+        status, body = _request("PUT", f"/api/users/{user_id}/details", details)
+        assert status == 200, body
+    return user_id
 
 
 def _details(user_id: str) -> dict:
@@ -90,7 +95,7 @@ def isolated_users(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "USERS_DIR", tmp_path)
 
 
-# ---------------------------------------------------------------- onboarding
+# ---------------------------------------------------------------- page 1: onboarding
 
 def test_the_existing_onboarding_payload_still_works_and_derives_age_and_bmi():
     uid = _sign_up()
@@ -104,6 +109,45 @@ def test_the_existing_onboarding_payload_still_works_and_derives_age_and_bmi():
     assert details["physique"] is None and details["habits"] is None
     assert details["consents"] == {"physique": None, "habits": None}
 
+
+def test_page_one_ignores_page_two_questions():
+    status, body = _request("POST", "/api/users", {**CORE, "habits": {"diet": "vegan"}, "consents": [
+        {"category": "habits", "granted": True, "policy_version": "v1"}]})
+    assert status == 200
+    user_dir = config.user_dir(body["user_id"])
+    assert not (user_dir / store.HABITS_FILENAME).exists() and not (user_dir / store.CONSENTS_FILENAME).exists()
+
+
+def test_a_failed_write_during_sign_up_leaves_no_half_created_user(monkeypatch):
+    def broken(*_args, **_kwargs):
+        raise OSError("disk full")
+    monkeypatch.setattr(store, "write_measurements", broken)
+    with pytest.raises(OSError):
+        service.onboard(dict(CORE))
+    assert _user_dirs() == []
+
+
+@pytest.mark.parametrize("override", [
+    {"gender": "robot"},
+    {"date_of_birth": "1990-02-30"},
+    {"date_of_birth": "10/05/1994"},
+    {"date_of_birth": (date.today() + timedelta(days=1)).isoformat()},
+    {"date_of_birth": "1899-12-31"},
+    {"height_cm": 10},
+    {"weight_kg": 900},
+])
+def test_page_one_rejects_invalid_answers(override):
+    status, _ = _request("POST", "/api/users", {**CORE, **override})
+    assert status == 422
+    assert _user_dirs() == []
+
+
+def test_every_gender_the_onboarding_form_offers_is_accepted():
+    for gender in ("female", "male", "non_binary", "undisclosed"):
+        assert _request("POST", "/api/users", {**CORE, "gender": gender})[0] == 200
+
+
+# ---------------------------------------------------------------- page 2: the optional questions
 
 def test_every_sign_up_question_can_be_answered_in_one_request():
     uid = _sign_up(
@@ -130,35 +174,65 @@ def test_every_sign_up_question_can_be_answered_in_one_request():
     assert _request("GET", f"/api/users/{uid}/skill")[1] == {"skill_level": "intermediate", "configured": True}
 
 
+def _stored_nothing(uid: str) -> bool:
+    user_dir = config.user_dir(uid)
+    return not any((user_dir / name).exists() for name in (
+        store.FITNESS_FILENAME, store.ACTIVITIES_FILENAME, store.PHYSIQUE_FILENAME,
+        store.HABITS_FILENAME, store.CONSENTS_FILENAME))
+
+
 @pytest.mark.parametrize("section,value,consents", [
     ("physique", {"body_type": "average"}, []),
     ("habits", HABITS, []),
     ("habits", HABITS, [{"category": "habits", "granted": False, "policy_version": "v1"}]),
     ("habits", HABITS, [{"category": "physique", "granted": True, "policy_version": "v1"}]),
 ])
-def test_sensitive_sections_need_their_consent_and_nothing_is_created_without_it(section, value, consents):
-    status, body = _request("POST", "/api/users", {**CORE, section: value, "consents": consents})
+def test_sensitive_sections_need_their_consent_and_a_refused_page_saves_nothing(section, value, consents):
+    uid = _sign_up()
+    status, body = _request("PUT", f"/api/users/{uid}/details", {
+        section: value, "consents": consents, "activities": [{"activity": "yoga"}]})
     assert status == 403 and body["detail"]["code"] == "consent_required"
-    assert _user_dirs() == []
+    assert _stored_nothing(uid)
 
 
-def test_a_failed_write_during_sign_up_leaves_no_half_created_user(monkeypatch):
-    def broken(*_args, **_kwargs):
-        raise OSError("disk full")
-    monkeypatch.setattr(store, "write_section", broken)
-    with pytest.raises(OSError):
-        service.onboard(dict(CORE), {"activities": [{"activity": "yoga"}]}, [])
-    assert _user_dirs() == []
+def test_consent_given_earlier_carries_over_to_a_later_page_two():
+    uid = _sign_up(consents=[{"category": "habits", "granted": True, "policy_version": "v1"}])
+    assert _request("PUT", f"/api/users/{uid}/details", {"habits": HABITS})[0] == 200
+    assert _details(uid)["habits"] == HABITS
 
 
-@pytest.mark.parametrize("override", [
-    {"gender": "robot"},
-    {"date_of_birth": "1990-02-30"},
-    {"date_of_birth": "10/05/1994"},
-    {"date_of_birth": (date.today() + timedelta(days=1)).isoformat()},
-    {"date_of_birth": "1899-12-31"},
-    {"height_cm": 10},
-    {"weight_kg": 900},
+def test_withdrawing_consent_on_page_two_erases_and_refuses_that_section():
+    uid = _sign_up(habits=HABITS, consents=CONSENT_ALL)
+    withdraw = [{"category": "habits", "granted": False, "policy_version": "v1"}]
+    status, _ = _request("PUT", f"/api/users/{uid}/details", {"habits": HABITS, "consents": withdraw})
+    assert status == 403 and _details(uid)["habits"] == HABITS  # refused request changed nothing
+    status, body = _request("PUT", f"/api/users/{uid}/details", {"consents": withdraw})
+    assert status == 200 and body["habits"] is None
+    assert not (config.user_dir(uid) / store.HABITS_FILENAME).exists()
+
+
+def test_page_two_can_be_resubmitted_and_leaves_skipped_sections_alone():
+    uid = _sign_up(activities=[{"activity": "yoga"}], fitness={"fitness_level": "advanced"})
+    status, body = _request("PUT", f"/api/users/{uid}/details", {"activities": [{"activity": "cycling"}]})
+    assert status == 200
+    assert [a["activity"] for a in body["activities"]] == ["cycling"]
+    assert body["fitness"]["fitness_level"] == "advanced"
+    assert _request("PUT", f"/api/users/{uid}/details", {})[0] == 200
+
+
+def test_an_unreadable_consent_log_refuses_page_two_before_writing_anything():
+    uid = _sign_up()
+    (config.user_dir(uid) / store.CONSENTS_FILENAME).write_text("{not json")
+    for payload in ({"habits": HABITS, "activities": [{"activity": "yoga"}]},
+                    {"consents": CONSENT_ALL, "activities": [{"activity": "yoga"}]}):
+        status, body = _request("PUT", f"/api/users/{uid}/details", payload)
+        assert status == 503 and body["detail"]["code"] == "consents_unreadable"
+    assert not (config.user_dir(uid) / store.ACTIVITIES_FILENAME).exists()
+    # Non-sensitive answers don't need the consent log at all.
+    assert _request("PUT", f"/api/users/{uid}/details", {"activities": [{"activity": "yoga"}]})[0] == 200
+
+
+@pytest.mark.parametrize("payload", [
     {"activities": [{"activity": "yoga"}, {"activity": "yoga"}]},
     {"activities": [{"activity": "parkour"}]},
     {"activities": [{"activity": "yoga", "interest": 9}]},
@@ -166,16 +240,18 @@ def test_a_failed_write_during_sign_up_leaves_no_half_created_user(monkeypatch):
     {"physique": {"body_type": "slim", "bmi": 18}},
     {"consents": [{"category": "habits", "granted": True, "policy_version": "v1"}] * 2},
     {"consents": [{"category": "habits", "granted": True, "policy_version": "has spaces"}]},
+    {"height_cm": 170},
 ])
-def test_sign_up_rejects_invalid_answers(override):
-    status, _ = _request("POST", "/api/users", {**CORE, **override})
-    assert status == 422
+def test_page_two_rejects_invalid_answers(payload):
+    uid = _sign_up()
+    assert _request("PUT", f"/api/users/{uid}/details", payload)[0] == 422
+    assert _stored_nothing(uid)
+
+
+def test_page_two_for_an_unknown_user_is_404():
+    status, body = _request("PUT", "/api/users/nobody-123456/details", {"activities": []})
+    assert status == 404 and body["detail"]["code"] == "user_not_found"
     assert _user_dirs() == []
-
-
-def test_every_gender_the_onboarding_form_offers_is_accepted():
-    for gender in ("female", "male", "non_binary", "undisclosed"):
-        assert _request("POST", "/api/users", {**CORE, "gender": gender})[0] == 200
 
 
 # ---------------------------------------------------------------- age and BMI

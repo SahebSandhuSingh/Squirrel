@@ -1,6 +1,6 @@
 /* App.tsx — top-level flow router. The landing page asks new-vs-existing:
 
-     new visitor:   landing → onboarding → modes → (session)
+     new visitor:   landing → onboarding → details → modes → (session)
      existing user: landing → returning → modes → (session)
      demo mode:     demo → (session)          ← the default today, see DEMO_PUSHUP below
 
@@ -15,6 +15,7 @@ import type { WorkoutConfig } from './types'
 import CoachStub from './flow/CoachStub'
 import { Landing } from './flow/Landing'
 import { Onboarding } from './flow/Onboarding'
+import { ProfileDetails } from './flow/ProfileDetails'
 import { ReturningUser } from './flow/ReturningUser'
 import { ModeSelect } from './flow/ModeSelect'
 import { SoloWorkspace } from './flow/SoloWorkspace'
@@ -40,7 +41,7 @@ function demoRequested(): boolean {
   return DEMO_PUSHUP
 }
 
-type Flow = 'landing' | 'onboarding' | 'returning' | 'modes' | 'solo' | 'session' | 'demo'
+type Flow = 'landing' | 'onboarding' | 'details' | 'returning' | 'modes' | 'solo' | 'session' | 'demo'
 
 export default function App() {
   const [user, setUser] = useState<CachedUser | null>(() => loadUser())
@@ -50,7 +51,8 @@ export default function App() {
   const [sessionId, setSessionId] = useState<string | undefined>(undefined) // current training session
   const [workout, setWorkout] = useState<WorkoutConfig | undefined>(undefined) // real sets/reps/rest for the session
 
-  const onboardingDone = (u: CachedUser) => { setUser(u); setFlow('modes') }
+  // Sign-up page 1 creates the account; page 2 (optional questions) follows before the app proper.
+  const onboardingDone = (u: CachedUser) => { setUser(u); setFlow('details') }
   // Switch the active profile from the returning-user dropdown — never deletes anyone.
   const switchTo = (u: CachedUser) => { setActiveUser(u); setUser(u) }
   // Logout: end the session and return to the landing page, but KEEP every cached
@@ -80,6 +82,9 @@ export default function App() {
 
     case 'onboarding':
       return <Onboarding onDone={onboardingDone} onBack={() => setFlow('landing')} />
+
+    case 'details':
+      return user ? <ProfileDetails user={user} onDone={() => setFlow('modes')} /> : landing
 
     case 'returning': {
       const users = loadUsers()

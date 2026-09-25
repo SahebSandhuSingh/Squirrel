@@ -2,6 +2,7 @@
 
     GET  /api/activity-types                       the activity catalogue
     GET  /api/users/{id}/details                   everything answered, with age and BMI derived
+    PUT  /api/users/{id}/details                   sign-up page 2: any sections + consents at once
     PUT  /api/users/{id}/details/fitness           fitness level, activity level, goal
     PUT  /api/users/{id}/details/activities        declared activities
     PUT  /api/users/{id}/details/physique          body type                (needs physique consent)
@@ -11,7 +12,8 @@
     GET  /api/users/{id}/consents                  current decision per category
     POST /api/users/{id}/consents                  grant or withdraw; withdrawing erases that data
 
-Onboarding itself stays POST /api/users (backend/users/router.py) and accepts the same sections.
+Sign-up page 1 (name, date of birth, contact, height, weight) stays POST /api/users
+(backend/users/router.py); page 2 is PUT /api/users/{id}/details.
 Errors carry a machine-readable `code` in `detail`.
 """
 
@@ -28,6 +30,7 @@ from backend.profiles.models import (
     HabitsAnswers,
     MeasurementIn,
     PhysiqueAnswers,
+    SignUpDetails,
 )
 from backend.profiles.vocab import ACTIVITY_TYPES
 
@@ -57,6 +60,12 @@ def list_activity_types() -> dict:
 @router.get("/users/{user_id}/details")
 def get_details(user_id: str) -> dict:
     return _call(service.details, _checked(user_id))
+
+
+@router.put("/users/{user_id}/details")
+def put_sign_up_details(user_id: str, body: SignUpDetails) -> dict:
+    return _call(service.save_sign_up_details, _checked(user_id), body.sections(),
+                 [c.model_dump() for c in body.consents])
 
 
 @router.put("/users/{user_id}/details/fitness")

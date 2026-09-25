@@ -1,7 +1,7 @@
 """User REST routes.
 
-  • POST /api/users                 — onboarding: mint the user id + directory, plus any answered
-                                      sign-up questions (see backend/profiles/).
+  • POST /api/users                 — sign-up page 1: mint the user id + directory. Page 2's
+                                      questions are PUT /api/users/{id}/details (backend/profiles/).
   • GET  /api/users/{id}            — profile (dashboard height/weight/BMI; latest measurements).
   • GET/POST /api/users/{id}/skill  — read/persist the chosen skill level.
 Minimal session creation lives in backend/sessions/router.py.
@@ -16,18 +16,16 @@ from pydantic import BaseModel, Field, field_validator
 
 from backend.core.ids import safe_user_id
 from backend.profiles import service as profiles
-from backend.profiles.models import SignUpDetails, check_date_of_birth
+from backend.profiles.models import check_date_of_birth
 from backend.profiles.vocab import GENDERS, HEIGHT_CM, WEIGHT_KG
 from backend.users.store import read_skill, write_skill
 
 router = APIRouter(prefix="/api")
 
-_CORE_FIELDS = {"first_name", "last_name", "gender", "height_cm", "weight_kg", "date_of_birth", "mobile", "email"}
 
-
-class UserProfile(SignUpDetails):
-    """Onboarding payload. The core fields match the frontend OnboardingForm one-to-one; the
-    sign-up questions (fitness, activities, physique, habits, consents) are optional."""
+class UserProfile(BaseModel):
+    """Sign-up page 1. Field names match the frontend OnboardingForm one-to-one. The optional
+    questions (fitness, activities, physique, habits) are page 2: PUT /api/users/{id}/details."""
     first_name:    str = Field(min_length=1, max_length=80)
     last_name:     str = Field(min_length=1, max_length=80)
     gender:        Literal[GENDERS]
@@ -45,14 +43,7 @@ class UserProfile(SignUpDetails):
 
 @router.post("/users")
 def create_user(profile: UserProfile) -> dict:
-    try:
-        return profiles.onboard(
-            profile.model_dump(include=_CORE_FIELDS),
-            profile.sections(),
-            [c.model_dump() for c in profile.consents],
-        )
-    except profiles.ProfileError as exc:
-        raise HTTPException(status_code=exc.status, detail=exc.detail()) from exc
+    return profiles.onboard(profile.model_dump())
 
 
 @router.get("/users/{user_id}")

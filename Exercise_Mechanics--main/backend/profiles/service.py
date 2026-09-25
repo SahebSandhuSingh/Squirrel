@@ -344,28 +344,13 @@ def profile_with_latest_body(user_id: str) -> dict | None:
 
 # ---------------------------------------------------------------- onboarding
 
-def onboard(core: dict, sections: dict, consents: list[dict], *, now: datetime | None = None) -> dict:
-    """Create the user and store every answered section, or nothing at all.
-
-    A sensitive section is accepted only when the same request grants its consent. Everything is
-    checked before anything is written; if a write still fails, the half-created user is removed."""
+def onboard(core: dict, *, now: datetime | None = None) -> dict:
+    """Sign-up page 1: create the user, with their height and weight as the first measurement.
+    All or nothing: if the measurement can't be written, the half-created user is removed."""
     now = now or datetime.now(timezone.utc)
-    decided = {c["category"]: c["granted"] for c in consents}
-    for section, category in SECTION_CONSENT.items():
-        if sections.get(section) is not None and decided.get(category) is not True:
-            raise ProfileError(403, "consent_required",
-                               f"'{section}' can only be saved with consent for '{category}'.")
-
     identity = create_user_record(core)
     user_id = identity["user_id"]
     try:
-        for consent in consents:
-            store.append_consent_event(user_id, {
-                "category": consent["category"],
-                "granted": consent["granted"],
-                "policy_version": consent["policy_version"],
-                "recorded_at": now.isoformat(),
-            })
         profile = read_profile(user_id) or {}
         store.write_measurements(user_id, [{
             "id": "onboarding",
@@ -374,12 +359,41 @@ def onboard(core: dict, sections: dict, consents: list[dict], *, now: datetime |
             "height_cm": core["height_cm"],
             "weight_kg": core["weight_kg"],
         }])
-        if sections.get("fitness") is not None:
-            save_fitness(user_id, sections["fitness"])
-        for section in ("activities", "physique", "habits"):
-            if sections.get(section) is not None:
-                save_section(user_id, section, sections[section])
     except BaseException:
         shutil.rmtree(config.user_dir(user_id), ignore_errors=True)
         raise
     return identity
+
+
+def save_sign_up_details(user_id: str, sections: dict, consents: list[dict], *,
+                         now: datetime | None = None) -> dict:
+    """Sign-up page 2: save every answered section and the consent decisions in one request.
+
+    A sensitive section needs its consent, granted in this request or earlier (and not withdrawn
+    in this request). Every check runs before anything is written, so a refused request changes
+    nothing. Sections left out are left as they were, so the page can be resubmitted safely."""
+    _require_user(user_id)
+    decided = {c["category"]: c["granted"] for c in consents}
+    needs_log = bool(consents) or any(
+        sections.get(section) is not None and category not in decided
+        for section, category in SECTION_CONSENT.items()
+    )
+    granted = _granted_categories(user_id) if needs_log else frozenset()
+    if granted is None:
+        raise ProfileError(503, "consents_unreadable",
+                           "Your consent settings can't be read right now, so nothing was saved.")
+    for section, category in SECTION_CONSENT.items():
+        if sections.get(section) is None:
+            continue
+        if not decided.get(category, category in granted):
+            raise ProfileError(403, "consent_required",
+                               f"'{section}' can only be saved with consent for '{category}'.")
+
+    for consent in consents:
+        record_consent(user_id, consent["category"], consent["granted"], consent["policy_version"], now=now)
+    if sections.get("fitness") is not None:
+        save_fitness(user_id, sections["fitness"])
+    for section in ("activities", "physique", "habits"):
+        if sections.get(section) is not None:
+            save_section(user_id, section, sections[section])
+    return details(user_id)

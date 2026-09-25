@@ -137,8 +137,9 @@ class MeasurementIn(BaseModel):
 
 
 class SignUpDetails(BaseModel):
-    """The optional sign-up questions. Mixed into the onboarding payload; each section may be
-    skipped. Physique and habits are accepted only alongside a granting consent decision."""
+    """Sign-up page 2: the optional questions, all in one request. Each section may be skipped.
+    Physique and habits are accepted only with their consent granted."""
+    model_config = ConfigDict(extra="forbid")
 
     fitness: FitnessAnswers | None = None
     activities: list[DeclaredActivity] | None = Field(default=None, max_length=MAX_DECLARED_ACTIVITIES)

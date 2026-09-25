@@ -224,9 +224,16 @@ fresh profile. History and saved baselines are lost, a demo still runs.
 
 ## Sign-up profile details
 
-Onboarding (`POST /api/users`) accepts optional sign-up questions alongside the original fields,
-and each one can be answered or changed later. The code is in `backend/profiles/`. The frontend
-doesn't ask these questions yet; today's onboarding payload is still accepted unchanged.
+Sign-up is two pages:
+
+1. **Page 1** (`Onboarding.tsx` → `POST /api/users`): name, date of birth, gender, height, weight,
+   mobile and email. This creates the account. The payload is the same as before.
+2. **Page 2** (`ProfileDetails.tsx` → `PUT /api/users/{id}/details`): fitness, activities, physique
+   and habits, all optional, with a **Skip for now** button. Physique and habits each have their own
+   consent box, and their questions only appear once it's ticked. Everything on the page is saved in
+   one request; a refused request saves nothing, and sections left out are left unchanged.
+
+The code is in `backend/profiles/`, and each answer can also be changed later through its own route.
 
 | Question | Where it lives | Rule |
 |---|---|---|
@@ -244,6 +251,7 @@ sensitive data is hidden and not saved, and the log is never overwritten. Sensit
 always offer a "prefer not to say" answer.
 
 Routes: `GET /api/users/{id}/details` (everything, with age and BMI derived);
+`PUT /api/users/{id}/details` (page 2, all at once);
 `PUT /api/users/{id}/details/{fitness|activities|physique|habits}`;
 `GET|POST /api/users/{id}/measurements`; `GET|POST /api/users/{id}/consents`.
 
