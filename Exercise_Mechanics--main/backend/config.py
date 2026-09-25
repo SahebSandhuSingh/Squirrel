@@ -19,6 +19,10 @@ PROFILE_FILENAME = "profile.json"
 SKILL_FILENAME   = "skill.json"   # the user's chosen skill level (set on the dashboard)
 
 
+# Moderation reports are not any one user's data, so they live apart from the user directories.
+REPORTS_DIR      = _REPO_ROOT / "data" / "moderation" / "reports"
+
+
 def user_dir(user_id: str) -> Path:
     """Absolute path to a single user's directory under USERS_DIR."""
     return USERS_DIR / user_id

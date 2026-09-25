@@ -38,6 +38,8 @@ data/users/*
 backend_old/users/
 backend_old/baseline/
 data/captures/
+# Moderation reports: who reported whom, and why — private, never committed
+data/moderation/
 captures/
 recordings/
 

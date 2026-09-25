@@ -197,11 +197,17 @@ host. On Render, Railway, Fly.io or Cloud Run:
 | Root directory | `Exercise_Mechanics--main` |
 | Dockerfile path | `Exercise_Mechanics--main/Dockerfile` |
 | Build / start command | *leave empty* — the Dockerfile `CMD` already binds `$PORT` |
-| Environment variables | none |
+| Environment variables | optional — see the table below |
 | Health check path (optional) | `/api/exercises` |
 
-Nothing in `backend/` or `frontend-react/src/` reads an environment variable; the only one in play
-is `PORT`, which the Dockerfile handles.
+The core app needs no environment variables beyond `PORT`, which the Dockerfile handles. These are
+optional and switch features on:
+
+| Variable | Used by | Without it |
+|---|---|---|
+| `RUN_MODULE_URL`, `RUN_MODULE_TOKEN` | Partner Hunt's XP gate (the Run Module) | Partner Hunt reports the XP service as unavailable |
+| `PARTNER_HUNT_DEV_XP` | Local testing only: a fixed XP for every user | — |
+| `MODERATION_TOKEN` | Moderator routes for reports | Moderator routes refuse every request (503) |
 
 **Serverless hosts (Vercel, Netlify Functions, Lambda) cannot run this.** `/ws/setup` and `/ws/train`
 are long-lived WebSockets carrying every pose frame, and the backend writes profiles, sessions and
@@ -256,11 +262,24 @@ Routes: `GET /api/users/{id}/details` (everything, with age and BMI derived);
 `PUT /api/users/{id}/details/{fitness|activities|physique|habits}`;
 `GET|POST /api/users/{id}/measurements`; `GET|POST /api/users/{id}/consents`.
 
-## Workout Score
+## Workout Score and Activity Rating
+
+Two separate things, never mixed:
+
+| | Workout Score | Activity Rating |
+|---|---|---|
+| Who produces it | The system | The member |
+| From | Measured workout data: reps, depth, technique, duration, consistency | How the member felt about the session and how they'd rate it |
+| Field in reports | `workout_score` | `activity_rating` |
+| Code | `backend/reports/workout_score.py` | `backend/activity_rating/` |
+
+A rating never changes the score, and the rating is not part of `activity_metrics`.
+
+### Workout Score
 
 Every exercise report (`GET /api/users/{id}/sessions/{sid}/report` and `.../exercises/{ex}/report`)
 carries a `workout_score`: one 0–100 number with feedback, built only from what pose detection and
-rep analysis captured (`backend/reports/workout_score.py`). The frontend doesn't show it yet.
+rep analysis captured. The frontend doesn't show it yet.
 
 | Part | Weight | From |
 |---|---|---|
@@ -281,6 +300,37 @@ rep analysis captured (`backend/reports/workout_score.py`). The frontend doesn't
   `activity_metrics` (`reps`, `correct_pct`, `avg_depth`, `workout_score`), the `metrics` object
   for the shared `activity_sessions` row in the Integration Contract.
 - Session overviews and `/progress` sessions carry `workout_score` too.
+
+### Activity Rating
+
+The member rates a session they did: `PUT /api/users/{id}/sessions/{sid}/activity-rating` with
+`rating` (1–5, required), and optionally `feeling` (`great`, `good`, `okay`, `tired`, `bad`),
+`effort` (perceived exertion, 1–10) and a `note` of up to 500 characters. `GET` reads it and `DELETE`
+removes it. Only the session's own member can rate it; re-rating keeps the first `rated_at`. It is
+stored beside the session (`activity_rating.json`) and appears as `activity_rating` in session and
+exercise reports, overviews, and (the 1–5 value) in `/progress` sessions.
+
+## Reports (moderation)
+
+Members can report another member, or one of their sessions, for review (`backend/moderation/`).
+Each report records who reported, whom or what, the category, a description, when, and a status.
+
+- **Categories:** `harassment`, `fake_profile`, `inappropriate_content`, `spam`, `cheating`
+  (manipulated workout data; can name a `session_id`), `other` (needs a description).
+- **Status:** `open` → `in_review` → `resolved` or `dismissed`, with every change kept in the
+  report's `history`.
+- **Members:** `POST /api/users/{id}/reports` files one (201). Re-reporting the same member for the
+  same category while it is still under review returns the existing report (200) instead of a
+  duplicate. The limit is 20 reports a day. `GET /api/users/{id}/reports` lists your own reports and
+  their status, without moderator notes.
+- **Privacy:** a reported member is never told who reported them, and no member route lists reports
+  made against anyone. Reporting doesn't block; blocking is a separate action.
+- **Moderators:** `GET /api/moderation/reports` (filter by `status`, `category`, `reported_user_id`;
+  each entry shows how many reports that member has), `GET` and `PATCH /api/moderation/reports/{id}`
+  (`status` and an optional `note`). These need `Authorization: Bearer <MODERATION_TOKEN>`. Without
+  that variable set, they refuse every request. Unreadable report files are listed under
+  `unreadable`, never dropped.
+- Reports are stored in `data/moderation/reports/`, which is git-ignored.
 
 ## Activity matching
 

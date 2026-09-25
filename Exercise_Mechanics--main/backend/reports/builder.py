@@ -19,6 +19,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+from backend.activity_rating.store import read_rating
 from backend.config import user_dir
 from backend.reports.workout_score import activity_metrics, rep_workout_score, timed_workout_score, trend
 from backend.sessions.store import read_session_record
@@ -492,6 +493,8 @@ def _with_trend(report: dict, uid: str, sid: str, record: dict, exercise_id: str
     workout = report["workout_score"]
     workout["trend"] = trend(workout["score"], _previous_score(uid, sid, record, exercise_id))
     report["activity_metrics"] = activity_metrics(report)
+    # The member's own rating of the session, beside the system-generated score, never mixed in.
+    report["activity_rating"] = read_rating(uid, sid)
     return report
 
 
@@ -553,6 +556,7 @@ def build_overview(uid: str, sid: str) -> dict | None:
                 "exercise_count": len(exercises),
                 "exercises": exercises,
                 "workout_score": _session_workout_score(exercises),
+                "activity_rating": read_rating(uid, sid),
             }
         quality = {"good": 0, "borderline": 0, "poor": 0}
         for r in report["per_rep"]:
@@ -590,6 +594,7 @@ def build_overview(uid: str, sid: str) -> dict | None:
         "exercise_count": len(exercises),
         "exercises": exercises,
         "workout_score": _session_workout_score(exercises),
+        "activity_rating": read_rating(uid, sid),
     }
 
 
@@ -651,6 +656,7 @@ def build_progress(uid: str) -> dict:
             "session_id": sid, "date": date, "day": day, "start_time": start_time,
             "score": overview["session_score"], "reps": overview["total_reps"],
             "workout_score": overview["workout_score"],
+            "activity_rating": (overview["activity_rating"] or {}).get("rating"),
             "exercises": [e["name"] for e in overview["exercises"]] or [None],
             "_time": overview["total_time_s"] or 0.0,
         })

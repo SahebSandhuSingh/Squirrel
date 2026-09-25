@@ -1,5 +1,6 @@
 """Workout Score: one 0–100 number per exercise in a session, with feedback, built only from what
-pose detection and rep analysis captured. Nothing is asked of the user and no profile data is used.
+pose detection and rep analysis captured. It is SYSTEM-GENERATED: nothing is asked of the user, no
+profile data is used, and the member's own Activity Rating (backend/activity_rating/) never feeds it.
 
 Every rep's form score is already technique × depth (engine/scorer.py: time_score × rom_factor).
 The Workout Score keeps those two apart so depth is not counted twice and the feedback can say
