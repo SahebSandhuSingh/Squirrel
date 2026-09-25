@@ -107,7 +107,7 @@ def test_the_existing_onboarding_payload_still_works_and_derives_age_and_bmi():
     assert details["body"]["bmi"] == 22.0
     assert details["answered"] == {"fitness": False, "activities": False, "physique": False, "habits": False}
     assert details["physique"] is None and details["habits"] is None
-    assert details["consents"] == {"physique": None, "habits": None}
+    assert details["consents"] == {"physique": None, "habits": None, "matching": None}
 
 
 def test_page_one_ignores_page_two_questions():

@@ -245,8 +245,9 @@ The code is in `backend/profiles/`, and each answer can also be changed later th
 | Physique (body type, body fat, waist) | `physique.json`, `measurements.json` | **Needs `physique` consent** |
 | Habits (workout times, sleep, diet, smoking, alcohol) | `habits.json` | **Needs `habits` consent** |
 
-Consent is an append-only log (`consents.json`, `POST /api/users/{id}/consents`). Withdrawing it
-erases that category's data. If the log can't be read, consent is treated as not given:
+Consent is an append-only log (`consents.json`, `POST /api/users/{id}/consents`), with three
+categories: `physique`, `habits` and `matching` (the opt-in to activity matching, below). Withdrawing
+physique or habits consent erases that category's data. If the log can't be read, consent is treated as not given:
 sensitive data is hidden and not saved, and the log is never overwritten. Sensitive questions
 always offer a "prefer not to say" answer.
 
@@ -280,6 +281,26 @@ rep analysis captured (`backend/reports/workout_score.py`). The frontend doesn't
   `activity_metrics` (`reps`, `correct_pct`, `avg_depth`, `workout_score`), the `metrics` object
   for the shared `activity_sessions` row in the Integration Contract.
 - Session overviews and `/progress` sessions carry `workout_score` too.
+
+## Activity matching
+
+Members who do the same activities are suggested to each other as possible workout partners: two
+runners, two lifters (`backend/activity_matching/`). It's separate from Partner Hunt: no XP gate, no
+city and no meeting preferences. The frontend doesn't show it yet.
+
+- **Opt-in:** the `matching` consent (`POST /api/users/{id}/consents`). You only see others while
+  you can be seen yourself. Members must be 18+ and have declared at least one activity (sign-up page 2).
+- **Score (0–100):** shared activities 60%, weighted by both members' interest (1–5); fitness level
+  20% (same, one apart, two apart); workout times 20%, used only when both share their habits.
+  Scores are symmetric, and each match comes with plain-language reasons.
+- **A match card shows only** first name and last initial, age band, fitness level, the shared
+  activities, the score and the reasons. Never gender, body data, contact details, location or
+  interest scores.
+- **Blocking** uses the same list as Partner Hunt and works both ways. Anyone whose consent or
+  block list can't be read is left out, never shown.
+
+Routes: `GET /api/users/{id}/activity-matching` (status, and exactly what matches see),
+`GET /api/users/{id}/activity-matches`, `POST /api/users/{id}/activity-matches/blocks`.
 
 ## Layout
 

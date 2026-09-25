@@ -15,6 +15,7 @@ Layout:
     users/       user REST (create · profile · skill)
     profiles/    sign-up details: age, gender, activities, measurements/BMI, physique, habits, consent
     partners/    Partner Hunt: preferences, matching, blocks, behind the Run Module's XP gate
+    activity_matching/  workout partners suggested by shared activities (opt-in, no XP gate)
 
 Run from the project root:
     uvicorn backend.main:app --reload
@@ -27,6 +28,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from backend.activity_matching.router import router as activity_matching_router
 from backend.engine.loader import validate_enabled_exercises
 from backend.partners.router import router as partners_router
 from backend.profiles.router import router as profiles_router
@@ -71,6 +73,7 @@ app.include_router(workouts_router)
 app.include_router(sessions_router)
 app.include_router(reports_router)
 app.include_router(partners_router)
+app.include_router(activity_matching_router)
 app.include_router(setup_ws_router)
 
 # Mounted last so /ws + /api take precedence. html=True serves index.html at /.

@@ -29,8 +29,9 @@ INTEREST_MIN, INTEREST_MAX = 1, 5
 MAX_DECLARED_ACTIVITIES = 20
 
 # Consent-gated categories. Height and weight are core onboarding fields (the dashboard's BMI has
-# always used them); body composition and body type are physique, and are gated.
-CONSENT_CATEGORIES = ("physique", "habits")
+# always used them); body composition and body type are physique, and are gated. "matching" is the
+# opt-in to activity matching: being suggested to other members, and seeing them.
+CONSENT_CATEGORIES = ("physique", "habits", "matching")
 
 MEASUREMENT_SOURCES = ("self_reported", "smart_scale", "wearable")
 
