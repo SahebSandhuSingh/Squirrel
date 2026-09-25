@@ -60,7 +60,8 @@ export default function Compose() {
         </Pressable>
         {STICKERS.map((k) => {
           const id = { 'one-more-km': 'st-km', fire: 'st-fire', 'good-vibes': 'st-vibes', 'neon-heart': 'st-heart', 'squirrel-flex': 'st-flex', hydrate: 'st-hydrate' }[k];
-          const has = owned.has(id) || k === 'neon-heart' || k === 'one-more-km';
+          // One More KM is a shop item; it's only free on the post you make right after a run.
+          const has = owned.has(id) || k === 'neon-heart' || (k === 'one-more-km' && !!km);
           return (
             <Pressable key={k} disabled={!has} onPress={() => { tap(); setSticker(k); }} style={[styles.sticker, sticker === k && { borderColor: colors.primary }, !has && { opacity: 0.35 }]}>
               <StickerArt kind={k as StickerKind} size={56} />

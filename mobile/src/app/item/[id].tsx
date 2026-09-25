@@ -5,8 +5,10 @@ import { ItemArt } from '@/components/cards';
 import { Sheet } from '@/components/Sheet';
 import { Button, CoinIcon, Display, Icon } from '@/components/ui';
 import { rarityColor, shopItemById } from '@/data/shop';
+import { CURRENT_USER_ID, userById } from '@/data/users';
 import { useApp } from '@/state/AppState';
 import { colors, fonts, radius } from '@/theme';
+import type { AvatarLook } from '@/types';
 
 /** Shop item sheet: preview, rarity, buy / equip. */
 export default function ItemSheet() {
@@ -25,7 +27,19 @@ export default function ItemSheet() {
   const onEquip = () => {
     if (isPet) { setPet(isEquipped ? 'pet-none' : item.id); router.back(); return; }
     if (isGear) { setGear(isEquipped ? 'none' : item.id); router.back(); return; }
-    if (item.lookPatch && !isEquipped) setLook({ ...look, ...item.lookPatch });
+    if (item.lookPatch) {
+      if (!isEquipped) setLook({ ...look, ...item.lookPatch });
+      else {
+        // Taking it off: put back the default for each part this item set, unless the
+        // user has since changed that part by hand.
+        const base = userById(CURRENT_USER_ID).look;
+        const revert: Partial<AvatarLook> = {};
+        for (const k of Object.keys(item.lookPatch) as (keyof AvatarLook)[]) {
+          if (look[k] === item.lookPatch[k]) Object.assign(revert, { [k]: base[k] });
+        }
+        setLook({ ...look, ...revert });
+      }
+    }
     toggleEquip(item.id);
     router.back();
   };

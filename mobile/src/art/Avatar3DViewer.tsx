@@ -29,14 +29,23 @@ import MODEL_VIEWER_JS from '../../assets/vendor/model-viewer-umd.min.js.txt';
  */
 
 const STAGE_DIR_NAME = 'avatar3d';
-const LIB_NAME = 'model-viewer-umd.min.js';
+/** Bump when viewerHtml changes, so installs with a cached page pick up the new one. */
+const VIEWER_TEMPLATE_VERSION = 1;
+// Cached files are named by the bundled asset's content hash: a newer vendored script or
+// model gets a new name instead of being shadowed by the copy staged by an older build.
+const libHash = () => Asset.fromModule(MODEL_VIEWER_JS).hash ?? 'umd';
+const libName = () => `model-viewer-${libHash()}.min.js`;
 
 async function stageAsset(module: number, dir: Directory, fileName: string): Promise<File> {
   const dest = new File(dir, fileName);
   if (dest.exists) return dest;
   const asset = await Asset.fromModule(module).downloadAsync();
   const src = asset.localUri ?? asset.uri;
-  await new File(src).copy(dest, { overwrite: true });
+  // Copy to a temp name and move into place, so an interrupted copy is never mistaken
+  // for a complete file by the `exists` check above.
+  const tmp = new File(dir, `${fileName}.part`);
+  await new File(src).copy(tmp, { overwrite: true });
+  await tmp.move(dest, { overwrite: true });
   return dest;
 }
 
@@ -49,7 +58,7 @@ const viewerHtml = (modelFileName: string) => `<!DOCTYPE html>
       model-viewer { width: 100%; height: 100%; --poster-color: transparent; }
       #err { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; font: 12px sans-serif; color: #8A93A6; text-align: center; padding: 16px; }
     </style>
-    <script src="./${LIB_NAME}"></script>
+    <script src="./${libName()}"></script>
   </head>
   <body>
     <model-viewer
@@ -99,11 +108,11 @@ type Stage = { htmlUri: string; dirUri: string };
 async function prepareStage(modelFile: number): Promise<Stage> {
   const dir = new Directory(Paths.cache, STAGE_DIR_NAME);
   dir.create({ intermediates: true, idempotent: true });
-  await stageAsset(MODEL_VIEWER_JS, dir, LIB_NAME);
+  await stageAsset(MODEL_VIEWER_JS, dir, libName());
   const asset = Asset.fromModule(modelFile);
   const modelName = `${asset.hash ?? asset.name}.glb`;
   await stageAsset(modelFile, dir, modelName);
-  const html = new File(dir, `viewer-${asset.hash ?? asset.name}.html`);
+  const html = new File(dir, `viewer-v${VIEWER_TEMPLATE_VERSION}-${libHash()}-${asset.hash ?? asset.name}.html`);
   if (!html.exists) html.write(viewerHtml(modelName));
   return { htmlUri: html.uri, dirUri: dir.uri };
 }
