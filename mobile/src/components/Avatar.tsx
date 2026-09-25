@@ -12,7 +12,7 @@ export function Avatar({
   user,
   look,
   size = 44,
-  ring = colors.pink,
+  ring = colors.primary,
   level,
   online,
   link = true,

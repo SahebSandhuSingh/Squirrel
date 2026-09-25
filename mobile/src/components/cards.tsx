@@ -59,13 +59,13 @@ export function MissionCard({ mission: m, onLog, claimed, compact }: { mission: 
           <Text style={{ color: done ? colors.green : colors.text, fontFamily: fonts.semibold }}>{fmt(m.current)}</Text> / {fmt(m.goal)}
           {m.unit ? ` ${m.unit}` : ''}
         </Text>
-        <ProgressBar progress={m.current / m.goal} color={done ? colors.green : m.color} color2={done ? '#9CFFD2' : colors.pinkSoft} style={{ marginTop: 7 }} height={5} />
+        <ProgressBar progress={m.current / m.goal} color={done ? colors.green : m.color} color2={done ? '#9CFFD2' : colors.primarySoft} style={{ marginTop: 7 }} height={5} />
       </View>
       <View style={{ alignItems: 'center', minWidth: 58 }}>
         {done ? (
           <Animated.View style={{ transform: [{ scale: pop }], alignItems: 'center' }}>
             <View style={[styles.doneDot, { backgroundColor: claimed ? colors.green : colors.gold }]}>
-              <Icon name={claimed ? 'check-bold' : 'gift'} size={16} color={colors.onCyan} />
+              <Icon name={claimed ? 'check-bold' : 'gift'} size={16} color={colors.onSecondary} />
             </View>
             <Text style={[styles.xp, claimed && { color: colors.green }]}>{claimed ? 'Claimed' : `+${m.xp} XP`}</Text>
           </Animated.View>
@@ -90,7 +90,7 @@ export function CrewCard({ crew, joined, onToggle }: { crew: Crew; joined: boole
   return (
     <PressScale onPress={() => router.push({ pathname: '/crew/[id]', params: { id: crew.id } })} style={styles.row} scaleTo={0.985}>
       <View style={[styles.crewIcon, { backgroundColor: crew.color }]}>
-        <Icon name={crew.icon} size={26} color={colors.onCyan} />
+        <Icon name={crew.icon} size={26} color={colors.onSecondary} />
       </View>
       <View style={{ flex: 1, marginHorizontal: 12 }}>
         <Text style={styles.title} numberOfLines={1}>{crew.name}</Text>
@@ -124,7 +124,7 @@ export function EventCard({ event, going, onToggle, variant = 'row' }: { event: 
         </SceneImage>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
           <AvatarStack users={attendees} extra={event.going + (going ? 1 : 0)} size={22} />
-          <TogglePill on={going} onPress={onToggle} labelOff="Join" labelOn="Going" color={colors.pink} style={{ minWidth: 70, paddingVertical: 6 }} />
+          <TogglePill on={going} onPress={onToggle} labelOff="Join" labelOn="Going" color={colors.primary} style={{ minWidth: 70, paddingVertical: 6 }} />
         </View>
       </PressScale>
     );
@@ -150,7 +150,7 @@ export function EventCard({ event, going, onToggle, variant = 'row' }: { event: 
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={styles.xpSmall}>+{event.xp} XP</Text>
-          <TogglePill on={going} onPress={onToggle} labelOff="Join" labelOn="Going" color={colors.pink} style={{ paddingVertical: 7 }} />
+          <TogglePill on={going} onPress={onToggle} labelOff="Join" labelOn="Going" color={colors.primary} style={{ paddingVertical: 7 }} />
         </View>
       </View>
     </PressScale>
@@ -190,7 +190,7 @@ export function SocialPost({ post }: { post: Post }) {
         <View style={{ flex: 1, marginLeft: 10 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <Text style={styles.author}>{author.name}</Text>
-            {author.verified && <Icon name="check-decagram" size={14} color={colors.cyan} />}
+            {author.verified && <Icon name="check-decagram" size={14} color={colors.secondary} />}
             <Text style={styles.lvl}>LV {author.level}</Text>
           </View>
           <Text style={styles.meta} numberOfLines={1}>
@@ -218,20 +218,20 @@ export function SocialPost({ post }: { post: Post }) {
         <SceneImage kind={post.scene} seed={post.seed} aspect={1.2} style={{ borderRadius: 0 }} scrim={false}>
           {act && (
             <View style={styles.actChip}>
-              <Icon name={act.icon} size={14} color={colors.pink} />
+              <Icon name={act.icon} size={14} color={colors.primary} />
               <Text style={styles.actText}>{act.text}</Text>
             </View>
           )}
           {post.sticker && <StickerArt kind={post.sticker} size={78} style={{ position: 'absolute', right: 10, top: 10, transform: [{ rotate: '8deg' }] }} />}
           <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', opacity: heart, transform: [{ scale: heart.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) }] }]}>
-            <Icon name="heart" size={96} color={colors.pink} style={{ textShadowColor: colors.pink, textShadowRadius: 20 }} />
+            <Icon name="heart" size={96} color={colors.primary} style={{ textShadowColor: colors.primary, textShadowRadius: 20 }} />
           </Animated.View>
         </SceneImage>
       </Pressable>
 
       <View style={styles.actions}>
         <Pressable onPress={like} style={styles.action} hitSlop={6} accessibilityLabel={isLiked ? 'Unlike' : 'Like'}>
-          <Icon name={isLiked ? 'heart' : 'heart-outline'} size={24} color={isLiked ? colors.pink : colors.text} />
+          <Icon name={isLiked ? 'heart' : 'heart-outline'} size={24} color={isLiked ? colors.primary : colors.text} />
           <Text style={styles.count}>{(baseLikes.current + (isLiked ? 1 : 0)).toLocaleString('en-IN')}</Text>
         </Pressable>
         <Pressable onPress={() => router.push({ pathname: '/post/[id]', params: { id: post.id } })} style={styles.action} hitSlop={6} accessibilityLabel="Comments">
@@ -260,7 +260,7 @@ export function UserChip({ user, following, onFollow }: { user: User; following:
       <Avatar user={user} size={60} level={user.level} />
       <Text style={[styles.title, { fontSize: 13, marginTop: 10 }]} numberOfLines={1}>{user.name}</Text>
       <Text style={[styles.meta, { fontSize: 11 }]} numberOfLines={1}>{user.tags[0]} · {user.area}</Text>
-      <TogglePill on={following} onPress={onFollow} labelOff="Follow" labelOn="Following" color={colors.pink} style={{ marginTop: 8, minWidth: 0, alignSelf: 'stretch', paddingVertical: 6 }} />
+      <TogglePill on={following} onPress={onFollow} labelOff="Follow" labelOn="Following" color={colors.primary} style={{ marginTop: 8, minWidth: 0, alignSelf: 'stretch', paddingVertical: 6 }} />
     </View>
   );
 }
@@ -273,7 +273,7 @@ export function StoryCircle({ label, scene, onPress, isNew, seen }: { label: str
           <Icon name="plus" size={28} color={colors.text} />
         </View>
       ) : (
-        <LinearGradient colors={seen ? [colors.lineHi, colors.lineHi] : [colors.pink, colors.purple, colors.cyan]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.storyRing}>
+        <LinearGradient colors={seen ? [colors.lineHi, colors.lineHi] : [colors.primary, colors.purple, colors.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.storyRing}>
           <View style={styles.storyInner}>{scene && <Scene kind={scene} seed={label.length} aspect={1} style={StyleSheet.absoluteFill} />}</View>
         </LinearGradient>
       )}
@@ -405,8 +405,8 @@ const styles = StyleSheet.create({
   postHead: { flexDirection: 'row', alignItems: 'center', padding: 12 },
   author: { color: colors.text, fontFamily: fonts.bold, fontSize: 15 },
   lvl: { color: colors.violet, fontFamily: fonts.bold, fontSize: 10, marginLeft: 2, backgroundColor: 'rgba(138,63,252,0.18)', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 5, overflow: 'hidden' },
-  followBtn: { borderWidth: 1, borderColor: colors.pink, borderRadius: radius.sm, paddingHorizontal: 12, paddingVertical: 5 },
-  followText: { color: colors.pink, fontFamily: fonts.bold, fontSize: 12 },
+  followBtn: { borderWidth: 1, borderColor: colors.primary, borderRadius: radius.sm, paddingHorizontal: 12, paddingVertical: 5 },
+  followText: { color: colors.primary, fontFamily: fonts.bold, fontSize: 12 },
   actChip: { position: 'absolute', left: 10, bottom: 10, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(7,5,13,0.78)', borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(255,53,181,0.35)' },
   actText: { color: colors.text, fontFamily: fonts.semibold, fontSize: 12 },
   actions: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: 12, gap: 16 },

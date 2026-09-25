@@ -86,7 +86,8 @@ export default function Explore() {
           <Display size={34}>Explore</Display>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <CityChip />
-            <IconButton icon={showRoute ? 'map-marker-path' : 'map-outline'} onPress={() => setShowRoute((v) => !v)} label="Toggle route" color={showRoute ? colors.pink : colors.text} />
+            <IconButton icon="flag-variant" onPress={() => router.push('/territory')} label="Territory" color={colors.primary} />
+            <IconButton icon={showRoute ? 'map-marker-path' : 'map-outline'} onPress={() => setShowRoute((v) => !v)} label="Toggle route" color={showRoute ? colors.primary : colors.text} />
           </View>
         </View>
         <View style={{ marginTop: 10 }}>
@@ -136,7 +137,7 @@ export default function Explore() {
                     if (ev) toggleEvent(ev.id);
                     else act(p);
                   }}
-                  style={[styles.go, { backgroundColor: going ? colors.cardHi : p.kind === 'Runs' ? colors.pink : colors.cyan }]}>
+                  style={[styles.go, { backgroundColor: going ? colors.cardHi : p.kind === 'Runs' ? colors.primary : colors.secondary }]}>
                   <Text style={[styles.goText, going && { color: colors.sub }]}>{ev ? (going ? 'Going' : 'Join') : p.kind === 'Runs' ? 'Run' : 'Go'}</Text>
                 </Pressable>
               </PressScale>
@@ -159,7 +160,7 @@ function Marker({ place, active, onPress }: { place: Place; active: boolean; onP
         <View style={{ alignItems: 'center', justifyContent: 'center' }}>
           {(active || place.kind === 'Events') && <Pulse size={34} color={place.color} />}
           <View style={[styles.pinDot, { backgroundColor: place.color }]}>
-            <Icon name={place.icon} size={15} color={colors.onCyan} />
+            <Icon name={place.icon} size={15} color={colors.onSecondary} />
           </View>
         </View>
         <View style={{ marginLeft: 6 }}>
@@ -190,5 +191,5 @@ const styles = StyleSheet.create({
   pName: { color: colors.text, fontFamily: fonts.bold, fontSize: 14 },
   pMeta: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12 },
   go: { borderRadius: radius.sm, paddingHorizontal: 11, paddingVertical: 7, marginLeft: 6 },
-  goText: { color: colors.onCyan, fontFamily: fonts.bold, fontSize: 12 },
+  goText: { color: colors.onSecondary, fontFamily: fonts.bold, fontSize: 12 },
 });

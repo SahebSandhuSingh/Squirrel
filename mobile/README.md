@@ -25,6 +25,10 @@ Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-h
 
 | Route | Screen |
 |---|---|
+| `/sign-in` | Sign in (account service), demo mode, or developer token |
+| `/territory` | Own your block: district map, zone control, decay |
+| `/challenges` | Daily, head-to-head and group challenges (auto-resolve) |
+| `/leaderboard` | City ranking by territory area: daily, weekly, all-time |
 | `/welcome` | Landing: cinematic sunset city, avatar + squirrel mascot, Get Started |
 | `/avatar` | **Make It You**: body, hair, outfit, shoes, accessories, gear, emotes and pet mascot |
 | `/home` *(tab)* | Top bar (avatar, level, XP, coins), greeting, activity rings, Start Run, missions, events carousel, city leaderboard, crew activity |
@@ -46,6 +50,34 @@ Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-h
 | `/user/[id]` | Any user's profile, with Follow |
 | `/city` | City picker |
 | `/notifications` | Activity notifications |
+
+## Look & feel
+
+The app uses the same visual system as the Squirrel Social website (`squirrel-social-site`):
+- **Canvas:** near-black `#060606` with graphite cards (`#111113` / `#17171A`, border `#27272B`).
+- **Colours:** **lime `#D7FF1F`** for primary actions and "yours"; **pink `#FF2D9B`** as the secondary accent.
+- **Type:** Knewave brush headlines, Oswald uppercase labels and buttons, Space Mono section kickers, Permanent Marker scribbles.
+- **Shapes:** pill buttons, marquee "tape" strips, and the lime line-art squirrel logo (also the app icon).
+
+All tokens live in `src/theme.ts`.
+
+## Backend integration (Run Module)
+
+This follows the *Frontend ↔ Backend Compatibility Assessment*.
+
+| Area | State in the app |
+|---|---|
+| **Install** | `package.json` pins Expo SDK 57 / expo-router 57; the stray `"undefined"` dependency is gone |
+| **Auth** | `src/auth/AuthProvider.tsx`: sign-in screen, token in SecureStore, `Authorization: Bearer` on every call. Needs an account service (`EXPO_PUBLIC_AUTH_URL`) — none exists yet. Until then: demo mode, or paste a developer token |
+| **API layer** | `src/api/`: `POST /v1/runs` → points → `/finish` → `GET /v1/runs/:id`, `GET /v1/users/me/xp`, `GET /v1/leaderboard`. **Field names are assumptions** — confirm them in `src/api/endpoints.ts` once the backend schema is shared |
+| **Runs** | Real GPS via `expo-location` (accuracy/jump filtering, auto-pause). Signed in, the run uploads and the **server's** distance, verdict and XP are shown. Without GPS (web, or permission denied), a clearly labelled demo simulation runs |
+| **XP** | Local estimate uses the backend's rules (50 + 10/km + 25 territory, 150/day run cap). Signed in, the server total replaces it. Levels are derived client-side (2,000 XP each) |
+| **Anti-cheat** | Run summary shows *accepted / flagged / rejected* (server verdict when live, local plausibility check otherwise) |
+| **Territory** | New `/territory` screen (zones, control %, rivals, contested, 14-day decay) and area-based leaderboard (`/leaderboard`). Demo data until the territory endpoints are wired |
+| **Challenges** | New `/challenges` screen (daily, head-to-head, group), auto-resolving with no claim. Missions stay as a separate frontend feature (company decision, §4.3) |
+| **Still frontend-only** | Coins, cosmetics, social feed, crews/events, badges. They need backend models (§5) |
+
+To point the app at a backend, copy `.env.example` to `.env`, then set `EXPO_PUBLIC_API_URL` (and `EXPO_PUBLIC_AUTH_URL` when the account service exists).
 
 ## Architecture
 

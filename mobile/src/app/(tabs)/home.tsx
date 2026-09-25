@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Mascot } from '@/art/Mascot';
@@ -8,6 +8,10 @@ import { CityChip, TopBar } from '@/components/TopBar';
 import { Button, Card, Display, FadeIn, Icon, PressScale, Ring, Screen, SectionHeader, Tagline } from '@/components/ui';
 import { today } from '@/data/stats';
 import { users } from '@/data/users';
+import { territoryBoard } from '@/data/territory';
+import { useAuth } from '@/auth/AuthProvider';
+import { Tape } from '@/components/Brand';
+import { xpApi } from '@/api/endpoints';
 import { useApp } from '@/state/AppState';
 import { colors, fonts, radius } from '@/theme';
 
@@ -17,21 +21,21 @@ const greeting = () => {
 };
 
 export default function Home() {
-  const { me, missions, logMission, claimed, claimable, claimRewards, events, joinedEvents, toggleEvent, city } = useApp();
+  const { me, missions, logMission, claimed, claimable, claimRewards, events, joinedEvents, toggleEvent, city, districts } = useApp();
+  const { mode } = useAuth();
+  const { syncServerXp } = useApp();
+  // Signed in: the server's XP total (derived from real activity) replaces the demo figure.
+  useEffect(() => {
+    if (mode !== 'live') return;
+    xpApi.me().then((r) => syncServerXp(r.total)).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+  const held = districts.filter((d) => d.status === 'yours');
+  const home = held[0] ?? districts[0];
   const daily = missions.filter((m) => m.tab === 'Daily');
   const doneCount = daily.filter((m) => m.current >= m.goal).length;
   const upcoming = events.filter((e) => !e.online).slice(0, 5);
-  const leaders = useMemo(
-    () => [
-      ...users
-        .filter((u) => u.cityId === city.id && u.id !== me.id)
-        .sort((a, b) => b.level - a.level)
-        .slice(0, 3)
-        .map((u, i) => ({ u, rank: i + 1, xp: 4200 - i * 610 })),
-      { u: me, rank: 7, xp: 2340 },
-    ],
-    [city.id, me],
-  );
+  const leaders = territoryBoard.weekly.slice(0, 4);
 
   const onClaim = () => {
     const r = claimRewards();
@@ -48,7 +52,7 @@ export default function Home() {
           <Text style={styles.hello}>{greeting()}, {me.name.split(' ')[0]} 👋</Text>
           <CityChip />
         </View>
-        <Display size={44} style={{ marginTop: 2 }}>Ready to <Text style={{ color: colors.pink }}>move?</Text></Display>
+        <Display size={44} style={{ marginTop: 2 }}>Ready to <Text style={{ color: colors.primary }}>move?</Text></Display>
       </FadeIn>
 
       {/* Today's progress */}
@@ -58,14 +62,14 @@ export default function Home() {
             <Text style={styles.cardTitle}>Today's progress</Text>
             <Pressable onPress={() => router.push('/progress')} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Text style={styles.link}>Stats</Text>
-              <Icon name="chevron-right" size={16} color={colors.pink} />
+              <Icon name="chevron-right" size={16} color={colors.primary} />
             </Pressable>
           </View>
           <View style={styles.rings}>
-            <RingStat progress={today.steps.value / today.steps.goal} color={colors.green} color2={colors.cyan} icon="shoe-print" value={today.steps.value.toLocaleString('en-IN')} label="Steps" />
-            <RingStat progress={today.active.value / today.active.goal} color={colors.cyan} color2={colors.blue} icon="timer-outline" value={`${today.active.value}m`} label="Active" />
+            <RingStat progress={today.steps.value / today.steps.goal} color={colors.green} color2={colors.secondary} icon="shoe-print" value={today.steps.value.toLocaleString('en-IN')} label="Steps" />
+            <RingStat progress={today.active.value / today.active.goal} color={colors.secondary} color2={colors.blue} icon="timer-outline" value={`${today.active.value}m`} label="Active" />
             <RingStat progress={today.kcal.value / today.kcal.goal} color={colors.orange} color2={colors.gold} icon="fire" value={String(today.kcal.value)} label="kcal" />
-            <RingStat progress={Math.min(1, today.streak / 14)} color={colors.violet} color2={colors.pink} icon="lightning-bolt" value={`${today.streak}d`} label="Streak" />
+            <RingStat progress={Math.min(1, today.streak / 14)} color={colors.violet} color2={colors.primary} icon="lightning-bolt" value={`${today.streak}d`} label="Streak" />
           </View>
         </Card>
       </FadeIn>
@@ -81,7 +85,7 @@ export default function Home() {
                 <Text style={styles.runSub}>Earn up to +150 XP · 3 friends running now</Text>
               </View>
               <View style={styles.playBtn}>
-                <Icon name="play" size={30} color={colors.onPink} />
+                <Icon name="play" size={30} color={colors.onPrimary} />
               </View>
             </View>
           </SceneImage>
@@ -89,7 +93,7 @@ export default function Home() {
       </FadeIn>
 
       {/* Missions */}
-      <SectionHeader title="Today's Missions" action={`${doneCount}/${daily.length} done`} onAction={() => router.push('/missions')} />
+      <SectionHeader kicker="01 — Today" title="Today's Missions" action={`${doneCount}/${daily.length} done`} onAction={() => router.push('/missions')} />
       <View style={{ gap: 10 }}>
         {daily.map((m, i) => (
           <FadeIn key={m.id} index={i}>
@@ -106,19 +110,52 @@ export default function Home() {
       />
       {!claimable.count && <Text style={styles.hint}>Tap + on a mission to log progress. Complete one to claim XP & coins.</Text>}
 
+      <Tape items={['Touch grass (literally)', 'Every run leaves a mark', 'Claim your block', 'No gym-bro energy']} color={colors.secondary} rotate={2} style={{ marginTop: 26, marginBottom: -6 }} />
+
+      {/* Territory */}
+      <SectionHeader kicker="02 — Territory" title="Own your block" action="Map" onAction={() => router.push('/territory')} />
+      <PressScale onPress={() => router.push('/territory')} scaleTo={0.98}>
+        <View style={styles.zone}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.zoneKicker}>YOUR CREW</Text>
+            <Display size={28} numberOfLines={1}>{home?.name}</Display>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
+              <View style={{ flex: 1, height: 8, backgroundColor: colors.line }}>
+                <View style={{ width: `${Math.round((home?.control ?? 0) * 100)}%`, height: '100%', backgroundColor: colors.primary }} />
+              </View>
+              <Text style={styles.zonePct}>{Math.round((home?.control ?? 0) * 100)}%</Text>
+            </View>
+            <Text style={styles.zoneInfo}>{held.length} zones held · {districts.filter((d) => d.status === 'contested').length} contested · decays in {home?.decayDays}d</Text>
+          </View>
+          <Icon name="chevron-right" size={24} color={colors.primary} />
+        </View>
+      </PressScale>
+
+      {/* Challenges */}
+      <PressScale onPress={() => router.push('/challenges')} scaleTo={0.98} style={{ marginTop: 12 }}>
+        <View style={styles.battle}>
+          <Icon name="sword-cross" size={26} color={colors.secondary} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.battleTitle}>Choose your battle</Text>
+            <Text style={styles.zoneInfo}>You vs Rhea · 18.4 vs 21.1 km this week</Text>
+          </View>
+          <Icon name="chevron-right" size={24} color={colors.secondary} />
+        </View>
+      </PressScale>
+
       {/* Motivation */}
       <FadeIn>
         <SceneImage kind="city-night" seed={12} height={176} style={{ marginTop: 22 }} scrim={false}>
           <Mascot pose="lift" size={176} animated style={{ position: 'absolute', left: -6, bottom: -10 }} />
           <View style={{ position: 'absolute', right: 16, top: 24, alignItems: 'flex-end' }}>
             <Tagline size={23} style={{ textAlign: 'right' }}>Discipline{'\n'}today.</Tagline>
-            <Tagline size={19} color={colors.pinkSoft} style={{ textAlign: 'right', marginTop: 4 }}>A bigger you{'\n'}tomorrow.</Tagline>
+            <Tagline size={19} color={colors.primarySoft} style={{ textAlign: 'right', marginTop: 4 }}>A bigger you{'\n'}tomorrow.</Tagline>
           </View>
         </SceneImage>
       </FadeIn>
 
       {/* Events */}
-      <SectionHeader title={`Happening in ${city.name}`} action="All events" onAction={() => router.push('/events')} />
+      <SectionHeader kicker="03 — Meetups" title={`Happening in ${city.name}`} action="All events" onAction={() => router.push('/events')} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingRight: 16 }} style={{ marginHorizontal: -16 }}>
         <View style={{ width: 16 }} />
         {upcoming.map((e) => (
@@ -126,24 +163,27 @@ export default function Home() {
         ))}
       </ScrollView>
 
-      {/* Leaderboard */}
-      <SectionHeader title="City Leaderboard" action="This week" onAction={() => router.push('/social')} />
+      {/* Leaderboard — ranked by territory area, like the backend */}
+      <SectionHeader kicker="04 — Who's moving" title="City Leaderboard" action="By area" onAction={() => router.push('/leaderboard')} />
       <Card style={{ paddingVertical: 6 }}>
-        {leaders.map(({ u, rank, xp }, i) => (
-          <View key={u.id} style={[styles.leader, u.id === me.id && styles.leaderMe, i > 0 && u.id !== me.id && { borderTopWidth: 1, borderTopColor: colors.line }]}>
-            <Text style={[styles.rank, rank === 1 && { color: colors.gold }]}>#{rank}</Text>
-            <Avatar user={u} size={36} ring={rank === 1 ? colors.gold : colors.lineHi} />
-            <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={styles.leaderName}>{u.id === me.id ? 'You' : u.name}</Text>
-              <Text style={styles.leaderSub}>LV {u.level} · {u.area}</Text>
+        {leaders.map((r, i) => {
+          const u = r.me ? me : users.find((x) => x.id === r.userId)!;
+          return (
+            <View key={r.userId} style={[styles.leader, r.me && styles.leaderMe, i > 0 && !r.me && { borderTopWidth: 1, borderTopColor: colors.line }]}>
+              <Text style={[styles.rank, i === 0 && { color: colors.primary }]}>{String(i + 1).padStart(2, '0')}</Text>
+              <Avatar user={u} size={36} ring={i === 0 ? colors.primary : colors.lineHi} />
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={styles.leaderName}>{r.me ? 'You' : r.name}</Text>
+                <Text style={styles.leaderSub}>LV {u.level} · {u.area}</Text>
+              </View>
+              <Text style={styles.leaderXp}>{r.km2.toFixed(1)} km²</Text>
             </View>
-            <Text style={styles.leaderXp}>{xp.toLocaleString('en-IN')} XP</Text>
-          </View>
-        ))}
+          );
+        })}
       </Card>
 
       {/* Friends activity */}
-      <SectionHeader title="Crew Activity" action="Feed" onAction={() => router.push('/social')} />
+      <SectionHeader kicker="05 — Right now" title="Crew Activity" action="Feed" onAction={() => router.push('/social')} />
       <View style={{ gap: 10 }}>
         {[
           { u: 'u_rhea', text: 'ran 7.2 km at 5\'42"/km', icon: 'run-fast' as const, t: '2h' },
@@ -161,7 +201,7 @@ export default function Home() {
                   {a.text}
                 </Text>
                 <View style={{ alignItems: 'flex-end' }}>
-                  <Icon name={a.icon} size={18} color={colors.pink} />
+                  <Icon name={a.icon} size={18} color={colors.primary} />
                   <Text style={styles.leaderSub}>{a.t}</Text>
                 </View>
               </View>
@@ -186,16 +226,22 @@ function RingStat({ progress, color, color2, icon, value, label }: { progress: n
 }
 
 const styles = StyleSheet.create({
+  zone: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 2, borderColor: colors.primary, padding: 14, transform: [{ rotate: '-0.6deg' }], shadowColor: colors.primary, shadowOpacity: 0.25, shadowRadius: 14, shadowOffset: { width: 0, height: 0 } },
+  zoneKicker: { color: colors.primary, fontFamily: fonts.monoBold, fontSize: 10, letterSpacing: 1.4 },
+  zonePct: { color: colors.primary, fontFamily: fonts.labelBold, fontSize: 18 },
+  zoneInfo: { color: colors.dim, fontFamily: fonts.mono, fontSize: 10, marginTop: 6 },
+  battle: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: 'rgba(255,45,155,0.5)', padding: 14 },
+  battleTitle: { color: colors.text, fontFamily: fonts.label, fontSize: 17, letterSpacing: 1, textTransform: 'uppercase' },
   hello: { color: colors.sub, fontFamily: fonts.semibold, fontSize: 15, flexShrink: 1 },
   cardTitle: { color: colors.text, fontFamily: fonts.bold, fontSize: 15 },
-  link: { color: colors.pink, fontFamily: fonts.semibold, fontSize: 13 },
+  link: { color: colors.primary, fontFamily: fonts.semibold, fontSize: 13 },
   rings: { flexDirection: 'row', justifyContent: 'space-between' },
   ringValue: { color: colors.text, fontFamily: fonts.display, fontSize: 18, marginTop: 6, letterSpacing: 0.3 },
   ringLabel: { color: colors.dim, fontFamily: fonts.medium, fontSize: 11 },
   runCta: { position: 'absolute', left: 16, right: 16, bottom: 14, flexDirection: 'row', alignItems: 'flex-end' },
-  kicker: { color: colors.cyan, fontFamily: fonts.bold, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },
+  kicker: { color: colors.secondary, fontFamily: fonts.bold, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },
   runSub: { color: colors.sub, fontFamily: fonts.medium, fontSize: 12 },
-  playBtn: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.pink, alignItems: 'center', justifyContent: 'center', shadowColor: colors.pink, shadowOpacity: 0.8, shadowRadius: 14, shadowOffset: { width: 0, height: 0 } },
+  playBtn: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', shadowColor: colors.primary, shadowOpacity: 0.8, shadowRadius: 14, shadowOffset: { width: 0, height: 0 } },
   hint: { color: colors.mute, fontSize: 12, textAlign: 'center', marginTop: 8, fontFamily: fonts.regular },
   leader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 4 },
   leaderMe: { backgroundColor: 'rgba(255,53,181,0.08)', borderRadius: radius.md, marginHorizontal: -6, paddingHorizontal: 10 },

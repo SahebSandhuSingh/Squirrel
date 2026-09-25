@@ -82,7 +82,7 @@ export function PressScale({ children, style, scaleTo = 0.97, haptic = true, onP
 }
 
 /** Looping pulse ring, used for map markers and live indicators. */
-export function Pulse({ size = 40, color = colors.pink, style }: { size?: number; color?: string; style?: StyleProp<ViewStyle> }) {
+export function Pulse({ size = 40, color = colors.primary, style }: { size?: number; color?: string; style?: StyleProp<ViewStyle> }) {
   const v = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(Animated.timing(v, { toValue: 1, duration: 1800, easing: Easing.out(Easing.quad), useNativeDriver: NATIVE }));
@@ -119,19 +119,20 @@ export function AnimatedNumber({ value, style, format = (n) => Math.round(n).toL
 
 export function Display({ children, size = 34, color = colors.text, style, numberOfLines }: { children: React.ReactNode; size?: number; color?: string; style?: StyleProp<TextStyle>; numberOfLines?: number }) {
   return (
-    <Text numberOfLines={numberOfLines} style={[{ fontFamily: fonts.display, fontSize: size, lineHeight: size * 1.1, color, letterSpacing: 0.4, textTransform: 'uppercase' }, style]}>
+    <Text numberOfLines={numberOfLines} style={[{ fontFamily: fonts.display, fontSize: size, lineHeight: size * 1.08, color, letterSpacing: 0.2, textTransform: 'uppercase' }, style]}>
       {children}
     </Text>
   );
 }
 
-/** Graffiti annotation. Use sparingly. */
-export function Tagline({ children, size = 20, color = colors.text, rotate = -6, glow = true, style }: { children: React.ReactNode; size?: number; color?: string; rotate?: number; glow?: boolean; style?: StyleProp<TextStyle> }) {
+/** Marker scribble, as on the website ("SAME PARKS. DIFFERENT PEOPLE."). Use sparingly. */
+export function Tagline({ children, size = 20, color = colors.text, rotate = -6, glow = false, style }: { children: React.ReactNode; size?: number; color?: string; rotate?: number; glow?: boolean; style?: StyleProp<TextStyle> }) {
   return (
     <Text
       style={[
         { fontFamily: fonts.script, fontSize: size, lineHeight: size * 1.18, color, transform: [{ rotate: `${rotate}deg` }] },
-        glow && { textShadowColor: 'rgba(255,53,181,0.85)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
+        { textTransform: 'uppercase' },
+        glow && { textShadowColor: 'rgba(215,255,31,0.6)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
         style,
       ]}>
       {children}
@@ -140,17 +141,30 @@ export function Tagline({ children, size = 20, color = colors.text, rotate = -6,
 }
 
 export function Label({ children, style, color = colors.dim }: { children: React.ReactNode; style?: StyleProp<TextStyle>; color?: string }) {
-  return <Text style={[{ color, fontFamily: fonts.semibold, fontSize: 12, letterSpacing: 1.1, textTransform: 'uppercase' }, style]}>{children}</Text>;
+  return <Text style={[{ color, fontFamily: fonts.label, fontSize: 12, letterSpacing: 1.4, textTransform: 'uppercase' }, style]}>{children}</Text>;
 }
 
-export function SectionHeader({ title, action, onAction, style }: { title: string; action?: string; onAction?: () => void; style?: StyleProp<ViewStyle> }) {
+/** Website-style section kicker: a short lime rule + Space Mono caps ("— 02 — HOW DOES IT WORK?"). */
+export function Kicker({ children, color = colors.primary, style }: { children: React.ReactNode; color?: string; style?: StyleProp<ViewStyle> }) {
   return (
-    <View style={[{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 26, marginBottom: 12 }, style]}>
-      <Display size={22}>{title}</Display>
+    <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 8 }, style]}>
+      <View style={{ width: 22, height: 2, backgroundColor: color }} />
+      <Text style={{ color, fontFamily: fonts.monoBold, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase' }}>{children}</Text>
+    </View>
+  );
+}
+
+export function SectionHeader({ title, action, onAction, style, kicker }: { title: string; action?: string; onAction?: () => void; style?: StyleProp<ViewStyle>; kicker?: string }) {
+  return (
+    <View style={[{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 28, marginBottom: 12 }, style]}>
+      <View style={{ flexShrink: 1 }}>
+        {kicker && <Kicker style={{ marginBottom: 6 }}>{kicker}</Kicker>}
+        <Display size={24}>{title}</Display>
+      </View>
       {action && (
         <Pressable hitSlop={10} onPress={() => { tap(); onAction?.(); }} style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Text style={{ color: colors.pink, fontFamily: fonts.semibold, fontSize: 13 }}>{action}</Text>
-          <Icon name="chevron-right" size={18} color={colors.pink} />
+          <Text style={{ color: colors.primary, fontFamily: fonts.label, fontSize: 13, letterSpacing: 1, textTransform: 'uppercase' }}>{action}</Text>
+          <Icon name="chevron-right" size={18} color={colors.primary} />
         </Pressable>
       )}
     </View>
@@ -161,18 +175,18 @@ export function SectionHeader({ title, action, onAction, style }: { title: strin
 // Buttons
 // ---------------------------------------------------------------------------
 
-type BtnVariant = 'primary' | 'secondary' | 'ghost' | 'cyan' | 'gold';
+type BtnVariant = 'primary' | 'secondary' | 'ghost' | 'accent' | 'gold';
 
 export function Button({ label, onPress, icon, iconLeft, variant = 'primary', size = 'lg', style, disabled, accessibilityLabel }: { label: string; onPress?: () => void; icon?: IconName; iconLeft?: IconName; variant?: BtnVariant; size?: 'sm' | 'md' | 'lg'; style?: StyleProp<ViewStyle>; disabled?: boolean; accessibilityLabel?: string }) {
-  const pad = size === 'lg' ? 17 : size === 'md' ? 12 : 8;
-  const fs = size === 'lg' ? 20 : size === 'md' ? 16 : 13;
-  const filled = variant === 'primary' || variant === 'cyan' || variant === 'gold';
-  const grad = variant === 'cyan' ? gradients.cyan : variant === 'gold' ? gradients.gold : gradients.pink;
-  const fg = variant === 'primary' ? colors.onPink : variant === 'cyan' || variant === 'gold' ? colors.onCyan : colors.text;
+  const pad = size === 'lg' ? 16 : size === 'md' ? 12 : 8;
+  const fs = size === 'lg' ? 17 : size === 'md' ? 15 : 12;
+  const filled = variant === 'primary' || variant === 'accent' || variant === 'gold';
+  const fill = variant === 'accent' ? colors.secondary : variant === 'gold' ? colors.gold : colors.primary;
+  const fg = filled ? colors.onPrimary : colors.text;
   const content = (
     <>
       {iconLeft && <Icon name={iconLeft} size={fs + 2} color={fg} style={{ marginRight: 8 }} />}
-      <Text style={{ fontFamily: size === 'sm' ? fonts.bold : fonts.display, fontSize: fs, color: fg, letterSpacing: size === 'sm' ? 0.2 : 1, textTransform: size === 'sm' ? 'none' : 'uppercase' }}>{label}</Text>
+      <Text style={{ fontFamily: fonts.label, fontSize: fs, color: fg, letterSpacing: size === 'sm' ? 0.6 : 1.2, textTransform: 'uppercase' }}>{label}</Text>
       {icon && <Icon name={icon} size={fs + 2} color={fg} style={{ marginLeft: 8 }} />}
     </>
   );
@@ -184,14 +198,12 @@ export function Button({ label, onPress, icon, iconLeft, variant = 'primary', si
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       style={[
-        { borderRadius: radius.md, opacity: disabled ? 0.45 : 1 },
+        { borderRadius: radius.pill, opacity: disabled ? 0.45 : 1 },
         filled && variant === 'primary' && !disabled && styles.glow,
         style,
       ]}>
       {filled ? (
-        <LinearGradient colors={grad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.btn, { paddingVertical: pad }]}>
-          {content}
-        </LinearGradient>
+        <View style={[styles.btn, { paddingVertical: pad, backgroundColor: fill }]}>{content}</View>
       ) : (
         <View style={[styles.btn, { paddingVertical: pad - 1.5 }, variant === 'secondary' ? styles.btnSecondary : styles.btnGhost]}>{content}</View>
       )}
@@ -213,11 +225,11 @@ export function IconButton({ icon, onPress, size = 22, color = colors.text, badg
 }
 
 /** Small toggle button: "Join" → "Joined", "Follow" → "Following". */
-export function TogglePill({ on, onPress, labelOff, labelOn, color = colors.cyan, style, accessibilityLabel }: { on: boolean; onPress: () => void; labelOff: string; labelOn: string; color?: string; style?: StyleProp<ViewStyle>; accessibilityLabel?: string }) {
+export function TogglePill({ on, onPress, labelOff, labelOn, color = colors.primary, style, accessibilityLabel }: { on: boolean; onPress: () => void; labelOff: string; labelOn: string; color?: string; style?: StyleProp<ViewStyle>; accessibilityLabel?: string }) {
   return (
     <PressScale onPress={onPress} accessibilityLabel={accessibilityLabel} accessibilityRole="button" accessibilityState={{ selected: on }} style={[styles.pill, on ? styles.pillOn : { backgroundColor: color }, style]}>
       {on && <Icon name="check" size={14} color={colors.sub} style={{ marginRight: 4 }} />}
-      <Text style={[styles.pillText, { color: on ? colors.sub : color === colors.pink ? colors.onPink : colors.onCyan }]}>{on ? labelOn : labelOff}</Text>
+      <Text style={[styles.pillText, { color: on ? colors.sub : colors.onPrimary }]}>{on ? labelOn : labelOff}</Text>
     </PressScale>
   );
 }
@@ -245,8 +257,8 @@ export function Chips<T extends string>({ items, value, onChange, icons, style }
         const ic = icons?.[i];
         return (
           <PressScale key={i} onPress={() => { tap(); onChange(i); }} accessibilityLabel={i} accessibilityRole="button" accessibilityState={{ selected: on }} style={[styles.chip, on && styles.chipOn]}>
-            {ic && <Icon name={ic} size={15} color={on ? colors.onCyan : colors.dim} style={{ marginRight: 5 }} />}
-            <Text style={[styles.chipText, on && { color: colors.onCyan }]}>{i}</Text>
+            {ic && <Icon name={ic} size={15} color={on ? colors.onSecondary : colors.dim} style={{ marginRight: 5 }} />}
+            <Text style={[styles.chipText, on && { color: colors.onSecondary }]}>{i}</Text>
           </PressScale>
         );
       })}
@@ -254,7 +266,7 @@ export function Chips<T extends string>({ items, value, onChange, icons, style }
   );
 }
 
-export function Segmented<T extends string>({ items, value, onChange, accent = 'pink', style, labels }: { items: readonly T[]; value: T; onChange: (v: T) => void; accent?: 'pink' | 'cyan'; style?: StyleProp<ViewStyle>; labels?: Partial<Record<T, string>> }) {
+export function Segmented<T extends string>({ items, value, onChange, accent = 'primary', style, labels }: { items: readonly T[]; value: T; onChange: (v: T) => void; accent?: 'primary' | 'secondary'; style?: StyleProp<ViewStyle>; labels?: Partial<Record<T, string>> }) {
   const [w, setW] = useState(0);
   const idx = Math.max(0, items.indexOf(value));
   const x = useRef(new Animated.Value(idx)).current;
@@ -266,14 +278,14 @@ export function Segmented<T extends string>({ items, value, onChange, accent = '
     <View style={[styles.seg, style]} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
       {seg > 0 && (
         <Animated.View style={[styles.segThumb, { width: seg, transform: [{ translateX: x.interpolate({ inputRange: [0, Math.max(1, items.length - 1)], outputRange: [0, seg * Math.max(1, items.length - 1)] }) }] }]}>
-          <LinearGradient colors={accent === 'cyan' ? gradients.cyan : gradients.pink} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: accent === 'secondary' ? colors.secondary : colors.primary }]} />
         </Animated.View>
       )}
       {items.map((i) => {
         const on = i === value;
         return (
           <PressScale key={i} onPress={() => { tap(); onChange(i); }} accessibilityLabel={i} accessibilityRole="button" accessibilityState={{ selected: on }} style={styles.segItem}>
-            <Text numberOfLines={1} style={[styles.segText, on && { color: accent === 'cyan' ? colors.onCyan : colors.onPink }]}>{labels?.[i] ?? i}</Text>
+            <Text numberOfLines={1} style={[styles.segText, on && { color: colors.onPrimary }]}>{labels?.[i] ?? i}</Text>
           </PressScale>
         );
       })}
@@ -285,7 +297,7 @@ export function Segmented<T extends string>({ items, value, onChange, accent = '
 // Progress
 // ---------------------------------------------------------------------------
 
-export function ProgressBar({ progress, color = colors.pink, color2, height = 6, style, animated = true }: { progress: number; color?: string; color2?: string; height?: number; style?: StyleProp<ViewStyle>; animated?: boolean }) {
+export function ProgressBar({ progress, color = colors.primary, color2, height = 6, style, animated = true }: { progress: number; color?: string; color2?: string; height?: number; style?: StyleProp<ViewStyle>; animated?: boolean }) {
   const p = Math.max(0, Math.min(1, progress));
   const v = useRef(new Animated.Value(animated ? 0 : p)).current;
   useEffect(() => {
@@ -303,7 +315,7 @@ export function ProgressBar({ progress, color = colors.pink, color2, height = 6,
 export function XPBar({ value, max, style, showLabel = true }: { value: number; max: number; style?: StyleProp<ViewStyle>; showLabel?: boolean }) {
   return (
     <View style={style}>
-      <ProgressBar progress={value / max} color={colors.pink} color2={colors.violet} height={8} />
+      <ProgressBar progress={value / max} color={colors.primary} color2={colors.violet} height={8} />
       {showLabel && (
         <Text style={{ color: colors.dim, fontFamily: fonts.semibold, fontSize: 11, marginTop: 4 }}>
           <Text style={{ color: colors.text }}>{value.toLocaleString('en-IN')}</Text> / {max.toLocaleString('en-IN')} XP
@@ -314,7 +326,7 @@ export function XPBar({ value, max, style, showLabel = true }: { value: number; 
 }
 
 /** Circular progress ring (activity rings on Home). */
-export function Ring({ progress, size = 64, stroke = 7, color = colors.pink, color2, children }: { progress: number; size?: number; stroke?: number; color?: string; color2?: string; children?: React.ReactNode }) {
+export function Ring({ progress, size = 64, stroke = 7, color = colors.primary, color2, children }: { progress: number; size?: number; stroke?: number; color?: string; color2?: string; children?: React.ReactNode }) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const id = React.useId().replace(/:/g, '');
@@ -362,7 +374,7 @@ export function Card({ children, style, glow }: { children: React.ReactNode; sty
 export function IconBadge({ icon, color, size = 44, solid }: { icon: IconName; color: string; size?: number; solid?: boolean }) {
   return (
     <View style={{ width: size, height: size, borderRadius: size * 0.32, backgroundColor: solid ? color : `${color}1F`, borderWidth: 1, borderColor: `${color}55`, alignItems: 'center', justifyContent: 'center' }}>
-      <Icon name={icon} size={size * 0.54} color={solid ? colors.onCyan : color} />
+      <Icon name={icon} size={size * 0.54} color={solid ? colors.onSecondary : color} />
     </View>
   );
 }
@@ -394,7 +406,7 @@ export function LevelBadge({ level, size = 'md' }: { level: number; size?: 'sm' 
   );
 }
 
-export function Tag({ label, icon, color = colors.pink }: { label: string; icon?: IconName; color?: string }) {
+export function Tag({ label, icon, color = colors.primary }: { label: string; icon?: IconName; color?: string }) {
   return (
     <View style={styles.tag}>
       {icon && <Icon name={icon} size={13} color={color} />}
@@ -457,27 +469,27 @@ export function EmptyState({ title, body, art, action, onAction }: { title: stri
 }
 
 const styles = StyleSheet.create({
-  glow: { shadowColor: colors.pink, shadowOpacity: 0.55, shadowRadius: 18, shadowOffset: { width: 0, height: 4 }, elevation: 10 },
-  btn: { borderRadius: radius.md, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  btnSecondary: { borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.28)', backgroundColor: 'rgba(255,255,255,0.04)' },
+  glow: { shadowColor: colors.primary, shadowOpacity: 0.45, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 10 },
+  btn: { borderRadius: radius.pill, paddingHorizontal: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  btnSecondary: { borderWidth: 1.5, borderColor: '#4A4A4F', backgroundColor: 'rgba(0,0,0,0.55)' },
   btnGhost: { backgroundColor: colors.cardHi, borderWidth: 1, borderColor: colors.line },
   iconBtn: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
-  badge: { position: 'absolute', top: -2, right: -2, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.pink, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: colors.bg },
+  badge: { position: 'absolute', top: -2, right: -2, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.secondary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: colors.bg },
   badgeText: { color: '#fff', fontSize: 9, fontFamily: fonts.bold },
-  pill: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm, paddingHorizontal: 16, paddingVertical: 8, minWidth: 82 },
+  pill: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 8, minWidth: 82 },
   pillOn: { backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: colors.lineHi },
-  pillText: { fontFamily: fonts.bold, fontSize: 13 },
+  pillText: { fontFamily: fonts.label, fontSize: 13, letterSpacing: 1, textTransform: 'uppercase' },
   search: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.glass, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, paddingLeft: 14, paddingRight: 6, height: 48 },
   searchInput: { flex: 1, color: colors.text, marginLeft: 8, fontFamily: fonts.regular, fontSize: 14, height: '100%' },
-  chip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 8, borderRadius: radius.sm, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line },
-  chipOn: { backgroundColor: colors.cyan, borderColor: colors.cyan },
-  chipText: { color: colors.sub, fontFamily: fonts.semibold, fontSize: 13 },
-  seg: { flexDirection: 'row', backgroundColor: colors.card, borderRadius: radius.md, padding: 4, borderWidth: 1, borderColor: colors.line, marginVertical: 12 },
-  segThumb: { position: 'absolute', top: 4, bottom: 4, left: 4, borderRadius: radius.sm, overflow: 'hidden' },
+  chip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 8, borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line },
+  chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { color: colors.sub, fontFamily: fonts.label, fontSize: 13, letterSpacing: 0.8, textTransform: 'uppercase' },
+  seg: { flexDirection: 'row', backgroundColor: colors.card, borderRadius: radius.pill, padding: 4, borderWidth: 1, borderColor: colors.line, marginVertical: 12 },
+  segThumb: { position: 'absolute', top: 4, bottom: 4, left: 4, borderRadius: radius.pill, overflow: 'hidden' },
   segItem: { flex: 1, alignItems: 'center', paddingVertical: 10 },
-  segText: { color: colors.sub, fontFamily: fonts.semibold, fontSize: 14 },
+  segText: { color: colors.sub, fontFamily: fonts.label, fontSize: 14, letterSpacing: 0.8, textTransform: 'uppercase' },
   card: { backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, padding: 14 },
   tag: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: colors.line, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: radius.pill, paddingHorizontal: 11, paddingVertical: 6 },
-  tagText: { color: colors.text, fontSize: 12, fontFamily: fonts.medium },
+  tagText: { color: colors.text, fontSize: 12, fontFamily: fonts.label, letterSpacing: 0.8, textTransform: 'uppercase' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 50, gap: 8 },
 });

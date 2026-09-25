@@ -17,7 +17,7 @@ export function TopBar() {
             <LevelBadge level={level} size="sm" />
             <Text style={styles.lv}>LV {level}</Text>
           </View>
-          <ProgressBar progress={levelXp / XP_PER_LEVEL} color={colors.pink} color2={colors.violet} height={4} style={{ marginTop: 5 }} />
+          <ProgressBar progress={levelXp / XP_PER_LEVEL} color={colors.primary} color2={colors.violet} height={4} style={{ marginTop: 5 }} />
         </View>
       </Pressable>
 
@@ -36,7 +36,7 @@ export function CityChip() {
   const { city } = useApp();
   return (
     <Pressable onPress={() => { tap(); router.push('/city'); }} style={styles.city} accessibilityLabel={`City: ${city.name}. Change city`}>
-      <Icon name="map-marker" size={14} color={colors.cyan} />
+      <Icon name="map-marker" size={14} color={colors.secondary} />
       <Text style={styles.cityText} numberOfLines={1}>{city.name}</Text>
       <Icon name="chevron-down" size={14} color={colors.dim} />
     </Pressable>

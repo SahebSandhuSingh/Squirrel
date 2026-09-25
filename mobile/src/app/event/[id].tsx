@@ -35,7 +35,7 @@ export default function EventDetail() {
           <Scrim strong />
           <View style={[styles.topBar, { top: insets.top + 8 }]}>
             <IconButton icon="chevron-left" size={26} onPress={() => router.back()} label="Back" />
-            <IconButton icon="share-variant-outline" onPress={() => toast('Event link copied', 'link-variant', colors.cyan)} label="Share" />
+            <IconButton icon="share-variant-outline" onPress={() => toast('Event link copied', 'link-variant', colors.secondary)} label="Share" />
           </View>
           <View style={styles.heroText}>
             <View style={styles.xp}>
@@ -73,7 +73,7 @@ export default function EventDetail() {
               <View style={styles.map}>
                 <CityMap seed={event.title.length} route style={StyleSheet.absoluteFill} />
                 <View style={styles.pin}>
-                  <Icon name={event.icon} size={18} color={colors.onPink} />
+                  <Icon name={event.icon} size={18} color={colors.onPrimary} />
                 </View>
               </View>
             </>
@@ -92,7 +92,7 @@ function Row({ icon, title, sub }: { icon: React.ComponentProps<typeof Icon>['na
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
       <View style={styles.rowIcon}>
-        <Icon name={icon} size={20} color={colors.pink} />
+        <Icon name={icon} size={20} color={colors.primary} />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={styles.rowTitle}>{title}</Text>
@@ -115,6 +115,6 @@ const styles = StyleSheet.create({
   rowSub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, marginTop: 1 },
   body: { color: colors.sub, fontFamily: fonts.regular, fontSize: 15, lineHeight: 22 },
   map: { height: 180, borderRadius: radius.lg, overflow: 'hidden', borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
-  pin: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.pink, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#fff' },
+  pin: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#fff' },
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 12, backgroundColor: 'rgba(7,5,13,0.95)', borderTopWidth: 1, borderTopColor: colors.line },
 });

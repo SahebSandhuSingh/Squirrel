@@ -9,12 +9,12 @@ import { colors, fonts, radius } from '@/theme';
 type Note = { id: string; user?: string; icon: IconName; color: string; text: string; time: string; go: Href; unread?: boolean };
 
 const NOTES: Note[] = [
-  { id: 'n1', user: 'u_rhea', icon: 'heart', color: colors.pink, text: 'Rhea and 23 others liked your run', time: '2m', go: '/profile', unread: true },
+  { id: 'n1', user: 'u_rhea', icon: 'heart', color: colors.primary, text: 'Rhea and 23 others liked your run', time: '2m', go: '/profile', unread: true },
   { id: 'n2', icon: 'trophy', color: colors.gold, text: 'You reached Level 13 · 3 rewards to open', time: '1h', go: '/level-up', unread: true },
   { id: 'n3', user: 'u_meera', icon: 'calendar-star', color: colors.violet, text: 'Meera invited you to Yoga in the Park', time: '3h', go: '/events', unread: true },
-  { id: 'n4', user: 'u_zoya', icon: 'account-plus', color: colors.cyan, text: 'Zoya started following you', time: '5h', go: { pathname: '/user/[id]', params: { id: 'u_zoya' } } },
+  { id: 'n4', user: 'u_zoya', icon: 'account-plus', color: colors.secondary, text: 'Zoya started following you', time: '5h', go: { pathname: '/user/[id]', params: { id: 'u_zoya' } } },
   { id: 'n5', icon: 'fire', color: colors.orange, text: '12-day streak! Keep it alive with a 10-minute walk', time: '8h', go: '/missions' },
-  { id: 'n6', user: 'u_aarav', icon: 'comment', color: colors.pink, text: 'Aarav commented: "that pace though 🔥"', time: '1d', go: '/social' },
+  { id: 'n6', user: 'u_aarav', icon: 'comment', color: colors.primary, text: 'Aarav commented: "that pace though 🔥"', time: '1d', go: '/social' },
   { id: 'n7', icon: 'shopping', color: colors.gold, text: 'New drop in the Shop: Sunset Collection', time: '2d', go: '/shop' },
 ];
 
@@ -51,5 +51,5 @@ const styles = StyleSheet.create({
   icon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   text: { flex: 1, color: colors.sub, fontFamily: fonts.medium, fontSize: 14, lineHeight: 19 },
   time: { color: colors.dim, fontFamily: fonts.regular, fontSize: 11 },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.pink },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary },
 });

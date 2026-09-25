@@ -57,12 +57,12 @@ export default function ItemSheet() {
           <Text style={styles.metaText}>Level {item.levelRequired}+</Text>
         </View>
         <View style={styles.meta}>
-          <Icon name="tag-outline" size={16} color={colors.cyan} />
+          <Icon name="tag-outline" size={16} color={colors.secondary} />
           <Text style={styles.metaText}>{item.category}</Text>
         </View>
       </View>
       {has ? (
-        <Button label={isEquipped ? 'Unequip' : 'Equip'} variant={isEquipped ? 'secondary' : 'cyan'} iconLeft={isEquipped ? 'close' : 'check'} onPress={onEquip} style={{ marginTop: 18 }} />
+        <Button label={isEquipped ? 'Unequip' : 'Equip'} variant={isEquipped ? 'secondary' : 'primary'} iconLeft={isEquipped ? 'close' : 'check'} onPress={onEquip} style={{ marginTop: 18 }} />
       ) : (
         <Button
           label={locked ? `Unlocks at level ${item.levelRequired}` : short ? `Need ${(item.price - coins).toLocaleString('en-IN')} more` : `Unlock for ${item.price.toLocaleString('en-IN')}`}
@@ -85,5 +85,5 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', gap: 8, marginTop: 14, flexWrap: 'wrap' },
   meta: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.card, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: colors.line },
   metaText: { color: colors.text, fontFamily: fonts.semibold, fontSize: 12 },
-  hint: { color: colors.pink, fontFamily: fonts.semibold, fontSize: 13, textAlign: 'center', marginTop: 12 },
+  hint: { color: colors.primary, fontFamily: fonts.semibold, fontSize: 13, textAlign: 'center', marginTop: 12 },
 });

@@ -10,9 +10,9 @@ import { colors, fonts, radius } from '@/theme';
 type Action = { label: string; sub: string; icon: IconName; color: string; go?: Href; mission?: string };
 
 const ACTIONS: Action[] = [
-  { label: 'Start a run', sub: 'GPS · live stats', icon: 'run-fast', color: colors.pink, go: '/run' },
+  { label: 'Start a run', sub: 'GPS · live stats', icon: 'run-fast', color: colors.primary, go: '/run' },
   { label: 'Post activity', sub: 'Photo, run or meal', icon: 'image-plus', color: colors.violet, go: '/compose' },
-  { label: 'Log water', sub: '+250 ml', icon: 'cup-water', color: colors.cyan, mission: 'm-water' },
+  { label: 'Log water', sub: '+250 ml', icon: 'cup-water', color: colors.secondary, mission: 'm-water' },
   { label: 'Log workout', sub: '+1 squat set', icon: 'dumbbell', color: colors.gold, mission: 'm-squats' },
   { label: 'Log a meal', sub: 'Healthy plate', icon: 'food-apple', color: colors.green, mission: 'm-meal' },
   { label: 'Find an event', sub: 'Join the crew', icon: 'calendar-star', color: colors.orange, go: '/events' },

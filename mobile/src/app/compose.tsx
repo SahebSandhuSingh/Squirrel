@@ -47,7 +47,7 @@ export default function Compose() {
       <Label style={{ marginTop: 18, marginBottom: 8 }}>Backdrop</Label>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
         {SCENES.map((s) => (
-          <Pressable key={s} onPress={() => { tap(); setScene(s); }} style={[styles.thumb, scene === s && { borderColor: colors.pink }]} accessibilityLabel={s}>
+          <Pressable key={s} onPress={() => { tap(); setScene(s); }} style={[styles.thumb, scene === s && { borderColor: colors.primary }]} accessibilityLabel={s}>
             <SceneImage kind={s} seed={3} height={66} style={{ width: 66, borderRadius: radius.sm }} scrim={false} />
           </Pressable>
         ))}
@@ -55,14 +55,14 @@ export default function Compose() {
 
       <Label style={{ marginTop: 18, marginBottom: 8 }}>Sticker</Label>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-        <Pressable onPress={() => setSticker(undefined)} style={[styles.sticker, !sticker && { borderColor: colors.pink }]}>
+        <Pressable onPress={() => setSticker(undefined)} style={[styles.sticker, !sticker && { borderColor: colors.primary }]}>
           <Text style={{ color: colors.dim, fontFamily: fonts.semibold }}>None</Text>
         </Pressable>
         {STICKERS.map((k) => {
           const id = { 'one-more-km': 'st-km', fire: 'st-fire', 'good-vibes': 'st-vibes', 'neon-heart': 'st-heart', 'squirrel-flex': 'st-flex', hydrate: 'st-hydrate' }[k];
           const has = owned.has(id) || k === 'neon-heart' || k === 'one-more-km';
           return (
-            <Pressable key={k} disabled={!has} onPress={() => { tap(); setSticker(k); }} style={[styles.sticker, sticker === k && { borderColor: colors.pink }, !has && { opacity: 0.35 }]}>
+            <Pressable key={k} disabled={!has} onPress={() => { tap(); setSticker(k); }} style={[styles.sticker, sticker === k && { borderColor: colors.primary }, !has && { opacity: 0.35 }]}>
               <StickerArt kind={k as StickerKind} size={56} />
             </Pressable>
           );

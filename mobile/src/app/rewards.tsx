@@ -39,10 +39,10 @@ export default function Rewards() {
               <FadeIn key={`${r.level}-${r.title}`} index={i}>
                 <View style={styles.roadRow}>
                   <View style={{ alignItems: 'center', width: 40 }}>
-                    <View style={[styles.node, unlocked && { backgroundColor: colors.pink, borderColor: colors.pinkSoft }]}>
+                    <View style={[styles.node, unlocked && { backgroundColor: colors.primary, borderColor: colors.primarySoft }]}>
                       <Text style={styles.nodeText}>{r.level}</Text>
                     </View>
-                    {i < levelRewards.length - 1 && <View style={[styles.rail, unlocked && { backgroundColor: colors.pink }]} />}
+                    {i < levelRewards.length - 1 && <View style={[styles.rail, unlocked && { backgroundColor: colors.primary }]} />}
                   </View>
                   <View style={[styles.roadCard, !unlocked && { opacity: 0.6 }]}>
                     <RewardArt kind={r.kind} size={62} />

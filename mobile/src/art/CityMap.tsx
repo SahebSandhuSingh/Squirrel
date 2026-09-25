@@ -456,24 +456,24 @@ export const CityMap = React.memo(function CityMap(props: {
       {/* running route */}
       {route ? (
         <G>
-          <Path d={ROUTE_D} stroke={art.pink} strokeOpacity={0.14} strokeWidth={3} fill="none" strokeDasharray="2 5" strokeLinecap="round" />
-          <AnimatedPath d={ROUTE_D} stroke={art.pink} strokeOpacity={0.16} strokeWidth={16} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} strokeDashoffset={offset} />
-          <AnimatedPath d={ROUTE_D} stroke={art.pink} strokeOpacity={0.4} strokeWidth={8} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} strokeDashoffset={offset} />
-          <AnimatedPath d={ROUTE_D} stroke={art.pink} strokeWidth={4} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} strokeDashoffset={offset} />
+          <Path d={ROUTE_D} stroke={art.lime} strokeOpacity={0.14} strokeWidth={3} fill="none" strokeDasharray="2 5" strokeLinecap="round" />
+          <AnimatedPath d={ROUTE_D} stroke={art.lime} strokeOpacity={0.16} strokeWidth={16} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} strokeDashoffset={offset} />
+          <AnimatedPath d={ROUTE_D} stroke={art.lime} strokeOpacity={0.4} strokeWidth={8} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} strokeDashoffset={offset} />
+          <AnimatedPath d={ROUTE_D} stroke={art.lime} strokeWidth={4} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} strokeDashoffset={offset} />
           <AnimatedPath d={ROUTE_D} stroke="#FFE1F3" strokeWidth={1.3} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} strokeDashoffset={offset} />
 
           {/* start */}
-          <Circle cx={start.x} cy={start.y} r={11} fill={art.pink} opacity={0.18} />
+          <Circle cx={start.x} cy={start.y} r={11} fill={art.lime} opacity={0.18} />
           <Circle cx={start.x} cy={start.y} r={8} fill="none" stroke="#FFFFFF" strokeWidth={1.8} strokeDasharray="3 2.5" />
-          <Circle cx={start.x} cy={start.y} r={4} fill={art.pink} stroke="#FFFFFF" strokeWidth={1.4} />
+          <Circle cx={start.x} cy={start.y} r={4} fill={art.lime} stroke="#FFFFFF" strokeWidth={1.4} />
 
           {/* finish flag */}
-          <Circle cx={end.x} cy={end.y} r={10} fill={art.cyan} opacity={0.18} />
-          <Circle cx={end.x} cy={end.y} r={4.5} fill="#FFFFFF" stroke={art.pink} strokeWidth={2} />
+          <Circle cx={end.x} cy={end.y} r={10} fill={art.pink} opacity={0.18} />
+          <Circle cx={end.x} cy={end.y} r={4.5} fill="#FFFFFF" stroke={art.lime} strokeWidth={2} />
           <Path d={`M${f(end.x)} ${f(end.y)} V${f(end.y - 22)}`} stroke="#FFFFFF" strokeWidth={1.8} strokeLinecap="round" />
           <Path
             d={`M${f(end.x)} ${f(end.y - 22)} h14 l-3.5 5 l3.5 5 h-14 Z`}
-            fill={art.pink}
+            fill={art.lime}
             stroke="#FFFFFF"
             strokeWidth={1.2}
             strokeLinejoin="round"
@@ -564,25 +564,25 @@ export const RunRoute = React.memo(function RunRoute(props: { progress?: Animate
     <Svg width="100%" height="100%" viewBox="0 0 400 700" preserveAspectRatio="xMidYMid slice" style={style}>
       <Defs>
         <LinearGradient id={`${uid}fade`} x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor={art.pink} stopOpacity={0.35} />
-          <Stop offset="1" stopColor={art.pink} stopOpacity={1} />
+          <Stop offset="0" stopColor={art.lime} stopOpacity={0.35} />
+          <Stop offset="1" stopColor={art.lime} stopOpacity={1} />
         </LinearGradient>
         <RadialGradient id={`${uid}hg`} cx="0.5" cy="0.5" r="0.5">
-          <Stop offset="0" stopColor={art.pink} stopOpacity={0.7} />
-          <Stop offset="1" stopColor={art.pink} stopOpacity={0} />
+          <Stop offset="0" stopColor={art.lime} stopOpacity={0.7} />
+          <Stop offset="1" stopColor={art.lime} stopOpacity={0} />
         </RadialGradient>
       </Defs>
       {/* whole route, faint */}
-      <Path d={shapes.full} fill={art.pink} opacity={0.2} />
-      {shapes.ahead ? <Path d={shapes.ahead} fill={art.pinkHi} opacity={0.6} /> : null}
+      <Path d={shapes.full} fill={art.lime} opacity={0.2} />
+      {shapes.ahead ? <Path d={shapes.ahead} fill={art.lime} opacity={0.6} /> : null}
       {/* completed part: glow + body + hot core */}
-      {shapes.glow ? <Path d={shapes.glow} fill={art.pink} opacity={0.16} /> : null}
+      {shapes.glow ? <Path d={shapes.glow} fill={art.lime} opacity={0.16} /> : null}
       {shapes.done ? <Path d={shapes.done} fill={`url(#${uid}fade)`} /> : null}
       {shapes.core ? <Path d={shapes.core} fill="#FFE6F5" opacity={0.85} /> : null}
 
       {/* current position */}
       <Ellipse cx={head.x} cy={head.y} rx={hw * 3.2} ry={hw * 2.2} fill={`url(#${uid}hg)`} />
-      <Circle cx={head.x} cy={head.y} r={hw * 1.35} fill={art.pink} opacity={0.3} />
+      <Circle cx={head.x} cy={head.y} r={hw * 1.35} fill={art.lime} opacity={0.3} />
       <Circle cx={head.x} cy={head.y} r={hw} fill="#FFFFFF" />
       <Circle cx={head.x} cy={head.y} r={hw * 0.66} fill={art.purple} />
       <Circle cx={head.x - hw * 0.2} cy={head.y - hw * 0.22} r={hw * 0.2} fill="#FFFFFF" opacity={0.7} />

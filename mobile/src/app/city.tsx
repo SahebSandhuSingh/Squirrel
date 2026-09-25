@@ -25,7 +25,7 @@ export default function CityPicker() {
                 if (!on) setCity(c.id);
                 router.back();
               }}
-              style={[styles.card, on && { borderColor: colors.pink }]}
+              style={[styles.card, on && { borderColor: colors.primary }]}
               accessibilityLabel={c.name}>
               <Scene kind={i % 3 === 0 ? 'city-sunset' : i % 3 === 1 ? 'city-night' : 'city-dawn'} seed={i * 13 + 5} aspect={1.9} style={StyleSheet.absoluteFill} />
               <Scrim strong />
@@ -35,7 +35,7 @@ export default function CityPicker() {
               </View>
               {on && (
                 <View style={styles.check}>
-                  <Icon name="check" size={14} color={colors.onPink} />
+                  <Icon name="check" size={14} color={colors.onPrimary} />
                 </View>
               )}
             </Pressable>
@@ -53,5 +53,5 @@ const styles = StyleSheet.create({
   label: { position: 'absolute', left: 10, bottom: 8 },
   name: { color: colors.text, fontFamily: fonts.display, fontSize: 20, letterSpacing: 0.4 },
   country: { color: colors.sub, fontFamily: fonts.medium, fontSize: 11 },
-  check: { position: 'absolute', top: 8, right: 8, width: 22, height: 22, borderRadius: 11, backgroundColor: colors.pink, alignItems: 'center', justifyContent: 'center' },
+  check: { position: 'absolute', top: 8, right: 8, width: 22, height: 22, borderRadius: 11, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
 });

@@ -24,7 +24,7 @@ function TabItem({ focused, label, icons, onPress }: { focused: boolean; label: 
   return (
     <Pressable onPress={onPress} style={styles.item} accessibilityRole="tab" accessibilityState={{ selected: focused }} accessibilityLabel={label}>
       <Animated.View style={{ transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [0, -2] }) }, { scale: v.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] }) }] }}>
-        <Icon name={focused ? icons[0] : icons[1]} size={25} color={focused ? colors.pink : colors.dim} />
+        <Icon name={focused ? icons[0] : icons[1]} size={25} color={focused ? colors.primary : colors.dim} />
       </Animated.View>
       <Text style={[styles.label, focused && { color: colors.text }]}>{label}</Text>
       <Animated.View style={[styles.dot, { opacity: v, transform: [{ scaleX: v }] }]} />
@@ -58,8 +58,8 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
             router.push('/create');
           }}
           style={({ pressed }) => [styles.plusWrap, { transform: [{ scale: pressed ? 0.93 : 1 }] }]}>
-          <LinearGradient colors={gradients.pink} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.plus}>
-            <Icon name="plus" size={36} color={colors.onPink} />
+          <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.plus}>
+            <Icon name="plus" size={36} color={colors.onPrimary} />
           </LinearGradient>
         </Pressable>
         {items.slice(2)}
@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
   bar: { flexDirection: 'row', alignItems: 'center', width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' },
   item: { flex: 1, alignItems: 'center', gap: 2, paddingVertical: 2 },
   label: { fontSize: 11, color: colors.dim, fontFamily: fonts.semibold },
-  dot: { width: 16, height: 3, borderRadius: 2, backgroundColor: colors.pink, marginTop: 2 },
-  plusWrap: { marginTop: -34, marginHorizontal: 4, borderRadius: 36, shadowColor: colors.pink, shadowOpacity: 0.85, shadowRadius: 18, shadowOffset: { width: 0, height: 0 }, elevation: 14 },
+  dot: { width: 16, height: 3, borderRadius: 2, backgroundColor: colors.primary, marginTop: 2 },
+  plusWrap: { marginTop: -34, marginHorizontal: 4, borderRadius: 36, shadowColor: colors.primary, shadowOpacity: 0.85, shadowRadius: 18, shadowOffset: { width: 0, height: 0 }, elevation: 14 },
   plus: { width: 66, height: 66, borderRadius: 33, alignItems: 'center', justifyContent: 'center', borderWidth: 4, borderColor: colors.bg },
 });

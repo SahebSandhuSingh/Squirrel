@@ -44,14 +44,14 @@ export default function Social() {
           <View>
             <Avatar user={me} size={62} ring={colors.lineHi} link={false} />
             <View style={styles.addStory}>
-              <Icon name="plus" size={14} color={colors.onPink} />
+              <Icon name="plus" size={14} color={colors.onPrimary} />
             </View>
           </View>
           <Text style={styles.storyName}>Your story</Text>
         </Pressable>
         {storyUsers.map((u, i) => (
           <View key={u.id} style={{ alignItems: 'center', width: 66 }}>
-            <Avatar user={u} size={62} ring={i < 5 ? colors.pink : colors.lineHi} />
+            <Avatar user={u} size={62} ring={i < 5 ? colors.primary : colors.lineHi} />
             <Text style={styles.storyName} numberOfLines={1}>{u.name.split(' ')[0]}</Text>
           </View>
         ))}
@@ -61,7 +61,7 @@ export default function Social() {
 
       {feed === 'Nearby' && (
         <Text style={styles.nearbyNote}>
-          <Icon name="map-marker" size={13} color={colors.cyan} /> Posts from {city.name} · switch city from Home or Explore
+          <Icon name="map-marker" size={13} color={colors.secondary} /> Posts from {city.name} · switch city from Home or Explore
         </Text>
       )}
 
@@ -103,7 +103,7 @@ export default function Social() {
                         <Text style={styles.sub}>{crews.length} crews in {city.name} & online</Text>
                       </View>
                       <View style={styles.arrow}>
-                        <Icon name="arrow-right" size={22} color={colors.onPink} />
+                        <Icon name="arrow-right" size={22} color={colors.onPrimary} />
                       </View>
                     </View>
                   </SceneImage>
@@ -119,10 +119,10 @@ export default function Social() {
 
 const styles = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  addStory: { position: 'absolute', right: 0, bottom: 0, width: 22, height: 22, borderRadius: 11, backgroundColor: colors.pink, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.bg },
+  addStory: { position: 'absolute', right: 0, bottom: 0, width: 22, height: 22, borderRadius: 11, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.bg },
   storyName: { color: colors.sub, fontFamily: fonts.medium, fontSize: 11, marginTop: 6 },
   nearbyNote: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, marginBottom: 12 },
-  kicker: { color: colors.cyan, fontFamily: fonts.bold, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },
+  kicker: { color: colors.secondary, fontFamily: fonts.bold, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },
   sub: { color: colors.sub, fontFamily: fonts.medium, fontSize: 12 },
-  arrow: { width: 46, height: 46, borderRadius: radius.md, backgroundColor: colors.pink, alignItems: 'center', justifyContent: 'center' },
+  arrow: { width: 46, height: 46, borderRadius: radius.md, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
 });

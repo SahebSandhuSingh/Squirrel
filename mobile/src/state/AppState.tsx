@@ -6,6 +6,9 @@ import { seedPosts, type Post } from '@/data/posts';
 import { STARTER_OWNED, shopItemById } from '@/data/shop';
 import { CURRENT_USER_ID, userById, users, type User } from '@/data/users';
 import type { AvatarLook } from '@/types';
+import { districtsForCity, type District } from '@/data/territory';
+import { runXp, type XpLine } from '@/logic/xp';
+import type { Verdict } from '@/logic/track';
 
 export const XP_PER_LEVEL = 2000;
 
@@ -58,12 +61,19 @@ type AppState = {
   toggleSave: (id: string) => void;
   posts: Post[];
   addPost: (p: Omit<Post, 'id' | 'authorId' | 'cityId' | 'area' | 'minutesAgo' | 'likes' | 'comments'>) => void;
-  // runs
-  finishRun: (km: number, minutes: number) => { xp: number; leveledUp: boolean };
+  // runs & territory
+  finishRun: (run: FinishRunInput) => FinishRunResult;
+  runXpToday: number;
+  districts: District[];
+  /** Replace the local XP total with the server's (GET /v1/users/me/xp). */
+  syncServerXp: (total: number) => void;
   // feedback
   toasts: ToastMsg[];
   toast: (text: string, icon?: string, color?: string) => void;
 };
+
+export type FinishRunInput = { km: number; minutes: number; verdict: Verdict; districtId?: string; serverXp?: number; serverLines?: XpLine[] };
+export type FinishRunResult = { xp: number; lines: XpLine[]; capped: boolean; leveledUp: boolean; captured?: District };
 
 const Ctx = createContext<AppState | null>(null);
 
@@ -100,6 +110,9 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const crews = useMemo(() => crewsForCity(cityId), [cityId]);
   const events = useMemo(() => eventsForCity(cityId), [cityId]);
   const places = useMemo(() => placesForCity(cityId), [cityId]);
+  const [districtState, setDistrictState] = useState<Record<string, District[]>>({});
+  const districts = useMemo(() => districtState[cityId] ?? districtsForCity(cityId), [districtState, cityId]);
+  const [runXpToday, setRunXpToday] = useState(0);
 
   const toast = useCallback((text: string, icon?: string, color?: string) => {
     const id = ++toastId.current;
@@ -196,7 +209,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         return currentCoins - item.price;
       });
       if (result === 'ok') {
-        toast(`Unlocked ${item.name}`, 'lock-open-variant', '#FFD43B');
+        toast(`Unlocked ${item.name}`, 'lock-open-variant', '#FFD21F');
       }
       return result;
     },
@@ -204,8 +217,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   );
 
   const finishRun = useCallback(
-    (km: number, minutes: number) => {
-      const gain = Math.round(km * 20 + minutes);
+    ({ km, minutes, verdict, districtId, serverXp, serverLines }: FinishRunInput): FinishRunResult => {
+      if (verdict === 'rejected') return { xp: 0, lines: [{ label: 'Run rejected — no XP', xp: 0 }], capped: false, leveledUp: false };
+      const target = districts.find((d) => d.id === districtId);
+      const captured = !!target && km >= 1;
+      const local = runXp(km, captured, runXpToday);
+      const gain = serverXp ?? local.total;
+      const lines = serverLines ?? local.lines;
+      setRunXpToday((x) => x + gain);
       setMissions((all) =>
         all.map((m) => {
           if (m.id === 'w-run') return { ...m, current: Math.min(m.goal, +(m.current + km).toFixed(1)) };
@@ -214,10 +233,17 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
           return m;
         }),
       );
+      let capturedDistrict: District | undefined;
+      if (captured && target) {
+        const control = Math.min(1, target.control + 0.15);
+        capturedDistrict = { ...target, control, status: control >= 0.5 ? 'yours' : 'contested', decayDays: 14 };
+        setDistrictState((all) => ({ ...all, [cityId]: districts.map((d) => (d.id === target.id ? capturedDistrict! : d)) }));
+      }
+      // Coins are frontend-only (no server currency yet): half the XP, as before.
       const res = addXp(gain, Math.round(gain / 2));
-      return { xp: gain, leveledUp: res.leveledUp };
+      return { xp: gain, lines, capped: local.capped && serverXp == null, leveledUp: res.leveledUp, captured: capturedDistrict };
     },
-    [addXp],
+    [addXp, districts, runXpToday, cityId],
   );
 
   const value: AppState = {
@@ -231,7 +257,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     city,
     setCity: (id) => {
       setCityId(id);
-      toast(`Exploring ${cityById(id).name}`, 'map-marker-radius', '#35DFFF');
+      toast(`Exploring ${cityById(id).name}`, 'map-marker-radius', '#D7FF1F');
     },
     crews,
     events,
@@ -254,7 +280,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     toggleCrew: useCallback((id: string) => {
       setJoinedCrews((s) => {
         const crew = crews.find((c) => c.id === id);
-        if (!s.has(id) && crew) toast(`You joined ${crew.name}`, 'account-group', '#35DFFF');
+        if (!s.has(id) && crew) toast(`You joined ${crew.name}`, 'account-group', '#D7FF1F');
         return toggled(s, id);
       });
     }, [crews, toast]),
@@ -262,7 +288,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     toggleEvent: useCallback((id: string) => {
       const ev = events.find((e) => e.id === id);
       if (!joinedEvents.has(id) && ev) {
-        toast(`You're going to ${ev.title} · +${ev.xp} XP on check-in`, 'calendar-check', '#FF35B5');
+        toast(`You're going to ${ev.title} · +${ev.xp} XP on check-in`, 'calendar-check', '#FF2D9B');
         setMissions((all) => all.map((m) => (m.id === 'w-event' ? { ...m, current: m.goal } : m)));
       }
       setJoinedEvents((s) => toggled(s, id));
@@ -270,7 +296,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     following,
     toggleFollow: useCallback((id: string) => {
       setFollowing((s) => {
-        if (!s.has(id)) toast(`Following @${users.find((u) => u.id === id)?.handle ?? ''}`, 'account-check', '#FF35B5');
+        if (!s.has(id)) toast(`Following @${users.find((u) => u.id === id)?.handle ?? ''}`, 'account-check', '#FF2D9B');
         return toggled(s, id);
       });
     }, [toast]),
@@ -279,7 +305,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     saved,
     toggleSave: useCallback((id: string) => {
       setSaved((s) => {
-        if (!s.has(id)) toast('Saved to your collection', 'bookmark', '#FFD43B');
+        if (!s.has(id)) toast('Saved to your collection', 'bookmark', '#FFD21F');
         return toggled(s, id);
       });
     }, [toast]),
@@ -289,10 +315,13 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         { ...p, id: `me-${Date.now()}`, authorId: me.id, cityId, area: city.areas[0], minutesAgo: 0, likes: 0, comments: 0 },
         ...all,
       ]);
-      toast('Posted to your feed · +20 XP', 'send', '#FF35B5');
+      toast('Posted to your feed · +20 XP', 'send', '#FF2D9B');
       setXp((x) => x + 20);
     }, [cityId, city, me.id, toast]),
     finishRun,
+    runXpToday,
+    districts,
+    syncServerXp: (total) => setXp(total),
     toasts,
     toast,
   };

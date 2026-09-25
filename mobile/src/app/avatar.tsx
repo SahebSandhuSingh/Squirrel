@@ -118,7 +118,7 @@ export default function AvatarScreen() {
               const on = i === selectedCharIndex;
               return (
                 <Pressable key={i} onPress={() => set(p)} accessibilityLabel={characterNames[i] ?? `Character ${i + 1}`}>
-                  <Portrait look={p} size={50} ring={on ? colors.pink : colors.lineHi} />
+                  <Portrait look={p} size={50} ring={on ? colors.primary : colors.lineHi} />
                 </Pressable>
               );
             })}
@@ -145,8 +145,8 @@ export default function AvatarScreen() {
               const on = cat === c.id;
               return (
                 <Pressable key={c.id} onPress={() => { tap(); setCat(c.id); }} style={[styles.rail, on && styles.railOn]} accessibilityLabel={c.id}>
-                  <Icon name={c.icon} size={21} color={on ? colors.pink : colors.text} />
-                  <Text style={[styles.railText, on && { color: colors.pink }]} numberOfLines={1}>{c.id === 'Accessories' ? 'Extras' : c.id}</Text>
+                  <Icon name={c.icon} size={21} color={on ? colors.primary : colors.text} />
+                  <Text style={[styles.railText, on && { color: colors.primary }]} numberOfLines={1}>{c.id === 'Accessories' ? 'Extras' : c.id}</Text>
                 </Pressable>
               );
             })}
@@ -271,7 +271,7 @@ function OptionCard({ children, on, onPress, label, locked }: { children: React.
   return (
     <Pressable onPress={onPress} style={[styles.opt, on && styles.optOn]} accessibilityLabel={label}>
       <View style={{ height: 62, alignItems: 'center', justifyContent: 'center' }}>{children}</View>
-      <Text style={[styles.optText, on && { color: colors.pink }]} numberOfLines={1}>{label}</Text>
+      <Text style={[styles.optText, on && { color: colors.primary }]} numberOfLines={1}>{label}</Text>
       {locked && <Icon name="lock" size={12} color={colors.dim} style={{ position: 'absolute', top: 6, right: 6 }} />}
     </Pressable>
   );
@@ -285,7 +285,7 @@ function CatalogCard({ item, owned, level, equipped, onPress }: { item: ShopItem
 
 function Swatch({ color, on, onPress }: { color: string; on: boolean; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} style={[styles.swatchWrap, on && { borderColor: colors.pink }]} accessibilityLabel={`Colour ${color}`}>
+    <Pressable onPress={onPress} style={[styles.swatchWrap, on && { borderColor: colors.primary }]} accessibilityLabel={`Colour ${color}`}>
       <View style={[styles.swatch, { backgroundColor: color }]} />
     </Pressable>
   );
@@ -302,13 +302,13 @@ const styles = StyleSheet.create({
   railCol: { flexGrow: 0, width: 64 },
   spot: { position: 'absolute', bottom: 10, width: 230, height: 230, borderRadius: 115, backgroundColor: colors.purple, opacity: 0.22 },
   platform: { position: 'absolute', bottom: 0, width: 170, height: 26, borderRadius: 85, backgroundColor: 'rgba(255,53,181,0.18)', borderWidth: 1.5, borderColor: 'rgba(255,53,181,0.5)' },
-  gearBadge: { position: 'absolute', left: -4, bottom: 6, width: 52, height: 52, borderRadius: 26, backgroundColor: colors.glass, borderWidth: 1.5, borderColor: colors.pink, alignItems: 'center', justifyContent: 'center' },
+  gearBadge: { position: 'absolute', left: -4, bottom: 6, width: 52, height: 52, borderRadius: 26, backgroundColor: colors.glass, borderWidth: 1.5, borderColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
   rail: { width: 62, height: 56, borderRadius: radius.md, backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center', gap: 2 },
-  railOn: { borderColor: colors.pink, backgroundColor: 'rgba(255,53,181,0.12)' },
+  railOn: { borderColor: colors.primary, backgroundColor: 'rgba(255,53,181,0.12)' },
   railText: { color: colors.sub, fontSize: 10, fontFamily: fonts.semibold },
   panel: { marginTop: 14, paddingBottom: 14, paddingLeft: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: 'rgba(16,9,26,0.6)' },
   opt: { width: 84, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', paddingVertical: 8 },
-  optOn: { borderColor: colors.pink, backgroundColor: 'rgba(255,53,181,0.1)' },
+  optOn: { borderColor: colors.primary, backgroundColor: 'rgba(255,53,181,0.1)' },
   optText: { color: colors.sub, fontFamily: fonts.semibold, fontSize: 11, marginTop: 4, textTransform: 'capitalize' },
   swatchWrap: { width: 46, height: 46, borderRadius: 23, borderWidth: 2, borderColor: 'transparent', alignItems: 'center', justifyContent: 'center', alignSelf: 'center' },
   swatch: { width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },

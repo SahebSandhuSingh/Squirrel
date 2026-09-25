@@ -14,6 +14,7 @@ import { recentActivities } from '@/data/stats';
 import { shopItemById } from '@/data/shop';
 import type { User } from '@/data/users';
 import { useApp, XP_PER_LEVEL } from '@/state/AppState';
+import { useAuth } from '@/auth/AuthProvider';
 import type { SceneKind } from '@/types';
 import { colors, fonts, MAX_WIDTH as MAXW, radius } from '@/theme';
 
@@ -66,7 +67,7 @@ export function ProfileView({ user, isMe }: { user: User; isMe: boolean }) {
         <View style={[styles.topBar, { top: insets.top + 8 }]}>
           {isMe ? (
             <View style={styles.cityPill}>
-              <Icon name="map-marker" size={13} color={colors.cyan} />
+              <Icon name="map-marker" size={13} color={colors.secondary} />
               <Text style={styles.cityPillText}>{user.area}</Text>
             </View>
           ) : (
@@ -83,7 +84,7 @@ export function ProfileView({ user, isMe }: { user: User; isMe: boolean }) {
         {/* Identity */}
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginTop: -58 }}>
           <View>
-            <Avatar user={user} size={112} ring={colors.pink} link={false} />
+            <Avatar user={user} size={112} ring={colors.primary} link={false} />
             <View style={{ position: 'absolute', right: -4, bottom: 2 }}>
               <LevelBadge level={lvl} size="md" />
             </View>
@@ -104,7 +105,7 @@ export function ProfileView({ user, isMe }: { user: User; isMe: boolean }) {
 
         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 6 }}>
           <Display size={30}>{user.name}</Display>
-          {user.verified && <Icon name="check-decagram" size={20} color={colors.cyan} />}
+          {user.verified && <Icon name="check-decagram" size={20} color={colors.secondary} />}
         </View>
         <Text style={styles.handle}>@{user.handle}</Text>
         <Text style={styles.bio}>{user.bio}</Text>
@@ -118,12 +119,12 @@ export function ProfileView({ user, isMe }: { user: User; isMe: boolean }) {
           {isMe ? (
             <>
               <Button label="Edit Profile" variant="secondary" size="md" iconLeft="pencil-outline" onPress={() => router.push({ pathname: '/avatar', params: { from: 'profile' } })} style={{ flex: 1 }} />
-              <Button label="Add Friend" variant="secondary" size="md" iconLeft="account-plus-outline" onPress={() => toast('Invite link copied · +50 XP when they join', 'link-variant', colors.cyan)} style={{ flex: 1 }} />
+              <Button label="Add Friend" variant="secondary" size="md" iconLeft="account-plus-outline" onPress={() => toast('Invite link copied · +50 XP when they join', 'link-variant', colors.secondary)} style={{ flex: 1 }} />
             </>
           ) : (
             <>
               <Button label={isFollowing ? 'Following' : 'Follow'} variant={isFollowing ? 'secondary' : 'primary'} size="md" iconLeft={isFollowing ? 'account-check' : 'account-plus'} onPress={() => toggleFollow(user.id)} style={{ flex: 1 }} />
-              <Button label="Message" variant="secondary" size="md" iconLeft="message-outline" onPress={() => toast(`Messages with ${user.name.split(' ')[0]} are coming soon`, 'message-outline', colors.cyan)} style={{ flex: 1 }} />
+              <Button label="Message" variant="secondary" size="md" iconLeft="message-outline" onPress={() => toast(`Messages with ${user.name.split(' ')[0]} are coming soon`, 'message-outline', colors.secondary)} style={{ flex: 1 }} />
             </>
           )}
         </View>
@@ -158,6 +159,9 @@ export function ProfileView({ user, isMe }: { user: User; isMe: boolean }) {
           ))}
           {isMe && <StoryCircle label="New" isNew onPress={() => router.push('/compose')} />}
         </ScrollView>
+
+        {/* Account (backend connection) */}
+        {isMe && <AccountRow />}
 
         {/* Badges */}
         <Pressable onPress={() => router.push('/rewards')} style={styles.badgeRow}>
@@ -195,7 +199,7 @@ export function ProfileView({ user, isMe }: { user: User; isMe: boolean }) {
         {/* Grid tabs */}
         <View style={styles.gridTabs}>
           {GRID_TABS.map((g) => (
-            <Pressable key={g.id} onPress={() => { tap(); setTab(g.id); }} style={[styles.gridTab, tab === g.id && { borderBottomColor: colors.pink }]} accessibilityLabel={g.id}>
+            <Pressable key={g.id} onPress={() => { tap(); setTab(g.id); }} style={[styles.gridTab, tab === g.id && { borderBottomColor: colors.primary }]} accessibilityLabel={g.id}>
               <Icon name={g.icon} size={22} color={tab === g.id ? colors.text : colors.dim} />
             </Pressable>
           ))}
@@ -226,7 +230,7 @@ export function ProfileView({ user, isMe }: { user: User; isMe: boolean }) {
                     {a.minutes} min · {a.kcal} kcal
                   </Text>
                 </View>
-                <Icon name={a.icon} size={22} color={colors.pink} />
+                <Icon name={a.icon} size={22} color={colors.primary} />
               </View>
             ))}
           </View>
@@ -245,6 +249,27 @@ export function ProfileView({ user, isMe }: { user: User; isMe: boolean }) {
           ))}
       </View>
     </ScrollView>
+  );
+}
+
+function AccountRow() {
+  const { mode, email, signOut } = useAuth();
+  const live = mode === 'live';
+  return (
+    <Pressable
+      onPress={async () => {
+        if (live) await signOut();
+        router.push('/sign-in');
+      }}
+      style={[styles.badgeRow, { marginTop: 16, borderColor: live ? 'rgba(215,255,31,0.4)' : colors.line }]}
+      accessibilityLabel={live ? 'Sign out' : 'Sign in to sync'}>
+      <Icon name={live ? 'cloud-check-outline' : 'cloud-off-outline'} size={22} color={live ? colors.primary : colors.dim} />
+      <View style={{ flex: 1, marginLeft: 10 }}>
+        <Text style={styles.sectionLabel}>{live ? 'Synced with server' : 'Demo mode'}</Text>
+        <Text style={styles.nextText}>{live ? email ?? 'Signed in with token' : 'Sign in to save runs, XP and territory'}</Text>
+      </View>
+      <Text style={{ color: colors.primary, fontFamily: fonts.label, fontSize: 13, letterSpacing: 1, textTransform: 'uppercase' }}>{live ? 'Sign out' : 'Sign in'}</Text>
+    </Pressable>
   );
 }
 

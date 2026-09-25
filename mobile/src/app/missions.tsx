@@ -26,11 +26,11 @@ export default function Missions() {
 
   return (
     <Screen tabBar={false}>
-      <Header back title="" right={<Coins amount={coins} />} />
+      <Header back title="" right={<><Text style={styles.chLink} onPress={() => router.push('/challenges')}>Challenges →</Text><Coins amount={coins} /></>} />
       <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
         <Display size={56} style={{ lineHeight: 56, flex: 1 }}>
           Today's{'\n'}
-          <Text style={{ color: colors.pink }}>Missions</Text>
+          <Text style={{ color: colors.primary }}>Missions</Text>
         </Display>
         <Mascot pose="cheer" accessory="crown" size={108} animated style={{ marginBottom: -6 }} />
       </View>
@@ -40,10 +40,10 @@ export default function Missions() {
       <View style={styles.summary}>
         <View style={{ flex: 1 }}>
           <Text style={styles.sumTitle}>{done}/{list.length} complete · {totalXp} XP available</Text>
-          <ProgressBar progress={done / list.length} color={colors.pink} color2={colors.gold} height={6} style={{ marginTop: 8 }} />
+          <ProgressBar progress={done / list.length} color={colors.primary} color2={colors.gold} height={6} style={{ marginTop: 8 }} />
         </View>
         <View style={styles.reset}>
-          <Icon name="timer-sand" size={14} color={colors.cyan} />
+          <Icon name="timer-sand" size={14} color={colors.secondary} />
           <Text style={styles.resetText}>{RESETS[tab]}</Text>
         </View>
       </View>
@@ -67,7 +67,7 @@ export default function Missions() {
         <Mascot pose="run" size={170} style={{ position: 'absolute', right: -4, bottom: -12 }} animated />
         <View style={{ position: 'absolute', left: 16, top: 26 }}>
           <Tagline size={24}>Discipline{'\n'}today.</Tagline>
-          <Tagline size={18} color={colors.pinkSoft} style={{ marginTop: 6 }}>A bigger you{'\n'}tomorrow.</Tagline>
+          <Tagline size={18} color={colors.primarySoft} style={{ marginTop: 6 }}>A bigger you{'\n'}tomorrow.</Tagline>
         </View>
       </SceneImage>
     </Screen>
@@ -75,9 +75,10 @@ export default function Missions() {
 }
 
 const styles = StyleSheet.create({
+  chLink: { color: colors.secondary, fontFamily: fonts.label, fontSize: 13, letterSpacing: 1, textTransform: 'uppercase', marginRight: 6 },
   summary: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12, backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, padding: 12 },
   sumTitle: { color: colors.text, fontFamily: fonts.semibold, fontSize: 13 },
   reset: { flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: 130 },
-  resetText: { color: colors.cyan, fontFamily: fonts.semibold, fontSize: 11, flexShrink: 1 },
+  resetText: { color: colors.secondary, fontFamily: fonts.semibold, fontSize: 11, flexShrink: 1 },
   hint: { color: colors.gold, fontSize: 12, textAlign: 'center', marginTop: 8, fontFamily: fonts.semibold },
 });

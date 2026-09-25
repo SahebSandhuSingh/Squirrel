@@ -57,6 +57,6 @@ export default function Shop() {
 const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   drop: { position: 'absolute', left: 16, bottom: 14, backgroundColor: colors.gold, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
-  dropText: { color: colors.onCyan, fontFamily: fonts.black, fontSize: 10, letterSpacing: 0.6 },
+  dropText: { color: colors.onSecondary, fontFamily: fonts.black, fontSize: 10, letterSpacing: 0.6 },
   foot: { color: colors.mute, fontFamily: fonts.regular, fontSize: 12, textAlign: 'center', marginTop: 8 },
 });

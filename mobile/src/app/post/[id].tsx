@@ -61,7 +61,7 @@ export default function PostDetail() {
         <View style={styles.inputInner}>
           <Avatar user={me} size={34} link={false} />
           <TextInput value={draft} onChangeText={setDraft} placeholder="Add a comment…" placeholderTextColor={colors.dim} style={styles.input} onSubmitEditing={send} returnKeyType="send" />
-          <IconButton icon="send" color={colors.pink} onPress={send} label="Send" />
+          <IconButton icon="send" color={colors.primary} onPress={send} label="Send" />
         </View>
       </View>
     </KeyboardAvoidingView>

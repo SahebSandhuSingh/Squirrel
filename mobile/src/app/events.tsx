@@ -31,7 +31,7 @@ export default function Events() {
           </>
         }
       />
-      <Segmented items={TABS} value={tab} onChange={setTab} accent="cyan" />
+      <Segmented items={TABS} value={tab} onChange={setTab} />
       {tab !== 'My Events' && (
         <Text style={styles.count}>
           {list.length} {tab === 'Online' ? 'online sessions' : `events in ${city.name}`} this week

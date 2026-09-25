@@ -8,7 +8,7 @@ import { heatmap, recentActivities, stats, type Period } from '@/data/stats';
 import { colors, fonts, radius } from '@/theme';
 
 const PERIODS: Period[] = ['Day', 'Week', 'Month', 'Year'];
-const HEAT = ['rgba(255,255,255,0.05)', 'rgba(255,53,181,0.25)', 'rgba(255,53,181,0.45)', 'rgba(255,53,181,0.7)', '#FF35B5'];
+const HEAT = ['rgba(255,255,255,0.05)', 'rgba(255,53,181,0.25)', 'rgba(255,53,181,0.45)', 'rgba(255,53,181,0.7)', '#FF2D9B'];
 
 /** YOUR PROGRESS — fitness-game analytics dashboard. */
 export default function Progress() {
@@ -18,14 +18,14 @@ export default function Progress() {
 
   return (
     <Screen tabBar={false}>
-      <Header back title="Your Progress" right={<IconButton icon="share-variant-outline" color={colors.pink} onPress={() => router.push('/compose')} label="Share progress" />} />
-      <Segmented items={PERIODS} value={period} onChange={setPeriod} accent="cyan" />
+      <Header back title="Your Progress" right={<IconButton icon="share-variant-outline" color={colors.primary} onPress={() => router.push('/compose')} label="Share progress" />} />
+      <Segmented items={PERIODS} value={period} onChange={setPeriod} />
 
       {/* Hero chart */}
       <FadeIn key={period}>
         <Card glow={colors.green}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Ring progress={steps.progress ?? 0} size={92} stroke={9} color={colors.green} color2={colors.cyan}>
+            <Ring progress={steps.progress ?? 0} size={92} stroke={9} color={colors.green} color2={colors.secondary}>
               <Text style={styles.ringPct}>{Math.round((steps.progress ?? 0) * 100)}%</Text>
               <Text style={styles.ringLbl}>of goal</Text>
             </Ring>

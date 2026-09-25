@@ -31,8 +31,8 @@ function Rays({ size }: { size: number }) {
         <Defs>
           <RadialGradient id="rays" cx="50%" cy="50%" r="50%">
             <Stop offset="0" stopColor={colors.gold} stopOpacity="0.55" />
-            <Stop offset="0.6" stopColor={colors.pink} stopOpacity="0.18" />
-            <Stop offset="1" stopColor={colors.pink} stopOpacity="0" />
+            <Stop offset="0.6" stopColor={colors.primary} stopOpacity="0.18" />
+            <Stop offset="1" stopColor={colors.primary} stopOpacity="0" />
           </RadialGradient>
         </Defs>
         <Path d={rays} fill="url(#rays)" />
@@ -51,7 +51,7 @@ function Confetti({ visible }: { visible: boolean }) {
       vy: 0.003 + Math.random() * 0.005,
       rot: Math.random() * Math.PI * 2,
       vr: (Math.random() - 0.5) * 0.05,
-      color: ['#FF35B5', '#FFD43B', '#35DFFF', '#B57BFF', '#FF7A45', '#3DF0A0'][Math.floor(Math.random() * 6)],
+      color: ['#FF2D9B', '#FFD21F', '#D7FF1F', '#C084FC', '#FF8A1F', '#3DF0A0'][Math.floor(Math.random() * 6)],
       size: 6 + Math.random() * 10,
       delay: Math.random() * 200,
     }))
@@ -134,12 +134,12 @@ export default function LevelUp() {
         <IconButton icon="close" onPress={() => (router.canGoBack() ? router.back() : router.replace('/home'))} label="Close" />
 
         <Animated.View style={{ alignItems: 'center', opacity: title, transform: [{ scale: title.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }] }}>
-          <Tagline size={Math.min(64, width * 0.15)} color={colors.pink} rotate={-6}>{isLevelUp ? 'Level Up!' : 'Nice work!'}</Tagline>
+          <Tagline size={Math.min(64, width * 0.15)} color={colors.primary} rotate={-6}>{isLevelUp ? 'Level Up!' : 'Nice work!'}</Tagline>
           <Display size={30} style={{ marginTop: -2, transform: [{ rotate: '-4deg' }] }}>Level {level}</Display>
           {!!gained && (
             <View style={styles.gains}>
               <View style={styles.gain}>
-                <Icon name="star-four-points" size={14} color={colors.pink} />
+                <Icon name="star-four-points" size={14} color={colors.primary} />
                 <Text style={styles.gainText}>+{gained} XP</Text>
               </View>
               {!!coins && (
@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
   col: { flex: 1, paddingHorizontal: 16, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' },
   gains: { flexDirection: 'row', gap: 8, marginTop: 10 },
   gain: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(7,5,13,0.7)', borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: colors.line },
-  gainText: { color: colors.pink, fontFamily: fonts.bold, fontSize: 13 },
+  gainText: { color: colors.primary, fontFamily: fonts.bold, fontSize: 13 },
   next: { flexDirection: 'row', alignItems: 'center', marginVertical: 14, backgroundColor: 'rgba(22,13,35,0.94)', borderRadius: radius.lg, borderWidth: 1, borderColor: 'rgba(138,63,252,0.5)', padding: 14 },
   nextKicker: { color: colors.violet, fontFamily: fonts.bold, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' },
   nextTitle: { color: colors.text, fontFamily: fonts.display, fontSize: 22, marginTop: 2 },

@@ -16,7 +16,8 @@ export const art = {
   sunBottom: '#FF4DC4',
 
   // neon
-  pink: '#FF35B5',
+  pink: '#FF2D9B',
+  lime: '#D7FF1F',
   pinkHi: '#FF7FD6',
   purple: '#8A3FFC',
   violet: '#B57BFF',

@@ -3,10 +3,13 @@ import { StatusBar } from 'expo-status-bar';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
-import { Anton_400Regular } from '@expo-google-fonts/anton';
+import { Knewave_400Regular } from '@expo-google-fonts/knewave';
+import { Oswald_600SemiBold, Oswald_700Bold } from '@expo-google-fonts/oswald';
+import { SpaceMono_400Regular, SpaceMono_700Bold } from '@expo-google-fonts/space-mono';
 import { PermanentMarker_400Regular } from '@expo-google-fonts/permanent-marker';
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_900Black } from '@expo-google-fonts/inter';
 import { AppStateProvider } from '@/state/AppState';
+import { AuthProvider } from '@/auth/AuthProvider';
 import { ToastHost } from '@/components/Toast';
 import { colors } from '@/theme';
 
@@ -14,7 +17,11 @@ const sheet = { presentation: 'transparentModal', animation: 'fade', contentStyl
 
 export default function RootLayout() {
   const [loaded] = useFonts({
-    Anton_400Regular,
+    Knewave_400Regular,
+    Oswald_600SemiBold,
+    Oswald_700Bold,
+    SpaceMono_400Regular,
+    SpaceMono_700Bold,
     PermanentMarker_400Regular,
     Inter_400Regular,
     Inter_500Medium,
@@ -27,12 +34,14 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
+      <AuthProvider>
       <AppStateProvider>
         <StatusBar style="light" />
         <View style={{ flex: 1, backgroundColor: colors.bg }}>
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg }, animation: 'slide_from_right' }}>
             <Stack.Screen name="index" />
             <Stack.Screen name="welcome" options={{ animation: 'fade' }} />
+            <Stack.Screen name="sign-in" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
             <Stack.Screen name="run" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="level-up" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
@@ -45,6 +54,7 @@ export default function RootLayout() {
           <ToastHost />
         </View>
       </AppStateProvider>
+      </AuthProvider>
     </SafeAreaProvider>
   );
 }

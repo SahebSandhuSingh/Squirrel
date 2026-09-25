@@ -35,7 +35,7 @@ export default function CrewDetail() {
         <IconButton icon="chevron-left" size={26} onPress={() => router.back()} style={{ position: 'absolute', left: 16, top: insets.top + 8 }} label="Back" />
         <View style={styles.heroText}>
           <View style={[styles.badge, { backgroundColor: crew.color }]}>
-            <Icon name={crew.icon} size={28} color={colors.onCyan} />
+            <Icon name={crew.icon} size={28} color={colors.onSecondary} />
           </View>
           <Display size={36} style={{ marginTop: 10 }}>{crew.name}</Display>
           <Text style={styles.sub}>{crew.tagline}</Text>
@@ -43,7 +43,7 @@ export default function CrewDetail() {
       </View>
       <View style={styles.col}>
         <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-          <Tag label={`${crew.members.toLocaleString('en-IN')} members`} icon="account-group" color={colors.cyan} />
+          <Tag label={`${crew.members.toLocaleString('en-IN')} members`} icon="account-group" color={colors.secondary} />
           <Tag label={crew.meets} icon="calendar-clock" />
           <Tag label={crew.scope} icon="map-marker-radius" color={colors.green} />
         </View>

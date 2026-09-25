@@ -28,7 +28,7 @@ function ToastItem({ t }: { t: ToastMsg }) {
       Animated.timing(v, { toValue: 0, duration: 260, easing: Easing.in(Easing.quad), useNativeDriver: NATIVE }),
     ]).start();
   }, [v]);
-  const c = t.color ?? colors.pink;
+  const c = t.color ?? colors.primary;
   return (
     <Animated.View style={[styles.toast, { borderColor: `${c}66`, opacity: v, transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [-20, 0] }) }] }]}>
       <View style={[styles.dot, { backgroundColor: `${c}26` }]}>

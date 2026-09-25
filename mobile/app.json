@@ -13,7 +13,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#1C0C2E"
+        "backgroundColor": "#060606"
       },
       "package": "in.squirrelsocial.app"
     },
@@ -22,15 +22,22 @@
       "bundler": "metro"
     },
     "scheme": "squirrelsocial",
-    "backgroundColor": "#07050D",
+    "backgroundColor": "#060606",
     "plugins": [
       "expo-router",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Squirrel Social uses your location to track runs and claim territory."
+        }
+      ],
+      "expo-secure-store"
     ],
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#07050D"
+      "backgroundColor": "#060606"
     }
   }
 }
