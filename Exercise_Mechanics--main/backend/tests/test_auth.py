@@ -14,6 +14,7 @@ from backend import config
 from backend.auth import tokens
 from backend.auth.deps import current_user
 from backend.auth.router import router as auth_router
+from backend.db import connection
 from backend.tests.asgi_client import call
 from backend.users.store import read_profile
 
@@ -47,9 +48,14 @@ def test_register_creates_profile_and_signs_in(app, tmp_path):
     assert profile["email"] == "aanya@example.test" and profile["first_name"] == "Aanya"
     assert "password" not in json.dumps(profile)
     assert call(app, "GET", "/whoami", headers=_bearer(body["access_token"])).json() == {"user_id": body["user_id"]}
-    # the credential index never stores the email or the plaintext password
-    [cred] = (tmp_path / "auth" / "credentials").iterdir()
-    assert "aanya" not in cred.name and "correct horse" not in cred.read_text()
+    # the plaintext password is never stored, and the file index never names the email
+    if connection.enabled():
+        with connection.pooled() as conn:
+            [(stored,)] = conn.execute("SELECT password_hash FROM user_accounts").fetchall()
+        assert stored.startswith("scrypt$") and "correct horse" not in stored
+    else:
+        [cred] = (tmp_path / "auth" / "credentials").iterdir()
+        assert "aanya" not in cred.name and "correct horse" not in cred.read_text()
 
 
 def test_duplicate_email_is_rejected_case_insensitively(app):

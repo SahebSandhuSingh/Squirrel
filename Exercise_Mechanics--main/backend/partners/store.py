@@ -17,6 +17,8 @@ from pathlib import Path
 
 from backend import config
 from backend.core.ids import is_valid_user_id
+from backend.db import accounts as db_accounts
+from backend.db import connection
 
 log = logging.getLogger(__name__)
 
@@ -88,6 +90,8 @@ def add_block(user_id: str, blocked_user_id: str) -> frozenset[str]:
 
 def list_user_ids() -> list[str]:
     """Every user with a profile. Sorted, so anything built from it is deterministic."""
+    if connection.enabled():
+        return [uid for uid in db_accounts.list_profile_user_ids() if is_valid_user_id(uid)]
     root = config.USERS_DIR
     if not root.exists():
         return []

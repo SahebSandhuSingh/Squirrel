@@ -1,10 +1,15 @@
-"""PostgreSQL storage for exercise sessions.
+"""PostgreSQL storage.
 
-Optional: without DATABASE_URL the backend runs exactly as before on its per-user files, and every
-database call here is a no-op. With it, each exercise session is mirrored into the
-`exercise_sessions` table (see migrations/). The files stay the source of truth, so a database that is
-down never interrupts training; `python -m backend.db backfill` catches the table up afterwards.
+Optional: without DATABASE_URL the backend runs on its per-user files, and every database call here
+is a no-op. With it:
 
-    python -m backend.db migrate     apply pending migrations
-    python -m backend.db backfill    write every stored session into the table
+  * accounts, refresh tokens and profiles live in the database only (accounts.py, migration 002);
+  * each exercise session is mirrored into `exercise_sessions` (migration 001) and, for accounts,
+    into the shared `activity_sessions` that XP is derived from (activity_sessions.py). Session files
+    stay the source of truth, so a database that is down never interrupts training;
+    `python -m backend.db backfill` catches the tables up afterwards.
+
+    python -m backend.db migrate        apply pending migrations
+    python -m backend.db backfill       write every stored session into the tables
+    python -m backend.db import-files   copy accounts and profiles from data/ into the database
 """

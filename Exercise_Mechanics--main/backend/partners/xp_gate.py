@@ -31,17 +31,17 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Protocol
 
+from backend.auth.tokens import issue_service_token
+
 log = logging.getLogger(__name__)
 
 RUN_MODULE_URL_ENV = "RUN_MODULE_URL"
 RUN_MODULE_TOKEN_ENV = "RUN_MODULE_TOKEN"
 DEV_XP_ENV = "PARTNER_HUNT_DEV_XP"
 
-# HTTP routes on the Run Module. The contract specifies these two calls' arguments and return values
-# but not their URLs — it only documents the token-scoped GET /v1/users/me/xp, and Partner Hunt has to
-# ask about OTHER users (a candidate who has not cleared the gate must not appear on anyone's board).
-# These paths are therefore an assumption, kept in exactly one place, to confirm with the Run Module
-# before this is pointed at it.
+# HTTP routes on the Run Module (its ADR-027). Service-only: Partner Hunt asks about OTHER users (a
+# candidate who has not cleared the gate must not appear on anyone's board), which a user's token
+# cannot do. Each call carries a short-lived service token this backend signs (auth.tokens).
 GATE_PATH = "/v1/users/{user_id}/xp-gate"
 XP_PATH = "/v1/users/{user_id}/xp"
 
@@ -71,7 +71,7 @@ class RunModuleXPGate:
         self,
         base_url: str,
         *,
-        token: str | None = None,
+        token: str | Callable[[], str] | None = None,
         timeout_s: float = DEFAULT_TIMEOUT_S,
         opener: Callable[..., object] = urllib.request.urlopen,
     ) -> None:
@@ -100,8 +100,9 @@ class RunModuleXPGate:
 
     def _get(self, path: str) -> object:
         headers = {"Accept": "application/json"}
-        if self._token:
-            headers["Authorization"] = f"Bearer {self._token}"
+        token = self._token() if callable(self._token) else self._token
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
         request = urllib.request.Request(self._base + path, headers=headers, method="GET")
         try:
             with self._open(request, timeout=self._timeout_s) as response:
@@ -152,13 +153,14 @@ class UnconfiguredXPGate:
 def xp_gate_from_env(env: Mapping[str, str] = os.environ) -> XPGate:
     """Pick the gate from the environment.
 
-    RUN_MODULE_URL set        → the real Run Module (optionally authenticated with RUN_MODULE_TOKEN).
+    RUN_MODULE_URL set        → the real Run Module, with a fresh service token per call (or a fixed
+                                RUN_MODULE_TOKEN, if set).
     else PARTNER_HUNT_DEV_XP  → every user has that much XP. Local development only; logged loudly.
     else                      → unconfigured: Partner Hunt stays locked and says why.
     """
     url = env.get(RUN_MODULE_URL_ENV, "").strip()
     if url:
-        return RunModuleXPGate(url, token=env.get(RUN_MODULE_TOKEN_ENV) or None)
+        return RunModuleXPGate(url, token=env.get(RUN_MODULE_TOKEN_ENV) or issue_service_token)
     dev_xp = env.get(DEV_XP_ENV, "").strip()
     if dev_xp:
         try:

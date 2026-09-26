@@ -18,6 +18,7 @@ from backend.partners import policy as partner_policy
 from backend.profiles import service, store
 from backend.profiles.router import router as profiles_router
 from backend.profiles.vocab import ACTIVITY_CODES, ACTIVITY_TYPES, GENDERS, WORKOUT_TIMES
+from backend.tests.storage import corrupt_profile_data, has_profile_data, profiles_in_database, still_corrupt
 from backend.users.router import router as users_router
 from backend.workouts.catalog import load_catalog
 
@@ -123,8 +124,8 @@ def test_page_one_ignores_page_two_questions():
     status, body = _request("POST", "/api/users", {**_signup(), "habits": {"diet": "vegan"}, "consents": [
         {"category": "habits", "granted": True, "policy_version": "v1"}]})
     assert status == 200
-    user_dir = config.user_dir(body["user_id"])
-    assert not (user_dir / store.HABITS_FILENAME).exists() and not (user_dir / store.CONSENTS_FILENAME).exists()
+    uid = body["user_id"]
+    assert not has_profile_data(uid, store.HABITS_FILENAME) and not has_profile_data(uid, store.CONSENTS_FILENAME)
 
 
 def test_a_failed_write_during_sign_up_leaves_no_half_created_user(monkeypatch):
@@ -133,7 +134,10 @@ def test_a_failed_write_during_sign_up_leaves_no_half_created_user(monkeypatch):
     monkeypatch.setattr(store, "write_measurements", broken)
     with pytest.raises(OSError):
         service.onboard(dict(CORE))
-    assert _user_dirs() == []
+    assert _user_dirs() == [] and profiles_in_database() == []
+    with pytest.raises(OSError):
+        service.onboard({**CORE, "email": "rollback@example.test"}, password="correct horse")
+    assert _user_dirs() == [] and profiles_in_database() == []
 
 
 @pytest.mark.parametrize("override", [
@@ -184,8 +188,7 @@ def test_every_sign_up_question_can_be_answered_in_one_request():
 
 
 def _stored_nothing(uid: str) -> bool:
-    user_dir = config.user_dir(uid)
-    return not any((user_dir / name).exists() for name in (
+    return not any(has_profile_data(uid, name) for name in (
         store.FITNESS_FILENAME, store.ACTIVITIES_FILENAME, store.PHYSIQUE_FILENAME,
         store.HABITS_FILENAME, store.CONSENTS_FILENAME))
 
@@ -217,7 +220,7 @@ def test_withdrawing_consent_on_page_two_erases_and_refuses_that_section():
     assert status == 403 and _details(uid)["habits"] == HABITS  # refused request changed nothing
     status, body = _request("PUT", f"/api/users/{uid}/details", {"consents": withdraw})
     assert status == 200 and body["habits"] is None
-    assert not (config.user_dir(uid) / store.HABITS_FILENAME).exists()
+    assert not has_profile_data(uid, store.HABITS_FILENAME)
 
 
 def test_page_two_can_be_resubmitted_and_leaves_skipped_sections_alone():
@@ -231,12 +234,12 @@ def test_page_two_can_be_resubmitted_and_leaves_skipped_sections_alone():
 
 def test_an_unreadable_consent_log_refuses_page_two_before_writing_anything():
     uid = _sign_up()
-    (config.user_dir(uid) / store.CONSENTS_FILENAME).write_text("{not json")
+    _corrupt(uid, store.CONSENTS_FILENAME)
     for payload in ({"habits": HABITS, "activities": [{"activity": "yoga"}]},
                     {"consents": CONSENT_ALL, "activities": [{"activity": "yoga"}]}):
         status, body = _request("PUT", f"/api/users/{uid}/details", payload)
         assert status == 503 and body["detail"]["code"] == "consents_unreadable"
-    assert not (config.user_dir(uid) / store.ACTIVITIES_FILENAME).exists()
+    assert not has_profile_data(uid, store.ACTIVITIES_FILENAME)
     # Non-sensitive answers don't need the consent log at all.
     assert _request("PUT", f"/api/users/{uid}/details", {"activities": [{"activity": "yoga"}]})[0] == 200
 
@@ -362,7 +365,7 @@ def test_withdrawing_physique_consent_erases_body_type_and_body_composition_but_
     status, body = _grant(uid, "physique", granted=False)
     assert status == 200 and body["consents"]["physique"]["granted"] is False
 
-    assert not (config.user_dir(uid) / store.PHYSIQUE_FILENAME).exists()
+    assert not has_profile_data(uid, store.PHYSIQUE_FILENAME)
     raw = store.read_measurements(uid)
     assert all("body_fat_pct" not in r and "waist_cm" not in r for r in raw)
     assert [r.get("weight_kg") for r in raw] == [60.0, 62.0]  # the body-fat-only reading is gone
@@ -375,7 +378,7 @@ def test_withdrawing_physique_consent_erases_body_type_and_body_composition_but_
 def test_withdrawing_habits_consent_erases_habits():
     uid = _sign_up(habits=HABITS, consents=CONSENT_ALL)
     _grant(uid, "habits", granted=False)
-    assert not (config.user_dir(uid) / store.HABITS_FILENAME).exists()
+    assert not has_profile_data(uid, store.HABITS_FILENAME)
     assert _details(uid)["habits"] is None
     assert _request("PUT", f"/api/users/{uid}/details/habits", HABITS)[0] == 403
 
@@ -403,7 +406,7 @@ def test_physique_readings_without_consent_are_never_shown():
 # ---------------------------------------------------------------- unreadable files fail closed
 
 def _corrupt(uid: str, filename: str) -> None:
-    (config.user_dir(uid) / filename).write_text("{not json")
+    corrupt_profile_data(uid, filename)
 
 
 def test_an_unreadable_consent_log_hides_sensitive_data_and_is_never_overwritten():
@@ -415,7 +418,7 @@ def test_an_unreadable_consent_log_hides_sensitive_data_and_is_never_overwritten
     status, body = _request("PUT", f"/api/users/{uid}/details/habits", HABITS)
     assert status == 503 and body["detail"]["code"] == "consents_unreadable"
     assert _grant(uid, "habits")[0] == 503
-    assert (config.user_dir(uid) / store.CONSENTS_FILENAME).read_text() == "{not json"
+    assert still_corrupt(uid, store.CONSENTS_FILENAME)
     assert _request("GET", f"/api/users/{uid}/consents")[0] == 503
 
 
@@ -424,7 +427,7 @@ def test_an_unreadable_measurement_history_is_never_overwritten():
     _corrupt(uid, store.MEASUREMENTS_FILENAME)
     status, body = _request("POST", f"/api/users/{uid}/measurements", {"weight_kg": 61.0})
     assert status == 500 and body["detail"]["code"] == "measurements_unreadable"
-    assert (config.user_dir(uid) / store.MEASUREMENTS_FILENAME).read_text() == "{not json"
+    assert still_corrupt(uid, store.MEASUREMENTS_FILENAME)
     # The dashboard falls back to the onboarding values instead of failing.
     assert _request("GET", f"/api/users/{uid}")[1]["weight_kg"] == 60.0
     assert _details(uid)["body"]["bmi"] is None
@@ -436,7 +439,7 @@ def test_withdrawal_is_recorded_even_when_measurements_cannot_be_erased():
     status, body = _grant(uid, "physique", granted=False)
     assert status == 500 and body["detail"]["code"] == "erasure_incomplete"
     assert service.consent_state(store.read_consent_events(uid))["physique"]["granted"] is False
-    assert not (config.user_dir(uid) / store.PHYSIQUE_FILENAME).exists()
+    assert not has_profile_data(uid, store.PHYSIQUE_FILENAME)
     assert _details(uid)["physique"] is None
 
 

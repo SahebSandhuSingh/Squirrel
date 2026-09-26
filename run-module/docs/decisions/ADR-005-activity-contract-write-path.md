@@ -7,6 +7,7 @@
 | **Ticket**     | RM-6.4 + RM-3.2a                                  |
 | **Authors**    | Run Module team                                   |
 | **Supersedes** | —                                                 |
+| **Superseded in part by** | ADR-027: the XP engine reads `activity_sessions` (read-only, for XP) |
 
 ---
 

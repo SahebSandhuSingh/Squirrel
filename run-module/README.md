@@ -45,6 +45,7 @@ run-module/
 │       ├── db/pool.ts      # pg Pool
 │       ├── redis/client.ts # ioredis client
 │       ├── workers/        # BullMQ workers (finalize_run, leaderboard_sync, decay)
+│       ├── xp/             # XP rules, derived from activity_sessions (ADR-027)
 │       ├── geometry/       # GPS path → polygon logic (RM-1.5+)
 │       └── anticheat/      # Anti-cheat scoring (RM-2.1+)
 ├── db/
@@ -149,6 +150,18 @@ See [`.env.example`](.env.example) for all required variables.
 | `PORT` | HTTP server port (default: 3000) |
 | `NODE_ENV` | `development` \| `test` \| `production` |
 | `LOG_LEVEL` | Pino log level (`info`, `debug`, etc.) |
+| `XP_TIMEZONE` | Optional. Day boundary for the XP daily caps (default `Asia/Kolkata`) |
+
+## XP
+
+XP is derived from `activity_sessions` on every read, never stored (rules and reasons:
+[ADR-027](docs/decisions/ADR-027-xp-rules-and-endpoints.md)).
+
+| Route | Caller | Returns |
+|---|---|---|
+| `GET /v1/users/me/xp` | the signed-in user | `{ xp, updated_at, breakdown: [{ reason, xp }] }` |
+| `GET /v1/users/:userId/xp` | Exercise Module (service token) | `{ xp, updatedAt }` |
+| `GET /v1/users/:userId/xp-gate?minXP=N` | Exercise Module (service token) | `true` / `false` |
 
 The server **exits immediately** if any variable is missing — see `src/config/env.ts`.
 

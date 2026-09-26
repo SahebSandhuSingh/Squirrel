@@ -9,6 +9,9 @@
 
 Separate files mirror the separate tables in the agreed schema: each sensitive category can be
 erased on its own when its consent is withdrawn.
+
+With DATABASE_URL set, each of these is instead one row of user_profile_data (kind = the category,
+data = the same JSON; see db/accounts.py), so they survive a redeploy.
 """
 
 from __future__ import annotations
@@ -21,6 +24,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from backend import config
+from backend.db import accounts as db_accounts
+from backend.db import connection
 
 log = logging.getLogger(__name__)
 
@@ -62,12 +67,18 @@ def read_section(user_id: str, section: str) -> dict | list | None:
     """A saved section, or None when unanswered. A corrupt file reads as unanswered (with a
     warning): the user is simply asked again, and nothing is inferred from half a file."""
     filename, kind = _SECTIONS[section]
-    path = _path(user_id, filename)
-    if not path.exists():
-        return None
     try:
-        with open(path, encoding="utf-8") as handle:
-            value = json.load(handle)[section]
+        if connection.enabled():
+            document = db_accounts.read_data(user_id, section)
+            if document is None:
+                return None
+            value = document[section]
+        else:
+            path = _path(user_id, filename)
+            if not path.exists():
+                return None
+            with open(path, encoding="utf-8") as handle:
+                value = json.load(handle)[section]
     except (OSError, ValueError, KeyError, TypeError):
         log.warning("unreadable %s for %s; treating as unanswered", filename, user_id)
         return None
@@ -76,53 +87,91 @@ def read_section(user_id: str, section: str) -> dict | list | None:
 
 def write_section(user_id: str, section: str, value: dict | list) -> None:
     filename, _ = _SECTIONS[section]
-    _atomic_write_json(
-        _path(user_id, filename),
-        {"schema_version": SCHEMA_VERSION, section: value, "updated_at": _now()},
-    )
+    document = {"schema_version": SCHEMA_VERSION, section: value, "updated_at": _now()}
+    if connection.enabled():
+        db_accounts.write_data(user_id, section, document)
+    else:
+        _atomic_write_json(_path(user_id, filename), document)
 
 
 def erase_section(user_id: str, section: str) -> None:
     filename, _ = _SECTIONS[section]
-    _path(user_id, filename).unlink(missing_ok=True)
+    if connection.enabled():
+        db_accounts.delete_data(user_id, section)
+    else:
+        _path(user_id, filename).unlink(missing_ok=True)
 
 
 # ---------------------------------------------------------------- append-only histories
 
-def _read_history(user_id: str, filename: str, key: str) -> list[dict]:
+# (database kind, file name, list key) of each history.
+_MEASUREMENTS = ("measurements", MEASUREMENTS_FILENAME, "measurements")
+_CONSENTS = ("consents", CONSENTS_FILENAME, "events")
+
+
+def _history_items(document: object, where: str, key: str) -> list[dict]:
+    try:
+        items = document[key]  # type: ignore[index]
+    except (KeyError, TypeError) as exc:
+        raise HistoryUnreadable(where) from exc
+    if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
+        raise HistoryUnreadable(where)
+    return items
+
+
+def _read_history(user_id: str, history: tuple[str, str, str]) -> list[dict]:
+    kind, filename, key = history
+    if connection.enabled():
+        document = db_accounts.read_data(user_id, kind)
+        return [] if document is None else _history_items(document, f"{kind} for {user_id}", key)
     path = _path(user_id, filename)
     if not path.exists():
         return []
     try:
         with open(path, encoding="utf-8") as handle:
-            items = json.load(handle)[key]
-    except (OSError, ValueError, KeyError, TypeError) as exc:
+            document = json.load(handle)
+    except (OSError, ValueError) as exc:
         raise HistoryUnreadable(f"{filename} for {user_id}") from exc
-    if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
-        raise HistoryUnreadable(f"{filename} for {user_id}")
-    return items
+    return _history_items(document, f"{filename} for {user_id}", key)
 
 
-def _write_history(user_id: str, filename: str, key: str, items: list[dict]) -> None:
-    _atomic_write_json(_path(user_id, filename), {"schema_version": SCHEMA_VERSION, key: items})
+def _write_history(user_id: str, history: tuple[str, str, str], items: list[dict]) -> None:
+    kind, filename, key = history
+    document = {"schema_version": SCHEMA_VERSION, key: items}
+    if connection.enabled():
+        db_accounts.write_data(user_id, kind, document)
+    else:
+        _atomic_write_json(_path(user_id, filename), document)
 
 
 def read_measurements(user_id: str) -> list[dict]:
-    return _read_history(user_id, MEASUREMENTS_FILENAME, "measurements")
+    return _read_history(user_id, _MEASUREMENTS)
+
+
+def has_measurement_history(user_id: str) -> bool:
+    """Whether a measurement history has ever been written, even one since emptied by an erasure."""
+    if connection.enabled():
+        return db_accounts.read_data(user_id, _MEASUREMENTS[0]) is not None
+    return _path(user_id, MEASUREMENTS_FILENAME).exists()
 
 
 def write_measurements(user_id: str, measurements: list[dict]) -> None:
-    _write_history(user_id, MEASUREMENTS_FILENAME, "measurements", measurements)
+    _write_history(user_id, _MEASUREMENTS, measurements)
 
 
 def read_consent_events(user_id: str) -> list[dict]:
-    return _read_history(user_id, CONSENTS_FILENAME, "events")
+    return _read_history(user_id, _CONSENTS)
 
 
 def append_consent_event(user_id: str, event: dict) -> list[dict]:
     """Append one event. Raises HistoryUnreadable instead of replacing a log it could not read."""
+    if connection.enabled():
+        kind, _, key = _CONSENTS
+        # One statement: two decisions made at once are both kept.
+        document = db_accounts.append_to_list(user_id, kind, key, event, {"schema_version": SCHEMA_VERSION})
+        return _history_items(document, f"{kind} for {user_id}", key)
     events = read_consent_events(user_id) + [event]
-    _write_history(user_id, CONSENTS_FILENAME, "events", events)
+    _write_history(user_id, _CONSENTS, events)
     return events
 
 

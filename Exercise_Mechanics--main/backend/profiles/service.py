@@ -8,16 +8,14 @@ Withdrawal is always accepted and erases that category's data.
 from __future__ import annotations
 
 import logging
-import shutil
 import uuid
 from datetime import date, datetime, timezone
 
-from backend import config
 from backend.profiles import store
 from backend.profiles.store import HistoryUnreadable
 from backend.profiles.vocab import CONSENT_CATEGORIES, MEASUREMENT_FIELDS, PHYSIQUE_MEASUREMENTS
 from backend.auth import store as auth_store
-from backend.users.store import create_user_record, read_profile, read_skill, write_profile, write_skill
+from backend.users.store import create_user_record, delete_user_record, read_profile, read_skill, write_profile, write_skill
 
 log = logging.getLogger(__name__)
 
@@ -220,7 +218,7 @@ def _history_with_onboarding_values(user_id: str, profile: dict) -> list[dict]:
     onboarding height and weight become the first reading, so a new weight never drops the
     height that BMI needs."""
     history = store.read_measurements(user_id)
-    if history or (config.user_dir(user_id) / store.MEASUREMENTS_FILENAME).exists():
+    if history or store.has_measurement_history(user_id):
         return history
     seed = {field: profile.get(field) for field in ("height_cm", "weight_kg")
             if isinstance(profile.get(field), (int, float)) and not isinstance(profile.get(field), bool)}
@@ -374,7 +372,7 @@ def onboard(core: dict, *, password: str | None = None, now: datetime | None = N
         }])
     except BaseException:
         if password is None:
-            shutil.rmtree(config.user_dir(user_id), ignore_errors=True)
+            delete_user_record(user_id)
         else:
             auth_store.delete_account(core["email"], user_id)
         raise

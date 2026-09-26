@@ -117,6 +117,24 @@ def verify_access_token(token: str, now: float | None = None) -> str | None:
     return claims["sub"]
 
 
+# --- service tokens ----------------------------------------------------------
+
+SERVICE_SUBJECT = "exercise_module"
+SERVICE_TOKEN_TTL_SECONDS = 300
+
+
+def issue_service_token(now: float | None = None) -> str:
+    """A short-lived token this backend presents to the Run Module's service-only routes (Partner
+    Hunt asking about OTHER users' XP; Run Module ADR-027). Signed with the same key as access
+    tokens; `typ: "service"` and a non-UUID subject keep it from ever passing as a user's token,
+    here (verify_access_token wants typ "access") or on the Run Module (it wants a UUID subject)."""
+    iat = int(now if now is not None else time.time())
+    payload = _b64e(json.dumps({"sub": SERVICE_SUBJECT, "iat": iat, "exp": iat + SERVICE_TOKEN_TTL_SECONDS,
+                                "typ": "service"}, separators=(",", ":")).encode())
+    signing_input = f"{_JWT_HEADER}.{payload}"
+    return f"{signing_input}.{_sign(signing_input)}"
+
+
 # --- refresh tokens ----------------------------------------------------------
 
 def new_refresh_token() -> str:

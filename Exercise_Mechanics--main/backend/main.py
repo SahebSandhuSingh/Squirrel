@@ -68,14 +68,17 @@ log = logging.getLogger(__name__)
 @asynccontextmanager
 async def _lifespan(_app: FastAPI):
     """With DATABASE_URL set, bring the schema up to date before serving. A database that is down
-    is logged, not fatal: sessions keep being stored on disk and can be backfilled later."""
+    is logged, not fatal: sessions keep being stored on disk and can be backfilled later, and sign-in
+    and profiles (which live in the database) answer with errors until it is back."""
     if db_connection.enabled():
         try:
             applied = migrate()
             print(f"[db] migrations {'applied: ' + ', '.join(applied) if applied else 'up to date'}")
         except Exception:  # noqa: BLE001
-            log.exception("[db] could not run migrations; continuing without the database")
+            log.exception("[db] could not run migrations; sign-in and profiles are unavailable until "
+                          "the database is reachable")
     yield
+    db_connection.close_pools()
 
 
 # Every route whose path names a user (/api/users/{user_id}/...) serves only that signed-in user.

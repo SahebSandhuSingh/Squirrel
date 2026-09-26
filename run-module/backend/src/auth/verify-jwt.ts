@@ -189,6 +189,50 @@ export async function requireAuth(
   request.userId = sub;
 }
 
+/**
+ * The one service allowed to call service routes: the Exercise Module (Partner Hunt asks whether
+ * OTHER users clear the XP gate). It signs a short-lived token with the same key as user tokens,
+ * `{ sub: "exercise_module", typ: "service", exp }`.
+ *
+ * A user token can never pass: its sub is a UUID and it has no service typ. A service token can
+ * never pass requireAuth: its sub is not a UUID.
+ */
+export const EXERCISE_SERVICE = "exercise_module";
+
+export async function requireService(
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<void> {
+  const authHeader = request.headers["authorization"];
+  const parts = typeof authHeader === "string" ? authHeader.split(" ") : [];
+  if (parts.length !== 2 || parts[0]!.toLowerCase() !== "bearer" || !parts[1]?.trim()) {
+    request.log.info({ reason: "missing_or_malformed_service_token" }, "service auth rejected");
+    await sendUnauthorized(reply);
+    return;
+  }
+  const config = getConfig();
+  try {
+    const { payload } = await jwtVerify(parts[1].trim(), await getKey(config), {
+      algorithms: [config.algorithm],
+      ...(config.issuer   && { issuer:   config.issuer }),
+      ...(config.audience && { audience: config.audience }),
+      clockTolerance: `${CLOCK_TOLERANCE_SECONDS}s`,
+      requiredClaims: ["exp"], // a service token must expire
+      subject: EXERCISE_SERVICE,
+    });
+    if (payload["typ"] !== "service") {
+      request.log.info({ reason: "not_a_service_token" }, "service auth rejected");
+      await sendUnauthorized(reply);
+      return;
+    }
+  } catch (err: unknown) {
+    const reason = err instanceof Error ? err.message : String(err);
+    request.log.info({ reason }, "service auth rejected");
+    await sendUnauthorized(reply);
+    return;
+  }
+}
+
 /** Send a generic 401 with no discriminating information to the client. */
 async function sendUnauthorized(reply: FastifyReply): Promise<void> {
   await reply

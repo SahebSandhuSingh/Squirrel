@@ -10,6 +10,7 @@ from fastapi import FastAPI
 
 from backend import config
 from backend.auth.router import router as auth_router
+from backend.db import connection
 from backend.nearby.engine import ProximityEngine, get_engine
 from backend.nearby.router import router as nearby_router
 from backend.tests.asgi_client import call
@@ -219,6 +220,7 @@ def test_no_proximity_history_is_written_to_disk(app, clock, tmp_path):
     _sit(clock, a, b, mutual=True)
     a.req("POST", "/api/notifications/nearby")
     written = sorted(p.name for p in (tmp_path / "users").rglob("*") if p.is_file())
-    assert written == ["nearby.json", "nearby.json", "profile.json", "profile.json"]
+    profiles = [] if connection.enabled() else ["profile.json", "profile.json"]  # in the database otherwise
+    assert written == sorted(["nearby.json", "nearby.json", *profiles])
     for f in (tmp_path / "users").rglob("nearby.json"):
         assert b.user_id not in f.read_text() and a.user_id not in f.read_text()

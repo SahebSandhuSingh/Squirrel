@@ -8,6 +8,7 @@ and a card never carries more personal data than it needs.
 from __future__ import annotations
 
 import asyncio
+import base64
 import io
 import json
 import urllib.error
@@ -17,6 +18,7 @@ import pytest
 from fastapi import FastAPI
 
 from backend import config
+from backend.auth import tokens
 from backend.partners import store
 from backend.partners.matching import (
     Person,
@@ -310,6 +312,24 @@ def test_invalid_json_is_unavailable():
     gate = RunModuleXPGate("https://run.example", opener=lambda request, timeout: FakeResponse(b"<html>"))
     with pytest.raises(XPServiceUnavailable):
         gate.meets_xp_gate("ana", 100)
+
+
+def test_the_run_module_gate_signs_a_fresh_service_token_per_call():
+    sent = []
+    gate = xp_gate_from_env({"RUN_MODULE_URL": "https://run.example"})
+    gate._open = opener_returning(True, sent)
+    gate.meets_xp_gate("3f0c6a52-6a8e-4c1e-9b1a-6f0e2d9c4b11", 100)
+    token = sent[0].get_header("Authorization").removeprefix("Bearer ")
+    header, payload, _ = token.split(".")
+    claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+    assert claims["sub"] == "exercise_module" and claims["typ"] == "service"
+    assert 0 < claims["exp"] - claims["iat"] <= 300  # short-lived
+    # It is never a user's token, here or on the Run Module (which wants a UUID subject).
+    assert tokens.verify_access_token(token) is None
+    fixed = xp_gate_from_env({"RUN_MODULE_URL": "https://run.example", "RUN_MODULE_TOKEN": "t0k"})
+    fixed._open = opener_returning(True, sent)
+    fixed.meets_xp_gate("ana", 100)
+    assert sent[1].get_header("Authorization") == "Bearer t0k"
 
 
 def test_gate_selection_from_environment():

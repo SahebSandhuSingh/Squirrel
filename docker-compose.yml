@@ -33,6 +33,7 @@ x-run-module: &run-module
     JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
     JWT_ISSUER: ${JWT_ISSUER:-}
     JWT_AUDIENCE: ${JWT_AUDIENCE:-}
+    XP_TIMEZONE: ${XP_TIMEZONE:-Asia/Kolkata}   # day boundary for the XP daily caps
   volumes:
     - ./deploy/certs:/certs:ro   # database CA certificate(s), referenced from DATABASE_URL
 
@@ -113,10 +114,13 @@ services:
     build: ./Exercise_Mechanics--main
     image: squirrel-exercise
     environment:
-      # psycopg takes the same postgres:// URL; it applies its own migrations at startup.
+      # psycopg takes the same postgres:// URL; it applies its own migrations at startup. Accounts and
+      # profiles live in this database; sessions stay in the exercise_data volume.
       DATABASE_URL: *database-url
       MODERATION_TOKEN: ${MODERATION_TOKEN:-}
-      PARTNER_HUNT_DEV_XP: ${PARTNER_HUNT_DEV_XP:-}
+      # Partner Hunt asks the Run Module for XP (its /v1/users/{id}/xp-gate), with a service token this
+      # backend signs with JWT_SECRET. HTTP only: the two still never touch each other's tables.
+      RUN_MODULE_URL: ${RUN_MODULE_URL:-http://run-api:3000}
       # Accounts: this backend signs login tokens with the Run Module's JWT_SECRET, so one sign-in
       # works on both. Every /api/users/{id}/... route needs that user's token; EXERCISE_REQUIRE_AUTH=0
       # switches the check off (only for trying the password-less browser coach locally).
@@ -126,7 +130,7 @@ services:
     ports:
       - "${EXERCISE_HOST_PORT:-8000}:8000"
     volumes:
-      - exercise_data:/app/data   # per-user files remain the Exercise source of truth
+      - exercise_data:/app/data   # session captures and calibration (accounts/profiles are in the database)
       - ./deploy/certs:/certs:ro
     depends_on:
       postgres: { condition: service_healthy, required: false }

@@ -1,9 +1,11 @@
 """Credential + refresh-token persistence.
 
-Layout under config.AUTH_DIR (never under version control):
+With DATABASE_URL set (production, Supabase): the user_accounts, user_refresh_tokens and user_profiles
+tables (db/accounts.py, migration 002).
+
+Without it (local development and most tests), files under config.AUTH_DIR (never under version control):
     credentials/<sha256(email)>.json   {user_id, password_hash, created_at}
     refresh/<sha256(token)>.json       {user_id, expires_at}
-
 The email is hashed in the file name so the directory listing is not an address book; the account
 profile itself lives in the ordinary users/<id>/profile.json.
 """
@@ -23,6 +25,8 @@ from pathlib import Path
 from backend import config
 from backend.auth.tokens import hash_password, new_refresh_token, token_digest
 from backend.config import PROFILE_FILENAME, user_dir
+from backend.db import accounts as db_accounts
+from backend.db import connection
 
 
 class EmailTaken(Exception):
@@ -60,16 +64,29 @@ def register_account(email: str, password: str, first_name: str, last_name: str,
     `profile` carries any further sign-up fields (gender, height, date of birth, …), stored in the
     same profile.json. All or nothing: if the profile can't be written, the credential is removed
     so the email can be used again."""
-    cred_path = _credential_path(email)
-    cred_path.parent.mkdir(parents=True, exist_ok=True)
     # A UUID: the Run Module only accepts UUID subjects, and it is also a valid id here
     # ([a-z0-9-], 36 characters), so the same account works on both backends.
     user_id = str(uuid.uuid4())
-    record = {
+    created_at = datetime.now(timezone.utc).isoformat()
+    profile_doc = {
+        **(profile or {}),
         "user_id": user_id,
-        "password_hash": hash_password(password),
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "first_name": first_name,
+        "last_name": last_name,
+        "email": normalize_email(email),
+        "created_at": created_at,
     }
+    if connection.enabled():
+        try:
+            db_accounts.create_account(user_id, normalize_email(email), hash_password(password), profile_doc)
+        except db_accounts.EmailTaken:
+            raise EmailTaken(email) from None
+        user_dir(user_id).mkdir(parents=True, exist_ok=True)  # sessions and calibration still live here
+        return user_id
+
+    cred_path = _credential_path(email)
+    cred_path.parent.mkdir(parents=True, exist_ok=True)
+    record = {"user_id": user_id, "password_hash": hash_password(password), "created_at": created_at}
     # O_EXCL makes the email claim atomic: two concurrent registrations cannot both win.
     try:
         fd = os.open(cred_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -81,14 +98,7 @@ def register_account(email: str, password: str, first_name: str, last_name: str,
     try:
         udir = user_dir(user_id)
         udir.mkdir(parents=True, exist_ok=True)
-        _atomic_write_json(udir / PROFILE_FILENAME, {
-            **(profile or {}),
-            "user_id": user_id,
-            "first_name": first_name,
-            "last_name": last_name,
-            "email": normalize_email(email),
-            "created_at": record["created_at"],
-        })
+        _atomic_write_json(udir / PROFILE_FILENAME, profile_doc)
     except BaseException:
         cred_path.unlink(missing_ok=True)
         shutil.rmtree(user_dir(user_id), ignore_errors=True)
@@ -98,11 +108,17 @@ def register_account(email: str, password: str, first_name: str, last_name: str,
 
 def delete_account(email: str, user_id: str) -> None:
     """Undo register_account (used when a later step of sign-up fails)."""
+    if connection.enabled():
+        db_accounts.delete_user(user_id)
+        shutil.rmtree(user_dir(user_id), ignore_errors=True)
+        return
     _credential_path(email).unlink(missing_ok=True)
     shutil.rmtree(user_dir(user_id), ignore_errors=True)
 
 
 def read_credential(email: str) -> dict | None:
+    if connection.enabled():
+        return db_accounts.read_credential(normalize_email(email))
     path = _credential_path(email)
     if not path.exists():
         return None
@@ -113,12 +129,17 @@ def read_credential(email: str) -> dict | None:
 def issue_refresh_token(user_id: str, now: float | None = None) -> tuple[str, int]:
     token = new_refresh_token()
     expires_at = int((now if now is not None else time.time()) + config.REFRESH_TOKEN_TTL_SECONDS)
+    if connection.enabled():
+        db_accounts.store_refresh_token(token_digest(token), user_id, expires_at)
+        return token, expires_at
     _atomic_write_json(_refresh_path(token), {"user_id": user_id, "expires_at": expires_at})
     return token, expires_at
 
 
 def consume_refresh_token(token: str, now: float | None = None) -> str | None:
     """Single-use: delete the stored token and return its user id if it was valid."""
+    if connection.enabled():
+        return db_accounts.consume_refresh_token(token_digest(token), now if now is not None else time.time())
     path = _refresh_path(token)
     try:
         with open(path) as f:

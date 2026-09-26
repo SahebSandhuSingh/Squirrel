@@ -1,8 +1,10 @@
-"""Mirror exercise sessions into the `exercise_sessions` table.
+"""Mirror exercise sessions into the `exercise_sessions` table, and into the shared `activity_sessions`.
 
 A row is derived from the session's stored files through the same report builder the API uses, so the
 table always agrees with the reports: reps, sets, the Workout Score, and the member's Activity Rating.
 Writes are upserts keyed by session id, so syncing the same session again just refreshes its row.
+The same sync writes the session's activity_sessions row (db/activity_sessions.py), which is what earns
+it XP in the Run Module.
 """
 
 from __future__ import annotations
@@ -13,7 +15,7 @@ from datetime import datetime, timezone
 
 from backend import config
 from backend.core.ids import is_valid_user_id
-from backend.db import connection
+from backend.db import activity_sessions, connection
 from backend.reports import builder
 from backend.sessions.store import is_valid_session_id, read_session_record
 
@@ -34,6 +36,12 @@ WHERE exercise_sessions.user_id = EXCLUDED.user_id
 
 def build_row(user_id: str, session_id: str) -> dict | None:
     """The row for one session, or None when there is nothing to record yet (no set was started)."""
+    built = _build(user_id, session_id)
+    return built[0] if built else None
+
+
+def _build(user_id: str, session_id: str) -> tuple[dict, dict | None] | None:
+    """(exercise_sessions row, activity_sessions row or None), or None when nothing is recorded yet."""
     record = read_session_record(user_id, session_id)
     if record is None or record.get("user_id") != user_id:
         return None
@@ -61,7 +69,7 @@ def build_row(user_id: str, session_id: str) -> dict | None:
     start = _timestamp(record.get("created_at"))
     # When the last set finished, by the server's clock (the set summary's last write).
     end = max(datetime.fromtimestamp(p.stat().st_mtime, timezone.utc) for p in set_summaries)
-    return {
+    row = {
         "session_id": session_id,
         "user_id": user_id,
         "activity_type": exercise_id,
@@ -74,6 +82,7 @@ def build_row(user_id: str, session_id: str) -> dict | None:
         "workout_score": report["workout_score"]["score"],
         "activity_rating": rating.get("rating"),
     }
+    return row, activity_sessions.build_activity_row(row, report)
 
 
 def upsert(conn, row: dict) -> None:
@@ -88,11 +97,12 @@ def sync_session(user_id: str, session_id: str) -> bool:
     if not (is_valid_user_id(user_id) and is_valid_session_id(session_id)):
         return False
     try:
-        row = build_row(user_id, session_id)
-        if row is None:
+        built = _build(user_id, session_id)
+        if built is None:
             return False
         with connection.connect() as conn:
-            upsert(conn, row)
+            upsert(conn, built[0])
+            activity_sessions.write(conn, built[1])  # its own savepoint: never undoes the row above
         return True
     except Exception:  # noqa: BLE001 — a database outage must never break training or a rating
         log.exception("could not sync session %s/%s to the database", user_id, session_id)
@@ -111,12 +121,13 @@ def backfill() -> tuple[int, int]:
             if not sessions.is_dir():
                 continue
             for session_dir in sorted(p for p in sessions.iterdir() if p.is_dir()):
-                row = build_row(user_dir.name, session_dir.name)
-                if row is None:
+                built = _build(user_dir.name, session_dir.name)
+                if built is None:
                     skipped += 1
                     continue
                 with conn.transaction():
-                    upsert(conn, row)
+                    upsert(conn, built[0])
+                    activity_sessions.write(conn, built[1])
                 written += 1
     return written, skipped
 

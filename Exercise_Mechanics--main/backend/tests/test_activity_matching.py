@@ -21,6 +21,7 @@ from backend.activity_matching.router import router as matching_router
 from backend.partners import store as blocks_store
 from backend.profiles import store as profile_store
 from backend.profiles.router import router as profiles_router
+from backend.tests.storage import corrupt_profile_data
 from backend.users.router import router as users_router
 
 MATCHING = {"category": "matching", "granted": True, "policy_version": "2026-09"}
@@ -232,8 +233,9 @@ def test_blocking_yourself_or_nobody_is_refused():
 def test_unreadable_data_fails_closed():
     ana, ben, cat = (member(n, {"running": 5}) for n in ("Ana", "Ben", "Cat"))
     # A candidate whose consent can't be confirmed is not shown.
-    (config.user_dir(ben) / profile_store.CONSENTS_FILENAME).write_text("{not json")
+    corrupt_profile_data(ben, profile_store.CONSENTS_FILENAME)
     # A candidate whose block list can't be read might have blocked Ana: not shown either.
+    (config.user_dir(cat) / blocks_store.BLOCKS_FILENAME).parent.mkdir(parents=True, exist_ok=True)
     (config.user_dir(cat) / blocks_store.BLOCKS_FILENAME).write_text("{not json")
     assert matches(ana) == []
     # And the viewer's own unreadable files stop the board rather than guessing.

@@ -205,10 +205,10 @@ optional and switch features on:
 
 | Variable | Used by | Without it |
 |---|---|---|
-| `RUN_MODULE_URL`, `RUN_MODULE_TOKEN` | Partner Hunt's XP gate (the Run Module) | Partner Hunt reports the XP service as unavailable |
-| `PARTNER_HUNT_DEV_XP` | Local testing only: a fixed XP for every user | — |
+| `RUN_MODULE_URL` | Partner Hunt's XP gate: the Run Module's `/v1/users/{id}/xp-gate`, called with a short-lived service token signed with `JWT_SECRET` (`RUN_MODULE_TOKEN` overrides it with a fixed token) | Partner Hunt reports the XP service as unavailable |
+| `PARTNER_HUNT_DEV_XP` | Local testing only, when `RUN_MODULE_URL` is unset: a fixed XP for every user | — |
 | `MODERATION_TOKEN` | Moderator routes for reports | Moderator routes refuse every request (503) |
-| `DATABASE_URL` | PostgreSQL copy of exercise sessions (see below) | Sessions are stored on disk only, as before |
+| `DATABASE_URL` | **Accounts and profiles are stored here** (sign-in, refresh tokens, profile, skill, profile details, measurements, consents). Exercise sessions are also copied into `exercise_sessions`, and into the shared `activity_sessions` that XP is derived from (see below) | Accounts and profiles are files under `data/`, lost on a redeploy without a volume |
 | `JWT_SECRET` | Signs Squirrel Social login tokens (HS256 JWTs). The **same value as the Run Module's**, so one sign-in works on both. **Required in production** (`SQUIRREL_AUTH_SECRET`, if set, takes precedence) | A development key is generated once in `data/auth/secret.key` |
 | `EXERCISE_REQUIRE_AUTH` | `0` switches off the sign-in check on per-user routes, only to try the password-less browser coach locally | Sign-in required |
 | `SQUIRREL_PUBLIC_BASE_URL` | Origin used in QR codes and invite links | `https://squirrelsocial.app` |
@@ -221,9 +221,10 @@ need a configurable backend origin and CORS, neither of which exists today.
 
 ### Persistence in a container
 
-`data/users/` is inside the container and is **not** in the image (`.dockerignore` excludes it), so
-without a mounted volume it starts empty and is wiped on every restart and redeploy. Mount it to
-keep profiles, sessions and baselines:
+With `DATABASE_URL` set, accounts and profiles are in the database and survive a redeploy. The
+session captures and calibration baselines are still files: `data/users/` is inside the container and
+is **not** in the image (`.dockerignore` excludes it), so without a mounted volume it starts empty and
+is wiped on every restart and redeploy. Mount it to keep them:
 
 ```bash
 docker run --rm -p 8000:8000 -v "$PWD/data:/app/data" exercise-mechanics
@@ -245,6 +246,8 @@ Sign-up is two pages:
    one request; a refused request saves nothing, and sections left out are left unchanged.
 
 The code is in `backend/profiles/`, and each answer can also be changed later through its own route.
+The file names below are the local (no `DATABASE_URL`) layout; with a database, each file is one row
+of `user_profiles` / `user_profile_data` holding the same JSON.
 
 | Question | Where it lives | Rule |
 |---|---|---|
@@ -372,25 +375,42 @@ side is in [`mobile/nearby/`](../mobile/nearby/).
 - **Off by default.** Every proximity route answers 403 until the user turns Nearby on. Turning it off erases their proximity state at once.
 - **No proximity history on disk.** Sightings and "who was near whom" live only in memory and expire after 15 minutes. On disk there is only the on/off setting (`nearby.json`) and accepted connections (`connections.json`), without time or place.
 - **One process.** That in-memory state is why the server runs a single worker. A restart forgets it, and phones simply open a new session.
-- **Accounts.** A registered account is an ordinary user folder (`data/users/<id>/profile.json`) whose id is a UUID, the form the Run Module also requires. Credentials and refresh tokens are stored as hashes under `data/auth/`, which is private and git-ignored, like `data/invites/`.
+- **Accounts.** A registered account's id is a UUID, the form the Run Module also requires. With `DATABASE_URL` set, the account, its refresh tokens (hashed) and its profile are rows in the database (see "PostgreSQL" below). Without it, they are files: the profile in `data/users/<id>/profile.json`, credentials and refresh tokens as hashes under `data/auth/`, which is private and git-ignored, like `data/invites/`.
 - **One sign-in, both backends.** Access tokens are HS256 JWTs signed with `JWT_SECRET`, the Run Module's secret, so the Run Module accepts them as they are.
 - **Every per-user route is locked to its user.** `/api/users/{user_id}/...` needs `Authorization: Bearer <that user's token>`: 401 without one, 403 with anyone else's. The training sockets take the token as `?token=`. Sign-up (`POST /api/users`) now takes a `password` and returns tokens; an account made elsewhere (e.g. the mobile app, with email and name only) adds its details with `PUT /api/users/{id}/profile`. `backend/tests/test_access.py` checks every per-user route.
 
-## PostgreSQL: exercise sessions
+## PostgreSQL: accounts, profiles and exercise sessions
 
-With `DATABASE_URL` set, every exercise session is also written to PostgreSQL, one row per session
-in `exercise_sessions` (`backend/db/`). It holds only the parameters that apply to the exercises
-this backend coaches. Running measures (distance, steps, pace, speed) are left out on purpose, and
-activity-specific parameters get their own migration when they're needed.
+With `DATABASE_URL` set (`backend/db/`):
 
-The same database can also hold the Run Module's tables (one Supabase + PostGIS database for both).
-The two never read each other's tables. See "Both backends on one database" in the
-[repository README](../README.md).
+- **Accounts and profiles live in the database**, not in files (migration 002): sign-in accounts
+  (`user_accounts`: email, scrypt password hash), single-use refresh tokens (`user_refresh_tokens`,
+  hashes only), profiles (`user_profiles`: the profile as JSON, with `first_name`, `last_name` and
+  `email` as columns) and the rest of each profile (`user_profile_data`: skill level, the fitness /
+  activities / physique / habits answers, the measurement history and the consent log, one row each).
+  They survive a redeploy. A database that is down means sign-in and profiles fail until it is back.
+- **Every exercise session is copied** into `exercise_sessions`, and, for accounts, into the shared
+  `activity_sessions` table, which is what earns the session XP (below). Session files stay the
+  source of truth.
+
+Without `DATABASE_URL`, all of this is files under `data/` (local development).
+
+**Moving an existing server over:** `python -m backend.db import-files` copies accounts and profiles
+from `data/` into the database. Existing users keep their id and password; nobody already in the
+database is overwritten, so it is safe to run twice. Refresh tokens are not copied: those users sign
+in again once.
+
+The same database also holds the Run Module's tables (one Supabase + PostGIS database for both). Each
+module migrates and writes its own tables. The one shared table is `activity_sessions`: the Run Module
+creates it, and this backend only inserts and updates its own rows there (`source_module =
+'exercise_module'`). See "Both backends on one database" in the [repository README](../README.md).
+
+### `exercise_sessions`
 
 | Column | Meaning |
 |---|---|
 | `session_id` | The session's id (primary key) |
-| `user_id` | The member's id (becomes the account service's UUID later) |
+| `user_id` | The member's id (the account's UUID) |
 | `activity_type` | `squat`, `pushup`, `bicep_curl` or `high_knee` (references `activity_types`) |
 | `start_time`, `end_time` | When the session was started, and when its last set finished |
 | `duration_s` | Active exercise time across its sets, in seconds |
@@ -399,15 +419,27 @@ The two never read each other's tables. See "Both backends on one database" in t
 | `workout_score` | The system-generated Workout Score (0–100) |
 | `activity_rating` | The member's own rating (1–5), if they gave one |
 
-**When rows are written:**
+Running measures (distance, steps, pace, speed) are left out on purpose.
+
+### `activity_sessions` rows (XP)
+
+One row per session of an account (`type = 'exercise'`, `subtype` = the exercise), per the Integration
+Contract. `duration_s` is the session's length, from its start to the end of its last set, because
+the XP tiers are by session length; the active exercise time is in `metrics.active_time_s`, next to
+reps, correct %, depth, Workout Score and sets. The Run Module turns these rows into XP
+([ADR-027](../run-module/docs/decisions/ADR-027-xp-rules-and-endpoints.md)): under 10 min 0 XP,
+10–20 min 30, 20–45 min 50, 45 min or more 70, at most 150 XP from exercise a day. If the Run
+Module's migrations have not run yet, the table is missing: the session's own row is still written
+and a warning is logged; a backfill adds the row later.
+
+**When session rows are written:**
 - when a set finishes;
 - when the training connection closes;
 - when a rating is saved or removed;
 - by `python -m backend.db backfill`, which writes every stored session.
 
-A write is an upsert, so running it again just refreshes the row. The files on disk stay the source
-of truth: if the database is down, training and ratings carry on, the failure is logged, and a
-backfill catches the table up afterwards.
+A write is an upsert, so running it again just refreshes the row. If the database is down, training
+and ratings carry on, the failure is logged, and a backfill catches the tables up afterwards.
 
 **Schema:** migrations live in `backend/db/migrations/` and are applied automatically when the app
 starts. You can also apply them yourself with `python -m backend.db migrate`. `activity_types`
@@ -420,18 +452,19 @@ brew install postgresql@16 && brew services start postgresql@16
 createdb exercise_mechanics
 export DATABASE_URL=postgresql://localhost/exercise_mechanics
 python -m uvicorn backend.main:app --port 8000     # creates the tables on start
+python -m backend.db import-files                  # optional: bring existing accounts/profiles in
 python -m backend.db backfill                      # optional: copy existing sessions in
 ```
 
-**On Render:** create a Render PostgreSQL database and set the web service's `DATABASE_URL` to its
-*Internal Database URL*.
-
-**Tests:** `backend/tests/test_database.py` runs against a real, disposable database named in
-`TEST_DATABASE_URL` (its tables are dropped and recreated) and is skipped when that isn't set.
+**Tests:** the suite never uses your shell's `DATABASE_URL`. `test_database.py` and
+`test_accounts_database.py` run against a disposable database named in `TEST_DATABASE_URL` (their
+tables are dropped and recreated) and are skipped without it. `TEST_ACCOUNTS_DATABASE_URL` (another
+disposable database) runs the **whole** suite with accounts and profiles in PostgreSQL instead of files.
 
 ```bash
-createdb exercise_test
+createdb exercise_test && createdb accounts_test
 TEST_DATABASE_URL=postgresql://localhost/exercise_test python -m pytest -q backend/tests
+TEST_ACCOUNTS_DATABASE_URL=postgresql://localhost/accounts_test python -m pytest -q backend/tests
 ```
 
 ## Layout

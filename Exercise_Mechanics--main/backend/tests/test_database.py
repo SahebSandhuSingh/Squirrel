@@ -8,15 +8,18 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
-from datetime import datetime
+import shutil
+import uuid
+from datetime import datetime, timedelta
 
 import psycopg
 import pytest
 
 from backend import config
 from backend.activity_rating import store as rating_store
-from backend.db import exercise_sessions
+from backend.db import activity_sessions, exercise_sessions
 from backend.db.exercise_sessions import COLUMNS, backfill, build_row, sync_session
 from backend.db.migrate import migrate, migration_files
 from backend.reports import builder
@@ -37,7 +40,7 @@ def db(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "USERS_DIR", tmp_path)
     monkeypatch.setenv("DATABASE_URL", TEST_URL)
     with psycopg.connect(TEST_URL, autocommit=True) as conn:
-        conn.execute("DROP TABLE IF EXISTS exercise_sessions, activity_types, schema_migrations CASCADE")
+        conn.execute("DROP TABLE IF EXISTS exercise_sessions, activity_types, user_refresh_tokens, user_accounts, user_profile_data, user_profiles, schema_migrations CASCADE")
     migrate()
     with psycopg.connect(TEST_URL, autocommit=True) as conn:
         yield conn
@@ -172,6 +175,98 @@ def test_one_members_sync_never_overwrites_anothers_row(db):
     assert rows(db)[0]["user_id"] == UID and rows(db)[0]["reps"] == len(REPS)
 
 
+# ---------------------------------------------------------------- shared activity_sessions (XP)
+
+# The Run Module's table, as its migration 002 creates it. Created here only so these tests run without
+# the Node migrations; in a deployment the Run Module creates it and this module never does.
+_RUN_MODULE_ACTIVITY_SESSIONS = """
+CREATE TABLE activity_sessions (
+  id uuid PRIMARY KEY, user_id uuid NOT NULL, type text NOT NULL, subtype text NOT NULL,
+  started_at timestamptz NOT NULL, duration_s integer NOT NULL, intensity text, calories_kcal numeric,
+  metrics jsonb NOT NULL, source_module text NOT NULL DEFAULT 'run_module',
+  created_at timestamptz NOT NULL DEFAULT now())
+"""
+ACCOUNT = "3f0c6a52-6a8e-4c1e-9b1a-6f0e2d9c4b11"
+
+
+@pytest.fixture
+def shared(db):
+    db.execute("DROP TABLE IF EXISTS activity_sessions")
+    db.execute(_RUN_MODULE_ACTIVITY_SESSIONS)
+    yield db
+    db.execute("DROP TABLE IF EXISTS activity_sessions")
+
+
+def activity_rows(conn) -> list[dict]:
+    cur = conn.execute("SELECT * FROM activity_sessions ORDER BY started_at")
+    names = [d.name for d in cur.description]
+    return [dict(zip(names, r)) for r in cur.fetchall()]
+
+
+def _account_session(sid: str, started: datetime, minutes: float) -> None:
+    """A squat session for an account (UUID id) whose last set ended `minutes` after it started."""
+    _write_session(config.USERS_DIR, sid, started.isoformat(), REPS)
+    shutil.move(config.USERS_DIR / UID / "sessions" / sid, config.USERS_DIR / ACCOUNT / "sessions" / sid)
+    session_file = config.USERS_DIR / ACCOUNT / "sessions" / sid / "session.json"
+    session_file.write_text(json.dumps({**json.loads(session_file.read_text()), "user_id": ACCOUNT}))
+    ended = (started + timedelta(minutes=minutes)).timestamp()
+    os.utime(config.USERS_DIR / ACCOUNT / "sessions" / sid / "workouts" / "squat" / "set_1" / "set_summary.json",
+             (ended, ended))
+
+
+def test_an_account_session_writes_one_activity_row_for_xp(shared):
+    started = datetime.fromisoformat("2026-09-21T07:00:00+00:00")
+    _account_session(SID, started, minutes=25)
+    assert sync_session(ACCOUNT, SID) is True
+    [row] = activity_rows(shared)
+    assert str(row["id"]) == activity_sessions.activity_id(SID)
+    assert str(row["user_id"]) == ACCOUNT
+    assert (row["type"], row["subtype"], row["source_module"]) == ("exercise", "squat", "exercise_module")
+    assert row["started_at"] == started
+    assert row["duration_s"] == 25 * 60  # the session's length, which the XP tiers use
+    metrics = row["metrics"]
+    assert metrics["reps"] == len(REPS) and metrics["sets"] == 1 and metrics["session_id"] == SID
+    assert metrics["active_time_s"] == rows(shared)[0]["duration_s"]  # active exercise time, kept too
+    assert metrics["workout_score"] == rows(shared)[0]["workout_score"]
+    assert row["calories_kcal"] is None and row["intensity"] is None
+    sync_session(ACCOUNT, SID)  # syncing again updates the same row
+    assert len(activity_rows(shared)) == 1
+
+
+def test_only_accounts_get_activity_rows(shared):
+    _write_session(config.USERS_DIR, SID, "2026-09-21T07:00:00+00:00", REPS)
+    assert sync_session(UID, SID) is True  # a name-slug test user: its session row, but no XP row
+    assert len(rows(shared)) == 1 and activity_rows(shared) == []
+
+
+def test_it_never_changes_a_row_it_does_not_own(shared):
+    _account_session(SID, datetime.fromisoformat("2026-09-21T07:00:00+00:00"), minutes=25)
+    run = {"id": activity_sessions.activity_id(SID), "user_id": ACCOUNT}
+    shared.execute("INSERT INTO activity_sessions (id, user_id, type, subtype, started_at, duration_s, metrics)"
+                   " VALUES (%(id)s, %(user_id)s, 'run', 'territory_run', now(), 60, '{}')", run)
+    sync_session(ACCOUNT, SID)
+    [row] = activity_rows(shared)
+    assert row["type"] == "run" and row["source_module"] == "run_module" and row["duration_s"] == 60
+    assert len(rows(shared)) == 1  # the session's own row is still written
+
+
+def test_backfill_writes_the_activity_rows_too(shared):
+    _account_session(SID, datetime.fromisoformat("2026-09-21T07:00:00+00:00"), minutes=12)
+    _account_session("20260922T070000-second", datetime.fromisoformat("2026-09-22T07:00:00+00:00"), minutes=50)
+    assert backfill() == (2, 0)
+    assert [r["duration_s"] for r in activity_rows(shared)] == [12 * 60, 50 * 60]
+    assert backfill() == (2, 0) and len(activity_rows(shared)) == 2
+
+
+def test_without_the_run_modules_table_the_session_row_is_still_written(db, caplog):
+    db.execute("DROP TABLE IF EXISTS activity_sessions")
+    _account_session(SID, datetime.fromisoformat("2026-09-21T07:00:00+00:00"), minutes=25)
+    with caplog.at_level(logging.WARNING):
+        assert sync_session(ACCOUNT, SID) is True
+    assert len(rows(db)) == 1
+    assert "activity_sessions does not exist yet" in caplog.text
+
+
 # ---------------------------------------------------------------- failure never breaks the app
 
 def test_without_database_url_everything_is_a_no_op(tmp_path, monkeypatch):
@@ -195,7 +290,7 @@ def test_a_database_that_is_down_is_logged_not_raised(tmp_path, monkeypatch, cap
 def test_the_app_migrates_on_startup(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", TEST_URL)
     with psycopg.connect(TEST_URL, autocommit=True) as conn:
-        conn.execute("DROP TABLE IF EXISTS exercise_sessions, activity_types, schema_migrations CASCADE")
+        conn.execute("DROP TABLE IF EXISTS exercise_sessions, activity_types, user_refresh_tokens, user_accounts, user_profile_data, user_profiles, schema_migrations CASCADE")
     from backend.main import _lifespan, app
 
     async def start_and_stop():

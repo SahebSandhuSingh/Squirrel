@@ -29,6 +29,19 @@ docker compose up --build
 | `run-worker` | Run Module workers (run finalisation, leaderboard, decay, notifications) | |
 | `exercise` | Exercise Mechanics (API + app); applies its own migrations at startup | <http://localhost:8000> |
 
+**What goes where.** Each module migrates and writes only its own tables:
+
+- Exercise: accounts, refresh tokens and profiles (`user_*`), `exercise_sessions`, `activity_types`.
+  Session captures and calibration stay in the `exercise_data` volume.
+- Run Module: runs, territories, leaderboard and its other tables.
+- One shared table, `activity_sessions`: the Run Module creates it and writes a row per run; the
+  Exercise backend writes a row per workout (only its own rows). The Run Module derives **XP** from
+  it on every read: `GET /v1/users/me/xp` for the app, and a service-only XP gate for Partner Hunt,
+  which the Exercise backend calls over HTTP (rules: [ADR-027](run-module/docs/decisions/ADR-027-xp-rules-and-endpoints.md)).
+
+A server that stored accounts in files before: `docker compose exec exercise python -m backend.db import-files`
+copies them into the database once (safe to repeat).
+
 The Run Module image is built from [`deploy/run-module.Dockerfile`](deploy/run-module.Dockerfile),
 kept outside `run-module/` so that folder stays exactly as its team ships it. The Exercise image is
 its existing `Dockerfile`.

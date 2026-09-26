@@ -29,7 +29,8 @@ seems to require them, stop and ask rather than building a stub.
   ADR covers it, STOP and ask. Do not invent the value.
 - Shared data contract with the other module: write to
   activity_sessions only; never read or assume the other
-  module's internals.
+  module's internals. One exception: the XP engine
+  (src/xp/, ADR-027) reads activity_sessions, read-only.
 
 ## Stack
 Backend: Node 22 LTS + TypeScript. Database: PostgreSQL 16 +
