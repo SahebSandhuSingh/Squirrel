@@ -1,3 +1,82 @@
+# Squirrel
+
+Two backends in one repository. They share **one PostgreSQL + PostGIS database** (Supabase in
+production) and nothing else. Neither calls the other or reads the other's tables; each migrates and
+writes its own.
+
+| Path | Module | Stack | Writes |
+|---|---|---|---|
+| [`Exercise_Mechanics--main/`](Exercise_Mechanics--main/) | Exercise coaching (pose, reps, scores, profiles, matching, reports) | Python 3.11 · FastAPI · psycopg | `exercise_sessions`, `activity_types`, `schema_migrations` |
+| [`run-module/`](run-module/) | Runs, GPS territories, anti-cheat, leaderboard | Node 22 · Fastify · BullMQ · Redis | `runs`, `territories`, `run_scores`, `leaderboard_snapshots`, `activity_sessions`, … `pgmigrations` |
+
+## Both backends on one database
+
+```bash
+cp .env.example .env        # set JWT_SECRET; everything else has a local default
+docker compose up --build
+```
+
+| Service | What it runs | Where |
+|---|---|---|
+| `postgres` | PostGIS 16-3.4, database `squirrel` (profile `local-db`) | `localhost:5435` |
+| `redis` | Redis 7, for the Run Module's queues and cache | `localhost:6380` |
+| `run-migrate` | the Run Module's own migrations (node-pg-migrate), then exits | |
+| `run-api` | Run Module API | <http://localhost:3000/health> |
+| `run-worker` | Run Module workers (run finalisation, leaderboard, decay, notifications) | |
+| `exercise` | Exercise Mechanics (API + app); applies its own migrations at startup | <http://localhost:8000> |
+
+The Run Module image is built from [`deploy/run-module.Dockerfile`](deploy/run-module.Dockerfile),
+kept outside `run-module/` so that folder stays exactly as its team ships it. The Exercise image is
+its existing `Dockerfile`.
+
+**Without Docker**, give both the same `DATABASE_URL` and run each the usual way. Each module's own
+README has the details. The Run Module's npm scripts read `run-module/backend/.env` (they fail
+without it), so the URL goes there; the Exercise backend reads it from the environment.
+
+```bash
+cp run-module/.env.example run-module/backend/.env   # set DATABASE_URL, REDIS_URL, JWT_SECRET
+(cd run-module/backend && npm run migrate && npm run dev)        # and `npm run worker` in another terminal
+(cd Exercise_Mechanics--main && DATABASE_URL=<the same URL> python -m uvicorn backend.main:app --port 8000)
+```
+
+### Supabase
+
+1. **Enable PostGIS.** The Run Module's first migration runs `CREATE EXTENSION IF NOT EXISTS
+   postgis`; alternatively turn it on under Database → Extensions.
+2. **Use the Session pooler** (port **5432**, user `postgres.<project-ref>`) or the direct
+   connection. Do not use the transaction pooler (6543): the Run Module's migrator holds a session
+   advisory lock, and psycopg prepares repeated statements, and neither survives transaction
+   pooling. The direct connection is IPv6-only unless you have the IPv4 add-on, and Docker's default
+   network has no IPv6, so the Session pooler is the one that works everywhere.
+3. **Trust Supabase's CA.** Download the certificate (Database → SSL Configuration) into
+   `deploy/certs/` (git-ignored, mounted read-only at `/certs`) and name it in the URL. Node's `pg`
+   treats `sslmode=require` as *verify the certificate*, and Supabase's CA is not in Node's default
+   store, so a bare `sslmode=require` is refused ("unable to verify the first certificate"). The
+   same URL works for both drivers:
+
+   ```
+   DATABASE_URL='postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=verify-full&sslrootcert=/certs/prod-ca-2021.crt'
+   ```
+
+   Keep the single quotes in `.env`: compose would otherwise expand a `$` in the password.
+4. **Remove `COMPOSE_PROFILES=local-db`** from `.env`, so the local `postgres` container is not
+   started. Redis stays local, or set `REDIS_URL` to a hosted one; Supabase has no Redis.
+
+### Checking that the two never collide
+
+```bash
+(cd run-module/backend && npm ci)
+python scripts/check_shared_database.py postgresql://postgres:postgres@localhost:5435/postgres
+```
+
+The script migrates each module alone into a throwaway database and records every table, view,
+sequence and index it creates. It fails if any name belongs to both. It then migrates both into one
+database in both orders, and again, to show neither assumes it runs first or alone. The throwaway
+databases are always dropped. The `Shared database` GitHub workflow runs it whenever either module's
+migrations change.
+
+---
+
 # Exercise Mechanics
 
 Exercise Mechanics is a browser-based live fitness-coaching prototype. MediaPipe pose inference runs in the

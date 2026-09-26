@@ -360,6 +360,10 @@ in `exercise_sessions` (`backend/db/`). It holds only the parameters that apply 
 this backend coaches. Running measures (distance, steps, pace, speed) are left out on purpose, and
 activity-specific parameters get their own migration when they're needed.
 
+The same database can also hold the Run Module's tables (one Supabase + PostGIS database for both).
+The two never read each other's tables. See "Both backends on one database" in the
+[repository README](../README.md).
+
 | Column | Meaning |
 |---|---|
 | `session_id` | The session's id (primary key) |

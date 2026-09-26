@@ -1,0 +1,4 @@
+# Combined stack (docker-compose.yml). Each module keeps its own .gitignore as well.
+.env
+deploy/certs/*
+!deploy/certs/.gitkeep

@@ -1,0 +1,125 @@
+# Both backends, side by side, on ONE PostgreSQL + PostGIS database.
+#
+#   cp .env.example .env        # then set JWT_SECRET (and DATABASE_URL for Supabase)
+#   docker compose up --build
+#
+#   Exercise Mechanics   http://localhost:8000
+#   Run Module API       http://localhost:3000/health
+#
+# The two modules do not talk to each other. Each one migrates and writes its own tables through its
+# own code (Exercise: backend/db, Python; Run Module: node-pg-migrate + db/queries); they only share
+# the database server. `scripts/check_shared_database.py` proves their tables never collide.
+#
+# By default the database is the local `postgres` service below. For Supabase, set DATABASE_URL in
+# .env and drop `local-db` from COMPOSE_PROFILES; nothing else changes. See README.md.
+
+name: squirrel
+
+x-database-url: &database-url ${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/squirrel}
+x-redis-url: &redis-url ${REDIS_URL:-redis://redis:6379}
+
+x-run-module: &run-module
+  build:
+    context: ./run-module
+    dockerfile: ../deploy/run-module.Dockerfile
+  image: squirrel-run-module
+  environment:
+    DATABASE_URL: *database-url
+    REDIS_URL: *redis-url
+    PORT: "3000"
+    NODE_ENV: ${RUN_MODULE_NODE_ENV:-production}
+    LOG_LEVEL: ${LOG_LEVEL:-info}
+    JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (see .env.example)}
+    JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+    JWT_ISSUER: ${JWT_ISSUER:-}
+    JWT_AUDIENCE: ${JWT_AUDIENCE:-}
+  volumes:
+    - ./deploy/certs:/certs:ro   # database CA certificate(s), referenced from DATABASE_URL
+
+services:
+  # ---- shared infrastructure ------------------------------------------------------------------
+
+  postgres:
+    profiles: ["local-db"]
+    image: postgis/postgis:16-3.4    # same image as the Run Module's own compose and CI
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: squirrel
+    ports:
+      - "${POSTGRES_HOST_PORT:-5435}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d squirrel"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:  # Run Module queues (BullMQ) and leaderboard cache. Supabase has no Redis.
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_HOST_PORT:-6380}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # ---- Run Module (Node) ----------------------------------------------------------------------
+
+  run-migrate:
+    <<: *run-module
+    command: ["node", "node_modules/node-pg-migrate/bin/node-pg-migrate.js", "up",
+              "--migrations-dir", "../db/migrations", "--database-url-var", "DATABASE_URL"]
+    environment:
+      DATABASE_URL: *database-url
+    depends_on:
+      postgres: { condition: service_healthy, required: false }
+    restart: "no"
+
+  run-api:
+    <<: *run-module
+    ports:
+      - "${RUN_MODULE_HOST_PORT:-3000}:3000"
+    depends_on:
+      run-migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  run-worker:
+    <<: *run-module
+    command: ["node", "--import", "tsx/esm", "src/workers/start.ts"]
+    stop_signal: SIGINT   # the worker closes its queues on SIGINT only
+    depends_on:
+      run-migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    restart: unless-stopped
+
+  # ---- Exercise Mechanics (Python) ------------------------------------------------------------
+
+  exercise:
+    build: ./Exercise_Mechanics--main
+    image: squirrel-exercise
+    environment:
+      # psycopg takes the same postgres:// URL; it applies its own migrations at startup.
+      DATABASE_URL: *database-url
+      MODERATION_TOKEN: ${MODERATION_TOKEN:-}
+      PARTNER_HUNT_DEV_XP: ${PARTNER_HUNT_DEV_XP:-}
+    ports:
+      - "${EXERCISE_HOST_PORT:-8000}:8000"
+    volumes:
+      - exercise_data:/app/data   # per-user files remain the Exercise source of truth
+      - ./deploy/certs:/certs:ro
+    depends_on:
+      postgres: { condition: service_healthy, required: false }
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  exercise_data:
