@@ -13,6 +13,9 @@ Layout:
     workouts/    validated lifecycle catalog + per-exercise config/FSM/rules
     training/    live setup-flow WS (/ws/setup) + baseline capture orchestration
     users/       user REST (create · profile · skill)
+    auth/        Squirrel Social accounts (register · login · refresh) + bearer-token dependency
+    nearby/      BLE nearby discovery: rotating ids, proximity scoring, nearby list, notifications
+    deeplinks/   /join + /invite/{token} store routing, download QR, Universal/App Link files
 
 Run from the project root:
     uvicorn backend.main:app --reload
@@ -25,7 +28,10 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from backend.auth.router import router as auth_router
+from backend.deeplinks.router import router as deeplinks_router
 from backend.engine.loader import validate_enabled_exercises
+from backend.nearby.router import router as nearby_router
 from backend.reports.router import router as reports_router
 from backend.sessions.router import router as sessions_router
 from backend.training.builders import validate_training_builders
@@ -66,6 +72,9 @@ app.include_router(workouts_router)
 app.include_router(sessions_router)
 app.include_router(reports_router)
 app.include_router(setup_ws_router)
+app.include_router(auth_router)
+app.include_router(nearby_router)
+app.include_router(deeplinks_router)   # /join, /invite/*, /.well-known/* — must precede the SPA mount
 
 # Mounted last so /ws + /api take precedence. html=True serves index.html at /.
 app.mount("/", StaticFiles(directory=str(FRONTEND_DIST), html=True), name="frontend")

@@ -111,6 +111,7 @@ port 8000.
 | Path | What it holds |
 |---|---|
 | `backend/` | FastAPI app, exercise engine, per-exercise rule packages, scoring, tests |
+| `backend/auth/`, `backend/nearby/`, `backend/deeplinks/` | Squirrel Social accounts, BLE Nearby Discovery API, `/join` + QR — see [`docs/nearby-discovery.md`](../docs/nearby-discovery.md) |
 | `frontend-react/` | React + Vite single-page app (source, assets, tests) |
 | `data/users/` | Local per-user profiles and sessions, created at runtime (private, not shipped) |
 | `USER_GUIDE.md` | Plain-language setup and usage walkthrough |
