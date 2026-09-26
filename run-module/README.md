@@ -160,7 +160,6 @@ See [AGENTS.md](AGENTS.md) for the full scope boundary. Do not add Exercise Modu
 
 ---
 
-## CI
+## Checks
 
-GitHub Actions runs **lint → typecheck → test** on every push and pull request.
-See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+There is no CI workflow. Before pushing, run `npm run lint`, `npm run typecheck` and `npm run test` in `backend/`.

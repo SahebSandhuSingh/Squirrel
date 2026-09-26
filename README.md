@@ -76,8 +76,7 @@ python scripts/check_shared_database.py postgresql://postgres:postgres@localhost
 The script migrates each module alone into a throwaway database and records every table, view,
 sequence and index it creates. It fails if any name belongs to both. It then migrates both into one
 database in both orders, and again, to show neither assumes it runs first or alone. The throwaway
-databases are always dropped. The `Shared database` GitHub workflow runs it whenever either module's
-migrations change.
+databases are always dropped. Run it by hand whenever either module's migrations change.
 
 ---
 
