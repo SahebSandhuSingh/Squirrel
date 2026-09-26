@@ -73,7 +73,7 @@ const sleep = (ms: number, signal?: AbortSignal) =>
   });
 
 /** Retries 429s (honouring Retry-After) and transient network / 5xx errors with backoff. */
-async function withRetry<T>(fn: () => Promise<T>, attempts = 4): Promise<T> {
+export async function withRetry<T>(fn: () => Promise<T>, attempts = 4): Promise<T> {
   let lastErr: unknown;
   for (let i = 0; i < attempts; i++) {
     try {

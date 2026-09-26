@@ -29,6 +29,10 @@ Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-h
 | `/territory` | Own your block: district map, zone control, decay |
 | `/challenges` | Daily, head-to-head and group challenges (auto-resolve) |
 | `/leaderboard` | City ranking by territory area: daily, weekly, all-time |
+| `/exercise` | **Form Coach** (Exercise Mechanics backend): skill level, form progress, exercise library, session history |
+| `/exercise/profile` | Create a coach profile, link an existing Coach ID, or view it (height, weight, BMI) |
+| `/exercise/plan/[key]` | Plan sets / reps or seconds / rest for one exercise and save it as a session |
+| `/exercise/session/[id]` | Session overview and per-exercise report: scores, quality buckets, per-set form, faults, coaching |
 | `/welcome` | Landing: cinematic sunset city, avatar + squirrel mascot, Get Started |
 | `/avatar` | **Make It You**: body, hair, outfit, shoes, accessories, gear, emotes and pet mascot |
 | `/home` *(tab)* | Top bar (avatar, level, XP, coins), greeting, activity rings, Start Run, missions, events carousel, city leaderboard, crew activity |
@@ -77,9 +81,11 @@ This follows the *Frontend ↔ Backend Compatibility Assessment*.
 | **Anti-cheat** | Run summary shows *accepted / flagged / rejected* (server verdict when live, local plausibility check otherwise) |
 | **Territory** | New `/territory` screen (zones, control %, rivals, contested, 14-day decay) and area-based leaderboard (`/leaderboard`). Demo data until the territory endpoints are wired |
 | **Challenges** | New `/challenges` screen (daily, head-to-head, group), auto-resolving with no claim. Missions stay as a separate frontend feature (company decision, §4.3) |
+| **Exercise** | `src/api/exercise.ts` on the same `api()` client and `withRetry` policy as the Run Module, pointed at `EXPO_PUBLIC_EXERCISE_API_URL`. Endpoints (from `Exercise_Mechanics--main/backend`): `POST /api/users`, `GET /api/users/{id}`, `GET·POST /api/users/{id}/skill`, `GET /api/exercises`, `POST /api/users/{id}/sessions`, `GET /api/users/{id}/{progress,activity/{year},sessions}`, `GET …/sessions/{sid}/{overview,report}`, `GET …/sessions/{sid}/exercises/{ex}/report`. Screens under `/exercise`; Home's Form Coach card and Progress (workouts, streak, recent sessions) read live data. That backend has no auth: its `user_id` is kept in SecureStore next to the Run token and cleared on sign-out |
+| **Exercise: not in the app** | Live rep tracking (`/ws/setup`, `/ws/train`) streams 33 MediaPipe pose landmarks per camera frame; the app has no on-device pose model, so sessions are planned here and trained in the Exercise Mechanics web coach |
 | **Still frontend-only** | Coins, cosmetics, social feed, crews/events, badges. They need backend models (§5) |
 
-To point the app at a backend, copy `.env.example` to `.env`, then set `EXPO_PUBLIC_API_URL` (and `EXPO_PUBLIC_AUTH_URL` when the account service exists).
+To point the app at a backend, copy `.env.example` to `.env`, then set `EXPO_PUBLIC_API_URL` (and `EXPO_PUBLIC_AUTH_URL` when the account service exists). For the form coach, set `EXPO_PUBLIC_EXERCISE_API_URL` to the Exercise Mechanics server (e.g. `http://<lan-ip>:8000` for `uvicorn backend.main:app --host 0.0.0.0`). That server sends no CORS headers, so the **web** build can only reach it from the same origin; iOS/Android are unaffected.
 
 ## Architecture
 

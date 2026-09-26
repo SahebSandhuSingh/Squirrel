@@ -12,8 +12,39 @@ import { territoryBoard } from '@/data/territory';
 import { useAuth } from '@/auth/AuthProvider';
 import { Tape } from '@/components/Brand';
 import { xpApi } from '@/api/endpoints';
+import { EXERCISE_API_CONFIGURED } from '@/api/config';
+import { useExerciseProgress, useExerciseUser } from '@/hooks/useExercise';
 import { useApp } from '@/state/AppState';
 import { colors, fonts, radius } from '@/theme';
+
+/** Entry to the form coach; live numbers from GET /api/users/{id}/progress when a coach profile exists. */
+function FormCoachCard() {
+  const user = useExerciseUser();
+  const { data: p, error } = useExerciseProgress(user?.user_id);
+  const sub = !EXERCISE_API_CONFIGURED
+    ? 'Rep-by-rep form scores · not connected'
+    : !user
+      ? 'Set up your profile to get scored reps'
+      : error && !p
+        ? "Couldn't reach the coach · tap to retry"
+        : p
+          ? p.totals.sessions === 0
+            ? 'No sessions yet · plan your first'
+            : `${p.this_week} this week · avg form ${p.avg_form ?? '—'} · ${p.streak_days}d streak`
+          : 'Loading your form…';
+  return (
+    <PressScale onPress={() => router.push('/exercise')} style={styles.coach} scaleTo={0.98} accessibilityLabel="Form coach">
+      <View style={styles.coachIcon}>
+        <Icon name="weight-lifter" size={24} color={colors.onPrimary} />
+      </View>
+      <View style={{ flex: 1, marginLeft: 12 }}>
+        <Text style={styles.coachTitle}>Form Coach</Text>
+        <Text style={styles.coachSub} numberOfLines={1}>{sub}</Text>
+      </View>
+      <Icon name="chevron-right" size={22} color={colors.dim} />
+    </PressScale>
+  );
+}
 
 const greeting = () => {
   const h = new Date().getHours();
@@ -90,6 +121,11 @@ export default function Home() {
             </View>
           </SceneImage>
         </PressScale>
+      </FadeIn>
+
+      {/* Form coach (Exercise Mechanics backend) */}
+      <FadeIn index={3}>
+        <FormCoachCard />
       </FadeIn>
 
       {/* Missions */}
@@ -226,6 +262,10 @@ function RingStat({ progress, color, color2, icon, value, label }: { progress: n
 }
 
 const styles = StyleSheet.create({
+  coach: { flexDirection: 'row', alignItems: 'center', marginTop: 12, backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, padding: 12 },
+  coachIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  coachTitle: { color: colors.text, fontFamily: fonts.label, fontSize: 17, letterSpacing: 1, textTransform: 'uppercase' },
+  coachSub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, marginTop: 1 },
   zone: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 2, borderColor: colors.primary, padding: 14, transform: [{ rotate: '-0.6deg' }], shadowColor: colors.primary, shadowOpacity: 0.25, shadowRadius: 14, shadowOffset: { width: 0, height: 0 } },
   zoneKicker: { color: colors.primary, fontFamily: fonts.monoBold, fontSize: 10, letterSpacing: 1.4 },
   zonePct: { color: colors.primary, fontFamily: fonts.labelBold, fontSize: 18 },
