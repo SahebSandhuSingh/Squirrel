@@ -8,7 +8,6 @@ The PNGs here are **exports of those same components**, for the app icon and spl
 
 | Path | Contents |
 |---|---|
-| `brand/logo.png` | Brand logo: squirrel with dumbbell, transparent cut-out, 512² |
 | `icon.png` | App icon, 1024² (mascot on a dusk gradient) |
 | `adaptive-icon.png` | Android adaptive-icon foreground, 1024², transparent |
 | `splash-icon.png` | Splash mascot (waving), 1024², transparent |

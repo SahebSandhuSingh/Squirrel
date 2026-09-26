@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "in.squirrelsocial.app"
@@ -13,7 +13,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#2F5BFF"
+        "backgroundColor": "#060606"
       },
       "package": "in.squirrelsocial.app"
     },
@@ -22,7 +22,7 @@
       "bundler": "metro"
     },
     "scheme": "squirrelsocial",
-    "backgroundColor": "#FFFFFF",
+    "backgroundColor": "#060606",
     "plugins": [
       "expo-router",
       "expo-font",
@@ -32,12 +32,20 @@
           "locationWhenInUsePermission": "Squirrel Social uses your location to track runs and claim territory."
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Squirrel Social uses the camera to show you on screen while the form coach counts your reps.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ]
     ],
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#FFFFFF"
+      "backgroundColor": "#060606"
     }
   }
 }

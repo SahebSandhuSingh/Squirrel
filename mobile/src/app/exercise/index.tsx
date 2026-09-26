@@ -175,7 +175,7 @@ function LibraryRow({ ex, avail }: { ex: LibraryExercise; avail?: ExerciseAvaila
       style={[styles.row, !enabled && { opacity: 0.55 }]}
       scaleTo={0.98}
       accessibilityLabel={`${ex.name}, ${state}`}>
-      <View style={[styles.rowIcon, enabled && { backgroundColor: 'rgba(47,91,255,0.1)' }]}>
+      <View style={[styles.rowIcon, enabled && { backgroundColor: 'rgba(215,255,31,0.1)' }]}>
         <Icon name={ex.icon} size={22} color={enabled ? colors.primary : colors.dim} />
       </View>
       <View style={{ flex: 1, marginLeft: 12 }}>

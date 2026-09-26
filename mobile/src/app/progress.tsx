@@ -46,7 +46,7 @@ function liveWorkoutStat(sessions: ProgressSession[], period: Period): Stat {
     }
     total = values.reduce((a, b) => a + b, 0);
   }
-  return { id: 'workouts', label: 'Coached workouts', value: String(total), unit: total === 1 ? 'session' : 'sessions', icon: 'arm-flex', color: '#2F5BFF', series: { labels, values } };
+  return { id: 'workouts', label: 'Coached workouts', value: String(total), unit: total === 1 ? 'session' : 'sessions', icon: 'arm-flex', color: '#D7FF1F', series: { labels, values } };
 }
 
 /** 5 weeks × 7 days (Mon-first, ending this week): 4 = trained that day, 0 = not. */
@@ -57,7 +57,7 @@ function liveHeatmap(dates: Set<string>): number[][] {
   return Array.from({ length: 5 }, (_, w) => Array.from({ length: 7 }, (_, d) => (dates.has(ymd(new Date(start.getTime() + (w * 7 + d) * DAY))) ? 4 : 0)));
 }
 
-const HEAT = [colors.cardHi, 'rgba(47,91,255,0.25)', 'rgba(47,91,255,0.45)', 'rgba(47,91,255,0.7)', '#2F5BFF'];
+const HEAT = [colors.cardHi, 'rgba(215,255,31,0.25)', 'rgba(215,255,31,0.45)', 'rgba(215,255,31,0.7)', '#D7FF1F'];
 
 /** YOUR PROGRESS — fitness-game analytics dashboard. */
 export default function Progress() {

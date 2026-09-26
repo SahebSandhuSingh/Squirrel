@@ -48,7 +48,7 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 
   return (
     <View style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, 10) }]}>
-      <LinearGradient colors={['rgba(255,255,255,0.95)', 'rgba(255,255,255,0.99)']} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={['rgba(17,17,19,0.95)', 'rgba(17,17,19,0.99)']} style={StyleSheet.absoluteFill} />
       <View style={styles.bar}>
         {items.slice(0, 2)}
         <Pressable

@@ -41,7 +41,7 @@ function ToastItem({ t }: { t: ToastMsg }) {
 
 const styles = StyleSheet.create({
   host: { position: 'absolute', left: 16, right: 16, alignItems: 'center', gap: 8, zIndex: 100 },
-  toast: { flexDirection: 'row', alignItems: 'center', gap: 10, width: '100%', maxWidth: MAX_WIDTH - 32, backgroundColor: 'rgba(255,255,255,0.98)', borderRadius: radius.md, borderWidth: 1, paddingVertical: 10, paddingHorizontal: 12, shadowColor: '#0B0F1A', shadowOpacity: 0.15, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 12 },
+  toast: { flexDirection: 'row', alignItems: 'center', gap: 10, width: '100%', maxWidth: MAX_WIDTH - 32, backgroundColor: 'rgba(17,17,19,0.98)', borderRadius: radius.md, borderWidth: 1, paddingVertical: 10, paddingHorizontal: 12, shadowColor: '#0B0F1A', shadowOpacity: 0.15, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 12 },
   dot: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   text: { color: colors.text, fontFamily: fonts.semibold, fontSize: 13, flex: 1 },
 });

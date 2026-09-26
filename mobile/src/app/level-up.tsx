@@ -52,7 +52,7 @@ function Confetti({ visible }: { visible: boolean }) {
       vy: 0.003 + Math.random() * 0.005,
       rot: Math.random() * Math.PI * 2,
       vr: (Math.random() - 0.5) * 0.05,
-      color: ['#2F5BFF', '#FFB020', '#FFFFFF', '#7090FF', '#FF4D8D', '#12B76A'][Math.floor(Math.random() * 6)],
+      color: ['#D7FF1F', '#FFD21F', '#FFFFFF', '#A855F7', '#FF2D9B', '#3DF0A0'][Math.floor(Math.random() * 6)],
       size: 6 + Math.random() * 10,
       delay: Math.random() * 200,
     }))
@@ -192,7 +192,7 @@ const styles = StyleSheet.create({
   gains: { flexDirection: 'row', gap: 8, marginTop: 10 },
   gain: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(10,10,10,0.7)', borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: colors.line },
   gainText: { color: colors.primary, fontFamily: fonts.bold, fontSize: 13 },
-  next: { flexDirection: 'row', alignItems: 'center', marginVertical: 14, backgroundColor: 'rgba(255,255,255,0.97)', borderRadius: radius.lg, borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)', padding: 14 },
+  next: { flexDirection: 'row', alignItems: 'center', marginVertical: 14, backgroundColor: 'rgba(17,17,19,0.97)', borderRadius: radius.lg, borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)', padding: 14 },
   nextKicker: { color: colors.violet, fontFamily: fonts.bold, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' },
   nextTitle: { color: colors.text, fontFamily: fonts.display, fontSize: 22, marginTop: 2 },
   nextSub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12 },

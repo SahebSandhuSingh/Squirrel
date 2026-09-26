@@ -87,11 +87,12 @@ export default function PlanExercise() {
         <View style={styles.notice}>
           <Icon name="camera-off" size={18} color={colors.dim} />
           <Text style={styles.noticeText}>
-            Live rep tracking uses the camera coach, which streams body-pose data to the server. The phone app can’t track pose yet, so train this session in the
-            Exercise Mechanics web coach. Your scores and report appear here afterwards.
+            The workout screen runs a guided demo on the phone. Scored reps need the camera coach, which streams body-pose data to the server, so
+            train in the Exercise Mechanics web coach to get this session’s report.
           </Text>
         </View>
-        <Button label="View session" icon="arrow-right" onPress={() => router.replace({ pathname: '/exercise/session/[id]', params: { id: created.session_id } })} style={{ marginTop: 16 }} />
+        <Button label="Start workout" icon="play" onPress={() => router.push({ pathname: '/exercise/train/[key]', params: { key: ex.key, sets: String(sets), value: String(value), rest: String(sets > 1 ? rest : 0), session: created.session_id } })} style={{ marginTop: 16 }} />
+        <Button label="View session" variant="secondary" size="md" onPress={() => router.replace({ pathname: '/exercise/session/[id]', params: { id: created.session_id } })} style={{ marginTop: 10 }} />
         <Button label="Back to coach" variant="secondary" size="md" onPress={() => router.back()} style={{ marginTop: 10 }} />
       </Screen>
     );
@@ -134,12 +135,20 @@ export default function PlanExercise() {
       </View>
 
       {error && (
-        <View style={[styles.notice, { borderColor: 'rgba(255,77,77,0.4)' }]}>
+        <View style={[styles.notice, { borderColor: 'rgba(255,92,122,0.4)' }]}>
           <Icon name="alert-circle-outline" size={18} color={colors.coral} />
           <Text style={[styles.noticeText, { color: colors.text }]}>{error}</Text>
         </View>
       )}
       <Button label={busy ? 'Saving…' : 'Save session'} icon="arrow-right" disabled={busy || !enabled} onPress={save} style={{ marginTop: 18 }} />
+      <Button
+        label="Start workout now"
+        iconLeft="play"
+        variant="secondary"
+        size="md"
+        onPress={() => router.push({ pathname: '/exercise/train/[key]', params: { key: ex.key, sets: String(sets), value: String(value), rest: String(sets > 1 ? rest : 0) } })}
+        style={{ marginTop: 10 }}
+      />
       <Text style={[styles.meta, { marginTop: 10, textAlign: 'center' }]}>The coach runs one exercise per session for now.</Text>
     </Screen>
   );

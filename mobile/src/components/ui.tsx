@@ -132,7 +132,7 @@ export function Tagline({ children, size = 20, color = colors.text, rotate = -6,
       style={[
         { fontFamily: fonts.script, fontSize: size, lineHeight: size * 1.18, color, transform: [{ rotate: `${rotate}deg` }] },
         { textTransform: 'uppercase' },
-        glow && { textShadowColor: 'rgba(47,91,255,0.6)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
+        glow && { textShadowColor: 'rgba(215,255,31,0.6)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
         style,
       ]}>
       {children}
@@ -416,7 +416,7 @@ export function Tag({ label, icon, color = colors.primary }: { label: string; ic
 }
 
 export function Scrim({ style, strong }: { style?: StyleProp<ViewStyle>; strong?: boolean }) {
-  return <LinearGradient pointerEvents="none" colors={strong ? ['rgba(8,12,24,0.1)', 'rgba(8,12,24,0.75)', 'rgba(8,12,24,0.96)'] : gradients.scrim} style={[StyleSheet.absoluteFill, style]} />;
+  return <LinearGradient pointerEvents="none" colors={strong ? ['rgba(6,6,6,0.1)', 'rgba(6,6,6,0.75)', 'rgba(6,6,6,0.96)'] : gradients.scrim} style={[StyleSheet.absoluteFill, style]} />;
 }
 
 // ---------------------------------------------------------------------------

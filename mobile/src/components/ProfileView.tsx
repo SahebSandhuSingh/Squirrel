@@ -261,7 +261,7 @@ function AccountRow() {
         if (live) await signOut();
         router.push('/sign-in');
       }}
-      style={[styles.badgeRow, { marginTop: 16, borderColor: live ? 'rgba(47,91,255,0.4)' : colors.line }]}
+      style={[styles.badgeRow, { marginTop: 16, borderColor: live ? 'rgba(215,255,31,0.4)' : colors.line }]}
       accessibilityLabel={live ? 'Sign out' : 'Sign in to sync'}>
       <Icon name={live ? 'cloud-check-outline' : 'cloud-off-outline'} size={22} color={live ? colors.primary : colors.dim} />
       <View style={{ flex: 1, marginLeft: 10 }}>

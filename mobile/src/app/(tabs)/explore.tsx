@@ -173,11 +173,11 @@ function Marker({ place, active, onPress }: { place: Place; active: boolean; onP
 }
 
 const styles = StyleSheet.create({
-  top: { paddingHorizontal: 16, backgroundColor: 'rgba(255,255,255,0.94)', borderBottomLeftRadius: radius.xl, borderBottomRightRadius: radius.xl },
+  top: { paddingHorizontal: 16, backgroundColor: 'rgba(17,17,19,0.94)', borderBottomLeftRadius: radius.xl, borderBottomRightRadius: radius.xl },
   people: { backgroundColor: colors.bg2, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, marginBottom: 10, overflow: 'hidden' },
   personRow: { flexDirection: 'row', alignItems: 'center', padding: 10, borderBottomWidth: 1, borderBottomColor: colors.line },
   pinWrap: { position: 'absolute' },
-  pin: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.96)', borderRadius: radius.pill, padding: 4, paddingRight: 11, borderWidth: 1.5, borderColor: colors.line, maxWidth: 170 },
+  pin: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(17,17,19,0.96)', borderRadius: radius.pill, padding: 4, paddingRight: 11, borderWidth: 1.5, borderColor: colors.line, maxWidth: 170 },
   pinDot: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' },
   pinName: { color: colors.text, fontFamily: fonts.bold, fontSize: 12 },
   pinMeta: { color: colors.sub, fontFamily: fonts.regular, fontSize: 10 },

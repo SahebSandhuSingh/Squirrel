@@ -41,7 +41,9 @@ function FormCoachCard() {
         <Text style={styles.coachTitle}>Form Coach</Text>
         <Text style={styles.coachSub} numberOfLines={1}>{sub}</Text>
       </View>
-      <Icon name="chevron-right" size={22} color={colors.dim} />
+      <Pressable onPress={() => router.push({ pathname: '/exercise/train/[key]', params: { key: 'squat', sets: '3', value: '15', rest: '45' } })} style={styles.coachGo} accessibilityLabel="Start a squat workout" hitSlop={6}>
+        <Icon name="play" size={20} color={colors.onPrimary} />
+      </Pressable>
     </PressScale>
   );
 }
@@ -264,6 +266,7 @@ function RingStat({ progress, color, color2, icon, value, label }: { progress: n
 const styles = StyleSheet.create({
   coach: { flexDirection: 'row', alignItems: 'center', marginTop: 12, backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, padding: 12 },
   coachIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  coachGo: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
   coachTitle: { color: colors.text, fontFamily: fonts.label, fontSize: 17, letterSpacing: 1, textTransform: 'uppercase' },
   coachSub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, marginTop: 1 },
   zone: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 2, borderColor: colors.primary, padding: 14, transform: [{ rotate: '-0.6deg' }], shadowColor: colors.primary, shadowOpacity: 0.25, shadowRadius: 14, shadowOffset: { width: 0, height: 0 } },
@@ -284,7 +287,7 @@ const styles = StyleSheet.create({
   playBtn: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', shadowColor: colors.primary, shadowOpacity: 0.8, shadowRadius: 14, shadowOffset: { width: 0, height: 0 } },
   hint: { color: colors.mute, fontSize: 12, textAlign: 'center', marginTop: 8, fontFamily: fonts.regular },
   leader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 4 },
-  leaderMe: { backgroundColor: 'rgba(47,91,255,0.08)', borderRadius: radius.md, marginHorizontal: -6, paddingHorizontal: 10 },
+  leaderMe: { backgroundColor: 'rgba(215,255,31,0.08)', borderRadius: radius.md, marginHorizontal: -6, paddingHorizontal: 10 },
   rank: { color: colors.dim, fontFamily: fonts.display, fontSize: 18, width: 34 },
   leaderName: { color: colors.text, fontFamily: fonts.bold, fontSize: 14 },
   leaderSub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 11 },

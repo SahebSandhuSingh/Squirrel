@@ -32,6 +32,7 @@ Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-h
 | `/exercise` | **Form Coach** (Exercise Mechanics backend): skill level, form progress, exercise library, session history |
 | `/exercise/profile` | Create a coach profile, link an existing Coach ID, or view it (height, weight, BMI) |
 | `/exercise/plan/[key]` | Plan sets / reps or seconds / rest for one exercise and save it as a session |
+| `/exercise/train/[key]` | **Live workout**: camera view (expo-camera, front/back), lime body-tracking skeleton, rep ring + counter, calories ring, form cues, time · BPM · calories bar, music / pause / flip controls, sets with rest, summary. Tracking is a guided demo until an on-device pose model is added |
 | `/exercise/session/[id]` | Session overview and per-exercise report: scores, quality buckets, per-set form, faults, coaching |
 | `/welcome` | Landing: cinematic sunset city, avatar + squirrel mascot, Get Started |
 | `/avatar` | **Make It You**: body, hair, outfit, shoes, accessories, gear, emotes and pet mascot |
@@ -55,15 +56,13 @@ Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-h
 | `/city` | City picker |
 | `/notifications` | Activity notifications |
 
-## Look & feel — "Voltage" (white + electric blue)
+## Look & feel
 
-A bright, clean **light** theme for a Gen-Z / college crowd, with GTA-style type:
-- **Canvas:** white `#FFFFFF`, with soft blue-grey cards (`#F4F6FB` / `#E9EDF7`, border `#E1E6F0`) and near-black ink text `#0B0F1A`.
-- **Colours:** **electric blue `#2F5BFF`** for every action and everything that's "yours" (your territory, your rank, your route); ink as the second voice; amber `#FFB020` for coins and rewards; pink `#FF4D8D` for rivals.
-- **Art:** the city illustrations stay dark (a blue-hour city: electric-blue neon, indigo skies, amber sun and windows). Anything drawn on top of artwork uses `colors.onImage` (white) and dark `imageChip` chips, so it stays readable.
-- **Type:** Anton for headlines and big numbers (heavy, condensed, slanted −6° like GTA title cards). Barlow Condensed for labels, buttons and italic callouts; Inter for body text.
-  - These are free Google Fonts lookalikes: GTA's own fonts are proprietary or commercial.
-- **Brand:** the squirrel-with-dumbbell logo is the app icon (on electric blue), the splash and the favicon, and appears in the in-app header. The Welcome screen uses a text wordmark and the waving mascot.
+The app uses the same visual system as the Squirrel Social website (`squirrel-social-site`):
+- **Canvas:** near-black `#060606` with graphite cards (`#111113` / `#17171A`, border `#27272B`).
+- **Colours:** **lime `#D7FF1F`** for primary actions and "yours"; **pink `#FF2D9B`** as the secondary accent.
+- **Type:** Knewave brush headlines, Oswald uppercase labels and buttons, Space Mono section kickers, Permanent Marker scribbles.
+- **Shapes:** pill buttons, marquee "tape" strips, and the lime line-art squirrel logo (also the app icon).
 
 All UI tokens live in `src/theme.ts`; illustration colours live in `src/art/palette.ts`.
 

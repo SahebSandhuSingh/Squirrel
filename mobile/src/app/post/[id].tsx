@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
   comment: { flexDirection: 'row', marginBottom: 14 },
   cText: { color: colors.sub, fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
   ago: { color: colors.mute, fontFamily: fonts.regular, fontSize: 11, marginTop: 2 },
-  inputBar: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: 10, paddingHorizontal: 16, backgroundColor: 'rgba(255,255,255,0.98)', borderTopWidth: 1, borderTopColor: colors.line },
+  inputBar: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: 10, paddingHorizontal: 16, backgroundColor: 'rgba(17,17,19,0.98)', borderTopWidth: 1, borderTopColor: colors.line },
   inputInner: { flexDirection: 'row', alignItems: 'center', gap: 10, width: '100%', maxWidth: MAX_WIDTH - 32, alignSelf: 'center' },
   input: { flex: 1, color: colors.text, fontFamily: fonts.regular, fontSize: 14, backgroundColor: colors.card, borderRadius: radius.pill, paddingHorizontal: 14, height: 42, borderWidth: 1, borderColor: colors.line },
 });

@@ -48,7 +48,7 @@ export function MissionCard({ mission: m, onLog, claimed, compact }: { mission: 
   }, [done, pop]);
 
   return (
-    <View style={[styles.mission, done && { borderColor: claimed ? 'rgba(47,91,255,0.35)' : `${m.color}99`, backgroundColor: claimed ? 'rgba(47,91,255,0.05)' : colors.card }]}>
+    <View style={[styles.mission, done && { borderColor: claimed ? 'rgba(215,255,31,0.35)' : `${m.color}99`, backgroundColor: claimed ? 'rgba(215,255,31,0.05)' : colors.card }]}>
       {done && !claimed && <LinearGradient colors={[`${m.color}26`, 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />}
       <IconBadge icon={m.icon} color={m.color} size={compact ? 40 : 46} />
       <View style={{ flex: 1, marginHorizontal: 12 }}>
@@ -347,7 +347,7 @@ export function ItemArt({ item, size }: { item: ShopItem; size: number }) {
 export function ShopItemCard({ item, owned, locked, equipped, onPress, style }: { item: ShopItem; owned: boolean; locked: boolean; equipped?: boolean; onPress: () => void; style?: StyleProp<ViewStyle> }) {
   const rc = rarityColor[item.rarity];
   return (
-    <PressScale onPress={onPress} style={[styles.shopItem, owned && { borderColor: 'rgba(47,91,255,0.45)' }, style]} scaleTo={0.96}>
+    <PressScale onPress={onPress} style={[styles.shopItem, owned && { borderColor: 'rgba(215,255,31,0.45)' }, style]} scaleTo={0.96}>
       <LinearGradient colors={[`${rc}22`, 'transparent']} style={StyleSheet.absoluteFill} />
       <View style={[styles.rarity, { backgroundColor: rc }]} />
       <View style={{ opacity: locked ? 0.45 : 1 }}>
@@ -404,10 +404,10 @@ const styles = StyleSheet.create({
   post: { backgroundColor: colors.card, borderRadius: radius.xl, overflow: 'hidden', marginBottom: 16, borderWidth: 1, borderColor: colors.line },
   postHead: { flexDirection: 'row', alignItems: 'center', padding: 12 },
   author: { color: colors.text, fontFamily: fonts.bold, fontSize: 15 },
-  lvl: { color: colors.violet, fontFamily: fonts.bold, fontSize: 10, marginLeft: 2, backgroundColor: 'rgba(47,91,255,0.1)', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 5, overflow: 'hidden' },
+  lvl: { color: colors.violet, fontFamily: fonts.bold, fontSize: 10, marginLeft: 2, backgroundColor: 'rgba(215,255,31,0.1)', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 5, overflow: 'hidden' },
   followBtn: { borderWidth: 1, borderColor: colors.primary, borderRadius: radius.sm, paddingHorizontal: 12, paddingVertical: 5 },
   followText: { color: colors.primary, fontFamily: fonts.bold, fontSize: 12 },
-  actChip: { position: 'absolute', left: 10, bottom: 10, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(10,10,10,0.78)', borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(47,91,255,0.35)' },
+  actChip: { position: 'absolute', left: 10, bottom: 10, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(10,10,10,0.78)', borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(215,255,31,0.35)' },
   actText: { color: colors.onImage, fontFamily: fonts.semibold, fontSize: 12 },
   actions: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: 12, gap: 16 },
   action: { flexDirection: 'row', alignItems: 'center', gap: 6 },
