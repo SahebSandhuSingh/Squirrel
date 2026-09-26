@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
+import uuid
 
 import pytest
 from fastapi import Depends, FastAPI
@@ -76,11 +79,45 @@ def test_refresh_rotates_and_is_single_use(app):
 def test_bad_tokens_are_rejected(app):
     body = call(app, "POST", "/api/auth/register", json=_ACCOUNT).json()
     assert call(app, "GET", "/whoami").status == 401
-    payload, sig = body["access_token"].split(".")
+    header, _payload, sig = body["access_token"].split(".")
     forged = tokens._b64e(json.dumps({"sub": "someone-else", "iat": 0, "exp": 9_999_999_999, "typ": "access"}).encode())
-    assert call(app, "GET", "/whoami", headers=_bearer(f"{forged}.{sig}")).status == 401
+    assert call(app, "GET", "/whoami", headers=_bearer(f"{header}.{forged}.{sig}")).status == 401
     expired, _ = tokens.issue_access_token(body["user_id"], now=0)
     assert call(app, "GET", "/whoami", headers=_bearer(expired)).status == 401
+
+
+def _part(obj: dict) -> str:
+    return tokens._b64e(json.dumps(obj).encode())
+
+
+def test_access_tokens_are_hs256_jwts_for_a_uuid(app):
+    """The Run Module verifies these tokens itself: a standard HS256 JWT whose `sub` is a UUID."""
+    body = call(app, "POST", "/api/auth/register", json=_ACCOUNT).json()
+    header, payload, _sig = body["access_token"].split(".")
+    assert json.loads(tokens._b64d(header)) == {"alg": "HS256", "typ": "JWT"}
+    claims = json.loads(tokens._b64d(payload))
+    assert claims["sub"] == body["user_id"] and claims["exp"] > claims["iat"]
+    assert str(uuid.UUID(body["user_id"])) == body["user_id"] and uuid.UUID(body["user_id"]).version == 4
+
+
+def test_unsigned_and_swapped_algorithm_tokens_are_rejected(app):
+    body = call(app, "POST", "/api/auth/register", json=_ACCOUNT).json()
+    _header, payload, sig = body["access_token"].split(".")
+    unsigned = f"{_part({'alg': 'none', 'typ': 'JWT'})}.{payload}."
+    swapped = f"{_part({'alg': 'HS512', 'typ': 'JWT'})}.{payload}.{sig}"
+    for token in (unsigned, swapped, f"{payload}.{sig}", "not-a-token"):
+        assert call(app, "GET", "/whoami", headers=_bearer(token)).status == 401, token
+
+
+def test_the_run_modules_jwt_secret_is_the_fallback_key(app, monkeypatch):
+    monkeypatch.delenv(config.AUTH_SECRET_ENV)
+    monkeypatch.setenv(config.SHARED_JWT_SECRET_ENV, "shared-with-run-module")
+    token, _ = tokens.issue_access_token("3f0c4b1e-6d0a-4b9a-9a55-2f7f1f8f6c11")
+    header, payload, sig = token.split(".")
+    expected = tokens._b64e(hmac.new(b"shared-with-run-module", f"{header}.{payload}".encode(), hashlib.sha256).digest())
+    assert sig == expected
+    monkeypatch.setenv(config.AUTH_SECRET_ENV, "explicit-wins")
+    assert tokens.verify_access_token(token) is None  # SQUIRREL_AUTH_SECRET takes precedence
 
 
 def test_password_hash_roundtrip():

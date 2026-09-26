@@ -40,7 +40,8 @@ export default function Run() {
   const { width, height } = useWindowDimensions();
   const { finishRun, toast, city, districts, syncServerXp } = useApp();
   const auth = useAuth();
-  const live = auth.mode === 'live';
+  // Signed in AND the Run Module is configured (an account alone may be only for the form coach).
+  const live = auth.mode === 'live' && auth.apiConfigured;
   const [phase, setPhase] = useState<Phase>('countdown');
   const [count, setCount] = useState(3);
   const [source, setSource] = useState<Source>('pending');

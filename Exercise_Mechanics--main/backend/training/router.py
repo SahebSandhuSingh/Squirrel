@@ -17,6 +17,8 @@ from pathlib import Path
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from backend import config
+from backend.auth.tokens import verify_access_token
 from backend.config import user_dir
 from backend.db.exercise_sessions import sync_session
 from backend.core.frame import FrameValidationError, validate_training_frame
@@ -79,6 +81,15 @@ def _status_dict(s: SetupStatus) -> dict:
     }
 
 
+def _socket_signed_in(websocket: WebSocket) -> bool:
+    """Browsers can't set headers on a WebSocket, so the access token rides in `?token=`. It must
+    belong to the `user_id` the socket asks for. Always true while auth is switched off."""
+    if not config.auth_required():
+        return True
+    token = websocket.query_params.get("token") or ""
+    return verify_access_token(token) == websocket.query_params.get("user_id")
+
+
 async def _session_access(websocket: WebSocket) -> SessionAccess | None:
     """Resolve the exact persisted plan or reject the socket without any identity fallback."""
     try:
@@ -95,6 +106,12 @@ async def _session_access(websocket: WebSocket) -> SessionAccess | None:
 
 
 async def _setup_access(websocket: WebSocket) -> SessionAccess | None:
+    if not _socket_signed_in(websocket):
+        await websocket.send_json(
+            _envelope("setup.error", {"code": "UNAUTHORIZED", "detail": "sign in to use this session"})
+        )
+        await websocket.close(code=1008, reason="UNAUTHORIZED")
+        return None
     if not websocket.query_params.get("session_id"):
         await websocket.send_json(
             _envelope(
@@ -248,6 +265,9 @@ async def _train_error(
 
 
 async def _training_access(websocket: WebSocket) -> SessionAccess | None:
+    if not _socket_signed_in(websocket):
+        await _train_error(websocket, "UNAUTHORIZED", "sign in to use this session", close=True)
+        return None
     if not websocket.query_params.get("session_id"):
         await _train_error(
             websocket,

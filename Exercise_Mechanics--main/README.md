@@ -209,7 +209,8 @@ optional and switch features on:
 | `PARTNER_HUNT_DEV_XP` | Local testing only: a fixed XP for every user | — |
 | `MODERATION_TOKEN` | Moderator routes for reports | Moderator routes refuse every request (503) |
 | `DATABASE_URL` | PostgreSQL copy of exercise sessions (see below) | Sessions are stored on disk only, as before |
-| `SQUIRREL_AUTH_SECRET` | Signs Squirrel Social login tokens (see below). **Required in production** | A development key is generated once in `data/auth/secret.key` |
+| `JWT_SECRET` | Signs Squirrel Social login tokens (HS256 JWTs). The **same value as the Run Module's**, so one sign-in works on both. **Required in production** (`SQUIRREL_AUTH_SECRET`, if set, takes precedence) | A development key is generated once in `data/auth/secret.key` |
+| `EXERCISE_REQUIRE_AUTH` | `0` switches off the sign-in check on per-user routes, only to try the password-less browser coach locally | Sign-in required |
 | `SQUIRREL_PUBLIC_BASE_URL` | Origin used in QR codes and invite links | `https://squirrelsocial.app` |
 | `SQUIRREL_APP_STORE_URL`, `SQUIRREL_PLAY_STORE_URL`, `SQUIRREL_IOS_APP_IDS`, `SQUIRREL_ANDROID_PACKAGE`, `SQUIRREL_ANDROID_CERT_SHA256` | Store links and the Universal/App Link files | Placeholder store listings |
 
@@ -371,7 +372,9 @@ side is in [`mobile/nearby/`](../mobile/nearby/).
 - **Off by default.** Every proximity route answers 403 until the user turns Nearby on. Turning it off erases their proximity state at once.
 - **No proximity history on disk.** Sightings and "who was near whom" live only in memory and expire after 15 minutes. On disk there is only the on/off setting (`nearby.json`) and accepted connections (`connections.json`), without time or place.
 - **One process.** That in-memory state is why the server runs a single worker. A restart forgets it, and phones simply open a new session.
-- **Accounts.** A registered account is an ordinary user folder (`data/users/<id>/profile.json`, same id format), so the rest of the API works for it. Credentials and refresh tokens are stored as hashes under `data/auth/`, which is private and git-ignored, like `data/invites/`.
+- **Accounts.** A registered account is an ordinary user folder (`data/users/<id>/profile.json`) whose id is a UUID, the form the Run Module also requires. Credentials and refresh tokens are stored as hashes under `data/auth/`, which is private and git-ignored, like `data/invites/`.
+- **One sign-in, both backends.** Access tokens are HS256 JWTs signed with `JWT_SECRET`, the Run Module's secret, so the Run Module accepts them as they are.
+- **Every per-user route is locked to its user.** `/api/users/{user_id}/...` needs `Authorization: Bearer <that user's token>`: 401 without one, 403 with anyone else's. The training sockets take the token as `?token=`. Sign-up (`POST /api/users`) now takes a `password` and returns tokens; an account made elsewhere (e.g. the mobile app, with email and name only) adds its details with `PUT /api/users/{id}/profile`. `backend/tests/test_access.py` checks every per-user route.
 
 ## PostgreSQL: exercise sessions
 

@@ -2,8 +2,8 @@
  * Exercise Mechanics backend — REST contract.
  *
  * Source of truth: Exercise_Mechanics--main/backend (FastAPI). Routes, from its routers:
- *   users/router.py     POST /api/users                         → { user_id, first_name, last_name }
- *                       GET  /api/users/{id}                    → profile.json
+ *   users/router.py     GET  /api/users/{id}                    → profile.json
+ *                       PUT  /api/users/{id}/profile            → profile (coach details on the account)
  *                       GET  /api/users/{id}/skill              → { skill_level, configured }
  *                       POST /api/users/{id}/skill              → { skill_level, configured: true }
  *   workouts/router.py  GET  /api/exercises                     → { exercises: [{ id, view, status }] }
@@ -20,9 +20,9 @@
  * landmarks per camera frame. The mobile app has no on-device pose model, so those sockets
  * are not used here (see README).
  *
- * The backend has no auth: identity is the `user_id` minted by POST /api/users. The shared
- * client still sends the Run Module bearer token when signed in, so nothing changes once the
- * service starts checking it.
+ * Every /api/users/{id}/... route needs the signed-in account's own bearer token (401 without
+ * it, 403 for anyone else's id). The id is the account's UUID from sign-in (src/auth/account.ts);
+ * the shared client attaches the token and refreshes it when it expires.
  */
 import { EXERCISE_API_URL } from '@/api/config';
 import { api } from '@/api/client';
@@ -32,19 +32,19 @@ import { withRetry } from '@/api/endpoints';
 // Types
 // ---------------------------------------------------------------------------
 
-/** POST /api/users body. Field names match the backend UserProfile model one-to-one. */
-export type ExerciseProfileInput = {
-  first_name: string; // 1–80 chars
-  last_name: string; // 1–80 chars
-  gender: string;
+/** PUT /api/users/{id}/profile body. Field names match the backend CoachProfile model one-to-one. */
+export type CoachDetails = {
+  gender: string; // female · male · non_binary · other · undisclosed
   height_cm: number; // 50–272
   weight_kg: number; // 20–400
   date_of_birth: string; // YYYY-MM-DD, 1900 to today
   mobile: string; // 3–32 chars
-  email: string; // 3–200 chars
 };
 export type ExerciseUser = { user_id: string; first_name: string; last_name: string };
-export type ExerciseProfile = ExerciseProfileInput & { user_id: string; created_at: string };
+/** An account registered in the app has names and email; the coach details arrive with PUT …/profile. */
+export type ExerciseProfile = Partial<CoachDetails> & { user_id: string; first_name: string; last_name: string; email: string; created_at: string };
+export const hasCoachDetails = (p: ExerciseProfile | undefined): p is ExerciseProfile & CoachDetails =>
+  !!p && typeof p.height_cm === 'number' && typeof p.weight_kg === 'number' && !!p.gender && !!p.date_of_birth;
 
 export type SkillLevel = 'beginner' | 'intermediate' | 'advanced';
 export const SKILL_LEVELS: SkillLevel[] = ['beginner', 'intermediate', 'advanced'];
@@ -152,14 +152,15 @@ const ex = <T>(path: string, init: { method?: string; body?: unknown } = {}) => 
 const u = (id: string) => `/users/${encodeURIComponent(id)}`;
 
 export const exerciseApi = {
-  // Non-idempotent creates are NOT retried: a lost response would mint a duplicate user/session.
-  createUser: (profile: ExerciseProfileInput) => ex<ExerciseUser>('/users', { body: profile }),
   getProfile: (userId: string) => withRetry(() => ex<ExerciseProfile>(u(userId))),
+  /** Idempotent (PUT), so a lost response is safe to retry. */
+  saveProfile: (userId: string, details: CoachDetails) => withRetry(() => ex<ExerciseProfile>(`${u(userId)}/profile`, { method: 'PUT', body: details })),
   getSkill: (userId: string) => withRetry(() => ex<SkillState>(`${u(userId)}/skill`)),
   setSkill: (userId: string, level: SkillLevel) => withRetry(() => ex<SkillState>(`${u(userId)}/skill`, { body: { skill_level: level } })),
 
   catalog: () => withRetry(() => ex<{ exercises: ExerciseAvailability[] }>('/exercises')).then((r) => r.exercises ?? []),
 
+  // Non-idempotent creates are NOT retried: a lost response would mint a duplicate session.
   /** The backend accepts exactly one exercise per session (Prototype 1). */
   createSession: (userId: string, exercise: SessionExerciseInput) => ex<CreatedSession>(`${u(userId)}/sessions`, { body: { exercises: [exercise] } }),
 

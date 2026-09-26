@@ -46,7 +46,7 @@ class RefreshBody(BaseModel):
     refresh_token: str = Field(min_length=16, max_length=200)
 
 
-def _token_pair(user_id: str) -> dict:
+def token_pair(user_id: str) -> dict:
     access, access_exp = issue_access_token(user_id)
     refresh, refresh_exp = issue_refresh_token(user_id)
     return {
@@ -65,7 +65,7 @@ def register(body: RegisterBody) -> dict:
         user_id = register_account(body.email, body.password, body.first_name, body.last_name)
     except EmailTaken:
         raise HTTPException(status_code=409, detail="an account with this email already exists") from None
-    return _token_pair(user_id)
+    return token_pair(user_id)
 
 
 @router.post("/login")
@@ -74,7 +74,7 @@ def login(body: LoginBody) -> dict:
     if credential is None:
         burn_password_check(body.password)
     elif verify_password(body.password, credential["password_hash"]):
-        return _token_pair(credential["user_id"])
+        return token_pair(credential["user_id"])
     raise HTTPException(status_code=401, detail="invalid email or password")
 
 
@@ -83,4 +83,4 @@ def refresh(body: RefreshBody) -> dict:
     user_id = consume_refresh_token(body.refresh_token)
     if user_id is None:
         raise HTTPException(status_code=401, detail="invalid or expired refresh token")
-    return _token_pair(user_id)
+    return token_pair(user_id)

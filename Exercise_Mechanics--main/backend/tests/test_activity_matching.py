@@ -66,7 +66,8 @@ def member(first: str, activities: dict[str, int], *, level="intermediate", opte
     """Sign up (page 1), then answer page 2: activities with interest, fitness level, consents."""
     status, body = _request("POST", "/api/users", {
         "first_name": first, "last_name": "Tester", "gender": "female", "height_cm": 170, "weight_kg": 65,
-        "date_of_birth": dob, "mobile": "9990001111", "email": f"{first.lower()}@example.test"})
+        "date_of_birth": dob, "mobile": "9990001111", "email": f"{first.lower()}@example.test",
+        "password": "correct horse"})
     assert status == 200, body
     uid = body["user_id"]
     consents = ([MATCHING] if opted_in else []) + ([HABITS] if times else [])

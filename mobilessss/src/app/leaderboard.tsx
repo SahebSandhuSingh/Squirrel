@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Avatar } from '@/components/Avatar';
 import { Button, Display, FadeIn, Header, Icon, Kicker, Screen, Segmented } from '@/components/ui';
 import { formatArea, isMyEntry, leaderboardApi, shortUserId, type LeaderboardEntry, type LeaderboardPage, type LeaderboardWindow } from '@/api/endpoints';
+import { API_CONFIGURED } from '@/api/config';
 import { useAuth } from '@/auth/AuthProvider';
 import { territoryBoard } from '@/data/territory';
 import { userById } from '@/data/users';
@@ -48,7 +49,7 @@ export default function Leaderboard() {
     setRows(demoRows(w));
     setMeRow(null);
     setCursor(null);
-    if (mode !== 'live') return setSource('demo');
+    if (mode !== 'live' || !API_CONFIGURED) return setSource('demo');
     let cancelled = false;
     setLoading(true);
     leaderboardApi

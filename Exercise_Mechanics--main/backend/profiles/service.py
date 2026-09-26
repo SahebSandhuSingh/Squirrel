@@ -16,7 +16,8 @@ from backend import config
 from backend.profiles import store
 from backend.profiles.store import HistoryUnreadable
 from backend.profiles.vocab import CONSENT_CATEGORIES, MEASUREMENT_FIELDS, PHYSIQUE_MEASUREMENTS
-from backend.users.store import create_user_record, read_profile, read_skill, write_skill
+from backend.auth import store as auth_store
+from backend.users.store import create_user_record, read_profile, read_skill, write_profile, write_skill
 
 log = logging.getLogger(__name__)
 
@@ -344,11 +345,23 @@ def profile_with_latest_body(user_id: str) -> dict | None:
 
 # ---------------------------------------------------------------- onboarding
 
-def onboard(core: dict, *, now: datetime | None = None) -> dict:
+CORE_PROFILE_FIELDS = ("gender", "height_cm", "weight_kg", "date_of_birth", "mobile")
+
+
+def onboard(core: dict, *, password: str | None = None, now: datetime | None = None) -> dict:
     """Sign-up page 1: create the user, with their height and weight as the first measurement.
-    All or nothing: if the measurement can't be written, the half-created user is removed."""
+
+    With a password this creates a sign-in account (auth.store; the id is a UUID). Without one,
+    only the legacy password-less user the browser coach creates while auth is switched off.
+    All or nothing: if the measurement can't be written, the half-created user is removed.
+    Raises auth.store.EmailTaken when the email already has an account."""
     now = now or datetime.now(timezone.utc)
-    identity = create_user_record(core)
+    if password is None:
+        identity = create_user_record(core)
+    else:
+        extra = {k: v for k, v in core.items() if k not in ("first_name", "last_name", "email")}
+        user_id = auth_store.register_account(core["email"], password, core["first_name"], core["last_name"], extra)
+        identity = {"user_id": user_id, "first_name": core["first_name"], "last_name": core["last_name"]}
     user_id = identity["user_id"]
     try:
         profile = read_profile(user_id) or {}
@@ -360,9 +373,25 @@ def onboard(core: dict, *, now: datetime | None = None) -> dict:
             "weight_kg": core["weight_kg"],
         }])
     except BaseException:
-        shutil.rmtree(config.user_dir(user_id), ignore_errors=True)
+        if password is None:
+            shutil.rmtree(config.user_dir(user_id), ignore_errors=True)
+        else:
+            auth_store.delete_account(core["email"], user_id)
         raise
     return identity
+
+
+def complete_profile(user_id: str, fields: dict, *, now: datetime | None = None) -> dict:
+    """Save the page-1 details (gender, height, weight, date of birth, mobile, and optionally the
+    name) onto an existing account, e.g. one registered from the app with only email and name.
+    Height and weight also become a measurement, so BMI and history use them."""
+    profile = _require_user(user_id)
+    # The reading first: it seeds history from the profile as it was, so it isn't logged twice.
+    if fields.get("height_cm") is not None or fields.get("weight_kg") is not None:
+        add_measurement(user_id, {"source": "self_reported", "height_cm": fields.get("height_cm"),
+                                  "weight_kg": fields.get("weight_kg")}, now=now)
+    write_profile(user_id, {**profile, **{k: v for k, v in fields.items() if v is not None}})
+    return profile_with_latest_body(user_id)
 
 
 def save_sign_up_details(user_id: str, sections: dict, consents: list[dict], *,

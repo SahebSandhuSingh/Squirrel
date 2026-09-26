@@ -9,8 +9,11 @@ migrate with their own phases.
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
 from backend.config import PROFILE_FILENAME, SKILL_FILENAME, user_dir
 from backend.core.ids import slugify
@@ -42,6 +45,19 @@ def create_user_record(profile: dict) -> dict:
 
     print(f"[api] created user {user_id}")
     return {"user_id": user_id, "first_name": profile["first_name"], "last_name": profile["last_name"]}
+
+
+def write_profile(user_id: str, profile: dict) -> None:
+    """Replace a user's profile.json atomically (a crash never leaves half a file)."""
+    path = user_dir(user_id) / PROFILE_FILENAME
+    fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(profile, f, indent=2)
+        os.replace(temp_name, path)
+    except BaseException:
+        Path(temp_name).unlink(missing_ok=True)
+        raise
 
 
 def read_skill(user_id: str) -> tuple[str, bool]:

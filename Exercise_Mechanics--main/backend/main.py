@@ -33,11 +33,12 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from backend.activity_matching.router import router as activity_matching_router
 from backend.activity_rating.router import router as activity_rating_router
+from backend.auth.deps import require_path_user
 from backend.auth.router import router as auth_router
 from backend.db import connection as db_connection
 from backend.db.migrate import migrate
@@ -77,7 +78,8 @@ async def _lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="Exercise Mechanics", lifespan=_lifespan)
+# Every route whose path names a user (/api/users/{user_id}/...) serves only that signed-in user.
+app = FastAPI(title="Exercise Mechanics", lifespan=_lifespan, dependencies=[Depends(require_path_user)])
 
 # The UI is the Vite-built SPA in frontend-dist (run `npm run build` in frontend-react/).
 _ROOT = Path(__file__).resolve().parent.parent

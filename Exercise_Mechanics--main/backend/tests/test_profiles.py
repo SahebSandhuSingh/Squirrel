@@ -6,6 +6,7 @@ USERS_DIR is monkeypatched to a temp dir so nothing touches data/users.
 from __future__ import annotations
 
 import asyncio
+import itertools
 import json
 from datetime import date, datetime, timedelta, timezone
 
@@ -24,6 +25,14 @@ CORE = {
     "first_name": "Ana", "last_name": "Tester", "gender": "female", "height_cm": 165.0,
     "weight_kg": 60.0, "date_of_birth": "1994-05-10", "mobile": "9990001111", "email": "ana@example.test",
 }
+_emails = itertools.count(1)
+
+
+def _signup(payload: dict | None = None) -> dict:
+    """A sign-up body: CORE plus a password and a fresh email (each account claims its email)."""
+    return {**CORE, **(payload or {}), "password": "correct horse", "email": f"ana{next(_emails)}@example.test"}
+
+
 CONSENT_ALL = [
     {"category": "physique", "granted": True, "policy_version": "2026-09"},
     {"category": "habits", "granted": True, "policy_version": "2026-09"},
@@ -71,7 +80,7 @@ def _request(method: str, path: str, payload: dict | None = None) -> tuple[int, 
 
 def _sign_up(**details) -> str:
     """Page 1 (core fields), then page 2 (the optional questions) when any are given."""
-    status, body = _request("POST", "/api/users", CORE)
+    status, body = _request("POST", "/api/users", _signup())
     assert status == 200, body
     user_id = body["user_id"]
     if details:
@@ -111,7 +120,7 @@ def test_the_existing_onboarding_payload_still_works_and_derives_age_and_bmi():
 
 
 def test_page_one_ignores_page_two_questions():
-    status, body = _request("POST", "/api/users", {**CORE, "habits": {"diet": "vegan"}, "consents": [
+    status, body = _request("POST", "/api/users", {**_signup(), "habits": {"diet": "vegan"}, "consents": [
         {"category": "habits", "granted": True, "policy_version": "v1"}]})
     assert status == 200
     user_dir = config.user_dir(body["user_id"])
@@ -137,14 +146,14 @@ def test_a_failed_write_during_sign_up_leaves_no_half_created_user(monkeypatch):
     {"weight_kg": 900},
 ])
 def test_page_one_rejects_invalid_answers(override):
-    status, _ = _request("POST", "/api/users", {**CORE, **override})
+    status, _ = _request("POST", "/api/users", _signup(override))
     assert status == 422
     assert _user_dirs() == []
 
 
 def test_every_gender_the_onboarding_form_offers_is_accepted():
     for gender in ("female", "male", "non_binary", "undisclosed"):
-        assert _request("POST", "/api/users", {**CORE, "gender": gender})[0] == 200
+        assert _request("POST", "/api/users", _signup({"gender": gender}))[0] == 200
 
 
 # ---------------------------------------------------------------- page 2: the optional questions

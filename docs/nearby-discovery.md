@@ -109,7 +109,7 @@ All `/api/*` routes except auth need `Authorization: Bearer <access_token>`.
 | POST | `/api/auth/login` | `{email, password}` → token pair; 401 otherwise |
 | POST | `/api/auth/refresh` | `{refresh_token}` → new pair. Refresh tokens are single-use and rotate. |
 
-The token pair is `{user_id, access_token (15 min, HMAC-signed), refresh_token (30 days, opaque), *_expires_at}`.
+The token pair is `{user_id, access_token (15 min, HS256 JWT signed with `JWT_SECRET`, also accepted by the Run Module), refresh_token (30 days, opaque), *_expires_at}`. `user_id` is a UUID.
 
 ### Nearby Discovery
 | Method | Path | Notes |
@@ -137,7 +137,7 @@ The token pair is `{user_id, access_token (15 min, HMAC-signed), refresh_token (
 
 | Env var | Purpose |
 |---|---|
-| `SQUIRREL_AUTH_SECRET` | **Required in production.** HMAC key for access tokens. Without it, a dev key is generated at `data/auth/secret.key`. |
+| `JWT_SECRET` | **Required in production.** Signs access tokens; the same value as the Run Module's, so one sign-in serves both (`SQUIRREL_AUTH_SECRET` overrides it if set). Without either, a dev key is generated at `data/auth/secret.key`. |
 | `SQUIRREL_PUBLIC_BASE_URL` | Public origin used in QR codes and invite links (default `https://squirrelsocial.app`). |
 | `SQUIRREL_APP_STORE_URL`, `SQUIRREL_PLAY_STORE_URL` | Store listings. |
 | `SQUIRREL_IOS_APP_IDS` | `TEAMID.bundle.id`, comma-separated, for the AASA file. |

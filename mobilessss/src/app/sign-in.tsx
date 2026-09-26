@@ -7,10 +7,16 @@ import { Button, Display, IconButton, Kicker, Tagline, tap } from '@/components/
 import { useAuth } from '@/auth/AuthProvider';
 import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
 
-/** Sign in. Needs an account service (EXPO_PUBLIC_AUTH_URL); until then: demo mode or a dev token. */
+/**
+ * Sign in or create a Squirrel Social account (Exercise backend, /api/auth). The same account
+ * signs in to the Run Module. Without a configured server: demo mode, or a developer token.
+ */
 export default function SignIn() {
   const insets = useSafeAreaInsets();
   const auth = useAuth();
+  const [creating, setCreating] = useState(false);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [token, setToken] = useState('');
@@ -40,18 +46,41 @@ export default function SignIn() {
           <Wordmark size={24} />
         </View>
 
-        <Kicker style={{ marginTop: 28 }}>Welcome back</Kicker>
+        <Kicker style={{ marginTop: 28 }}>{creating ? 'New here' : 'Welcome back'}</Kicker>
         <Display size={46} style={{ marginTop: 6, lineHeight: 48 }}>
-          Back in{'\n'}
-          <Text style={{ color: colors.primary }}>the game.</Text>
+          {creating ? 'Join the' : 'Back in'}
+          {'\n'}
+          <Text style={{ color: colors.primary }}>{creating ? 'squad.' : 'the game.'}</Text>
         </Display>
 
         <View style={{ gap: 10, marginTop: 22 }}>
+          {creating && (
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                <TextInput style={styles.input} value={firstName} onChangeText={setFirstName} placeholder="First name" placeholderTextColor={colors.mute} autoComplete="given-name" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <TextInput style={styles.input} value={lastName} onChangeText={setLastName} placeholder="Last name" placeholderTextColor={colors.mute} autoComplete="family-name" />
+              </View>
+            </View>
+          )}
           <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="Email" placeholderTextColor={colors.mute} autoCapitalize="none" keyboardType="email-address" autoComplete="email" />
-          <TextInput style={styles.input} value={password} onChangeText={setPassword} placeholder="Password" placeholderTextColor={colors.mute} secureTextEntry autoComplete="password" />
-          <Button label={busy ? 'Signing in…' : 'Sign in'} icon="arrow-right" disabled={busy || !email || !password} onPress={() => run(() => auth.signIn(email.trim(), password))} />
-          {!auth.authConfigured && <Text style={styles.warn}>No account service is connected yet, so email sign-in is off. Use demo mode for now.</Text>}
+          <TextInput style={styles.input} value={password} onChangeText={setPassword} placeholder={creating ? 'Password (8+ characters)' : 'Password'} placeholderTextColor={colors.mute} secureTextEntry autoComplete={creating ? 'new-password' : 'password'} />
+          {creating ? (
+            <Button
+              label={busy ? 'Creating account…' : 'Create account'}
+              icon="arrow-right"
+              disabled={busy || !firstName.trim() || !lastName.trim() || !email.trim() || password.length < 8}
+              onPress={() => run(() => auth.signUp({ first_name: firstName.trim(), last_name: lastName.trim(), email: email.trim(), password }))}
+            />
+          ) : (
+            <Button label={busy ? 'Signing in…' : 'Sign in'} icon="arrow-right" disabled={busy || !email || !password} onPress={() => run(() => auth.signIn(email.trim(), password))} />
+          )}
+          {!auth.authConfigured && <Text style={styles.warn}>No account server is connected. Set EXPO_PUBLIC_EXERCISE_API_URL, or use demo mode for now.</Text>}
           {error && <Text style={styles.error}>{error}</Text>}
+          <Pressable onPress={() => { setCreating((v) => !v); setError(null); }} accessibilityLabel={creating ? 'I already have an account' : 'Create an account'}>
+            <Text style={styles.switch}>{creating ? 'Already have an account? Sign in' : 'New to Squirrel Social? Create an account'}</Text>
+          </Pressable>
         </View>
 
         <View style={styles.or}>
@@ -97,4 +126,5 @@ const styles = StyleSheet.create({
   rule: { flex: 1, height: 1, backgroundColor: colors.line },
   orText: { color: colors.dim, fontFamily: fonts.mono, fontSize: 11, textTransform: 'uppercase' },
   dev: { color: colors.dim, fontFamily: fonts.mono, fontSize: 11 },
+  switch: { color: colors.primary, fontFamily: fonts.semibold, fontSize: 13, textAlign: 'center', marginTop: 4 },
 });

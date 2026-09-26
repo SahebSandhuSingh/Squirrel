@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import tempfile
 import time
 import uuid
@@ -22,7 +23,6 @@ from pathlib import Path
 from backend import config
 from backend.auth.tokens import hash_password, new_refresh_token, token_digest
 from backend.config import PROFILE_FILENAME, user_dir
-from backend.core.ids import slugify
 
 
 class EmailTaken(Exception):
@@ -53,11 +53,18 @@ def _atomic_write_json(path: Path, payload: dict) -> None:
         raise
 
 
-def register_account(email: str, password: str, first_name: str, last_name: str) -> str:
-    """Create the credential and a minimal social profile. Raises EmailTaken on a duplicate."""
+def register_account(email: str, password: str, first_name: str, last_name: str,
+                     profile: dict | None = None) -> str:
+    """Create the credential and the account's profile. Raises EmailTaken on a duplicate.
+
+    `profile` carries any further sign-up fields (gender, height, date of birth, …), stored in the
+    same profile.json. All or nothing: if the profile can't be written, the credential is removed
+    so the email can be used again."""
     cred_path = _credential_path(email)
     cred_path.parent.mkdir(parents=True, exist_ok=True)
-    user_id = f"{slugify(first_name + '-' + last_name)}-{uuid.uuid4().hex[:6]}"
+    # A UUID: the Run Module only accepts UUID subjects, and it is also a valid id here
+    # ([a-z0-9-], 36 characters), so the same account works on both backends.
+    user_id = str(uuid.uuid4())
     record = {
         "user_id": user_id,
         "password_hash": hash_password(password),
@@ -71,17 +78,28 @@ def register_account(email: str, password: str, first_name: str, last_name: str)
     with os.fdopen(fd, "w") as f:
         json.dump(record, f, indent=2)
 
-    udir = user_dir(user_id)
-    udir.mkdir(parents=True, exist_ok=True)
-    profile = {
-        "user_id": user_id,
-        "first_name": first_name,
-        "last_name": last_name,
-        "email": normalize_email(email),
-        "created_at": record["created_at"],
-    }
-    _atomic_write_json(udir / PROFILE_FILENAME, profile)
+    try:
+        udir = user_dir(user_id)
+        udir.mkdir(parents=True, exist_ok=True)
+        _atomic_write_json(udir / PROFILE_FILENAME, {
+            **(profile or {}),
+            "user_id": user_id,
+            "first_name": first_name,
+            "last_name": last_name,
+            "email": normalize_email(email),
+            "created_at": record["created_at"],
+        })
+    except BaseException:
+        cred_path.unlink(missing_ok=True)
+        shutil.rmtree(user_dir(user_id), ignore_errors=True)
+        raise
     return user_id
+
+
+def delete_account(email: str, user_id: str) -> None:
+    """Undo register_account (used when a later step of sign-up fails)."""
+    _credential_path(email).unlink(missing_ok=True)
+    shutil.rmtree(user_dir(user_id), ignore_errors=True)
 
 
 def read_credential(email: str) -> dict | None:

@@ -35,9 +35,11 @@ def user_dir(user_id: str) -> Path:
 AUTH_DIR    = _REPO_ROOT / "data" / "auth"      # credentials index, refresh tokens, dev secret
 INVITES_DIR = _REPO_ROOT / "data" / "invites"   # opaque invite tokens → inviter (no PII in token)
 
-# HMAC key for access tokens. Production MUST set SQUIRREL_AUTH_SECRET; without it a random
-# development key is generated once and kept at AUTH_DIR/secret.key.
+# HMAC key for access tokens (HS256 JWTs). Production MUST set SQUIRREL_AUTH_SECRET or JWT_SECRET;
+# without either, a random development key is generated once and kept at AUTH_DIR/secret.key.
 AUTH_SECRET_ENV            = "SQUIRREL_AUTH_SECRET"
+# Fallback: the Run Module's secret. With both backends on one secret, one sign-in serves both.
+SHARED_JWT_SECRET_ENV      = "JWT_SECRET"
 ACCESS_TOKEN_TTL_SECONDS   = 15 * 60
 REFRESH_TOKEN_TTL_SECONDS  = 30 * 24 * 3600
 
@@ -51,3 +53,12 @@ APP_SCHEME       = "squirrelsocial"
 IOS_APP_IDS              = [s for s in os.environ.get("SQUIRREL_IOS_APP_IDS", "").split(",") if s]
 ANDROID_PACKAGE          = os.environ.get("SQUIRREL_ANDROID_PACKAGE", "app.squirrelsocial")
 ANDROID_CERT_SHA256      = [s for s in os.environ.get("SQUIRREL_ANDROID_CERT_SHA256", "").split(",") if s]
+
+# Every /api/users/{user_id}/... route and the training sockets require a bearer token for that
+# user. On unless EXERCISE_REQUIRE_AUTH is 0/false/no/off: the switch exists only so the browser
+# coach, which has no sign-in yet, can still be used on a development machine.
+REQUIRE_AUTH_ENV = "EXERCISE_REQUIRE_AUTH"
+
+
+def auth_required() -> bool:
+    return os.environ.get(REQUIRE_AUTH_ENV, "").strip().lower() not in ("0", "false", "no", "off")

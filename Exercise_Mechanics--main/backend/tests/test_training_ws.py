@@ -9,6 +9,7 @@ import pytest
 from fastapi import WebSocketDisconnect
 
 from backend import config
+from backend.auth import tokens
 from backend.sessions.store import create_session_record
 from backend.training.debug_capture import TrainingDebugCapture
 from backend.training.router import train_ws
@@ -105,6 +106,7 @@ def persisted_session(tmp_path, monkeypatch):
 def _query(user_id: str, session_id: str, *, exercise: str = "squat", set_no: str = "1"):
     return {
         "user_id": user_id,
+        "token": tokens.issue_access_token(user_id)[0],
         "session_id": session_id,
         "exercise": exercise,
         "set_no": set_no,
@@ -271,7 +273,7 @@ def test_debug_persistence_failure_is_reported_and_closes_with_server_error(
 
 def test_missing_session_uses_stable_session_required_error():
     websocket = FakeWebSocket(
-        {"user_id": "some-user", "exercise": "squat", "set_no": "1"}
+        {"user_id": "some-user", "token": tokens.issue_access_token("some-user")[0], "exercise": "squat", "set_no": "1"}
     )
     _run(websocket)
     assert websocket.sent[0]["data"]["code"] == "SESSION_REQUIRED"
@@ -298,3 +300,13 @@ def test_invalid_training_identity_uses_stable_error_codes(
     _run(websocket)
     assert websocket.sent[0]["data"]["code"] == expected
     assert websocket.closed == (1008, expected)
+
+
+@pytest.mark.parametrize("token_for", [None, "someone-else"])
+def test_training_socket_needs_the_users_own_token(persisted_session, token_for):
+    user_id, session_id = persisted_session
+    query = {**_query(user_id, session_id), "token": tokens.issue_access_token(token_for)[0] if token_for else ""}
+    websocket = FakeWebSocket(query)
+    _run(websocket)
+    assert websocket.sent[0]["data"]["code"] == "UNAUTHORIZED"
+    assert websocket.closed == (1008, "UNAUTHORIZED")

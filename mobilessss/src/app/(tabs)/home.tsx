@@ -12,7 +12,7 @@ import { territoryBoard } from '@/data/territory';
 import { useAuth } from '@/auth/AuthProvider';
 import { Tape } from '@/components/Brand';
 import { xpApi } from '@/api/endpoints';
-import { EXERCISE_API_CONFIGURED } from '@/api/config';
+import { API_CONFIGURED, EXERCISE_API_CONFIGURED } from '@/api/config';
 import { useExerciseProgress, useExerciseUser } from '@/hooks/useExercise';
 import { useApp } from '@/state/AppState';
 import { colors, fonts, radius } from '@/theme';
@@ -59,7 +59,7 @@ export default function Home() {
   const { syncServerXp } = useApp();
   // Signed in: the server's XP total (derived from real activity) replaces the demo figure.
   useEffect(() => {
-    if (mode !== 'live') return;
+    if (mode !== 'live' || !API_CONFIGURED) return;
     xpApi.me().then((r) => syncServerXp(r.xp)).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);

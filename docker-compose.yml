@@ -117,9 +117,11 @@ services:
       DATABASE_URL: *database-url
       MODERATION_TOKEN: ${MODERATION_TOKEN:-}
       PARTNER_HUNT_DEV_XP: ${PARTNER_HUNT_DEV_XP:-}
-      # Squirrel Social accounts + Nearby Discovery (docs/nearby-discovery.md). Empty secret = a
-      # development key generated in the exercise_data volume; set a real one in production.
-      SQUIRREL_AUTH_SECRET: ${SQUIRREL_AUTH_SECRET:-}
+      # Accounts: this backend signs login tokens with the Run Module's JWT_SECRET, so one sign-in
+      # works on both. Every /api/users/{id}/... route needs that user's token; EXERCISE_REQUIRE_AUTH=0
+      # switches the check off (only for trying the password-less browser coach locally).
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (see .env.example)}
+      EXERCISE_REQUIRE_AUTH: ${EXERCISE_REQUIRE_AUTH:-1}
       SQUIRREL_PUBLIC_BASE_URL: ${SQUIRREL_PUBLIC_BASE_URL:-https://squirrelsocial.app}
     ports:
       - "${EXERCISE_HOST_PORT:-8000}:8000"
