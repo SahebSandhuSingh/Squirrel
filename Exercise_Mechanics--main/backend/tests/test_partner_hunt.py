@@ -340,6 +340,9 @@ def test_gate_selection_from_environment():
     # The real Run Module always wins over the dev override.
     both = xp_gate_from_env({"RUN_MODULE_URL": "https://run.example", "PARTNER_HUNT_DEV_XP": "150"})
     assert isinstance(both, RunModuleXPGate)
+    # A private-network "host:port" (Render's hostport) is plain http; a bare host name is still refused.
+    private = xp_gate_from_env({"RUN_MODULE_URL": "squirrel-run-api:10000"})
+    assert isinstance(private, RunModuleXPGate) and private._base == "http://squirrel-run-api:10000"
     for bad in ({"PARTNER_HUNT_DEV_XP": "lots"}, {"PARTNER_HUNT_DEV_XP": "-1"}, {"RUN_MODULE_URL": "run.example"}):
         with pytest.raises(ValueError):
             xp_gate_from_env(bad)

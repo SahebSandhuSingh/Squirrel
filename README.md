@@ -10,6 +10,9 @@ writes its own.
 | [`run-module/`](run-module/) | Runs, GPS territories, anti-cheat, leaderboard | Node 22 · Fastify · BullMQ · Redis | `runs`, `territories`, `run_scores`, `leaderboard_snapshots`, `activity_sessions`, … `pgmigrations` |
 | [`mobile/nearby/`](mobile/nearby/) | Android (Kotlin) and iOS (Swift) Bluetooth clients for Nearby Discovery | native | none (talks to the Exercise API) |
 
+**Deploying:** [`DEPLOY.md`](DEPLOY.md): backends and Redis on Render (`render.yaml`), the web app on
+Vercel (`mobilessss/vercel.json`), the database on Supabase.
+
 Nearby Discovery (Bluetooth "someone near you is on Squirrel Social") is designed in
 [`docs/nearby-discovery.md`](docs/nearby-discovery.md): protocol, proximity scoring, privacy and API.
 

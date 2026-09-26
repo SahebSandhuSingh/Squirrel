@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -150,15 +151,21 @@ class UnconfiguredXPGate:
         raise XPServiceUnavailable(f"{RUN_MODULE_URL_ENV} is not configured")
 
 
+_PRIVATE_HOSTPORT = re.compile(r"[A-Za-z0-9.-]+:[0-9]{1,5}")
+
+
 def xp_gate_from_env(env: Mapping[str, str] = os.environ) -> XPGate:
     """Pick the gate from the environment.
 
     RUN_MODULE_URL set        → the real Run Module, with a fresh service token per call (or a fixed
-                                RUN_MODULE_TOKEN, if set).
+                                RUN_MODULE_TOKEN, if set). A bare "host:port" means http:// on a
+                                private network.
     else PARTNER_HUNT_DEV_XP  → every user has that much XP. Local development only; logged loudly.
     else                      → unconfigured: Partner Hunt stays locked and says why.
     """
     url = env.get(RUN_MODULE_URL_ENV, "").strip()
+    if _PRIVATE_HOSTPORT.fullmatch(url):
+        url = "http://" + url  # a host's private-network "host:port" (e.g. Render's hostport)
     if url:
         return RunModuleXPGate(url, token=env.get(RUN_MODULE_TOKEN_ENV) or issue_service_token)
     dev_xp = env.get(DEV_XP_ENV, "").strip()

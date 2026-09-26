@@ -40,6 +40,7 @@ from backend.activity_matching.router import router as activity_matching_router
 from backend.activity_rating.router import router as activity_rating_router
 from backend.auth.deps import require_path_user
 from backend.auth.router import router as auth_router
+from backend.cors import add_cors
 from backend.db import connection as db_connection
 from backend.db.migrate import migrate
 from backend.deeplinks.router import router as deeplinks_router
@@ -101,6 +102,9 @@ async def _no_cache_html(request, call_next):
         response.headers["Expires"] = "0"
     return response
 
+
+# The web app on its own domain (CORS_ALLOWED_ORIGINS; off when unset). Added last, so it runs first.
+add_cors(app)
 
 # API + WS routes are registered BEFORE the catch-all static mount so /api and /ws win.
 app.include_router(users_router)

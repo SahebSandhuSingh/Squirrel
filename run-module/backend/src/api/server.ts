@@ -34,6 +34,7 @@ import { territoriesRoutes } from './routes/territories.js';
 import tilesRoutes from './routes/tiles.js';
 import { leaderboardRoutes } from './routes/leaderboard.js';
 import { xpRoutes } from './routes/xp.js';
+import { registerCors } from './cors.js';
 export { requireAuth } from "../auth/verify-jwt.js";
 
 const fastify = Fastify({
@@ -49,6 +50,7 @@ const fastify = Fastify({
 });
 
 
+await registerCors(fastify, process.env["CORS_ALLOWED_ORIGINS"]);
 await fastify.register(healthRoutes);
 await fastify.register(runsRoutes);
 await fastify.register(territoriesRoutes, { prefix: '/v1/territories' });

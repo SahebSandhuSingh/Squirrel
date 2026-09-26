@@ -1,0 +1,115 @@
+# Render Blueprint: both backends and Redis, from this repository (Dashboard → New → Blueprint).
+# The web app goes to Vercel (mobilessss/vercel.json); the database is Supabase. Steps: DEPLOY.md.
+#
+#   squirrel-exercise     Exercise Mechanics API + live-coaching sockets, with a disk for session files
+#   squirrel-run-api      Run Module API; applies its migrations before each deploy
+#   squirrel-run-worker   Run Module workers (run finalisation, leaderboard, decay, notifications)
+#   squirrel-redis        Render Key Value (Redis) for the Run Module's queues and leaderboard
+#
+# Values marked `sync: false` are asked for when the Blueprint is created and never stored here.
+# DATABASE_URL names Supabase's CA certificate at /etc/secrets/prod-ca-2021.crt: add that file as a
+# Secret File on the `squirrel-shared` environment group (see DEPLOY.md), then redeploy.
+
+envVarGroups:
+  - name: squirrel-shared
+    envVars:
+      # One secret for sign-in on both backends: Exercise signs the tokens, the Run Module checks them.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_ALGORITHM
+        value: HS256
+      # Day boundary for the XP daily caps (run-module/docs/decisions/ADR-027).
+      - key: XP_TIMEZONE
+        value: Asia/Kolkata
+
+services:
+  - type: web
+    name: squirrel-exercise
+    runtime: docker
+    region: singapore
+    plan: starter            # a disk needs a paid instance
+    branch: saheb
+    dockerfilePath: ./Exercise_Mechanics--main/Dockerfile
+    dockerContext: ./Exercise_Mechanics--main
+    healthCheckPath: /
+    disk:
+      name: exercise-data
+      mountPath: /app/data   # session captures and calibration; accounts and profiles are in Postgres
+      sizeGB: 1
+    envVars:
+      - fromGroup: squirrel-shared
+      - key: DATABASE_URL
+        sync: false
+      # The Vercel web app's address(es), comma-separated; `*` for preview URLs (backend/cors.py).
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      # Partner Hunt's XP gate, over Render's private network.
+      - key: RUN_MODULE_URL
+        fromService:
+          type: web
+          name: squirrel-run-api
+          property: hostport
+      - key: EXERCISE_REQUIRE_AUTH
+        value: "1"
+      - key: MODERATION_TOKEN
+        generateValue: true
+      - key: SQUIRREL_PUBLIC_BASE_URL
+        value: https://squirrelsocial.app
+
+  - type: web
+    name: squirrel-run-api
+    runtime: docker
+    region: singapore
+    plan: starter            # a pre-deploy command needs a paid instance
+    branch: saheb
+    dockerfilePath: ./deploy/run-module.Dockerfile
+    dockerContext: ./run-module
+    healthCheckPath: /health
+    preDeployCommand: node node_modules/node-pg-migrate/bin/node-pg-migrate.js up --migrations-dir ../db/migrations --database-url-var DATABASE_URL
+    envVars:
+      - fromGroup: squirrel-shared
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: squirrel-redis
+          property: connectionString
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+
+  - type: worker
+    name: squirrel-run-worker
+    runtime: docker
+    region: singapore
+    plan: starter            # background workers have no free instance
+    branch: saheb
+    dockerfilePath: ./deploy/run-module.Dockerfile
+    dockerContext: ./run-module
+    dockerCommand: node --import tsx/esm src/workers/start.ts
+    envVars:
+      - fromGroup: squirrel-shared
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: squirrel-redis
+          property: connectionString
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: PORT            # required by the Run Module's config, though the worker serves nothing
+        value: "3000"
+
+  - type: keyvalue
+    name: squirrel-redis
+    region: singapore
+    plan: free
+    maxmemoryPolicy: noeviction   # BullMQ queues must never be evicted
+    ipAllowList: []               # private network only
