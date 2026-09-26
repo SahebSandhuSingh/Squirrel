@@ -15,11 +15,11 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend import config
-from backend.auth.router import token_pair
+from backend.auth.router import count_sign_up, token_pair
 from backend.auth.store import EmailTaken
 from backend.core.ids import safe_user_id
 from backend.profiles import service as profiles
@@ -52,9 +52,11 @@ class UserProfile(BaseModel):
 
 
 @router.post("/users")
-def create_user(profile: UserProfile) -> dict:
+def create_user(profile: UserProfile, request: Request) -> dict:
     if profile.password is None and config.auth_required():
         raise HTTPException(status_code=422, detail="password is required to create an account")
+    if profile.password is not None:
+        count_sign_up(request)  # the same sign-up limit as /api/auth/register
     try:
         identity = profiles.onboard(profile.model_dump(exclude={"password"}), password=profile.password)
     except EmailTaken:

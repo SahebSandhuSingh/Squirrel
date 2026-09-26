@@ -21,7 +21,8 @@ class Result:
         return self.body.decode()
 
 
-def call(app, method: str, path: str, *, json=None, headers: dict[str, str] | None = None) -> Result:
+def call(app, method: str, path: str, *, json=None, headers: dict[str, str] | None = None,
+         client: str = "127.0.0.1") -> Result:
     path, _, query = path.partition("?")
     body = b"" if json is None else _json.dumps(json).encode()
     raw_headers = [(b"host", b"test")]
@@ -45,7 +46,7 @@ def call(app, method: str, path: str, *, json=None, headers: dict[str, str] | No
         "type": "http", "asgi": {"version": "3.0", "spec_version": "2.3"}, "http_version": "1.1",
         "method": method, "scheme": "http", "path": path, "raw_path": path.encode(),
         "query_string": query.encode(), "root_path": "", "headers": raw_headers,
-        "client": ("127.0.0.1", 12345), "server": ("test", 80),
+        "client": (client, 12345), "server": ("test", 80),
     }
     asyncio.run(app(scope, receive, send))
     start = next(m for m in messages if m["type"] == "http.response.start")

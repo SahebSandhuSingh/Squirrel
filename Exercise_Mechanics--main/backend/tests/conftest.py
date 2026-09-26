@@ -17,9 +17,10 @@ import psycopg
 import pytest
 
 from backend import config
+from backend.auth import throttle
 
 ACCOUNTS_DB_URL = os.environ.get("TEST_ACCOUNTS_DATABASE_URL", "")
-_ACCOUNT_TABLES = "user_refresh_tokens, user_accounts, user_profile_data, user_profiles"
+_ACCOUNT_TABLES = "user_refresh_tokens, user_accounts, user_profile_data, user_profiles, auth_throttle"
 
 
 @pytest.fixture(scope="session")
@@ -43,6 +44,7 @@ def _isolated_auth_storage(tmp_path_factory, monkeypatch, _accounts_database):
     monkeypatch.setenv(config.AUTH_SECRET_ENV, "test-signing-secret")
     monkeypatch.delenv(config.REQUIRE_AUTH_ENV, raising=False)
     monkeypatch.delenv("DATABASE_URL", raising=False)
+    throttle.reset_memory()
     if _accounts_database:
         with psycopg.connect(_accounts_database, autocommit=True) as conn:
             conn.execute(f"TRUNCATE {_ACCOUNT_TABLES}")

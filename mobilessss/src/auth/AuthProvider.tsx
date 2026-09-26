@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
-import { setApiToken, setTokenRefresher } from '@/api/client';
+import { ApiError, setApiToken, setTokenRefresher } from '@/api/client';
 import { API_CONFIGURED, AUTH_CONFIGURED, EXERCISE_API_CONFIGURED } from '@/api/config';
 import { exerciseApi, type ExerciseUser } from '@/api/exercise';
 import { accountApi, type NewAccount, type TokenPair } from '@/auth/account';
@@ -88,7 +88,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [applyAccess],
   );
 
-  // One refresher for the whole app. A refresh that fails means the session is over.
+  // One refresher for the whole app. Only a refresh token the server rejects (401) ends the
+  // session; no connection, a rate limit (429) or a server error leaves the user signed in, and
+  // the next request simply tries again.
   useEffect(() => {
     setTokenRefresher(async () => {
       const current = refreshToken.current;
@@ -97,9 +99,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const pair = await accountApi.refresh(current);
         await savePair(pair);
         return pair.access_token;
-      } catch {
-        await clear();
-        setMode('signed-out');
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 401) {
+          await clear();
+          setMode('signed-out');
+        }
         return null;
       }
     });

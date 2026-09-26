@@ -35,7 +35,7 @@ def db(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "USERS_DIR", tmp_path / "users")
     with psycopg.connect(TEST_URL, autocommit=True) as conn:
         conn.execute("DROP TABLE IF EXISTS exercise_sessions, activity_types, user_refresh_tokens, user_accounts, "
-                     "user_profile_data, user_profiles, schema_migrations CASCADE")
+                     "user_profile_data, user_profiles, auth_throttle, schema_migrations CASCADE")
     with psycopg.connect(TEST_URL, autocommit=True) as conn:
         migrate(conn)
     monkeypatch.setenv("DATABASE_URL", TEST_URL)

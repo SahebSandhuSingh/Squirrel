@@ -3,11 +3,13 @@
   • POST /api/auth/register — create an account (email + password + name) and sign in.
   • POST /api/auth/login    — exchange email + password for tokens.
   • POST /api/auth/refresh  — rotate a refresh token into a fresh token pair.
+
+All three are rate-limited (auth/throttle.py): 429 with Retry-After when over a limit.
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.auth.store import (
@@ -17,6 +19,7 @@ from backend.auth.store import (
     read_credential,
     register_account,
 )
+from backend.auth import throttle
 from backend.auth.tokens import burn_password_check, issue_access_token, verify_password
 
 router = APIRouter(prefix="/api/auth")
@@ -59,8 +62,19 @@ def token_pair(user_id: str) -> dict:
     }
 
 
+def count_sign_up(request: Request) -> None:
+    """Every sign-up, successful or not, counts against the caller's address."""
+    address = throttle.client_address(request)
+    try:
+        throttle.check(throttle.SIGNUP_IP, address)
+    except throttle.Throttled as exc:
+        raise throttle.too_many(exc) from None
+    throttle.hit(throttle.SIGNUP_IP, address)
+
+
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-def register(body: RegisterBody) -> dict:
+def register(body: RegisterBody, request: Request) -> dict:
+    count_sign_up(request)
     try:
         user_id = register_account(body.email, body.password, body.first_name, body.last_name)
     except EmailTaken:
@@ -69,17 +83,32 @@ def register(body: RegisterBody) -> dict:
 
 
 @router.post("/login")
-def login(body: LoginBody) -> dict:
+def login(body: LoginBody, request: Request) -> dict:
+    email, address = throttle.email_key(body.email), throttle.client_address(request)
+    try:
+        throttle.check(throttle.LOGIN_EMAIL, email)
+        throttle.check(throttle.LOGIN_IP, address)
+    except throttle.Throttled as exc:
+        raise throttle.too_many(exc) from None
     credential = read_credential(body.email)
     if credential is None:
         burn_password_check(body.password)
     elif verify_password(body.password, credential["password_hash"]):
+        throttle.clear(throttle.LOGIN_EMAIL, email)
         return token_pair(credential["user_id"])
+    throttle.hit(throttle.LOGIN_EMAIL, email)
+    throttle.hit(throttle.LOGIN_IP, address)
     raise HTTPException(status_code=401, detail="invalid email or password")
 
 
 @router.post("/refresh")
-def refresh(body: RefreshBody) -> dict:
+def refresh(body: RefreshBody, request: Request) -> dict:
+    address = throttle.client_address(request)
+    try:
+        throttle.check(throttle.REFRESH_IP, address)
+    except throttle.Throttled as exc:
+        raise throttle.too_many(exc) from None
+    throttle.hit(throttle.REFRESH_IP, address)
     user_id = consume_refresh_token(body.refresh_token)
     if user_id is None:
         raise HTTPException(status_code=401, detail="invalid or expired refresh token")
