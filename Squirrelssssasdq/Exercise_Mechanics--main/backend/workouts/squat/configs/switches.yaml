@@ -1,0 +1,25 @@
+# Squat template activation is context-specific. False means no evaluation, cue, persistence or
+# score contribution in that context. Setup and baseline activation remain exercise-specific.
+schema_version: 1
+
+contexts:
+  pre_check:
+    standing_posture: true
+    stance_width: true
+    depth: false
+    knee_valgus: false
+    lateral_torso_lean: false
+
+  baseline_capture:
+    standing_posture: true
+    stance_width: true
+    depth: false
+    knee_valgus: false
+    lateral_torso_lean: false
+
+  live:
+    standing_posture: false
+    stance_width: true
+    depth: true
+    knee_valgus: true
+    lateral_torso_lean: true

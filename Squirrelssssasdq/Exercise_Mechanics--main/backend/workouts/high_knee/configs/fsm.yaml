@@ -1,0 +1,36 @@
+# Planned per-leg lift graph. The shared RepFSM vocabulary remains internal; the future adapter
+# translates its events and counters into lift terminology before publishing timed status.
+schema_version: 2
+movement_type: time
+
+phases: [setup, ascent, top, descent, reset]
+initial_phase: setup
+
+transitions:
+  - {from: setup, to: setup, when: tracking_recovery_failed, action: reset_attempt}
+  - {from: setup, to: ascent, when: descent_started}
+
+  - {from: ascent, to: setup, when: tracking_recovery_failed, action: discard_attempt, emit: attempt_discarded}
+  - {from: ascent, to: setup, when: phase_stale, action: discard_attempt, emit: attempt_discarded}
+  - {from: ascent, to: top, when: full_rom_reached}
+  - {from: ascent, to: descent, when: turnaround_confirmed}
+
+  - {from: top, to: setup, when: tracking_recovery_failed, action: discard_attempt, emit: attempt_discarded}
+  - {from: top, to: setup, when: phase_stale, action: discard_attempt, emit: attempt_discarded}
+  - {from: top, to: descent, when: turnaround_confirmed}
+
+  - {from: descent, to: setup, when: tracking_recovery_failed, action: discard_attempt, emit: attempt_discarded}
+  - {from: descent, to: setup, when: phase_stale, action: discard_attempt, emit: attempt_discarded}
+  - {from: descent, to: reset, when: top_returned, action: complete_attempt, emit: attempt_completed}
+
+  - {from: reset, to: reset, when: tracking_recovery_failed, action: reset_attempt}
+  - {from: reset, to: setup, when: reset_dwell_elapsed, action: reset_attempt, emit: rep_cycle_completed}
+
+# Initial development concepts only. Phase 4/5 rig evidence owns production tuning.
+movement_start: 0.15
+reset: 0.10
+min_lift_peak: 0.30
+turnaround_ms: 150
+reset_dwell_ms: 200
+stale_phase_ms: 5000
+

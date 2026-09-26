@@ -1,0 +1,30 @@
+# Double-arm bicep curl template activation is context-specific. False means no evaluation, cue,
+# persistence or score contribution in that context. Stance and arms-extended run ONLY in the
+# pre-check gate; the baseline capture records keypoints + per-joint median with no condition checks;
+# curl ROM (wrist height) is the single live ROM rule.
+schema_version: 1
+
+contexts:
+  pre_check:
+    elbow_flare_corridor: false
+    lateral_torso_lean: false
+    shoulder_elevation: false
+    curl_rom: false
+    stance_width: true
+    arms_extended: true
+
+  baseline_capture:
+    elbow_flare_corridor: false
+    lateral_torso_lean: false
+    shoulder_elevation: false
+    curl_rom: false
+    stance_width: false
+    arms_extended: false
+
+  live:
+    elbow_flare_corridor: true
+    lateral_torso_lean: true
+    shoulder_elevation: true
+    curl_rom: true
+    stance_width: false
+    arms_extended: false
