@@ -87,11 +87,15 @@ services:
     depends_on:
       run-migrate: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
+    # One check at startup: every 2 s until /health first answers, then no more (the next would be
+    # a year away), so the log is not filled with /health requests.
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
-      interval: 10s
+      start_period: 60s
+      start_interval: 2s
+      interval: 8760h
       timeout: 5s
-      retries: 10
+      retries: 3
     restart: unless-stopped
 
   run-worker:
