@@ -69,3 +69,18 @@ const start = async (): Promise<void> => {
 
 await start();
 
+// Hosts without background workers (Render's free plan): RUN_WORKERS_IN_API=1 runs every worker and
+// scheduled job in this process instead of src/workers/start.ts. They close with the server.
+if (process.env["RUN_WORKERS_IN_API"] === "1") {
+  const { startAllWorkers } = await import("../workers/all.js");
+  const workers = await startAllWorkers();
+  fastify.log.info(`Running ${workers.length} background workers in the API process`);
+  const stop = async (): Promise<void> => {
+    await Promise.all(workers.map((w) => w.close()));
+    await fastify.close();
+    process.exit(0);
+  };
+  process.once("SIGTERM", () => void stop());
+  process.once("SIGINT", () => void stop());
+}
+

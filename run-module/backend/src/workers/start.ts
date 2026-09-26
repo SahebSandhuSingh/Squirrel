@@ -1,25 +1,11 @@
-import { startFinalizeRunWorker } from './finalize_run/queue.js';
-import { startLeaderboardSyncWorker, scheduleSnapshotJob } from './leaderboard_sync/queue.js';
-import { startDecayWorker, scheduleDecayJob } from './decay/queue.js';
-import { startNotificationWorker } from '../notifications/emitter.js';
+import { startAllWorkers } from './all.js';
 import { pool } from '../db/pool.js';
 import { redis } from '../redis/client.js';
 
 async function main() {
   console.log('Starting background workers...');
   
-  const workers = [
-    startFinalizeRunWorker(),
-    startLeaderboardSyncWorker(),
-    startDecayWorker(),
-    startNotificationWorker()
-  ];
-  
-  await scheduleSnapshotJob();
-  console.log('Scheduled hourly snapshot job.');
-  
-  await scheduleDecayJob();
-  console.log('Scheduled nightly decay job.');
+  const workers = await startAllWorkers();
 
   process.on('SIGINT', async () => {
     console.log('\nShutting down workers...');
