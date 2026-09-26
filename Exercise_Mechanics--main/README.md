@@ -209,6 +209,9 @@ optional and switch features on:
 | `PARTNER_HUNT_DEV_XP` | Local testing only: a fixed XP for every user | — |
 | `MODERATION_TOKEN` | Moderator routes for reports | Moderator routes refuse every request (503) |
 | `DATABASE_URL` | PostgreSQL copy of exercise sessions (see below) | Sessions are stored on disk only, as before |
+| `SQUIRREL_AUTH_SECRET` | Signs Squirrel Social login tokens (see below). **Required in production** | A development key is generated once in `data/auth/secret.key` |
+| `SQUIRREL_PUBLIC_BASE_URL` | Origin used in QR codes and invite links | `https://squirrelsocial.app` |
+| `SQUIRREL_APP_STORE_URL`, `SQUIRREL_PLAY_STORE_URL`, `SQUIRREL_IOS_APP_IDS`, `SQUIRREL_ANDROID_PACKAGE`, `SQUIRREL_ANDROID_CERT_SHA256` | Store links and the Universal/App Link files | Placeholder store listings |
 
 **Serverless hosts (Vercel, Netlify Functions, Lambda) cannot run this.** `/ws/setup` and `/ws/train`
 are long-lived WebSockets carrying every pose frame, and the backend writes profiles, sessions and
@@ -352,6 +355,23 @@ city and no meeting preferences. The frontend doesn't show it yet.
 
 Routes: `GET /api/users/{id}/activity-matching` (status, and exactly what matches see),
 `GET /api/users/{id}/activity-matches`, `POST /api/users/{id}/activity-matches/blocks`.
+
+## Squirrel Social: accounts, Nearby Discovery, invite links
+
+Phones find each other over Bluetooth and the backend decides when two people are really near each
+other. The full design is in [`docs/nearby-discovery.md`](../docs/nearby-discovery.md); the phone
+side is in [`mobile/nearby/`](../mobile/nearby/).
+
+| Module | Routes |
+|---|---|
+| `backend/auth/` | `POST /api/auth/register`, `/login`, `/refresh`. Returns a short-lived access token (`Authorization: Bearer …`) and a single-use refresh token |
+| `backend/nearby/` | `GET/PUT /api/nearby/settings`, `POST /api/proximity/session`, `/detection`, `/confirm`, `GET /api/nearby`, `POST /api/nearby/connect`, `GET /api/connections`, `POST /api/notifications/nearby` |
+| `backend/deeplinks/` | `/join` and `/invite/{token}` (store redirect or landing page), `POST /api/invites`, `/join/qr.svg`, `/join/poster`, `/.well-known/*` |
+
+- **Off by default.** Every proximity route answers 403 until the user turns Nearby on. Turning it off erases their proximity state at once.
+- **No proximity history on disk.** Sightings and "who was near whom" live only in memory and expire after 15 minutes. On disk there is only the on/off setting (`nearby.json`) and accepted connections (`connections.json`), without time or place.
+- **One process.** That in-memory state is why the server runs a single worker. A restart forgets it, and phones simply open a new session.
+- **Accounts.** A registered account is an ordinary user folder (`data/users/<id>/profile.json`, same id format), so the rest of the API works for it. Credentials and refresh tokens are stored as hashes under `data/auth/`, which is private and git-ignored, like `data/invites/`.
 
 ## PostgreSQL: exercise sessions
 

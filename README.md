@@ -6,8 +6,12 @@ writes its own.
 
 | Path | Module | Stack | Writes |
 |---|---|---|---|
-| [`Exercise_Mechanics--main/`](Exercise_Mechanics--main/) | Exercise coaching (pose, reps, scores, profiles, matching, reports) | Python 3.11 · FastAPI · psycopg | `exercise_sessions`, `activity_types`, `schema_migrations` |
+| [`Exercise_Mechanics--main/`](Exercise_Mechanics--main/) | Exercise coaching (pose, reps, scores, profiles, matching, reports), Squirrel Social accounts, Nearby Discovery, `/join` invite links | Python 3.11 · FastAPI · psycopg | `exercise_sessions`, `activity_types`, `schema_migrations` |
 | [`run-module/`](run-module/) | Runs, GPS territories, anti-cheat, leaderboard | Node 22 · Fastify · BullMQ · Redis | `runs`, `territories`, `run_scores`, `leaderboard_snapshots`, `activity_sessions`, … `pgmigrations` |
+| [`mobile/nearby/`](mobile/nearby/) | Android (Kotlin) and iOS (Swift) Bluetooth clients for Nearby Discovery | native | none (talks to the Exercise API) |
+
+Nearby Discovery (Bluetooth "someone near you is on Squirrel Social") is designed in
+[`docs/nearby-discovery.md`](docs/nearby-discovery.md): protocol, proximity scoring, privacy and API.
 
 ## Both backends on one database
 

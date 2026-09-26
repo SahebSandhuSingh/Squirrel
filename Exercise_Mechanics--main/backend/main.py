@@ -19,6 +19,9 @@ Layout:
     activity_rating/    the member's own rating of a session (user-generated; never feeds the Workout Score)
     moderation/         reports on members or sessions, and the moderators' review queue
     db/                 optional PostgreSQL mirror of exercise sessions (DATABASE_URL)
+    auth/               Squirrel Social accounts (register · login · refresh) + bearer-token dependency
+    nearby/             BLE nearby discovery: rotating ids, proximity scoring, nearby list, notifications
+    deeplinks/          /join + /invite/{token} store routing, download QR, Universal/App Link files
 
 Run from the project root:
     uvicorn backend.main:app --reload
@@ -35,10 +38,13 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.activity_matching.router import router as activity_matching_router
 from backend.activity_rating.router import router as activity_rating_router
+from backend.auth.router import router as auth_router
 from backend.db import connection as db_connection
 from backend.db.migrate import migrate
+from backend.deeplinks.router import router as deeplinks_router
 from backend.engine.loader import validate_enabled_exercises
 from backend.moderation.router import router as moderation_router
+from backend.nearby.router import router as nearby_router
 from backend.partners.router import router as partners_router
 from backend.profiles.router import router as profiles_router
 from backend.reports.router import router as reports_router
@@ -101,6 +107,9 @@ app.include_router(activity_rating_router)
 app.include_router(partners_router)
 app.include_router(activity_matching_router)
 app.include_router(moderation_router)
+app.include_router(auth_router)
+app.include_router(nearby_router)
+app.include_router(deeplinks_router)   # /join, /invite/*, /.well-known/* — must precede the SPA mount
 app.include_router(setup_ws_router)
 
 # Mounted last so /ws + /api take precedence. html=True serves index.html at /.
