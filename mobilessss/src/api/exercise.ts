@@ -37,9 +37,9 @@ export type ExerciseProfileInput = {
   first_name: string; // 1–80 chars
   last_name: string; // 1–80 chars
   gender: string;
-  height_cm: number; // 0 < h < 300
-  weight_kg: number; // 0 < w < 500
-  date_of_birth: string; // YYYY-MM-DD
+  height_cm: number; // 50–272
+  weight_kg: number; // 20–400
+  date_of_birth: string; // YYYY-MM-DD, 1900 to today
   mobile: string; // 3–32 chars
   email: string; // 3–200 chars
 };

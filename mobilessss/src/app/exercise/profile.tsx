@@ -86,9 +86,11 @@ function validate(f: Record<string, string>): string | null {
   if (!f.first_name.trim() || !f.last_name.trim()) return 'Enter your first and last name.';
   const h = Number(f.height_cm);
   const w = Number(f.weight_kg);
-  if (!(h > 0 && h < 300)) return 'Height must be between 1 and 299 cm.';
-  if (!(w > 0 && w < 500)) return 'Weight must be between 1 and 499 kg.';
+  // Same bounds as the backend (profiles/vocab.py HEIGHT_CM, WEIGHT_KG; check_date_of_birth).
+  if (!(h >= 50 && h <= 272)) return 'Height must be between 50 and 272 cm.';
+  if (!(w >= 20 && w <= 400)) return 'Weight must be between 20 and 400 kg.';
   if (!/^\d{4}-\d{2}-\d{2}$/.test(f.date_of_birth) || Number.isNaN(Date.parse(f.date_of_birth))) return 'Date of birth must be YYYY-MM-DD.';
+  if (f.date_of_birth < '1900-01-01' || f.date_of_birth > new Date().toISOString().slice(0, 10)) return 'Date of birth must be between 1900 and today.';
   if (f.mobile.trim().length < 3) return 'Enter your mobile number.';
   if (!/^\S+@\S+\.\S+$/.test(f.email.trim())) return 'Enter a valid email.';
   return null;
