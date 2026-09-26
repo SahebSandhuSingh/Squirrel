@@ -36,7 +36,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Squirrel Social uses the camera to show you on screen while the form coach counts your reps.",
+          "cameraPermission": "Squirrel Social uses the camera to track your body so the coach can count and score your reps. No video is recorded or uploaded.",
           "microphonePermission": false,
           "recordAudioAndroid": false
         }

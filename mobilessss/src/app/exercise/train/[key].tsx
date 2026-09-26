@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -11,14 +11,28 @@ import { PoseSkeleton, squatPose, type Joint } from '@/components/PoseSkeleton';
 import { Button, Display, Icon, Ring, tap } from '@/components/ui';
 import { exerciseByKey, PLAN_BOUNDS } from '@/data/exercises';
 import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
+import { useKeepAwake } from 'expo-keep-awake';
+import { EXERCISE_API_URL } from '@/api/config';
+import { getApiToken, refreshApiToken } from '@/api/client';
+import { exerciseApi } from '@/api/exercise';
+import { invalidateExercise, useExerciseUser } from '@/hooks/useExercise';
+import { CoachSession, type CoachState, type PoseFrame } from '@/workout/coach';
+import { liveView } from '@/workout/liveView';
+import { PoseCamera } from '@/workout/tracker/PoseCamera';
+import type { TrackerStatus } from '@/workout/tracker/types';
 
 /**
- * LIVE WORKOUT — camera view with a body-tracking skeleton, rep counter, calories,
- * form cues, time / BPM / calories bar, and music · pause · camera controls.
+ * WORKOUT. Signed in to the coach: a LIVE workout. The phone tracks the body on-device
+ * (workout/tracker: MediaPipe in a WebView, the browser coach's proven tracking) and streams it
+ * to the coaching server, which counts reps, scores form and cues (workout/coach.ts). Every set is
+ * saved, so reports, history and XP follow.
  *
- * The phone has no on-device pose model yet, so tracking runs a guided demo motion
- * (clearly labelled). The layout, controls, sets, rest and summary are the real flow.
+ * Not signed in, or no coach server configured: the guided demo (clearly labelled, nothing saved).
  */
+export default function Train() {
+  const user = useExerciseUser();
+  return user ? <LiveWorkout userId={user.user_id} /> : <DemoWorkout />;
+}
 
 const REP_MS = 2600; // one guided rep: down + up
 const KG = 65; // estimate until the coach profile weight is wired in
@@ -35,7 +49,7 @@ const CUES: Cue[] = [
 
 const mmss = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
-export default function Train() {
+function DemoWorkout() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ key: string; sets?: string; value?: string; rest?: string; session?: string }>();
   const ex = exerciseByKey(String(params.key)) ?? exerciseByKey('squat')!;
@@ -263,6 +277,262 @@ export default function Train() {
             <Button label="View session" icon="arrow-right" onPress={() => router.replace({ pathname: '/exercise/session/[id]', params: { id: String(params.session) } })} style={{ marginTop: 18, alignSelf: 'stretch' }} />
           ) : null}
           <Button label="Done" variant={params.session ? 'secondary' : 'primary'} size="md" onPress={() => (router.canGoBack() ? router.back() : router.replace('/exercise'))} style={{ marginTop: 10, alignSelf: 'stretch' }} />
+        </View>
+      )}
+    </View>
+  );
+}
+
+
+// ---------------------------------------------------------------------------------------------
+// Live workout
+// ---------------------------------------------------------------------------------------------
+
+type LiveSession = { id: string; exercise: string; variant?: string };
+
+function LiveWorkout({ userId }: { userId: string }) {
+  useKeepAwake();
+  const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ key: string; sets?: string; value?: string; rest?: string; session?: string }>();
+  const ex = exerciseByKey(String(params.key)) ?? exerciseByKey('squat')!;
+  const timed = ex.measure === 'time';
+  const sets = Number(params.sets) || PLAN_BOUNDS.sets.value;
+  const target = Number(params.value) || (timed ? PLAN_BOUNDS.time.value : 15);
+  const rest = Number(params.rest ?? PLAN_BOUNDS.rest.value);
+
+  const [perm, requestPerm] = useCameraPermissions();
+  const [session, setSession] = useState<LiveSession | null>(
+    params.session ? { id: String(params.session), exercise: ex.slug, variant: ex.variant } : null,
+  );
+  const [setupError, setSetupError] = useState<string | null>(null);
+  const [tracker, setTracker] = useState<{ status: TrackerStatus; detail?: string }>({ status: 'loading' });
+  const [trackerKey, setTrackerKey] = useState(0);
+  const [state, setState] = useState<CoachState | null>(null);
+  const [confirmEnd, setConfirmEnd] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const coach = useRef<CoachSession | null>(null);
+
+  useEffect(() => {
+    if (perm && !perm.granted && perm.canAskAgain) requestPerm();
+  }, [perm, requestPerm]);
+
+  // A workout started without a saved plan saves one now: the server coaches only saved sessions.
+  useEffect(() => {
+    if (session) return;
+    let cancelled = false;
+    exerciseApi
+      .createSession(userId, {
+        name: ex.name, slug: ex.slug, ...(ex.variant ? { variant: ex.variant } : {}), body_part: ex.bodyPart,
+        training_tag: ex.tag, measure: ex.measure, sets, value: target, rest_seconds: sets > 1 ? rest : 0,
+      })
+      .then((s) => !cancelled && setSession({ id: s.session_id, exercise: s.exercise_id, variant: s.variant ?? undefined }))
+      .catch((e) => !cancelled && setSetupError(e instanceof Error ? e.message : 'Could not start the workout.'));
+    return () => {
+      cancelled = true;
+    };
+  }, [session, userId, ex, sets, target, rest]);
+
+  // The coaching session. Server messages arrive ~30 a second; the screen redraws at most ~8 a
+  // second, except at once when something structural changes (phase, set, rest, error).
+  useEffect(() => {
+    if (!session) return;
+    const c = new CoachSession({
+      baseUrl: EXERCISE_API_URL, userId, sessionId: session.id, exercise: session.exercise, variant: session.variant,
+      sets, measure: ex.measure, restSeconds: sets > 1 ? rest : 0, getToken: getApiToken, refreshToken: refreshApiToken,
+    });
+    coach.current = c;
+    let shown: CoachState | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const show = (s: CoachState) => {
+      shown = s;
+      setState(s);
+    };
+    const unsubscribe = c.subscribe((s) => {
+      const structural = !shown || s.phase !== shown.phase || s.set !== shown.set || s.restLeft !== shown.restLeft
+        || s.error !== shown.error || s.paused !== shown.paused || s.results.length !== shown.results.length;
+      if (structural) {
+        if (timer) clearTimeout(timer);
+        timer = null;
+        show(s);
+      } else if (!timer) {
+        timer = setTimeout(() => {
+          timer = null;
+          show(c.getState());
+        }, 120);
+      }
+      if (s.phase === 'done' && shown?.phase !== 'done') invalidateExercise(userId);
+    });
+    c.start();
+    return () => {
+      if (timer) clearTimeout(timer);
+      unsubscribe();
+      c.dispose();
+      coach.current = null;
+    };
+  }, [session, userId, sets, rest, ex.measure]);
+
+  // Workout clock: counts while a set is running.
+  const phase = state?.phase ?? 'setup';
+  const paused = state?.paused ?? false;
+  useEffect(() => {
+    if (phase !== 'training' || paused) return;
+    const id = setInterval(() => setElapsed((e) => e + 1), 1000);
+    return () => clearInterval(id);
+  }, [phase, paused]);
+
+  const onFrame = useCallback((f: PoseFrame) => coach.current?.frame(f), []);
+  const onStatus = useCallback((status: TrackerStatus, detail?: string) => setTracker({ status, detail }), []);
+  const view = useMemo(() => liveView(state, tracker.status, target, target), [state, tracker.status, target]);
+
+  // Say it when a rep lands.
+  const lastCount = useRef(0);
+  useEffect(() => {
+    if (!view.timed && view.count > lastCount.current) tap('impact');
+    lastCount.current = view.count;
+  }, [view.count, view.timed]);
+
+  const done = phase === 'done';
+  const results = state?.results ?? [];
+  const totalCount = results.reduce((a, r) => a + r.count, 0);
+  const scored = results.filter((r) => r.score != null);
+  const avgScore = scored.length ? Math.round(scored.reduce((a, r) => a + (r.score ?? 0), 0) / scored.length) : null;
+  const trackingOn = !done && phase !== 'rest';
+  const cameraReady = !!perm?.granted || Platform.OS === 'web';
+  const blocking = setupError ?? (state?.fatal ? state.error?.detail ?? 'The coach stopped this workout.' : null);
+
+  return (
+    <View style={styles.root}>
+      <StatusBar style="light" />
+      {cameraReady && !blocking ? (
+        <PoseCamera key={trackerKey} active={trackingOn} skeleton={view.skeleton} onFrame={onFrame} onStatus={onStatus} style={StyleSheet.absoluteFill} />
+      ) : (
+        <Scene kind="gym" seed={9} aspect={0.46} style={StyleSheet.absoluteFill} />
+      )}
+      <LinearGradient colors={['rgba(6,6,6,0.55)', 'rgba(6,6,6,0)', 'rgba(6,6,6,0)', 'rgba(6,6,6,0.8)']} locations={[0, 0.22, 0.62, 1]} style={StyleSheet.absoluteFill} pointerEvents="none" />
+
+      <View style={[styles.col, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 16 }]} pointerEvents="box-none">
+        <View style={styles.topRow}>
+          <View style={styles.counter}>
+            <Ring progress={view.capture ?? view.progress} size={62} stroke={6} color={colors.primary}>
+              <Icon name={ex.icon} size={24} color={colors.primary} />
+            </Ring>
+            <View style={{ marginLeft: 12, flexShrink: 1 }}>
+              <Text style={styles.exName} numberOfLines={1}>{ex.name}</Text>
+              <Text style={styles.count}>
+                {view.timed ? (
+                  <><Text style={{ color: colors.primary }}>{mmss(phase === 'training' ? view.count : target)}</Text> left</>
+                ) : (
+                  <><Text style={{ color: colors.primary }}>{phase === 'training' ? view.count : 0}</Text> / {target}</>
+                )}
+              </Text>
+              <Text style={styles.setText}>Set {state?.set ?? 1} of {sets}</Text>
+            </View>
+          </View>
+          <RoundBtn icon="close" label="End workout" onPress={() => setConfirmEnd(true)} />
+        </View>
+        <View style={styles.demoPill}>
+          <View style={[styles.demoDot, view.skeleton === 'red' && { backgroundColor: colors.coral }]} />
+          <Text style={styles.demoText} numberOfLines={1}>{view.status}</Text>
+        </View>
+
+        <View style={{ flex: 1 }} />
+
+        <View style={styles.rail}>
+          {view.cue ? (
+            <View style={[styles.cue, view.skeleton === 'red' && { borderColor: colors.coral }]}>
+              <Text style={[styles.cueTitle, view.skeleton === 'red' && { color: colors.coral }]}>{view.cue}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        <View style={styles.stats}>
+          <Stat value={mmss(elapsed)} label="Time" />
+          <View style={styles.div} />
+          <Stat value={String(totalCount + (phase === 'training' && !view.timed ? view.count : 0))} label={timed ? 'Lifts' : 'Reps'} />
+          <View style={styles.div} />
+          <Stat value={view.score == null ? '—' : String(view.score)} label="Form" />
+        </View>
+
+        <View style={[styles.controls, { justifyContent: 'center' }]}>
+          <Pressable
+            onPress={() => { tap('impact'); if (paused) coach.current?.resume(); else coach.current?.pause(); }}
+            disabled={phase !== 'training'}
+            style={[styles.pauseRing, phase !== 'training' && { opacity: 0.4 }]}
+            accessibilityLabel={paused ? 'Resume' : 'Pause'}>
+            <View style={styles.pauseInner}>
+              <Icon name={paused ? 'play' : 'pause'} size={46} color={colors.text} />
+            </View>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Camera permission, or tracking that could not start */}
+      {!blocking && perm && !perm.granted && Platform.OS !== 'web' && (
+        <View style={styles.overlay}>
+          <Icon name="camera-outline" size={40} color={colors.primary} />
+          <Display size={30} style={{ marginTop: 8, textAlign: 'center' }}>Camera needed</Display>
+          <Text style={styles.overlaySub}>The coach watches your form through the front camera. Nothing is recorded as video: only body points leave the phone.</Text>
+          <Button label={perm.canAskAgain ? 'Allow camera' : 'Open settings'} onPress={() => (perm.canAskAgain ? requestPerm() : Linking.openSettings())} style={{ marginTop: 20, alignSelf: 'stretch' }} />
+          <Button label="Back" variant="secondary" size="md" onPress={() => router.back()} style={{ marginTop: 10, alignSelf: 'stretch' }} />
+        </View>
+      )}
+      {!blocking && (tracker.status === 'error' || tracker.status === 'denied') && (
+        <View style={styles.overlay}>
+          <Icon name="alert-circle-outline" size={40} color={colors.coral} />
+          <Display size={28} style={{ marginTop: 8, textAlign: 'center' }}>{tracker.status === 'denied' ? 'Camera blocked' : 'Tracking didn’t start'}</Display>
+          <Text style={styles.overlaySub}>{tracker.status === 'denied' ? 'Allow camera access for Squirrel Social, then try again.' : 'Body tracking needs an internet connection the first time it loads.'}</Text>
+          <Button label="Try again" icon="refresh" onPress={() => { setTracker({ status: 'loading' }); setTrackerKey((k) => k + 1); }} style={{ marginTop: 20, alignSelf: 'stretch' }} />
+          <Button label="Back" variant="secondary" size="md" onPress={() => router.back()} style={{ marginTop: 10, alignSelf: 'stretch' }} />
+        </View>
+      )}
+      {blocking && (
+        <View style={styles.overlay}>
+          <Icon name="alert-circle-outline" size={40} color={colors.coral} />
+          <Display size={28} style={{ marginTop: 8, textAlign: 'center' }}>Workout stopped</Display>
+          <Text style={styles.overlaySub}>{blocking}</Text>
+          <Button label="Back" onPress={() => router.back()} style={{ marginTop: 20, alignSelf: 'stretch' }} />
+        </View>
+      )}
+
+      {/* Rest between sets */}
+      {phase === 'rest' && (
+        <View style={styles.overlay}>
+          <Text style={styles.kicker}>Set {state?.set} done{results.at(-1)?.score != null ? ` · form ${Math.round(results.at(-1)!.score!)}` : ''} · rest</Text>
+          <Display size={96} color={colors.primary}>{state?.restLeft ?? 0}</Display>
+          <Text style={styles.overlaySub}>Next: set {(state?.set ?? 1) + 1} of {sets}</Text>
+          <Button label="Skip rest" size="md" onPress={() => coach.current?.skipRest()} style={{ marginTop: 20, alignSelf: 'stretch' }} />
+          <Button label="+30 s" variant="secondary" size="md" onPress={() => coach.current?.addRest(30)} style={{ marginTop: 10, alignSelf: 'stretch' }} />
+        </View>
+      )}
+
+      {/* Paused, or asked to end */}
+      {(paused || confirmEnd) && !done && (
+        <View style={styles.overlay}>
+          <Display size={48}>{confirmEnd ? 'End workout?' : 'Paused'}</Display>
+          <Text style={styles.overlaySub}>{totalCount} {timed ? 'lifts' : 'reps'} saved so far · {mmss(elapsed)}</Text>
+          <Button label={confirmEnd ? 'Keep going' : 'Resume'} icon="play" onPress={() => { setConfirmEnd(false); coach.current?.resume(); }} style={{ marginTop: 22, alignSelf: 'stretch' }} />
+          <Button label="End workout" variant="secondary" size="md" onPress={() => { setConfirmEnd(false); coach.current?.end(); }} style={{ marginTop: 10, alignSelf: 'stretch' }} />
+        </View>
+      )}
+
+      {/* Summary */}
+      {done && (
+        <View style={styles.overlay}>
+          <Mascot pose="celebrate" size={130} animated />
+          <Display size={40} style={{ marginTop: 6, textAlign: 'center' }}>Workout done</Display>
+          <Text style={styles.overlaySub}>{ex.name} · {results.length} of {sets} sets</Text>
+          <View style={[styles.stats, { marginTop: 18, alignSelf: 'stretch' }]}>
+            <Stat value={String(totalCount)} label={timed ? 'Lifts' : 'Reps'} />
+            <View style={styles.div} />
+            <Stat value={mmss(elapsed)} label="Time" />
+            <View style={styles.div} />
+            <Stat value={avgScore == null ? '—' : String(avgScore)} label="Form" />
+          </View>
+          <Text style={[styles.overlaySub, { fontSize: 12, marginTop: 12 }]}>Scored by your coach and saved to your history.</Text>
+          {session ? (
+            <Button label="View report" icon="arrow-right" onPress={() => router.replace({ pathname: '/exercise/session/[id]', params: { id: session.id } })} style={{ marginTop: 18, alignSelf: 'stretch' }} />
+          ) : null}
+          <Button label="Done" variant="secondary" size="md" onPress={() => (router.canGoBack() ? router.back() : router.replace('/exercise'))} style={{ marginTop: 10, alignSelf: 'stretch' }} />
         </View>
       )}
     </View>

@@ -85,10 +85,10 @@ export default function PlanExercise() {
           </Card>
         </FadeIn>
         <View style={styles.notice}>
-          <Icon name="camera-off" size={18} color={colors.dim} />
+          <Icon name="camera-outline" size={18} color={colors.dim} />
           <Text style={styles.noticeText}>
-            The workout screen runs a guided demo on the phone. Scored reps need the camera coach, which streams body-pose data to the server, so
-            train in the Exercise Mechanics web coach to get this session’s report.
+            Prop the phone up so your whole body is in view. The coach tracks your body on the phone, counts and scores every rep, and saves
+            this session’s report.
           </Text>
         </View>
         <Button label="Start workout" icon="play" onPress={() => router.push({ pathname: '/exercise/train/[key]', params: { key: ex.key, sets: String(sets), value: String(value), rest: String(sets > 1 ? rest : 0), session: created.session_id } })} style={{ marginTop: 16 }} />

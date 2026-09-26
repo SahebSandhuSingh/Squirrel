@@ -14,3 +14,7 @@ export const EXERCISE_API_URL = trim(process.env.EXPO_PUBLIC_EXERCISE_API_URL);
 export const EXERCISE_API_CONFIGURED = EXERCISE_API_URL.length > 0;
 export const AUTH_URL = trim(process.env.EXPO_PUBLIC_AUTH_URL) || EXERCISE_API_URL;
 export const AUTH_CONFIGURED = AUTH_URL.length > 0;
+
+/** Optional: one folder serving MediaPipe's vision_bundle.mjs, wasm/ and pose_landmarker_lite.task.
+ *  Unset: jsDelivr and Google's model storage, as the browser coach uses. */
+export const POSE_ASSETS_URL = trim(process.env.EXPO_PUBLIC_POSE_ASSETS_URL);

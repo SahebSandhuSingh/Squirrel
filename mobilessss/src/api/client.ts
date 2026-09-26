@@ -27,6 +27,12 @@ let refreshing: Promise<string | null> | null = null;
 export const setTokenRefresher = (fn: (() => Promise<string | null>) | null) => {
   refresher = fn;
 };
+/** The current access token (e.g. for a WebSocket URL, which cannot carry a header). */
+export const getApiToken = (): string | null => token;
+
+/** Ask the installed refresher for a fresh token (shared with any refresh already running). */
+export const refreshApiToken = (): Promise<string | null> => refreshOnce();
+
 function refreshOnce(): Promise<string | null> {
   if (!refresher) return Promise.resolve(null);
   refreshing ??= refresher()
