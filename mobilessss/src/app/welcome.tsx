@@ -16,7 +16,15 @@ export default function Welcome() {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const { look } = useApp();
-  const { continueDemo } = useAuth();
+  const { continueDemo, authConfigured } = useAuth();
+  // With an account server, "Get started" makes an account; without one, it starts the demo.
+  const getStarted = () => {
+    if (authConfigured) router.push({ pathname: '/sign-in', params: { mode: 'create' } });
+    else {
+      continueDemo();
+      router.push('/avatar');
+    }
+  };
   const w = Math.min(width, MAX_WIDTH);
   const heroH = Math.max(130, Math.min(height * 0.24, 300));
   const h1 = Math.min(56, w * 0.13, height * 0.065);
@@ -54,7 +62,7 @@ export default function Welcome() {
 
       <View style={[styles.bottom, { paddingBottom: insets.bottom + 16 }]}>
         <FadeIn delay={450} style={{ gap: 12 }}>
-          <Button label="Get started" icon="arrow-right" onPress={() => { continueDemo(); router.push('/avatar'); }} />
+          <Button label="Get started" icon="arrow-right" onPress={getStarted} />
           <Button label="I already have an account" variant="secondary" size="md" onPress={() => router.push('/sign-in')} />
           <Text style={styles.foot}>free to join · takes 10 sec · zero gym-bro energy required</Text>
         </FadeIn>

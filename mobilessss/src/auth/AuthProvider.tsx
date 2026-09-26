@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform } from 'react-native';
+import { router } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import { ApiError, setApiToken, setTokenRefresher } from '@/api/client';
 import { API_CONFIGURED, AUTH_CONFIGURED, EXERCISE_API_CONFIGURED } from '@/api/config';
@@ -28,6 +29,11 @@ type AuthState = {
   signInWithToken: (token: string) => Promise<void>;
   continueDemo: () => void;
   signOut: () => Promise<void>;
+  /** The email last used to sign in on this device (kept after sign-out, to pre-fill the form). */
+  lastEmail: string | null;
+  /** Why the user was signed out, when it wasn't their choice (shown on the sign-in screen). */
+  notice: string | null;
+  clearNotice: () => void;
   /** The signed-in account as the form coach sees it (null when signed out or not configured). */
   exerciseUser: ExerciseUser | null;
 };
@@ -36,6 +42,8 @@ const KEY = 'squirrel.auth.token';
 const REFRESH_KEY = 'squirrel.auth.refresh';
 const EMAIL_KEY = 'squirrel.auth.email';
 const NAME_KEY = 'squirrel.auth.name';
+/** Not cleared on sign-out: only pre-fills the email field next time. */
+const LAST_EMAIL_KEY = 'squirrel.auth.last-email';
 /** Pre-account builds stored a bare coach id here, which anyone could link. Removed on launch. */
 const LEGACY_EXERCISE_KEY = 'squirrel.exercise.user';
 
@@ -62,6 +70,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [email, setEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [name, setName] = useState<Name | null>(null);
+  const [lastEmail, setLastEmail] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const refreshToken = useRef<string | null>(null);
 
   const clear = useCallback(async () => {
@@ -103,6 +113,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (e instanceof ApiError && e.status === 401) {
           await clear();
           setMode('signed-out');
+          setNotice('Your session ended. Please sign in again.');
+          router.replace('/sign-in');
         }
         return null;
       }
@@ -114,7 +126,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       try {
         store.del(LEGACY_EXERCISE_KEY).catch(() => undefined);
-        const [t, r, e, n] = await Promise.all([store.get(KEY), store.get(REFRESH_KEY), store.get(EMAIL_KEY), store.get(NAME_KEY)]);
+        const [t, r, e, n, last] = await Promise.all([store.get(KEY), store.get(REFRESH_KEY), store.get(EMAIL_KEY), store.get(NAME_KEY), store.get(LAST_EMAIL_KEY)]);
+        setLastEmail(last);
         if (t && (API_CONFIGURED || EXERCISE_API_CONFIGURED)) {
           refreshToken.current = r;
           applyAccess(t);
@@ -138,8 +151,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!AUTH_CONFIGURED) throw new Error('No account server is configured. Set EXPO_PUBLIC_EXERCISE_API_URL, or continue in demo mode.');
       const pair = await accountApi.login(em, password);
       await savePair(pair);
-      await store.set(EMAIL_KEY, em);
+      await Promise.all([store.set(EMAIL_KEY, em), store.set(LAST_EMAIL_KEY, em)]);
       setEmail(em);
+      setLastEmail(em);
+      setNotice(null);
       // The name for greetings; the account works without it if the profile can't be read now.
       if (EXERCISE_API_CONFIGURED) {
         const p = await exerciseApi.getProfile(pair.user_id).catch(() => null);
@@ -155,8 +170,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!AUTH_CONFIGURED) throw new Error('No account server is configured. Set EXPO_PUBLIC_EXERCISE_API_URL, or continue in demo mode.');
       const pair = await accountApi.register(account);
       await savePair(pair);
-      await store.set(EMAIL_KEY, account.email);
+      await Promise.all([store.set(EMAIL_KEY, account.email), store.set(LAST_EMAIL_KEY, account.email)]);
       setEmail(account.email);
+      setLastEmail(account.email);
+      setNotice(null);
       await rememberName({ first_name: account.first_name, last_name: account.last_name });
       setMode('live');
     },
@@ -185,7 +202,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <Ctx.Provider
-      value={{ mode, email, userId, apiConfigured: API_CONFIGURED, authConfigured: AUTH_CONFIGURED, signIn, signUp, signInWithToken, continueDemo: () => setMode('demo'), signOut, exerciseUser }}
+      value={{ mode, email, userId, apiConfigured: API_CONFIGURED, authConfigured: AUTH_CONFIGURED, signIn, signUp, signInWithToken, continueDemo: () => setMode('demo'), signOut, lastEmail, notice, clearNotice: () => setNotice(null), exerciseUser }}
     >
       {children}
     </Ctx.Provider>

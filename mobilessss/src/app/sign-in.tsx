@@ -1,40 +1,73 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Wordmark } from '@/components/Brand';
-import { Button, Display, IconButton, Kicker, Tagline, tap } from '@/components/ui';
+import { Button, Display, Icon, IconButton, Kicker, Tagline, tap } from '@/components/ui';
 import { useAuth } from '@/auth/AuthProvider';
 import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
+
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+const MIN_PASSWORD = 8;
 
 /**
  * Sign in or create a Squirrel Social account (Exercise backend, /api/auth). The same account
  * signs in to the Run Module. Without a configured server: demo mode, or a developer token.
+ * `/sign-in?mode=create` opens on "create account" (Welcome → Get started).
  */
 export default function SignIn() {
   const insets = useSafeAreaInsets();
   const auth = useAuth();
-  const [creating, setCreating] = useState(false);
+  const params = useLocalSearchParams<{ mode?: string }>();
+  const [creating, setCreating] = useState(params.mode === 'create');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(params.mode === 'create' ? '' : auth.lastEmail ?? '');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [token, setToken] = useState('');
   const [showToken, setShowToken] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const lastNameRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
 
-  const done = () => router.replace('/home');
-  const run = async (fn: () => Promise<void>) => {
+  const run = async (fn: () => Promise<void>, next: '/home' | '/avatar' = '/home') => {
     setBusy(true);
     setError(null);
     try {
       await fn();
-      done();
+      router.replace(next);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong.');
     } finally {
       setBusy(false);
+    }
+  };
+
+  /** Checks done here, in plain words, before anything is sent. */
+  const problem = (): string | null => {
+    if (creating && (!firstName.trim() || !lastName.trim())) return 'Enter your first and last name.';
+    if (!EMAIL_RE.test(email.trim())) return 'Enter a valid email address.';
+    if (creating && password.length < MIN_PASSWORD) return `Your password needs at least ${MIN_PASSWORD} characters.`;
+    if (!password) return 'Enter your password.';
+    return null;
+  };
+
+  const submit = () => {
+    if (busy) return;
+    const p = problem();
+    if (p) {
+      setError(p);
+      return;
+    }
+    auth.clearNotice();
+    if (creating) {
+      // A new account picks its look next, then lands on Home.
+      run(() => auth.signUp({ first_name: firstName.trim(), last_name: lastName.trim(), email: email.trim(), password }), '/avatar');
+    } else {
+      run(() => auth.signIn(email.trim(), password));
     }
   };
 
@@ -53,31 +86,45 @@ export default function SignIn() {
           <Text style={{ color: colors.primary }}>{creating ? 'squad.' : 'the game.'}</Text>
         </Display>
 
+        {auth.notice && !error && <Text style={[styles.notice, { marginTop: 18 }]}>{auth.notice}</Text>}
+
         <View style={{ gap: 10, marginTop: 22 }}>
           {creating && (
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <View style={{ flex: 1 }}>
-                <TextInput style={styles.input} value={firstName} onChangeText={setFirstName} placeholder="First name" placeholderTextColor={colors.mute} autoComplete="given-name" />
+                <TextInput style={styles.input} value={firstName} onChangeText={setFirstName} placeholder="First name" placeholderTextColor={colors.mute}
+                  autoComplete="given-name" textContentType="givenName" returnKeyType="next" onSubmitEditing={() => lastNameRef.current?.focus()} submitBehavior="submit" />
               </View>
               <View style={{ flex: 1 }}>
-                <TextInput style={styles.input} value={lastName} onChangeText={setLastName} placeholder="Last name" placeholderTextColor={colors.mute} autoComplete="family-name" />
+                <TextInput ref={lastNameRef} style={styles.input} value={lastName} onChangeText={setLastName} placeholder="Last name" placeholderTextColor={colors.mute}
+                  autoComplete="family-name" textContentType="familyName" returnKeyType="next" onSubmitEditing={() => emailRef.current?.focus()} submitBehavior="submit" />
               </View>
             </View>
           )}
-          <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="Email" placeholderTextColor={colors.mute} autoCapitalize="none" keyboardType="email-address" autoComplete="email" />
-          <TextInput style={styles.input} value={password} onChangeText={setPassword} placeholder={creating ? 'Password (8+ characters)' : 'Password'} placeholderTextColor={colors.mute} secureTextEntry autoComplete={creating ? 'new-password' : 'password'} />
-          {creating ? (
-            <Button
-              label={busy ? 'Creating account…' : 'Create account'}
-              icon="arrow-right"
-              disabled={busy || !firstName.trim() || !lastName.trim() || !email.trim() || password.length < 8}
-              onPress={() => run(() => auth.signUp({ first_name: firstName.trim(), last_name: lastName.trim(), email: email.trim(), password }))}
-            />
-          ) : (
-            <Button label={busy ? 'Signing in…' : 'Sign in'} icon="arrow-right" disabled={busy || !email || !password} onPress={() => run(() => auth.signIn(email.trim(), password))} />
+          <TextInput ref={emailRef} style={styles.input} value={email} onChangeText={setEmail} placeholder="Email" placeholderTextColor={colors.mute}
+            autoCapitalize="none" autoCorrect={false} keyboardType="email-address" autoComplete="email" textContentType={creating ? 'emailAddress' : 'username'}
+            returnKeyType="next" onSubmitEditing={() => passwordRef.current?.focus()} submitBehavior="submit" />
+          <View>
+            <TextInput ref={passwordRef} style={[styles.input, { paddingRight: 48 }]} value={password} onChangeText={setPassword}
+              placeholder={creating ? `Password (${MIN_PASSWORD}+ characters)` : 'Password'} placeholderTextColor={colors.mute}
+              secureTextEntry={!showPassword} autoCapitalize="none" autoCorrect={false}
+              autoComplete={creating ? 'new-password' : 'current-password'} textContentType={creating ? 'newPassword' : 'password'}
+              returnKeyType="go" onSubmitEditing={submit} />
+            <Pressable onPress={() => setShowPassword((v) => !v)} style={styles.eye} hitSlop={8} accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}>
+              <Icon name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.dim} />
+            </Pressable>
+          </View>
+          {creating && password.length > 0 && password.length < MIN_PASSWORD && (
+            <Text style={styles.hint}>{MIN_PASSWORD - password.length} more character{MIN_PASSWORD - password.length === 1 ? '' : 's'}</Text>
           )}
+          <Button
+            label={busy ? (creating ? 'Creating account…' : 'Signing in…') : creating ? 'Create account' : 'Sign in'}
+            icon="arrow-right"
+            disabled={busy}
+            onPress={submit}
+          />
           {!auth.authConfigured && <Text style={styles.warn}>No account server is connected. Set EXPO_PUBLIC_EXERCISE_API_URL, or use demo mode for now.</Text>}
-          {error && <Text style={styles.error}>{error}</Text>}
+          {error && <Text style={styles.error} accessibilityLiveRegion="polite">{error}</Text>}
           <Pressable onPress={() => { setCreating((v) => !v); setError(null); }} accessibilityLabel={creating ? 'I already have an account' : 'Create an account'}>
             <Text style={styles.switch}>{creating ? 'Already have an account? Sign in' : 'New to Squirrel Social? Create an account'}</Text>
           </Pressable>
@@ -95,7 +142,7 @@ export default function SignIn() {
           onPress={() => {
             tap();
             auth.continueDemo();
-            done();
+            router.replace('/home');
           }}
         />
 
@@ -127,4 +174,7 @@ const styles = StyleSheet.create({
   orText: { color: colors.dim, fontFamily: fonts.mono, fontSize: 11, textTransform: 'uppercase' },
   dev: { color: colors.dim, fontFamily: fonts.mono, fontSize: 11 },
   switch: { color: colors.primary, fontFamily: fonts.semibold, fontSize: 13, textAlign: 'center', marginTop: 4 },
+  eye: { position: 'absolute', right: 12, top: 0, bottom: 0, justifyContent: 'center' },
+  hint: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, marginTop: -4 },
+  notice: { color: colors.text, fontFamily: fonts.semibold, fontSize: 13, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, padding: 12 },
 });
