@@ -15,9 +15,8 @@ Division of responsibility (why this is FSM-free), identical to the squat depth 
 
 The measurement (the load-bearing part) — WRIST HEIGHT, not elbow angle:
 
-    wrist_h = projection(wrist − hip_midpoint, body_up_axis)
-    offset  = (baseline_shoulder_h − wrist_h) / baseline_upper_arm
-    ratio    = (rest_offset − offset) / (rest_offset − target_offset)
+    offset  = (wrist_y − shoulder_y) / upper_arm      (same arm, live; image y grows down)
+    ratio   = (rest_offset − offset) / (rest_offset − target_offset)
 
         0.0  = the wrist hangs where the person's BASELINE put it (arm at rest)
         1.0  = the wrist has risen to `target_offset` (0.0 ⇒ wrist level with the shoulder)
@@ -29,12 +28,14 @@ The measurement (the load-bearing part) — WRIST HEIGHT, not elbow angle:
     ~178° to a few degrees within one frame and cannot separate a shallow curl from a full one.
     Vertical wrist travel is read cleanly by a front camera and degrades gracefully.
 
-    `rest_offset`, the shoulder target and the scale come from the persisted per-set BASELINE (arms
-    hanging extended, captured at setup). A live hip midpoint removes body translation and the live
-    torso axis removes rigid image rotation, but the live shoulder height is never the wrist anchor:
-    shrugging is scored independently and cannot make an otherwise complete curl read shallow. The
-    accepted setup fixes camera distance for the set. `z` is unreliable on a front-view camera, so
-    this is a 2D measurement.
+    `rest_offset` comes from the persisted per-set BASELINE (arms hanging extended, captured at
+    setup), in upper-arm lengths. The live offset is scaled by the LIVE upper arm (shoulder→elbow),
+    so stepping closer to the camera after setup (setup needs the feet in view) changes nothing.
+    Each wrist is measured against its OWN live shoulder, which removes body translation and needs
+    nothing below the chest: people curl close to the camera, with the hips
+    out of frame, and a hip-anchored measurement read nothing at all, so no curl ever counted. (A
+    shrug lifts the shoulder a little and reads as slightly less curl; it is scored separately by
+    shoulder_elevation.) `z` is unreliable on a front-view camera, so this is a 2D measurement.
 
 `progress` — the movement's headline value — is the LEADING arm, `max(left_ratio, right_ratio)`
 (also reported as `leading_ratio`). A curl with either arm counts: both arms together, alternating
@@ -42,8 +43,8 @@ arms, or one arm while the other is out of view. Requiring BOTH arms (the weaker
 alternating curls, and any frame where one arm was hidden, never counted. The weaker arm is still
 reported (`weaker_side`, the per-arm ratios) so coaching can name a side that curls short.
 
-Only the shoulders and hips are required live (the body frame). Each arm is measured when its
-elbow and wrist are usable; with one arm out of view, the visible arm stands in for both.
+Only the shoulders are required live. Each arm is measured when its elbow and wrist are usable;
+with one arm out of view, the visible arm stands in for both.
 
 Thresholds are NOT hardcoded here. `target_offset`, `min_upper_arm_px` and `full_rom_gate` are
 passed verbatim from the curl template; the curl ROM signal deliberately has no hysteresis.
@@ -62,8 +63,6 @@ RULE_ID = "curl_rom"
 REQUIRED_KEYPOINTS = (
     "left_shoulder",
     "right_shoulder",
-    "left_hip",
-    "right_hip",
 )
 # Per arm, optional live: a curl is read from whichever arms are usable.
 _ARM_JOINTS = ("elbow", "wrist")
@@ -76,7 +75,6 @@ _SIDES = ("left", "right")
 # Below this the resting hang and the target coincide: the normalization would divide by ~0 and the
 # ratio would explode. A pure degeneracy floor (like a zero-length segment), not a tunable.
 _MIN_REST_SPAN = 1e-6
-_MIN_BODY_AXIS_PX = 1e-6
 
 
 def _side(side: str) -> str:
@@ -136,21 +134,16 @@ class CurlRomRule:
         points = reference_xy(baseline, BASELINE_KEYPOINTS)
         if points is None:
             raise ValueError(
-                "curl baseline requires finite shoulder, elbow, wrist and hip coordinates"
+                "curl baseline requires finite shoulder, elbow and wrist coordinates"
             )
 
         self._target_offset = float(target_offset)
         self._min_upper_arm_px = float(min_upper_arm_px)
         self._full_rom_gate = float(full_rom_gate)
-        body_frame = _body_frame(points)
-        if body_frame is None:
-            raise ValueError("curl baseline requires a non-degenerate shoulder-to-hip body axis")
-        hip_midpoint, up_axis = body_frame
 
         self._rest: dict[str, float] = {}
         self._span: dict[str, float] = {}
         self._upper_arm: dict[str, float] = {}
-        self._baseline_shoulder_height: dict[str, float] = {}
         for side in _SIDES:
             upper_arm = hypot(
                 points[f"{side}_shoulder"][0] - points[f"{side}_elbow"][0],
@@ -161,11 +154,7 @@ class CurlRomRule:
                     f"baseline {side} upper arm ({upper_arm:.1f}px) is below the minimum plausible "
                     f"{min_upper_arm_px}px; recapture the baseline with both arms in view."
                 )
-            shoulder_height = _height(
-                points[f"{side}_shoulder"], hip_midpoint, up_axis
-            )
-            wrist_height = _height(points[f"{side}_wrist"], hip_midpoint, up_axis)
-            rest = (shoulder_height - wrist_height) / upper_arm
+            rest = (points[f"{side}_wrist"][1] - points[f"{side}_shoulder"][1]) / upper_arm
             span = rest - self._target_offset
             if not span > _MIN_REST_SPAN:
                 raise ValueError(
@@ -175,23 +164,18 @@ class CurlRomRule:
             self._rest[side] = rest
             self._span[side] = span
             self._upper_arm[side] = upper_arm
-            self._baseline_shoulder_height[side] = shoulder_height
 
     # ------------------------------------------------------------------
     def read(self, keypoints: dict) -> CurlRomReading | None:
-        """Compute this frame's curl progress from live shoulder, elbow, wrist and hip landmarks.
+        """Compute this frame's curl progress from live shoulder, elbow and wrist landmarks.
 
         An arm is measured when its elbow and wrist are usable and its upper arm reads plausibly
         long; an arm that is not stands in as the other arm's reading. Returns None when a shoulder
-        or hip is missing or below CONFIDENCE_MIN, or when neither arm can be measured — the caller
+        is missing or below CONFIDENCE_MIN, or when neither arm can be measured — the caller
         must treat this frame as "no reading" (never advance a rep or score on partial data)."""
         pts = usable_xy(keypoints, REQUIRED_KEYPOINTS)
         if pts is None:
             return None
-        body_frame = _body_frame(pts)
-        if body_frame is None:
-            return None
-        hip_midpoint, up_axis = body_frame
 
         ratios: dict[str, float] = {}
         offsets: dict[str, float] = {}
@@ -205,10 +189,7 @@ class CurlRomRule:
             upper_arm = hypot(shoulder[0] - elbow[0], shoulder[1] - elbow[1])
             if not upper_arm >= self._min_upper_arm_px:
                 continue
-            wrist_height = _height(wrist, hip_midpoint, up_axis)
-            offset = (
-                self._baseline_shoulder_height[side] - wrist_height
-            ) / self._upper_arm[side]
+            offset = (wrist[1] - shoulder[1]) / upper_arm
             ratio = (self._rest[side] - offset) / self._span[side]
             if not (isfinite(offset) and isfinite(ratio)):
                 continue
@@ -267,30 +248,3 @@ class CurlRomRule:
     def baseline_upper_arm_px(self, side: str) -> float:
         """The baseline shoulder→elbow span for one arm, in pixels — the signal's scale."""
         return self._upper_arm[_side(side)]
-
-
-def _body_frame(
-    points: dict[str, tuple[float, float]],
-) -> tuple[tuple[float, float], tuple[float, float]] | None:
-    shoulders = _midpoint(points["left_shoulder"], points["right_shoulder"])
-    hips = _midpoint(points["left_hip"], points["right_hip"])
-    torso = (shoulders[0] - hips[0], shoulders[1] - hips[1])
-    length = hypot(*torso)
-    if length < _MIN_BODY_AXIS_PX:
-        return None
-    return hips, (torso[0] / length, torso[1] / length)
-
-
-def _height(
-    point: tuple[float, float],
-    origin: tuple[float, float],
-    axis: tuple[float, float],
-) -> float:
-    return (point[0] - origin[0]) * axis[0] + (point[1] - origin[1]) * axis[1]
-
-
-def _midpoint(
-    left: tuple[float, float],
-    right: tuple[float, float],
-) -> tuple[float, float]:
-    return ((left[0] + right[0]) / 2.0, (left[1] + right[1]) / 2.0)

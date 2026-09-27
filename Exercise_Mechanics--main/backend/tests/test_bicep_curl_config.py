@@ -74,7 +74,8 @@ def test_real_bicep_curl_bundle_validates_and_exposes_decisions():
     assert rom["scoring"]["role"] == "rom" and rom["scoring"]["mode"] == "rom"
     assert rom["target_offset"] == 0.0 and rom["min_upper_arm_px"] == 30
     assert rom["tuning_status"] == "development"  # corrected body-relative signal needs a rig
-    assert {"left_hip", "right_hip"}.issubset(rom["required_keypoints"])
+    # Shoulders only: the hips are often out of frame when curling close to the camera.
+    assert rom["required_keypoints"] == ["left_shoulder", "right_shoulder"]
     assert rom["full_rom_gate"] == 0.75
     assert rom["active_phases"] == ["ascent", "top", "descent"]
     # Stance and arms-extended run ONLY in the pre-check gate: not during the baseline capture

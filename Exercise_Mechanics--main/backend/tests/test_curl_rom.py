@@ -145,29 +145,37 @@ def test_whole_body_vertical_translation_is_invariant():
     assert raised.progress == pytest.approx(level.progress, abs=1e-9)
 
 
-def test_live_body_translation_and_rigid_rotation_are_invariant():
+def test_live_body_translation_is_invariant():
     rule = _rule()
     reference = rule.read(_kps(0.6, 0.6))
-    transformed = rule.read(
-        _transform(_kps(0.6, 0.6), rotation_deg=20.0, shift=(300.0, -200.0))
-    )
-    assert transformed.progress == pytest.approx(reference.progress, abs=1e-9)
+    moved = rule.read(_transform(_kps(0.6, 0.6), rotation_deg=0.0, shift=(300.0, -200.0)))
+    assert moved.progress == pytest.approx(reference.progress, abs=1e-9)
 
 
-def test_shrug_does_not_reduce_rom_for_the_same_body_relative_wrist_height():
+def test_stepping_closer_after_setup_reads_the_same():
+    # Setup needs the feet in view; people then step closer to curl. The live upper arm scales.
+    rule = _rule()
+    reference = rule.read(_kps(0.6, 0.6))
+    closer = rule.read(_kps(0.6, 0.6, upper_arm=_UPPER_ARM * 1.9, shoulder_y=260.0))
+    assert closer.progress == pytest.approx(reference.progress, abs=1e-9)
+
+
+def test_hips_out_of_frame_still_read():
+    frame = _kps(0.85, 0.85)
+    del frame["left_hip"]
+    frame["right_hip"]["v"] = 0.1
+    reading = _rule().read(frame)
+    assert reading.progress == pytest.approx(0.85, abs=1e-9)
+    assert reading.full_rom is True
+
+
+def test_a_shrug_that_carries_the_arm_does_not_change_rom():
     rule = _rule()
     clean = _kps(0.85, 0.85)
     shrug = _kps(0.85, 0.85)
-    shrug["left_shoulder"]["y"] -= 16.0
-    shrug["left_elbow"]["y"] -= 16.0
-
-    clean_reading = rule.read(clean)
-    shrug_reading = rule.read(shrug)
-    assert clean_reading.progress == pytest.approx(0.85, abs=1e-9)
-    assert shrug_reading.progress == pytest.approx(clean_reading.progress, abs=1e-9)
-    assert shrug_reading.left_ratio == pytest.approx(clean_reading.left_ratio, abs=1e-9)
-    assert shrug_reading.right_ratio == pytest.approx(clean_reading.right_ratio, abs=1e-9)
-    assert shrug_reading.full_rom is True
+    for joint in ("shoulder", "elbow", "wrist"):
+        shrug[f"left_{joint}"]["y"] -= 16.0
+    assert rule.read(shrug).progress == pytest.approx(rule.read(clean).progress, abs=1e-9)
 
 
 def test_scale_invariance():
@@ -218,12 +226,12 @@ def test_is_full_rom_gate_boundary():
 
 # ── keypoint + construction guards ───────────────────────────────────────────────
 
-def test_missing_shoulder_or_hip_returns_none():
+def test_missing_shoulder_returns_none():
     frame = _kps(0.5, 0.5)
     del frame["right_shoulder"]
     assert _rule().read(frame) is None
     frame = _kps(0.5, 0.5)
-    frame["left_hip"]["v"] = 0.1
+    frame["left_shoulder"]["v"] = 0.1
     assert _rule().read(frame) is None
 
 
@@ -255,13 +263,6 @@ def test_live_upper_arm_below_minimum_is_not_measured():
     assert _rule().read(frame) is None
 
 
-def test_degenerate_live_body_axis_returns_none():
-    frame = _kps(0.5, 0.5)
-    frame["left_hip"]["y"] = _SHOULDER_Y
-    frame["right_hip"]["y"] = _SHOULDER_Y
-    assert _rule().read(frame) is None
-
-
 def test_construction_rejects_unreadable_baseline():
     baseline = _baseline()
     del baseline["right_elbow"]
@@ -269,10 +270,6 @@ def test_construction_rejects_unreadable_baseline():
         _rule(baseline=baseline)
     with pytest.raises(ValueError, match="curl baseline"):
         _rule(baseline=_baseline(left_wrist={"x": 100.0, "y": float("nan")}))
-    missing_hip = _baseline()
-    del missing_hip["right_hip"]
-    with pytest.raises(ValueError, match="curl baseline"):
-        _rule(baseline=missing_hip)
 
 
 def test_construction_rejects_short_baseline_upper_arm():

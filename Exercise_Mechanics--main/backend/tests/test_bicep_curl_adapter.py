@@ -466,3 +466,39 @@ def test_lowering_without_fully_straightening_still_counts():
 
 def test_quick_back_to_back_curls_each_count():
     assert _count_curls(_smooth_reps(4, frame_ms=33, period_ms=1200)) == 4
+
+
+def _curler(scale: float, curl: float, *, hips_in_view: bool) -> dict:
+    """A front-view double-arm curl. Setup (scale 1) sees the whole body; for the set the person
+    steps closer (scale ~2): everything is bigger and the hips and feet leave the bottom of the
+    frame, as in a real session."""
+    from math import cos, pi
+    points = {}
+    for side, dx in (("left", -60.0), ("right", 60.0)):
+        shoulder = (450.0 + dx * scale, 260.0)
+        elbow = (shoulder[0], shoulder[1] + 90.0 * scale)
+        wrist_y = elbow[1] + 90.0 * scale * cos(pi * 0.95 * curl)   # the forearm swings up
+        hip_v = 0.9 if hips_in_view else 0.2
+        points[f"{side}_shoulder"] = {"x": shoulder[0], "y": shoulder[1], "v": 0.95}
+        points[f"{side}_elbow"] = {"x": elbow[0], "y": elbow[1], "v": 0.9}
+        points[f"{side}_wrist"] = {"x": elbow[0], "y": wrist_y, "v": 0.9}
+        points[f"{side}_hip"] = {"x": 450.0 + 0.8 * dx * scale, "y": 260.0 + 250.0 * scale, "v": hip_v}
+        points[f"{side}_ankle"] = {"x": 450.0 + dx * scale, "y": 260.0 + 600.0 * scale, "v": hip_v}
+    return points
+
+
+def test_curls_close_to_the_camera_with_the_hips_out_of_frame_count():
+    from math import cos, pi
+    baseline = {
+        name: {"x": p["x"], "y": p["y"]}
+        for name, p in _curler(1.0, 0.0, hips_in_view=True).items()
+    }
+    adapter = build_bicep_curl_adapter(baseline=baseline, target_reps=12, config=_CONFIG)
+    status, t = None, 0.0
+    for _ in range(4):
+        for k in range(40):
+            curl = 0.7 * (1 - cos(2 * pi * k / 40)) / 2
+            status = adapter.process(TrainingFrame(t, _curler(1.9, curl, hips_in_view=False)))
+            t += 50.0
+    assert status["tracking"]["available"] is True
+    assert status["set"]["completed_reps"] == 4

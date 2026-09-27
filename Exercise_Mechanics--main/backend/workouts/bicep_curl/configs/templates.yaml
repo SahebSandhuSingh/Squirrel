@@ -205,8 +205,9 @@ templates:
     tuning_status: development
     fault_label: "Short curl"
     active_phases: [ascent, top, descent]
-    # Elbows and wrists are optional live (rules/curl_rom.py): either arm curling counts.
-    required_keypoints: [left_shoulder, right_shoulder, left_hip, right_hip]
+    # Shoulders only: elbows and wrists are optional (either arm curling counts) and the hips are not
+    # used, so curling close to the camera with the hips out of frame still counts (rules/curl_rom.py).
+    required_keypoints: [left_shoulder, right_shoulder]
     issue: "The curl does not reach the intended flexion at the top."
     cue: "Curl all the way up with control."
     coaching: "You're cutting your curls short. Squeeze the weight all the way up until your forearm nearly meets your biceps, pause at the top, then lower under control — the full range is where the muscle is built."
