@@ -2,6 +2,10 @@
  * What the live workout screen shows, derived from the coaching session's state (pure).
  * Wording follows the browser coach: "hold still for tracking" when the body can't be read,
  * "turn side-on" when a rule says the camera angle makes the reading meaningless (push-up).
+ *
+ * The skeleton is a position signal: GREEN only while the body is in the exercise's full position
+ * (curl up, squat down, push-up down, knee up), RED for a form fault or a body out of view, WHITE
+ * otherwise, including standing still while getting ready.
  */
 
 import type { CoachState } from './coach';
@@ -14,6 +18,7 @@ export type LiveView = {
   status: string;
   /** The coach's correction, when there is one. */
   cue: string | null;
+  /** green: in the full position right now · red: a fault or out of view · white: otherwise. */
   skeleton: 'green' | 'red' | 'white';
   /** Rep exercises: reps done / target. Timed: seconds left / set length. */
   count: number;
@@ -46,7 +51,7 @@ export function liveView(s: CoachState | null, tracker: TrackerStatus, targetRep
       ...base,
       getReady: s.getReadyLeft,
       status: s.inView ? 'Stand straight and hold still' : 'Step back: your whole body needs to be in view',
-      skeleton: s.inView ? 'green' : 'red',
+      skeleton: s.inView ? 'white' : 'red',
     };
   }
 
@@ -65,25 +70,26 @@ export function liveView(s: CoachState | null, tracker: TrackerStatus, targetRep
       ...base,
       status,
       cue: failure?.cue ?? d.cue?.text ?? null,
-      skeleton: bad ? 'red' : d.phase === 'collecting' || d.phase === 'validating' ? 'green' : 'white',
+      skeleton: bad ? 'red' : 'white',
       capture: d.phase === 'collecting' || d.phase === 'validating' ? d.capture.progress : null,
     };
   }
-  if (s.phase === 'starting') return { ...base, status: 'Go!', skeleton: 'green' };
+  if (s.phase === 'starting') return { ...base, status: 'Go!' };
   if (s.phase === 'rest') return { ...base, status: `Set ${s.set} done` };
   if (s.phase === 'done') return { ...base, status: 'Workout done' };
 
   // training
   const t = s.train;
-  if (!t) return { ...base, status: 'Go!', skeleton: 'green' };
+  if (!t) return { ...base, status: 'Go!' };
   if (isTimed(t)) {
     const redIssue = t.issues.some((i) => i.skeleton_color === 'red');
+    const kneeUp = t.rom.left_full_rom === true || t.rom.right_full_rom === true;
     return {
       ...base,
       timed: true,
       status: !t.tracking.available ? 'Hold still for tracking' : `${t.movement.counted_lifts} knee lifts`,
       cue: t.cue?.text ?? null,
-      skeleton: !t.tracking.available ? 'white' : redIssue ? 'red' : 'green',
+      skeleton: !t.tracking.available ? 'white' : redIssue ? 'red' : kneeUp ? 'green' : 'white',
       count: Math.ceil(t.set.remaining_ms / 1000),
       target: Math.round(t.set.target_duration_ms / 1000),
       progress: t.set.target_duration_ms ? Math.min(1, t.set.elapsed_ms / t.set.target_duration_ms) : 0,
@@ -101,7 +107,7 @@ export function liveView(s: CoachState | null, tracker: TrackerStatus, targetRep
     timed: false,
     status,
     cue: r.cue?.text ?? null,
-    skeleton: !r.tracking.available ? 'white' : redIssue ? 'red' : 'green',
+    skeleton: !r.tracking.available ? 'white' : redIssue ? 'red' : r.rom.full_rom ? 'green' : 'white',
     count: r.set.completed_reps,
     target: r.set.target_reps,
     progress: r.set.target_reps ? Math.min(1, r.set.completed_reps / r.set.target_reps) : 0,
