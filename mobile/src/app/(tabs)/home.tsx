@@ -1,3 +1,4 @@
+import { COMING_SOON, LOCKED, LOCKED_MISSIONS } from '@/data/features';
 import { useEffect } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
@@ -23,7 +24,7 @@ const greeting = () => {
 export default function Home() {
   const { me, missions, logMission, claimed, claimable, claimRewards, events, joinedEvents, toggleEvent, city, districts } = useApp();
   const { mode } = useAuth();
-  const { syncServerXp } = useApp();
+  const { syncServerXp, toast } = useApp();
   // Signed in: the server's XP total (derived from real activity) replaces the demo figure.
   useEffect(() => {
     if (mode !== 'live') return;
@@ -32,8 +33,10 @@ export default function Home() {
   }, [mode]);
   const held = districts.filter((d) => d.status === 'yours');
   const home = held[0] ?? districts[0];
-  const daily = missions.filter((m) => m.tab === 'Daily');
-  const doneCount = daily.filter((m) => m.current >= m.goal).length;
+  // Locked (not-yet-launched) missions stay visible at the end but don't count.
+  const daily = missions.filter((m) => m.tab === 'Daily').sort((a, b) => Number(LOCKED_MISSIONS.has(a.id)) - Number(LOCKED_MISSIONS.has(b.id)));
+  const activeDaily = daily.filter((m) => !LOCKED_MISSIONS.has(m.id));
+  const doneCount = activeDaily.filter((m) => m.current >= m.goal).length;
   const upcoming = events.filter((e) => !e.online).slice(0, 5);
   const leaders = territoryBoard.weekly.slice(0, 4);
 
@@ -93,7 +96,7 @@ export default function Home() {
       </FadeIn>
 
       {/* Missions */}
-      <SectionHeader kicker="01 — Today" title="Today's Missions" action={`${doneCount}/${daily.length} done`} onAction={() => router.push('/missions')} />
+      <SectionHeader kicker="01 — Today" title="Today's Missions" action={`${doneCount}/${activeDaily.length} done`} onAction={() => router.push('/missions')} />
       <View style={{ gap: 10 }}>
         {daily.map((m, i) => (
           <FadeIn key={m.id} index={i}>
@@ -110,7 +113,7 @@ export default function Home() {
       />
       {!claimable.count && <Text style={styles.hint}>Tap + on a mission to log progress. Complete one to claim XP & coins.</Text>}
 
-      <Tape items={['Touch grass (literally)', 'Every run leaves a mark', 'Claim your block', 'No gym-bro energy']} color={colors.secondary} rotate={2} style={{ marginTop: 26, marginBottom: -6 }} />
+      <Tape items={['Touch grass (literally)', 'Every run leaves a mark', 'Claim your block', 'No pressure, all vibes']} color={colors.secondary} rotate={2} style={{ marginTop: 26, marginBottom: -6 }} />
 
       {/* Territory */}
       <SectionHeader kicker="02 — Territory" title="Own your block" action="Map" onAction={() => router.push('/territory')} />
@@ -154,17 +157,8 @@ export default function Home() {
         </SceneImage>
       </FadeIn>
 
-      {/* Events */}
-      <SectionHeader kicker="03 — Meetups" title={`Happening in ${city.name}`} action="All events" onAction={() => router.push('/events')} />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingRight: 16 }} style={{ marginHorizontal: -16 }}>
-        <View style={{ width: 16 }} />
-        {upcoming.map((e) => (
-          <EventCard key={e.id} event={e} variant="hero" going={joinedEvents.has(e.id)} onToggle={() => toggleEvent(e.id)} />
-        ))}
-      </ScrollView>
-
-      {/* Leaderboard — ranked by territory area, like the backend */}
-      <SectionHeader kicker="04 — Who's moving" title="City Leaderboard" action="By area" onAction={() => router.push('/leaderboard')} />
+      {/* Campus leaderboard — students on your campus, ranked by territory area */}
+      <SectionHeader kicker={`03 — ${city.campus}`} title="Campus Leaderboard" action="By area" onAction={() => router.push('/leaderboard')} />
       <Card style={{ paddingVertical: 6 }}>
         {leaders.map((r, i) => {
           const u = r.me ? me : users.find((x) => x.id === r.userId)!;
@@ -182,6 +176,20 @@ export default function Home() {
         })}
       </Card>
 
+      {/* Events */}
+      <SectionHeader
+        kicker={LOCKED.events ? '04 — Meetups · coming soon' : '04 — Meetups'}
+        title={`Happening in ${city.name}`}
+        action={LOCKED.events ? 'Coming soon' : 'All events'}
+        onAction={() => (LOCKED.events ? toast(COMING_SOON.events, 'lock', colors.dim) : router.push('/events'))}
+      />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingRight: 16 }} style={{ marginHorizontal: -16 }}>
+        <View style={{ width: 16 }} />
+        {upcoming.map((e) => (
+          <EventCard key={e.id} event={e} variant="hero" going={joinedEvents.has(e.id)} onToggle={() => toggleEvent(e.id)} />
+        ))}
+      </ScrollView>
+
       {/* Friends activity */}
       <SectionHeader kicker="05 — Right now" title="Crew Activity" action="Feed" onAction={() => router.push('/social')} />
       <View style={{ gap: 10 }}>
@@ -189,7 +197,7 @@ export default function Home() {
           { u: 'u_rhea', text: 'ran 7.2 km at 5\'42"/km', icon: 'run-fast' as const, t: '2h' },
           { u: 'u_meera', text: 'is hosting Yoga in the Park', icon: 'yoga' as const, t: '3h' },
           { u: 'u_zoya', text: 'unlocked the Early Bird badge', icon: 'medal' as const, t: '5h' },
-          { u: 'u_aarav', text: 'hit a new squat PR · 80 kg', icon: 'weight-lifter' as const, t: '6h' },
+          { u: 'u_aarav', text: 'hit a new squat PR · 80 kg', icon: 'arm-flex' as const, t: '6h' },
         ].map((a, i) => {
           const u = users.find((x) => x.id === a.u)!;
           return (

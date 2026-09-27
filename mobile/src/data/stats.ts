@@ -67,7 +67,7 @@ export type ActivityLog = { id: string; title: string; scene: SceneKind; when: s
 export const recentActivities: ActivityLog[] = [
   { id: 'r1', title: 'Evening Run · Koregaon Park', scene: 'run', when: 'Today, 6:40 PM', km: 5.12, minutes: 32, kcal: 412, icon: 'run-fast' },
   { id: 'r2', title: 'Yoga in the Park', scene: 'yoga', when: 'Yesterday, 7:00 AM', minutes: 60, kcal: 210, icon: 'yoga' },
-  { id: 'r3', title: 'Leg Day · Iron House', scene: 'gym', when: 'Mon, 7:30 PM', minutes: 55, kcal: 460, icon: 'weight-lifter' },
+  { id: 'r3', title: 'HIIT Circuit · Pulse HIIT', scene: 'hiit', when: 'Mon, 7:30 PM', minutes: 55, kcal: 460, icon: 'lightning-bolt' },
   { id: 'r4', title: 'Lake Loop', scene: 'lake', when: 'Sun, 6:10 AM', km: 8.4, minutes: 52, kcal: 640, icon: 'run-fast' },
   { id: 'r5', title: 'HIIT Takeover', scene: 'hiit', when: 'Sat, 7:00 PM', minutes: 45, kcal: 520, icon: 'lightning-bolt' },
 ];

@@ -700,121 +700,6 @@ function yogaScene(c: Ctx): Node {
   );
 }
 
-function gymScene(c: Ctx): Node {
-  const { H } = c;
-  const floorY = H * 0.7;
-  const s = figScale(c) * 1.1;
-  const fh = 100 * s;
-  const signY = clamp(floorY * 0.34, fh * 0.35, floorY - fh * 1.25);
-  const bricks: string[] = [];
-  for (let y = 6, row = 0; y < floorY; y += 9, row++) {
-    bricks.push(`M0 ${y}h400`);
-    for (let x = row % 2 ? 0 : 11; x < 400; x += 22) bricks.push(`M${x} ${y}v9`);
-  }
-  const sc = clamp(H / 400, 0.7, 1.2);
-  const dumb = (cx: number, cy: number, k: number) =>
-    `M${f(cx - 26 * k)} ${f(cy)}h${f(52 * k)}` +
-    rectD(cx - 38 * k, cy - 15 * k, 8 * k, 30 * k) +
-    rectD(cx - 29 * k, cy - 10 * k, 5 * k, 20 * k) +
-    rectD(cx + 30 * k, cy - 15 * k, 8 * k, 30 * k) +
-    rectD(cx + 24 * k, cy - 10 * k, 5 * k, 20 * k);
-  const sign = dumb(200, signY, sc);
-  const ring = circleD(200, signY, 52 * sc);
-  const lifterY = floorY + (H - floorY) * 0.5;
-  const rackBase = floorY + (H - floorY) * 0.18;
-  const rackH = fh * 1.3;
-  const steel = '#242636';
-  const rack =
-    rectD(34, rackBase - rackH, 6, rackH) +
-    rectD(96, rackBase - rackH, 6, rackH) +
-    rectD(30, rackBase - rackH, 76, 5) +
-    rectD(28, rackBase - 3, 80, 4) +
-    rectD(40, rackBase - rackH * 0.62, 5, 3) +
-    rectD(91, rackBase - rackH * 0.62, 5, 3);
-  const barY = rackBase - rackH * 0.62 - 2;
-  const rackBar = `M10 ${f(barY)}h116`;
-  const plates = rectD(14, barY - 13, 7, 26) + rectD(21, barY - 10, 5, 20) + rectD(115, barY - 13, 7, 26) + rectD(110, barY - 10, 5, 20);
-  // dumbbell rack
-  const dx0 = 282;
-  const dRack = rectD(dx0, rackBase - fh * 0.5, 4, fh * 0.5) + rectD(dx0 + 100, rackBase - fh * 0.5, 4, fh * 0.5) + rectD(dx0 - 2, rackBase - fh * 0.5, 108, 3) + rectD(dx0 - 2, rackBase - fh * 0.25, 108, 3);
-  const dbs: string[] = [];
-  const dbHi: string[] = [];
-  for (let tier = 0; tier < 2; tier++) {
-    const ty = rackBase - fh * (tier ? 0.25 : 0.5) - 1;
-    for (let i = 0; i < 5; i++) {
-      const x = dx0 + 6 + i * 19;
-      const r = (3 + i * 0.5) * clamp(s, 0.7, 1.1);
-      dbs.push(circleD(x + 3, ty - r, r) + circleD(x + 13, ty - r, r) + rectD(x + 3, ty - r - 1, 10, 2));
-      dbHi.push(`M${f(x + 3 - r * 0.6)} ${f(ty - r * 1.7)}h${f(r * 0.8)}`);
-    }
-  }
-  const floorLines: string[] = [];
-  for (let i = -8; i <= 8; i++) floorLines.push(`M${200 + i * 14} ${f(floorY)}L${200 + i * 70} ${f(H + 2)}`);
-  for (let k = 1; k < 5; k++) {
-    const y = floorY + (H - floorY) * Math.pow(k / 5, 1.6);
-    floorLines.push(`M0 ${f(y)}h400`);
-  }
-  const winH = floorY * 0.42;
-  const winY = clamp(floorY * 0.08, 6, 60);
-  const windows = (x: number) => {
-    const mull: string[] = [rectD(x, winY, 72, winH)];
-    return mull.join('');
-  };
-  const mullD = (x: number) => {
-    const d: string[] = [];
-    for (let i = 1; i < 4; i++) d.push(`M${x + i * 18} ${f(winY)}v${f(winH)}`);
-    for (let i = 1; i < 4; i++) d.push(`M${x} ${f(winY + (winH * i) / 4)}h72`);
-    return d.join('') + rectD(x, winY, 72, winH);
-  };
-  const cityDots: [number, number][] = [];
-  for (let i = 0; i < 40; i++) {
-    const x = c.r() < 0.5 ? 14 + c.r() * 68 : 318 + c.r() * 68;
-    cityDots.push([x, winY + winH * (0.45 + c.r() * 0.55)]);
-  }
-  const beams = [70, 330].map((x, i) => (
-    <Path key={i} d={polyD([[x - 5, -2], [x + 5, -2], [x + 70, floorY + 10], [x - 70, floorY + 10]])} fill={c.lin([[0, art.violet, 0.35], [1, art.purple, 0]])} />
-  ));
-  const barbell = (
-    <G>
-      <Path d="M-56 -104h112" stroke="#424556" strokeWidth={3} strokeLinecap="round" />
-      <Path d={rectD(-52, -122, 9, 36) + rectD(43, -122, 9, 36) + rectD(-42, -116, 6, 24) + rectD(36, -116, 6, 24)} fill="#0C0E1E" stroke={art.pink} strokeWidth={1} />
-    </G>
-  );
-  return (
-    <G>
-      <Rect x={-2} y={-2} width={404} height={floorY + 4} fill={c.lin([[0, '#0C1028'], [0.6, '#14193C'], [1, '#0C1026']])} />
-      <Path d={bricks.join('')} stroke="#252C59" strokeWidth={0.7} opacity={0.55} />
-      <Path d={windows(12) + windows(316)} fill={c.lin([[0, '#14193C'], [1, '#1A295A']])} />
-      <Path d={dotsD(cityDots)} stroke={art.amber} strokeWidth={1.6} strokeLinecap="round" opacity={0.8} />
-      <Path d={mullD(12) + mullD(316)} stroke="#060711" strokeWidth={2.4} fill="none" />
-      <Ellipse cx={200} cy={signY} rx={160} ry={110 * sc} fill={c.rad([[0, art.pink, 0.4], [1, art.pink, 0]])} />
-      {beams}
-      <Glow d={ring} color={art.cyan} core="#CFF8FF" w={1.4} />
-      <Glow d={sign} color={art.pink} core={art.pinkHi} w={2} />
-      <Rect x={-2} y={floorY} width={404} height={H - floorY + 2} fill={c.lin([[0, '#0E1126'], [1, art.night0]])} />
-      <Path d={floorLines.join('')} stroke="#1D2241" strokeWidth={0.8} />
-      <G transform={`translate(0 ${f(floorY)}) scale(1 -0.5) translate(0 ${f(-floorY)})`} opacity={0.35}>
-        <Path d={sign} stroke={art.pink} strokeWidth={3} fill="none" transform={`translate(0 ${f(-(floorY - signY) * 1.1)})`} />
-      </G>
-      <Glow d={`M-2 ${f(floorY)}h404`} color={art.cyan} core="#CFF8FF" w={0.9} op={0.8} />
-      <Path d={rack} fill={steel} />
-      <Path d={`M40 ${f(rackBase - rackH)}v${f(rackH)}M102 ${f(rackBase - rackH)}v${f(rackH)}`} stroke={art.cyan} strokeWidth={0.8} opacity={0.7} />
-      <Path d={rackBar} stroke="#424556" strokeWidth={2.4} />
-      <Path d={plates} fill="#0B0D1B" stroke={art.cyan} strokeWidth={0.8} />
-      <Path d={dRack} fill={steel} />
-      <Path d={dbs.join('')} fill="#0B0D1B" />
-      <Path d={dbHi.join('')} stroke={art.pink} strokeWidth={1} strokeLinecap="round" />
-      <Path d={[[268, 1], [296, 0.8], [128, 1]].map(([x, k]) => circleD(x, lifterY - 10 * k * s, 10 * k * s)).join('')} fill="#0C0E1E" stroke={art.cyan} strokeWidth={0.7} />
-      <Path d={[[268, 1], [296, 0.8], [128, 1]].map(([x, k]) => `M${f(x - 6 * k * s)} ${f(lifterY - 17 * k * s)}a${f(6 * k * s)} ${f(6 * k * s)} 0 1 1 ${f(12 * k * s)} 0`).join('')} stroke="#0C0E1E" strokeWidth={2.2 * s} fill="none" />
-      <Path d={ellipseD(200, lifterY + 2, 70 * s, 8 * s)} fill={art.cyan} opacity={0.12} />
-      <Person x={200} y={lifterY} s={s} pose="press" rim={art.pink} hair="short" reflect={0.14}>
-        {barbell}
-      </Person>
-      {vignetteEl(c, 0.5)}
-    </G>
-  );
-}
-
 function hiitScene(c: Ctx): Node {
   const { H } = c;
   const floorY = H * 0.68;
@@ -1511,7 +1396,6 @@ const BUILDERS: Record<SceneKind, (c: Ctx) => Node> = {
   'city-dawn': cityDawn,
   run: runScene,
   yoga: yogaScene,
-  gym: gymScene,
   cafe: cafeScene,
   brunch: brunchScene,
   crew: crewScene,

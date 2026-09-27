@@ -28,19 +28,19 @@ Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-h
 | `/sign-in` | Sign in (account service), demo mode, or developer token |
 | `/territory` | Own your block: district map, zone control, decay |
 | `/challenges` | Daily, head-to-head and group challenges (auto-resolve) |
-| `/leaderboard` | City ranking by territory area: daily, weekly, all-time |
+| `/leaderboard` | **Campus Leaderboard**: students on your campus ranked by territory area (daily, weekly, all-time) |
 | `/welcome` | Landing: cinematic sunset city, avatar + squirrel mascot, Get Started |
 | `/avatar` | **Make It You**: body, hair, outfit, shoes, accessories, gear, emotes and pet mascot |
-| `/home` *(tab)* | Top bar (avatar, level, XP, coins), greeting, activity rings, Start Run, missions, events carousel, city leaderboard, crew activity |
+| `/home` *(tab)* | Top bar (avatar, level, XP, coins), greeting, activity rings, Start Run, missions, campus leaderboard, events carousel (coming soon), crew activity |
 | `/explore` *(tab)* | Stylised neon city map: pulsing markers, animated route, filters, search (places + people), place carousel |
-| **＋** *(tab)* | Create menu: start run, post, log water/workout/meal, find event |
+| **＋** *(tab)* | Create menu: start run, post, log workout; log water, log a meal and find an event are locked (coming soon) |
 | `/social` *(tab)* | Stories, For You / Following / Nearby feed, suggested people, crews teaser |
 | `/profile` *(tab)* | Cover, level card, highlights, badges, equipped cosmetics, posts/activity/saved grid |
 | `/run` | Live run: 3-2-1 countdown, route animation, live stats, music/camera, hold-to-finish, summary |
 | `/missions` | Daily / Weekly / Special missions with completion and claim states |
 | `/progress` | Your Progress: Day/Week/Month/Year charts, stat cards, streak heatmap, recent activity |
 | `/crews`, `/crew/[id]` | Find Your Crew (Nearby/Online/Campus/Interests), crew detail with members, events and posts |
-| `/events`, `/event/[id]` | Events (Nearby/Online/My Events) and event detail with attendees and meeting point |
+| `/events`, `/event/[id]` | Events preview behind a "Coming soon" banner; the detail route shows a locked screen |
 | `/level-up` | RPG level-up reveal: rays, mascot, XP bar, staggered reward cards, next unlock |
 | `/rewards` | Level road, achievement badges, sticker collection |
 | `/shop`, `/item/[id]` | Shop (20+ items, rarities, level locks) and item sheet (buy / equip) |
@@ -50,6 +50,16 @@ Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-h
 | `/user/[id]` | Any user's profile, with Follow |
 | `/city` | City picker |
 | `/notifications` | Activity notifications |
+
+## Not launched yet (locked)
+
+`src/data/features.ts` holds the launch switches. While a flag is on, the feature stays visible as **Coming soon** but can't be used. Every entry point is blocked: buttons, routes and the `AppState` actions.
+- `LOCKED.mealWater`: Log water / Log a meal (Create sheet), the water and meal daily missions, and the Hydro Homie badge.
+- `LOCKED.events`: `/events` (preview + banner), `/event/[id]` (locked screen), event cards and Join pills, Explore event markers, the Home meetups carousel, joining, and the "Join a crew event" weekly mission.
+
+Locked missions are listed last and left out of the done/XP counters and claimable rewards. Set a flag to `false` at launch.
+
+**Campus, not city.** Each city in `data/cities.ts` has a `campus`, and the leaderboard ranks students on that campus. The Run Module's leaderboard API only offers `scope=global` today, so signed-in rows are labelled as all runners until a campus scope exists.
 
 ## Look & feel — "Voltage" (white + electric blue)
 
@@ -90,7 +100,7 @@ src/
   art/                 Original vector illustration library (react-native-svg)
     Mascot.tsx         Squirrel mascot: 9 poses (idle, run, celebrate, drink, lift, sit, cheer, sleep, wave) + accessories
     Character.tsx      Parametric human avatars (AvatarLook) in 6 poses, plus circular Portrait
-    Scene.tsx          14 cinematic scenes (city sunset/night/dawn, run, yoga, gym, cafe, brunch, crew, hiit…)
+    Scene.tsx          13 cinematic scenes (city sunset/night/dawn, run, yoga, cafe, brunch, crew, hiit…)
     Product.tsx        20 shop items (hoodie, tee, shoes, bag, bottle, sunglasses, watch…)
     Badge.tsx          12 achievement badges (plus locked state)
     Sticker.tsx        8 die-cut stickers

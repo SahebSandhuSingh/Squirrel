@@ -1,3 +1,5 @@
+import { SoonPill } from '@/components/Locked';
+import { COMING_SOON, LOCKED, LOCKED_MISSIONS } from '@/data/features';
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -41,11 +43,25 @@ export function SceneImage({ kind, seed, height, aspect, style, children, scrim 
 const fmt = (n: number) => (Number.isInteger(n) ? n.toLocaleString('en-IN') : n.toFixed(n % 1 === 0.5 ? 1 : 2).replace(/0$/, ''));
 
 export function MissionCard({ mission: m, onLog, claimed, compact }: { mission: Mission; onLog: () => void; claimed: boolean; compact?: boolean }) {
-  const done = m.current >= m.goal;
+  const locked = LOCKED_MISSIONS.has(m.id);
+  const done = !locked && m.current >= m.goal;
   const pop = useRef(new Animated.Value(done ? 1 : 0)).current;
   useEffect(() => {
     if (done) Animated.spring(pop, { toValue: 1, useNativeDriver: NATIVE, speed: 12, bounciness: 14 }).start();
   }, [done, pop]);
+
+  if (locked) {
+    return (
+      <View style={[styles.mission, { opacity: 0.6 }]} accessibilityLabel={`${m.title}, coming soon`}>
+        <IconBadge icon={m.icon} color={colors.mute} size={compact ? 40 : 46} />
+        <View style={{ flex: 1, marginHorizontal: 12 }}>
+          <Text style={[styles.mTitle, { color: colors.sub }]} numberOfLines={1}>{m.title}</Text>
+          <Text style={styles.mSub}>Not available yet</Text>
+        </View>
+        <SoonPill />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.mission, done && { borderColor: claimed ? 'rgba(47,91,255,0.35)' : `${m.color}99`, backgroundColor: claimed ? 'rgba(47,91,255,0.05)' : colors.card }]}>
@@ -107,8 +123,10 @@ export function CrewCard({ crew, joined, onToggle }: { crew: Crew; joined: boole
 }
 
 export function EventCard({ event, going, onToggle, variant = 'row' }: { event: EventItem; going: boolean; onToggle: () => void; variant?: 'row' | 'hero' }) {
+  const { toast } = useApp();
   const attendees = event.attendeeIds.map(userById);
-  const open = () => router.push({ pathname: '/event/[id]', params: { id: event.id } });
+  const open = () => (LOCKED.events ? toast(COMING_SOON.events, 'lock', colors.dim) : router.push({ pathname: '/event/[id]', params: { id: event.id } }));
+  const join = LOCKED.events ? <SoonPill /> : null;
   if (variant === 'hero') {
     return (
       <PressScale onPress={open} style={{ width: 250 }} scaleTo={0.98}>
@@ -124,7 +142,7 @@ export function EventCard({ event, going, onToggle, variant = 'row' }: { event: 
         </SceneImage>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
           <AvatarStack users={attendees} extra={event.going + (going ? 1 : 0)} size={22} />
-          <TogglePill on={going} onPress={onToggle} labelOff="Join" labelOn="Going" color={colors.primary} style={{ minWidth: 70, paddingVertical: 6 }} />
+          {join ?? <TogglePill on={going} onPress={onToggle} labelOff="Join" labelOn="Going" color={colors.primary} style={{ minWidth: 70, paddingVertical: 6 }} />}
         </View>
       </PressScale>
     );
@@ -150,7 +168,7 @@ export function EventCard({ event, going, onToggle, variant = 'row' }: { event: 
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={styles.xpSmall}>+{event.xp} XP</Text>
-          <TogglePill on={going} onPress={onToggle} labelOff="Join" labelOn="Going" color={colors.primary} style={{ paddingVertical: 7 }} />
+          {join ?? <TogglePill on={going} onPress={onToggle} labelOff="Join" labelOn="Going" color={colors.primary} style={{ paddingVertical: 7 }} />}
         </View>
       </View>
     </PressScale>

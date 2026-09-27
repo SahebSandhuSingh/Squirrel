@@ -25,7 +25,7 @@ export type Post = {
 
 export const seedPosts: Post[] = [
   { id: 'p1', authorId: 'u_rhea', cityId: 'pune', area: 'Koregaon Park', minutesAgo: 120, caption: 'Morning run crew 🏃‍♀️🏃\nDiscipline over mood.', scene: 'run', seed: 3, likes: 241, comments: 12, activity: { type: 'run', km: 7.2, minutes: 41, pace: `5'42"` }, crewName: 'Pune Runners' },
-  { id: 'p2', authorId: 'u_aarav', cityId: 'pune', area: 'Baner', minutesAgo: 240, caption: 'Post-workout happiness 💪', scene: 'gym', seed: 5, likes: 88, comments: 4, activity: { type: 'workout', name: 'Push day', minutes: 62, kcal: 480 }, sticker: 'squirrel-flex' },
+  { id: 'p2', authorId: 'u_aarav', cityId: 'pune', area: 'Baner', minutesAgo: 240, caption: 'Post-workout happiness 💪', scene: 'hiit', seed: 5, likes: 88, comments: 4, activity: { type: 'workout', name: 'Push day', minutes: 62, kcal: 480 }, sticker: 'squirrel-flex' },
   { id: 'p3', authorId: 'u_meera', cityId: 'pune', area: 'Aundh', minutesAgo: 300, caption: 'Golden hour flow with 24 of you. Same time Thursday? 🧘‍♀️', scene: 'yoga', seed: 8, likes: 412, comments: 37, activity: { type: 'yoga', minutes: 60 }, crewName: 'Yoga Vibes' },
   { id: 'p4', authorId: 'u_isha', cityId: 'pune', area: 'Kalyani Nagar', minutesAgo: 380, caption: 'Day 12 of no sugar and this bowl slaps. Recipe in comments 🥣', scene: 'brunch', seed: 2, likes: 199, comments: 58, activity: { type: 'meal', name: 'Açaí + granola bowl' }, sticker: 'good-vibes' },
   { id: 'p5', authorId: 'u_kabir', cityId: 'pune', area: 'Kothrud', minutesAgo: 600, caption: 'Night Riders did 42 km. City looked unreal tonight.', scene: 'cycling', seed: 11, likes: 156, comments: 14, activity: { type: 'ride', km: 42, minutes: 96 }, crewName: 'Pune Night Riders' },

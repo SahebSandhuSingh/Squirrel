@@ -114,7 +114,7 @@ export default function Territory() {
       <Text style={styles.rules}>
         A closed run captures the ground it loops. Rival crews can carve into your zones, and anything you don't refresh decays after 14 days.
       </Text>
-      <Button label="Territory leaderboard" variant="secondary" size="md" iconLeft="trophy-outline" onPress={() => router.push('/leaderboard')} style={{ marginTop: 16 }} />
+      <Button label="Campus leaderboard" variant="secondary" size="md" iconLeft="trophy-outline" onPress={() => router.push('/leaderboard')} style={{ marginTop: 16 }} />
     </Screen>
   );
 }

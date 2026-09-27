@@ -5,7 +5,7 @@ export type ShopTab = 'Outfits' | 'Gear' | 'Accessories' | 'Pets' | 'Stickers';
 export type Rarity = 'Common' | 'Rare' | 'Epic' | 'Legendary';
 
 /** Thematic tag shown on Outfit "sets" in the avatar builder — Athletic, Streetwear, etc. */
-export type OutfitTag = 'Athletic' | 'Streetwear' | 'Running' | 'Gym' | 'Basketball' | 'Football' | 'Casual' | 'Night workout' | 'Winter' | 'Limited Edition';
+export type OutfitTag = 'Athletic' | 'Streetwear' | 'Running' | 'Basketball' | 'Football' | 'Casual' | 'Night workout' | 'Winter' | 'Limited Edition';
 
 export type ShopItem = {
   id: string;
@@ -58,7 +58,7 @@ export const shopItems: ShopItem[] = [
   p('b-shorts', 'Split Shorts', 'Outfits', 'Bottoms', 'shorts', 650, 'Common', 2, '#16101E', '#FF4D8D', '5" race shorts.'),
   p('s-aero', 'Aero Runners', 'Outfits', 'Shoes', 'shoes', 1000, 'Rare', 4, '#FFFFFF', '#2F5BFF', 'Light, bouncy daily trainers.'),
   p('s-high', 'Court Hightops', 'Outfits', 'Shoes', 'hightops', 1400, 'Epic', 9, '#16101E', '#FFFFFF', 'Streetwear hightops for rest days.'),
-  p('g-duffel', 'Gym Duffel', 'Gear', 'Bags', 'bag', 1200, 'Rare', 5, '#FF4F6E', '#16101E', 'Fits shoes, towel and snacks.'),
+  p('g-duffel', 'Weekend Duffel', 'Gear', 'Bags', 'bag', 1200, 'Rare', 5, '#FF4F6E', '#16101E', 'Fits shoes, towel and snacks.'),
   p('g-pack', 'Trail Pack', 'Gear', 'Bags', 'backpack', 1300, 'Rare', 7, '#16101E', '#2F5BFF', 'Hydration-ready run pack.'),
   p('g-bottle', 'Neon Bottle', 'Gear', 'Hydration', 'bottle', 600, 'Common', 1, '#FFFFFF', '#2F5BFF', '1L insulated bottle.'),
   p('g-watch', 'Pulse Watch', 'Gear', 'Tech', 'watch', 700, 'Rare', 3, '#C9C9D6', '#2F5BFF', 'Tracks every step (in-game).'),
@@ -97,7 +97,7 @@ export const shopItems: ShopItem[] = [
   o('os-athletic', 'Tempo Set', 'Athletic', 'tee', art.cyan, '#16101E', 900, 'Common', 1, 'Breathable tee and split shorts for tempo days.', { top: 'tee', topColor: art.cyan, bottom: 'shorts', bottomColor: '#16101E' }),
   o('os-street', 'Block Party', 'Streetwear', 'jacket', '#16101E', art.pink, 1600, 'Rare', 6, 'Bomber jacket over joggers — rest-day drip.', { top: 'jacket', topColor: '#16101E', bottom: 'joggers', bottomColor: '#1B1524' }),
   o('os-running', 'Split Runner', 'Running', 'tank', art.pink, '#16101E', 850, 'Common', 2, 'Race tank and leggings, built for pace.', { top: 'tank', topColor: art.pink, bottom: 'leggings', bottomColor: '#16101E' }),
-  o('os-gym', 'Lift Day', 'Gym', 'tank', art.purple, art.pink, 1000, 'Rare', 4, 'Crop top and joggers for the weight room.', { top: 'crop', topColor: art.purple, bottom: 'joggers', bottomColor: '#1B1524' }),
+  o('os-power', 'Power Hour', 'Athletic', 'tank', art.purple, art.pink, 1000, 'Rare', 4, 'Crop top and joggers for high-intensity days.', { top: 'crop', topColor: art.purple, bottom: 'joggers', bottomColor: '#1B1524' }),
   o('os-basketball', 'Hoop Fit', 'Basketball', 'tank', art.orange, '#16101E', 1200, 'Rare', 6, 'Mesh tank and shorts, court-ready.', { top: 'tank', topColor: art.orange, bottom: 'shorts', bottomColor: '#16101E' }),
   o('os-football', 'Pitch Kit', 'Football', 'tee', art.green, art.cloud, 1200, 'Rare', 6, 'Club-style tee and shorts.', { top: 'tee', topColor: art.green, bottom: 'shorts', bottomColor: art.cloud }),
   o('os-casual', 'Off Duty', 'Casual', 'hoodie', art.cloud, art.purple, 1100, 'Common', 3, 'Soft hoodie and joggers for the walk home.', { top: 'hoodie', topColor: art.cloud, bottom: 'joggers', bottomColor: '#3A3160' }),
@@ -112,7 +112,7 @@ export const shopItems: ShopItem[] = [
   sh('sh-hoop', 'Hoop High', 1300, 'Epic', 8, art.orange, '#16101E', 'High-top cut for lateral support.'),
 
   // --- Pets — Squirrel Social mascot variants ------------------------------
-  pt('pet-gym', 'Gym Squirrel', 'lift', 'headband', art.orange, 900, 'Rare', 5, 'Never skips a set.'),
+  pt('pet-flex', 'Flex Squirrel', 'lift', 'headband', art.orange, 900, 'Rare', 5, 'Never skips a set.'),
   pt('pet-runner', 'Runner Squirrel', 'run', 'headphones', art.cyan, 900, 'Rare', 4, 'Always chasing a PB.'),
   pt('pet-neon', 'Neon Squirrel', 'cheer', 'sunglasses', art.pink, 1500, 'Epic', 8, 'Glows under the city lights.'),
   pt('pet-gamer', 'Gamer Squirrel', 'sit', 'headphones', art.purple, 1500, 'Epic', 9, 'One more round, one more km.'),

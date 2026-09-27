@@ -15,7 +15,7 @@ export const achievements: Achievement[] = [
   { id: 'a-streak', kind: 'streak', name: 'On Fire', description: 'Keep a 7-day streak.', progress: 1, unlockedAt: 'Sep 2026' },
   { id: 'a-city', kind: 'city', name: 'City Badge', description: 'Reach Level 13 in your city.', progress: 1, unlockedAt: 'Today' },
   { id: 'a-early', kind: 'early-bird', name: 'Early Bird', description: '10 workouts before 7 AM.', progress: 1, unlockedAt: 'Aug 2026' },
-  { id: 'a-hydra', kind: 'hydration', name: 'Hydro Homie', description: 'Hit your water goal 14 days.', progress: 0.71 },
+  { id: 'a-hydra', kind: 'hydration', name: 'Hydro Homie', description: 'Coming soon · hit your water goal 14 days.', progress: 0 },
   { id: 'a-10k', kind: 'steps-10k', name: '10K Club', description: 'Walk 10,000 steps in a day.', progress: 1, unlockedAt: 'Jul 2026' },
   { id: 'a-crew', kind: 'crew', name: 'Crew Player', description: 'Join 3 crews.', progress: 0.33 },
   { id: 'a-yoga', kind: 'yoga', name: 'Zen Mode', description: 'Attend 5 yoga sessions.', progress: 0.6 },

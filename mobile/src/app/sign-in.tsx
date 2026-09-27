@@ -82,7 +82,7 @@ export default function SignIn() {
         )}
 
         <View style={{ flex: 1 }} />
-        <Tagline size={16} rotate={-3} style={{ alignSelf: 'flex-end' }}>Zero gym-bro energy required.</Tagline>
+        <Tagline size={16} rotate={-3} style={{ alignSelf: 'flex-end' }}>Zero pressure. All vibes.</Tagline>
       </View>
     </KeyboardAvoidingView>
   );

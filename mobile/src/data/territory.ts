@@ -79,7 +79,7 @@ export const statusLabel: Record<TerritoryStatus, string> = {
   neutral: 'Unclaimed',
 };
 
-/** Territory-area leaderboard (backend ranks by area: daily / weekly / all-time). */
+/** Campus leaderboard sample: students on your campus ranked by territory area (daily / weekly / all-time). */
 export const territoryBoard = {
   daily: [
     { name: 'Rhea K.', userId: 'u_rhea', km2: 0.9 },

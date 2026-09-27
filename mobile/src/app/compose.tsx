@@ -10,7 +10,7 @@ import { useApp } from '@/state/AppState';
 import type { SceneKind, StickerKind } from '@/types';
 import { colors, fonts, radius } from '@/theme';
 
-const SCENES: SceneKind[] = ['city-sunset', 'run', 'gym', 'yoga', 'brunch', 'cafe', 'rooftop', 'lake', 'city-night', 'hiit', 'cycling', 'stadium'];
+const SCENES: SceneKind[] = ['city-sunset', 'run', 'yoga', 'brunch', 'cafe', 'rooftop', 'lake', 'city-night', 'hiit', 'cycling', 'stadium'];
 const STICKERS: NonNullable<Post['sticker']>[] = ['one-more-km', 'fire', 'good-vibes', 'neon-heart', 'squirrel-flex', 'hydrate'];
 
 /** Post composer (also reached after finishing a run with the run prefilled). */

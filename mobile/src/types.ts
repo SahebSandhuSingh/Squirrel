@@ -30,7 +30,6 @@ export type SceneKind =
   | 'city-dawn'
   | 'run'
   | 'yoga'
-  | 'gym'
   | 'cafe'
   | 'brunch'
   | 'crew'

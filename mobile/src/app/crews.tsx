@@ -29,7 +29,7 @@ export default function Crews() {
     <Screen tabBar={false}>
       <Header back title="Find Your Crew" right={<CityChip />} />
       <View style={{ marginTop: 10 }}>
-        <SearchBar placeholder="Search clubs (running, gym, yoga...)" value={q} onChangeText={setQ} />
+        <SearchBar placeholder="Search clubs (running, yoga, cycling...)" value={q} onChangeText={setQ} />
       </View>
       <Chips items={SCOPES} value={scope} onChange={setScope} icons={SCOPE_ICONS} />
 

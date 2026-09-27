@@ -29,13 +29,13 @@ const TAG_ICONS: Record<string, React.ComponentProps<typeof Icon>['name']> = {
   Runner: 'run',
   Yoga: 'yoga',
   'No Sugar Club': 'food-apple',
-  Gym: 'dumbbell',
+  Strength: 'arm-flex',
   HIIT: 'lightning-bolt',
   Cycling: 'bike',
   Coach: 'whistle',
 };
 
-const EXTRA_SCENES: SceneKind[] = ['city-sunset', 'run', 'rooftop', 'lake', 'yoga', 'gym', 'cafe', 'city-night', 'stadium'];
+const EXTRA_SCENES: SceneKind[] = ['city-sunset', 'run', 'rooftop', 'lake', 'yoga', 'hiit', 'cafe', 'city-night', 'stadium'];
 
 /** Rich profile used for "me" (tab) and other users (/user/[id]). */
 export function ProfileView({ user, isMe }: { user: User; isMe: boolean }) {

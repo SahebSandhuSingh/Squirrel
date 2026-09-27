@@ -1,3 +1,4 @@
+import { COMING_SOON, LOCKED, LOCKED_MISSIONS } from '@/data/features';
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { DEFAULT_CITY_ID, cityById, type City } from '@/data/cities';
 import { crewsForCity, eventsForCity, placesForCity, type Crew, type EventItem, type Place } from '@/data/community';
@@ -97,7 +98,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [claimed, setClaimed] = useState<Set<string>>(new Set());
   const [owned, setOwned] = useState<Set<string>>(new Set(STARTER_OWNED));
   const [equipped, setEquipped] = useState<Set<string>>(new Set(['a-shades']));
-  const [joinedCrews, setJoinedCrews] = useState<Set<string>>(new Set(['pune-crew-2']));
+  const [joinedCrews, setJoinedCrews] = useState<Set<string>>(new Set(['pune-crew-1']));
   const [joinedEvents, setJoinedEvents] = useState<Set<string>>(new Set());
   const [following, setFollowing] = useState<Set<string>>(new Set(['u_rhea', 'u_meera', 'u_zoya', 'u_isha']));
   const [liked, setLiked] = useState<Set<string>>(new Set(['p3']));
@@ -137,6 +138,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 
   const logMission = useCallback(
     (id: string) => {
+      if (LOCKED_MISSIONS.has(id)) return; // feature not launched yet
       setMissions((currentMissions) => {
         const m = currentMissions.find((x) => x.id === id);
         if (!m || m.current >= m.goal) return currentMissions;
@@ -149,7 +151,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     [toast],
   );
 
-  const ready = useMemo(() => missions.filter((m) => m.current >= m.goal && !claimed.has(m.id)), [missions, claimed]);
+  const ready = useMemo(() => missions.filter((m) => m.current >= m.goal && !claimed.has(m.id) && !LOCKED_MISSIONS.has(m.id)), [missions, claimed]);
   const claimable = useMemo(
     () => ({ xp: ready.reduce((s, m) => s + m.xp, 0), coins: ready.reduce((s, m) => s + m.coins, 0), count: ready.length }),
     [ready],
@@ -163,7 +165,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setMissions((currentMissions) => {
       const claimedSet = new Set(claimed);
       readyMissions = currentMissions
-        .filter((m) => m.current >= m.goal && !claimedSet.has(m.id))
+        .filter((m) => m.current >= m.goal && !claimedSet.has(m.id) && !LOCKED_MISSIONS.has(m.id))
         .map((m) => m.id);
       claimableXp = readyMissions.reduce((s, id) => {
         const m = currentMissions.find((x) => x.id === id);
@@ -286,6 +288,10 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     }, [crews, toast]),
     joinedEvents,
     toggleEvent: useCallback((id: string) => {
+      if (LOCKED.events) {
+        toast(COMING_SOON.events, 'lock', '#6B7489');
+        return;
+      }
       const ev = events.find((e) => e.id === id);
       if (!joinedEvents.has(id) && ev) {
         toast(`You're going to ${ev.title} · +${ev.xp} XP on check-in`, 'calendar-check', '#2F5BFF');

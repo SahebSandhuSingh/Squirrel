@@ -16,7 +16,7 @@ The PNGs here are **exports of those same components**, for the app icon and spl
 | `illustrations/mascot/` | Squirrel mascot poses: idle, run, celebrate, drink, lift, sit, cheer, sleep, wave; plus idle with crown, headband, headphones and no accessory |
 | `illustrations/characters/` | Female and male fitness avatars in 6 poses (stand, run, wave, lift, yoga, flex) |
 | `illustrations/avatars/` | Portraits of every demo user |
-| `illustrations/scenes/` | 14 scenes: city sunset, night and dawn; run, yoga, gym, cafe, brunch, crew, hiit, cycling, lake, rooftop, stadium |
+| `illustrations/scenes/` | 13 scenes: city sunset, night and dawn; run, yoga, cafe, brunch, crew, hiit, cycling, lake, rooftop, stadium |
 | `illustrations/products/` | 20 shop items (hoodie, tee, tank, jacket, joggers, shorts, shoes, hightops, cap, beanie, headband, bag, backpack, bottle, sunglasses, watch, earbuds, socks, gloves, mat) |
 | `illustrations/badges/` | 12 achievement badges |
 | `illustrations/stickers/` | 8 die-cut stickers |

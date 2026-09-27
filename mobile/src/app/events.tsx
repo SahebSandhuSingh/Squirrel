@@ -1,3 +1,5 @@
+import { SoonBanner } from '@/components/Locked';
+import { COMING_SOON, LOCKED } from '@/data/features';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
@@ -27,10 +29,11 @@ export default function Events() {
         right={
           <>
             <CityChip />
-            <IconButton icon="plus" onPress={() => { toast('Hosting opens at Level 15 · keep moving!', 'lock-clock', colors.violet); }} label="Host event" />
+            <IconButton icon="plus" onPress={() => { toast(LOCKED.events ? COMING_SOON.events : 'Hosting opens at Level 15 · keep moving!', 'lock-clock', colors.violet); }} label="Host event" />
           </>
         }
       />
+      {LOCKED.events && <SoonBanner title="Events · coming soon" body="Meetups, workshops and crew runs are launching soon. Here's a preview; joining opens at launch." />}
       <Segmented items={TABS} value={tab} onChange={setTab} />
       {tab !== 'My Events' && (
         <Text style={styles.count}>
@@ -38,7 +41,7 @@ export default function Events() {
         </Text>
       )}
 
-      <View style={{ gap: 10 }}>
+      <View style={[{ gap: 10 }, LOCKED.events && { opacity: 0.55 }]}>
         {list.map((e, i) => (
           <FadeIn key={e.id} index={i}>
             <EventCard event={e} going={joinedEvents.has(e.id)} onToggle={() => toggleEvent(e.id)} />

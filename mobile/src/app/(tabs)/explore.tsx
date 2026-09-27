@@ -1,3 +1,4 @@
+import { COMING_SOON, LOCKED } from '@/data/features';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
@@ -11,14 +12,14 @@ import { useApp } from '@/state/AppState';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, radius } from '@/theme';
 
-const FILTERS = ['All', 'Gyms', 'Runs', 'Cafes', 'Events'] as const;
+const FILTERS = ['All', 'Runs', 'Cafes', 'Events'] as const;
 type Filter = (typeof FILTERS)[number];
-const FILTER_ICONS = { All: 'map-marker-multiple', Gyms: 'dumbbell', Runs: 'run-fast', Cafes: 'coffee', Events: 'calendar-star' } as const;
+const FILTER_ICONS = { All: 'map-marker-multiple', Runs: 'run-fast', Cafes: 'coffee', Events: 'calendar-star' } as const;
 
 /** EXPLORE — stylised neon city map with live places, runs and events. */
 export default function Explore() {
   const insets = useSafeAreaInsets();
-  const { places, city, joinedEvents, toggleEvent, events } = useApp();
+  const { places, city, joinedEvents, toggleEvent, events, toast } = useApp();
   const [filter, setFilter] = useState<Filter>('All');
   const [q, setQ] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
@@ -59,6 +60,7 @@ export default function Explore() {
 
   const act = (p: Place) => {
     if (p.kind === 'Runs') router.push('/run');
+    else if (p.kind === 'Events' && LOCKED.events) toast(COMING_SOON.events, 'lock', colors.dim);
     else if (p.eventId) router.push({ pathname: '/event/[id]', params: { id: p.eventId } });
     else router.push('/crews');
   };
@@ -91,7 +93,7 @@ export default function Explore() {
           </View>
         </View>
         <View style={{ marginTop: 10 }}>
-          <SearchBar placeholder="Search gyms, runs, cafes, people..." value={q} onChangeText={handleSearchChange} />
+          <SearchBar placeholder="Search runs, cafes, people..." value={q} onChangeText={handleSearchChange} />
         </View>
         <Chips items={FILTERS} value={filter} onChange={setFilter} icons={FILTER_ICONS} />
         {people.length > 0 && (
@@ -120,7 +122,7 @@ export default function Explore() {
         </View>
         <ScrollView ref={listRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingHorizontal: 16 }} snapToInterval={232} decelerationRate="fast">
           {visible.map((p) => {
-            const ev = p.eventId ? events.find((e) => e.id === p.eventId) : undefined;
+            const ev = p.eventId && !LOCKED.events ? events.find((e) => e.id === p.eventId) : undefined;
             const going = ev ? joinedEvents.has(ev.id) : false;
             return (
               <PressScale key={p.id} onPress={() => select(p)} style={[styles.placeCard, selected === p.id && { borderColor: p.color }]}>
@@ -129,16 +131,17 @@ export default function Explore() {
                 </View>
                 <View style={{ flex: 1, marginLeft: 10 }}>
                   <Text style={styles.pName} numberOfLines={1}>{p.name}</Text>
-                  <Text style={styles.pMeta} numberOfLines={1}>{p.kind} · {p.meta}</Text>
+                  <Text style={styles.pMeta} numberOfLines={1}>{p.kind} · {p.kind === 'Events' && LOCKED.events ? 'Coming soon' : p.meta}</Text>
                 </View>
                 <Pressable
                   onPress={() => {
                     tap();
-                    if (ev) toggleEvent(ev.id);
+                    if (p.kind === 'Events' && LOCKED.events) act(p);
+                    else if (ev) toggleEvent(ev.id);
                     else act(p);
                   }}
-                  style={[styles.go, { backgroundColor: going ? colors.cardHi : p.kind === 'Runs' ? colors.primary : colors.secondary }]}>
-                  <Text style={[styles.goText, going && { color: colors.sub }]}>{ev ? (going ? 'Going' : 'Join') : p.kind === 'Runs' ? 'Run' : 'Go'}</Text>
+                  style={[styles.go, { backgroundColor: going || (p.kind === 'Events' && LOCKED.events) ? colors.cardHi : p.kind === 'Runs' ? colors.primary : colors.secondary }]}>
+                  <Text style={[styles.goText, (going || (p.kind === 'Events' && LOCKED.events)) && { color: colors.sub }]}>{p.kind === 'Events' && LOCKED.events ? 'Soon' : ev ? (going ? 'Going' : 'Join') : p.kind === 'Runs' ? 'Run' : 'Go'}</Text>
                 </Pressable>
               </PressScale>
             );
@@ -165,7 +168,7 @@ function Marker({ place, active, onPress }: { place: Place; active: boolean; onP
         </View>
         <View style={{ marginLeft: 6 }}>
           <Text style={styles.pinName} numberOfLines={1}>{place.name}</Text>
-          <Text style={styles.pinMeta}>{place.meta}</Text>
+          <Text style={styles.pinMeta}>{place.kind === 'Events' && LOCKED.events ? 'Coming soon' : place.meta}</Text>
         </View>
       </Pressable>
     </Animated.View>

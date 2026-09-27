@@ -31,7 +31,11 @@ const liveRow = (e: LeaderboardEntry, mine: boolean): Row => ({
 
 const pinnedMeRow = (me: NonNullable<Me>): Row => ({ key: 'me', rank: me.rank, name: 'You', areaText: formatArea(me.score), me: true, live: true });
 
-/** City leaderboard ranked by territory area (GET /v1/leaderboard?scope=global&metric=area&window=…). */
+/**
+ * CAMPUS leaderboard: students on your campus, ranked by territory area
+ * (GET /v1/leaderboard?metric=area&window=…). The Run Module only offers scope=global today,
+ * so live rows are all runners until a campus scope exists; the sample data is campus-only.
+ */
 export default function Leaderboard() {
   const { city, me } = useApp();
   const { mode, userId } = useAuth();
@@ -109,11 +113,11 @@ export default function Leaderboard() {
   return (
     <Screen tabBar={false}>
       <Header back title="" />
-      <Kicker>{source === 'live' ? 'Global' : city.name} · ranked by territory</Kicker>
-      <Display size={46} style={{ marginTop: 6 }}>Who owns <Text style={{ color: colors.primary }}>the city</Text></Display>
+      <Kicker>Campus Leaderboard · {city.campus}</Kicker>
+      <Display size={46} style={{ marginTop: 6 }}>Who owns <Text style={{ color: colors.primary }}>the campus</Text></Display>
       <Segmented items={TABS} value={tab} onChange={setTab} />
       <Text style={styles.source}>
-        {source === 'live' ? 'Live from the server' : source === 'error' ? 'Server unreachable · showing sample data' : 'Sample data · sign in for live rankings'}
+        {source === 'live' ? 'Live · all runners until campus rankings go live' : source === 'error' ? 'Server unreachable · showing sample campus data' : 'Sample campus data · sign in for live rankings'}
       </Text>
 
       {loading && rows.length === 0 ? <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} /> : null}
