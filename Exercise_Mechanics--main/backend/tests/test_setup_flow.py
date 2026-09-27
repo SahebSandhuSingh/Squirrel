@@ -105,15 +105,37 @@ def test_combined_precheck_streams_every_failure_and_missing_keypoint() -> None:
     }
 
 
-def test_any_precheck_failure_resets_the_one_continuous_dwell() -> None:
+def test_a_sustained_precheck_failure_resets_the_one_continuous_dwell() -> None:
+    # Failing for invalid_pause_ms (50 ms here) or longer restarts the hold.
     orchestrator = _orchestrator(stable_ms=200.0)
     orchestrator.update(_frame(), 0.0)
+    orchestrator.update(_frame(hidden=("nose",)), 100.0)
     status = orchestrator.update(_frame(hidden=("nose",)), 150.0)
     assert status.dwell_ms == 0.0
 
     orchestrator.update(_frame(), 200.0)
     assert orchestrator.update(_frame(), 350.0).phase == PRECHECK
     assert orchestrator.update(_frame(), 400.0).phase == COLLECTING
+
+
+def test_a_one_frame_precheck_flicker_does_not_restart_the_dwell() -> None:
+    # Landmark jitter (a knee read just under the extension floor for a frame) is not a failure
+    # to stand still; restarting on it can hold a correctly standing person in pre-check forever.
+    orchestrator = _orchestrator(stable_ms=200.0)
+    orchestrator.update(_frame(), 0.0)
+    status = orchestrator.update(_frame(bent_knees=True), 100.0)
+    assert status.phase == PRECHECK
+    assert status.dwell_ms == 100.0
+    assert {result.reason_id for result in status.failures} == {"knees_not_extended"}
+
+    assert orchestrator.update(_frame(), 120.0).phase == PRECHECK
+    assert orchestrator.update(_frame(), 200.0).phase == COLLECTING
+
+
+def test_failing_frames_never_complete_the_dwell() -> None:
+    orchestrator = _orchestrator(stable_ms=200.0)
+    orchestrator.update(_frame(), 0.0)
+    assert orchestrator.update(_frame(bent_knees=True), 240.0).phase == PRECHECK
 
 
 @pytest.mark.parametrize("ratio", (0.70, 0.79, 0.80, 1.20, 1.21, 1.30))

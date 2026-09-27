@@ -58,6 +58,8 @@ class SetupOrchestrator:
         self._min_visibility = float(min_visibility)
         self._phase = PRECHECK
         self._precheck_since: float | None = None
+        # When the current run of failing pre-check frames began (None while passing).
+        self._precheck_failing_since: float | None = None
         self._last_timestamp: float | None = None
 
         self._collector = self._new_collector()
@@ -179,8 +181,24 @@ class SetupOrchestrator:
         self._validation_results = ()
         all_pass = not missing and all(result.passed for result in results)
         if not all_pass:
-            self._precheck_since = None
+            # A flicker shorter than invalid_pause_ms (landmark jitter: a relaxed knee read at
+            # 159 deg for a frame) does not restart the stable hold; a real failure does. Without
+            # this grace, one noisy frame restarts the whole hold, and on a phone's lighter pose
+            # model a person standing correctly can be kept here indefinitely. Failing frames never
+            # complete the hold (that happens only below, on a passing frame).
+            if self._precheck_since is None:
+                return
+            if self._precheck_failing_since is None:
+                self._precheck_failing_since = now_ms
+            if now_ms - self._precheck_failing_since >= self._config.invalid_pause_ms:
+                self._precheck_since = None
+                self._precheck_failing_since = None
             return
+        if self._precheck_failing_since is not None:
+            # The failure lasted until this passing frame: too long a run restarts the hold here.
+            if now_ms - self._precheck_failing_since >= self._config.invalid_pause_ms:
+                self._precheck_since = None
+            self._precheck_failing_since = None
         if self._precheck_since is None:
             self._precheck_since = now_ms
         if now_ms - self._precheck_since >= self._config.stable_ms:
@@ -291,6 +309,7 @@ class SetupOrchestrator:
     ) -> None:
         self._phase = PRECHECK
         self._precheck_since = None
+        self._precheck_failing_since = None
         self._begin_capture()
         self._validation_results = validation_results
 
