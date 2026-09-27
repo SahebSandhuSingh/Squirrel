@@ -109,7 +109,8 @@ export type CoachOptions = {
   /** http(s) base of the Exercise backend; its ws(s) twin is used. */
   baseUrl: string;
   userId: string;
-  sessionId: string;
+  /** The saved session. May come later (setSession): the get-ready countdown does not wait for it. */
+  sessionId?: string;
   /** The session plan's exercise_id (e.g. 'squat', 'bicep_curl'), and its variant if any. */
   exercise: string;
   variant?: string;
@@ -136,6 +137,7 @@ export class CoachSession {
   private timers = new Set<ReturnType<typeof setTimeout>>();
   private restTimer: ReturnType<typeof setInterval> | null = null;
   private countdownTimer: ReturnType<typeof setInterval> | null = null;
+  private session: { id: string; exercise: string; variant?: string } | null;
   private refreshedOnce = false;
   private disposed = false;
   // Logical clock: stops while paused (browser coach usePose.ts logicalNow).
@@ -151,6 +153,7 @@ export class CoachSession {
   constructor(private readonly opts: CoachOptions) {
     this.now = opts.now ?? (() => (globalThis.performance ? globalThis.performance.now() : Date.now()));
     this.WS = opts.WebSocketImpl ?? globalThis.WebSocket;
+    this.session = opts.sessionId ? { id: opts.sessionId, exercise: opts.exercise, variant: opts.variant } : null;
     this.state = {
       phase: 'getready', set: 1, totalSets: opts.sets, measure: opts.measure, paused: false, connected: false,
       getReadyLeft: null, inView: null,
@@ -172,6 +175,12 @@ export class CoachSession {
 
   start(): void {
     this.getReady();
+  }
+
+  /** The saved session, once the server has it. A setup that was waiting for it starts now. */
+  setSession(id: string, exercise: string, variant?: string): void {
+    this.session = { id, exercise, variant };
+    if (this.state.phase === 'setup' && !this.ws && !this.disposed) this.open('setup');
   }
 
   /** Feed one tracked camera frame. Sent only when the server should be seeing it. */
@@ -229,19 +238,19 @@ export class CoachSession {
 
   private url(endpoint: 'setup' | 'train'): string {
     const params = new URLSearchParams({
-      exercise: this.opts.exercise,
+      exercise: this.session!.exercise,
       set_no: String(this.state.set),
       user_id: this.opts.userId,
-      session_id: this.opts.sessionId,
+      session_id: this.session!.id,
       token: this.opts.getToken() ?? '',
     });
-    if (this.opts.variant) params.set('variant', this.opts.variant);
+    if (this.session!.variant) params.set('variant', this.session!.variant);
     const base = this.opts.baseUrl.replace(/\/+$/, '').replace(/^http/i, 'ws');
     return `${base}/ws/${endpoint}?${params.toString()}`;
   }
 
   private open(endpoint: 'setup' | 'train'): void {
-    if (this.disposed) return;
+    if (this.disposed || !this.session) return;
     this.closeSocket();
     const ws = new this.WS(this.url(endpoint));
     this.ws = ws;
@@ -369,7 +378,7 @@ export class CoachSession {
     if (this.countdownTimer) clearInterval(this.countdownTimer);
     this.countdownTimer = null;
     this.update({ phase: 'setup', getReadyLeft: null, inView: null, setup: null });
-    this.open('setup');
+    if (this.session) this.open('setup'); // else setSession opens it when the session is saved
   }
 
   // ---------------------------------------------------------------- helpers

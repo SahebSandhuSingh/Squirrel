@@ -13,7 +13,7 @@ import { exerciseByKey, PLAN_BOUNDS } from '@/data/exercises';
 import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
 import { useKeepAwake } from 'expo-keep-awake';
 import { EXERCISE_API_URL } from '@/api/config';
-import { getApiToken, refreshApiToken } from '@/api/client';
+import { ApiError, getApiToken, refreshApiToken } from '@/api/client';
 import { exerciseApi } from '@/api/exercise';
 import { invalidateExercise, useExerciseUser } from '@/hooks/useExercise';
 import { CoachSession, type CoachState, type PoseFrame } from '@/workout/coach';
@@ -289,6 +289,8 @@ function DemoWorkout() {
 // ---------------------------------------------------------------------------------------------
 
 type LiveSession = { id: string; exercise: string; variant?: string };
+/** How long to keep retrying the plan's save while the server is unreachable (waking up). */
+const SAVE_RETRY_MS = 90_000;
 
 function LiveWorkout({ userId }: { userId: string }) {
   useKeepAwake();
@@ -317,16 +319,33 @@ function LiveWorkout({ userId }: { userId: string }) {
   }, [perm, requestPerm]);
 
   // A workout started without a saved plan saves one now: the server coaches only saved sessions.
+  // It runs alongside the get-ready countdown. A server that is waking up (free hosting sleeps)
+  // answers nothing for up to a minute, so an unreachable server is retried for up to 90 s.
   useEffect(() => {
     if (session) return;
     let cancelled = false;
-    exerciseApi
-      .createSession(userId, {
-        name: ex.name, slug: ex.slug, ...(ex.variant ? { variant: ex.variant } : {}), body_part: ex.bodyPart,
-        training_tag: ex.tag, measure: ex.measure, sets, value: target, rest_seconds: sets > 1 ? rest : 0,
-      })
-      .then((s) => !cancelled && setSession({ id: s.session_id, exercise: s.exercise_id, variant: s.variant ?? undefined }))
-      .catch((e) => !cancelled && setSetupError(e instanceof Error ? e.message : 'Could not start the workout.'));
+    const save = async () => {
+      const deadline = Date.now() + SAVE_RETRY_MS;
+      for (;;) {
+        try {
+          const s = await exerciseApi.createSession(userId, {
+            name: ex.name, slug: ex.slug, ...(ex.variant ? { variant: ex.variant } : {}), body_part: ex.bodyPart,
+            training_tag: ex.tag, measure: ex.measure, sets, value: target, rest_seconds: sets > 1 ? rest : 0,
+          });
+          if (!cancelled) setSession({ id: s.session_id, exercise: s.exercise_id, variant: s.variant ?? undefined });
+          return;
+        } catch (e) {
+          const unreachable = e instanceof ApiError && e.status === 0;
+          if (cancelled) return;
+          if (!unreachable || Date.now() + 3000 > deadline) {
+            setSetupError(e instanceof Error ? e.message : 'Could not start the workout.');
+            return;
+          }
+          await new Promise((r) => setTimeout(r, 3000));
+        }
+      }
+    };
+    void save();
     return () => {
       cancelled = true;
     };
@@ -334,10 +353,12 @@ function LiveWorkout({ userId }: { userId: string }) {
 
   // The coaching session. Server messages arrive ~30 a second; the screen redraws at most ~8 a
   // second, except at once when something structural changes (phase, set, rest, error).
+  // Created at once, so the get-ready countdown starts while the plan is still being saved.
+  const initialSession = useRef(session);
   useEffect(() => {
-    if (!session) return;
+    const first = initialSession.current;
     const c = new CoachSession({
-      baseUrl: EXERCISE_API_URL, userId, sessionId: session.id, exercise: session.exercise, variant: session.variant,
+      baseUrl: EXERCISE_API_URL, userId, sessionId: first?.id, exercise: first?.exercise ?? ex.slug, variant: first?.variant ?? ex.variant,
       sets, measure: ex.measure, restSeconds: sets > 1 ? rest : 0, getToken: getApiToken, refreshToken: refreshApiToken,
     });
     coach.current = c;
@@ -370,7 +391,11 @@ function LiveWorkout({ userId }: { userId: string }) {
       c.dispose();
       coach.current = null;
     };
-  }, [session, userId, sets, rest, ex.measure]);
+  }, [userId, sets, rest, ex.measure, ex.slug, ex.variant]);
+
+  useEffect(() => {
+    if (session) coach.current?.setSession(session.id, session.exercise, session.variant);
+  }, [session]);
 
   // Workout clock: counts while a set is running.
   const phase = state?.phase ?? 'setup';
