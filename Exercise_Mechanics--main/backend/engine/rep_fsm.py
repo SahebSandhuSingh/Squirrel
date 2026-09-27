@@ -156,7 +156,9 @@ class RepFSM:
     """Exercise-agnostic rep FSM driven entirely by configuration-supplied boundaries.
 
     ``max_frame_delta_ms`` is shared with the evidence timeline. It distinguishes a resumable
-    tracking interruption from a long gap. No constructor tunable has a code default. The lifecycle
+    tracking interruption from a long gap, unless the exercise configures a longer
+    ``max_tracking_gap_ms`` (slow cameras, a joint hidden for a moment). No other constructor
+    tunable has a code default. The lifecycle
     roles (resting/setup phase, reset phase, movement phases and the single returning phase) are
     derived from the transition graph so no phase name is hard-coded.
     """
@@ -175,6 +177,7 @@ class RepFSM:
         reset_dwell_ms: float,
         stale_phase_ms: float,
         max_frame_delta_ms: float,
+        max_tracking_gap_ms: float | None = None,
     ) -> None:
         if not callable(reached_gate):
             raise ValueError("reached_gate must be callable")
@@ -200,6 +203,11 @@ class RepFSM:
         self._reset_dwell_ms = _positive(reset_dwell_ms, "reset_dwell_ms")
         self._stale_phase_ms = _positive(stale_phase_ms, "stale_phase_ms")
         self._max_frame_delta_ms = _positive(max_frame_delta_ms, "max_frame_delta_ms")
+        self._max_tracking_gap_ms = (
+            self._max_frame_delta_ms
+            if max_tracking_gap_ms is None
+            else _positive(max_tracking_gap_ms, "max_tracking_gap_ms")
+        )
         if not 0 <= self._top_return <= self._descent_trigger < self._min_rep_peak:
             raise ValueError(
                 "progress thresholds must satisfy "
@@ -252,19 +260,17 @@ class RepFSM:
 
         if self._last_tracked_ms is not None:
             gap_ms = timestamp - self._last_tracked_ms
-            gap_detected = self._tracking_paused or gap_ms > self._max_frame_delta_ms
-            if gap_detected:
-                if gap_ms > self._max_frame_delta_ms or not self._recovery_is_compatible(
-                    value.progress
+            if gap_ms > self._max_tracking_gap_ms or (
+                self._tracking_paused and not self._recovery_is_compatible(value.progress)
+            ):
+                if not self._apply_configured_transition(
+                    "tracking_recovery_failed", value, timestamp
                 ):
-                    if not self._apply_configured_transition(
-                        "tracking_recovery_failed", value, timestamp
-                    ):
-                        raise RuntimeError(
-                            f"no tracking_recovery_failed transition configured for {self._phase}"
-                        )
-                else:
-                    self._shift_phase_clocks(gap_ms)
+                    raise RuntimeError(
+                        f"no tracking_recovery_failed transition configured for {self._phase}"
+                    )
+            elif self._tracking_paused:
+                self._shift_phase_clocks(gap_ms)
 
         self._tracking_paused = False
         self._last_tracked_ms = timestamp

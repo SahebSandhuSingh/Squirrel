@@ -34,6 +34,9 @@ _FSM_RUNTIME_KEYS = (
     "stale_phase_ms",
 )
 _FSM_ALL_KEYS = _FSM_RUNTIME_KEYS
+# Optional: how long tracking may drop out (slow camera frames, a joint briefly hidden) before an
+# attempt in progress is discarded. Without it the scoring frame gap (max_frame_delta_ms) applies.
+_FSM_OPTIONAL_KEYS = ("max_tracking_gap_ms",)
 _TIMED_FSM_KEYS = (
     "phases",
     "initial_phase",
@@ -793,7 +796,7 @@ def _validate_fsm(raw: dict) -> dict:
     if movement_type not in {"reps", "time"}:
         raise ConfigurationError("fsm.movement_type must be 'reps' or 'time'")
     keys = _FSM_ALL_KEYS if movement_type == "reps" else _TIMED_FSM_KEYS
-    allowed = {"schema_version", "movement_type", *keys}
+    allowed = {"schema_version", "movement_type", *keys, *_FSM_OPTIONAL_KEYS}
     unknown = sorted(set(raw) - allowed)
     if unknown:
         raise ConfigurationError(f"fsm contains unknown fields: {unknown}")
@@ -809,6 +812,9 @@ def _validate_fsm(raw: dict) -> dict:
             "movement_start", "min_lift_peak",
         }
         _number(raw.get(key), f"fsm.{key}", minimum=minimum, strict=strict)
+    for key in _FSM_OPTIONAL_KEYS:
+        if key in raw:
+            _number(raw[key], f"fsm.{key}", minimum=0, strict=True)
     if movement_type == "reps":
         reset = float(raw["top_return"])
         start = float(raw["descent_trigger"])
@@ -1086,4 +1092,5 @@ def fsm_params(slug: str) -> dict:
         raise ConfigurationError("fsm_params is available only for repetition FSMs")
     params = {key: spec[key] for key in _FSM_RUNTIME_KEYS}
     params["max_frame_delta_ms"] = scoring_params(slug)["max_frame_delta_ms"]
+    params.update({key: spec[key] for key in _FSM_OPTIONAL_KEYS if key in spec})
     return params

@@ -66,10 +66,10 @@ RULE_ID = "depth"
 REQUIRED_KEYPOINTS = ("left_hip", "right_hip", "left_knee", "right_knee")
 ANKLE_KEYPOINTS = ("left_ankle", "right_ankle")
 # Depth may not exceed BASE + SLOPE · knee_bend (see "Knee-bend cap" above). Structural, not tuning:
-# SLOPE leaves every real squat's depth under the cap (knee_bend trails depth by up to ~0.25 near
-# parallel); BASE sits just under the descent trigger (0.10), so straight legs never start a rep.
-KNEE_BEND_CAP_BASE = 0.08
-KNEE_BEND_CAP_SLOPE = 1.5
+# SLOPE leaves every real squat's depth well under the cap (knee_bend trails depth by up to ~0.25
+# near parallel); BASE sits under the descent trigger (0.25), so straight legs never start a rep.
+KNEE_BEND_CAP_BASE = 0.15
+KNEE_BEND_CAP_SLOPE = 2.0
 
 
 @dataclass(frozen=True)

@@ -81,7 +81,7 @@ def _frame(
 
 _FULL = [(0.0, 0), (0.3, 100), (0.6, 200), (0.9, 300), (0.95, 400), (0.9, 500), (0.7, 600), (0.3, 700), (0.05, 800)]
 _SHALLOW = [(0.0, 0), (0.3, 100), (0.6, 200), (0.7, 300), (0.5, 400), (0.3, 500), (0.05, 600)]
-_INVALID = [(0.0, 0), (0.15, 100), (0.2, 200), (0.15, 300), (0.12, 400), (0.05, 500)]
+_INVALID = [(0.0, 0), (0.28, 100), (0.35, 200), (0.3, 300), (0.27, 400), (0.05, 500)]
 
 
 def _drive(adapter, sequence, **frame_options):
@@ -130,7 +130,7 @@ def test_final_set_cycle_completes_only_after_configured_reset_transition():
     assert scored["events"]["set_cycle_completed"] is False
 
     reset_finished = None
-    for timestamp in (900, 1000, 1100, 1200, 1300):
+    for timestamp in (850, 900):
         reset_finished = adapter.process(_frame(0.0, timestamp))
 
     assert reset_finished is not None
@@ -363,7 +363,7 @@ def test_long_tracking_gap_discards_partial_attempt_without_last_rep():
     adapter.process(_frame(0.0, 0))
     adapter.process(_frame(0.4, 30))
     adapter.process(_frame(0.9, 60))
-    status = adapter.process(_frame(0.7, 200))
+    status = adapter.process(_frame(0.7, 1100))   # over a second without a frame
 
     assert status["events"]["attempt_discarded"] is True
     assert status["counters"]["attempts"] == 0
@@ -458,3 +458,44 @@ def test_a_squat_filmed_from_a_camera_that_then_moves_still_counts():
     adapter = build_squat_adapter(baseline=_baseline(), target_reps=3)
     status = _drive_points(adapter, _SWEEP, lambda p: _moved(_real_squat(p), shift_y=p * 40.0))
     assert status["set"]["completed_reps"] == 1
+
+
+# ---- Real cameras and real people: every squat counts (fsm.yaml) --------------------------------
+
+def _squats(count: int, *, frame_ms: float, period_ms: float = 2000.0, rest: float = 0.0, peak: float = 0.9):
+    """`count` back-to-back squats (a smooth down-and-up, no pause at the top), sampled every
+    `frame_ms`, standing at depth `rest` between them."""
+    from math import cos, pi
+    frames, t = [], 0.0
+    while t <= count * period_ms + 300:
+        phase = (t % period_ms) / period_ms if t < count * period_ms else 0.0
+        frames.append((rest + (peak - rest) * (1 - cos(2 * pi * phase)) / 2, t))
+        t += frame_ms
+    return frames
+
+
+def test_a_slow_camera_still_counts_every_squat():
+    # 7 frames a second: every gap is over the scoring frame gap (100 ms).
+    status = _drive_points(build_squat_adapter(baseline=_baseline(), target_reps=5), _squats(3, frame_ms=150), _real_squat)
+    assert status["set"]["completed_reps"] == 3
+
+
+def test_hips_hidden_for_a_moment_at_the_bottom_still_counts():
+    adapter = build_squat_adapter(baseline=_baseline(), target_reps=5)
+    status = None
+    for progress, timestamp in _squats(3, frame_ms=33):
+        points = _real_squat(progress)
+        if progress > 0.8:   # thighs cover the hips at the bottom: low-confidence hips
+            points["left_hip"] = {**points["left_hip"], "v": 0.2}
+        status = adapter.process(TrainingFrame(timestamp, points))
+    assert status["set"]["completed_reps"] == 3
+
+
+def test_standing_with_soft_knees_between_squats_still_counts():
+    status = _drive_points(build_squat_adapter(baseline=_baseline(), target_reps=5), _squats(3, frame_ms=33, rest=0.2), _real_squat)
+    assert status["set"]["completed_reps"] == 3
+
+
+def test_quick_back_to_back_squats_each_count():
+    status = _drive_points(build_squat_adapter(baseline=_baseline(), target_reps=5), _squats(4, frame_ms=33, period_ms=1300), _real_squat)
+    assert status["set"]["completed_reps"] == 4
