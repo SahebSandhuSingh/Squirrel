@@ -29,11 +29,6 @@ Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-h
 | `/territory` | Own your block: district map, zone control, decay |
 | `/challenges` | Daily, head-to-head and group challenges (auto-resolve) |
 | `/leaderboard` | City ranking by territory area: daily, weekly, all-time |
-| `/exercise` | **Form Coach** (Exercise Mechanics backend): skill level, form progress, exercise library, session history |
-| `/exercise/profile` | Create a coach profile, link an existing Coach ID, or view it (height, weight, BMI) |
-| `/exercise/plan/[key]` | Plan sets / reps or seconds / rest for one exercise and save it as a session |
-| `/exercise/train/[key]` | **Live workout**: camera view (expo-camera, front/back), lime body-tracking skeleton, rep ring + counter, calories ring, form cues, time · BPM · calories bar, music / pause / flip controls, sets with rest, summary. Tracking is a guided demo until an on-device pose model is added |
-| `/exercise/session/[id]` | Session overview and per-exercise report: scores, quality buckets, per-set form, faults, coaching |
 | `/welcome` | Landing: cinematic sunset city, avatar + squirrel mascot, Get Started |
 | `/avatar` | **Make It You**: body, hair, outfit, shoes, accessories, gear, emotes and pet mascot |
 | `/home` *(tab)* | Top bar (avatar, level, XP, coins), greeting, activity rings, Start Run, missions, events carousel, city leaderboard, crew activity |
@@ -56,13 +51,15 @@ Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-h
 | `/city` | City picker |
 | `/notifications` | Activity notifications |
 
-## Look & feel
+## Look & feel — "Voltage" (white + electric blue)
 
-The app uses the same visual system as the Squirrel Social website (`squirrel-social-site`):
-- **Canvas:** near-black `#060606` with graphite cards (`#111113` / `#17171A`, border `#27272B`).
-- **Colours:** **lime `#D7FF1F`** for primary actions and "yours"; **pink `#FF2D9B`** as the secondary accent.
-- **Type:** Knewave brush headlines, Oswald uppercase labels and buttons, Space Mono section kickers, Permanent Marker scribbles.
-- **Shapes:** pill buttons, marquee "tape" strips, and the lime line-art squirrel logo (also the app icon).
+A bright, clean **light** theme for a Gen-Z / college crowd, with GTA-style type:
+- **Canvas:** white `#FFFFFF`, with soft blue-grey cards (`#F4F6FB` / `#E9EDF7`, border `#E1E6F0`) and near-black ink text `#0B0F1A`.
+- **Colours:** **electric blue `#2F5BFF`** for every action and everything that's "yours" (your territory, your rank, your route); ink as the second voice; amber `#FFB020` for coins and rewards; pink `#FF4D8D` for rivals.
+- **Art:** the city illustrations stay dark (a blue-hour city: electric-blue neon, indigo skies, amber sun and windows). Anything drawn on top of artwork uses `colors.onImage` (white) and dark `imageChip` chips, so it stays readable.
+- **Type:** Anton for headlines and big numbers (heavy, condensed, slanted −6° like GTA title cards). Barlow Condensed for labels, buttons and italic callouts; Inter for body text.
+  - These are free Google Fonts lookalikes: GTA's own fonts are proprietary or commercial.
+- **Brand:** the squirrel-with-dumbbell logo is the app icon (on electric blue), the splash and the favicon, and appears in the in-app header. The Welcome screen uses a text wordmark and the waving mascot.
 
 All UI tokens live in `src/theme.ts`; illustration colours live in `src/art/palette.ts`.
 
@@ -80,11 +77,9 @@ This follows the *Frontend ↔ Backend Compatibility Assessment*.
 | **Anti-cheat** | Run summary shows *accepted / flagged / rejected* (server verdict when live, local plausibility check otherwise) |
 | **Territory** | New `/territory` screen (zones, control %, rivals, contested, 14-day decay) and area-based leaderboard (`/leaderboard`). Demo data until the territory endpoints are wired |
 | **Challenges** | New `/challenges` screen (daily, head-to-head, group), auto-resolving with no claim. Missions stay as a separate frontend feature (company decision, §4.3) |
-| **Exercise** | `src/api/exercise.ts` on the same `api()` client and `withRetry` policy as the Run Module, pointed at `EXPO_PUBLIC_EXERCISE_API_URL`. Endpoints (from `Exercise_Mechanics--main/backend`): `POST /api/users`, `GET /api/users/{id}`, `GET·POST /api/users/{id}/skill`, `GET /api/exercises`, `POST /api/users/{id}/sessions`, `GET /api/users/{id}/{progress,activity/{year},sessions}`, `GET …/sessions/{sid}/{overview,report}`, `GET …/sessions/{sid}/exercises/{ex}/report`. Screens under `/exercise`; Home's Form Coach card and Progress (workouts, streak, recent sessions) read live data. That backend has no auth: its `user_id` is kept in SecureStore next to the Run token and cleared on sign-out |
-| **Exercise: not in the app** | Live rep tracking (`/ws/setup`, `/ws/train`) streams 33 MediaPipe pose landmarks per camera frame; the app has no on-device pose model, so sessions are planned here and trained in the Exercise Mechanics web coach |
 | **Still frontend-only** | Coins, cosmetics, social feed, crews/events, badges. They need backend models (§5) |
 
-To point the app at a backend, copy `.env.example` to `.env`, then set `EXPO_PUBLIC_API_URL` (and `EXPO_PUBLIC_AUTH_URL` when the account service exists). For the form coach, set `EXPO_PUBLIC_EXERCISE_API_URL` to the Exercise Mechanics server (e.g. `http://<lan-ip>:8000` for `uvicorn backend.main:app --host 0.0.0.0`). That server sends no CORS headers, so the **web** build can only reach it from the same origin; iOS/Android are unaffected.
+To point the app at a backend, copy `.env.example` to `.env`, then set `EXPO_PUBLIC_API_URL` (and `EXPO_PUBLIC_AUTH_URL` when the account service exists).
 
 ## Architecture
 
