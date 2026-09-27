@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import pytest
 
-from backend.workouts.squat.rules.depth import DepthRule, DepthReading
+from backend.workouts.squat.rules.depth import KNEE_BEND_CAP_BASE, DepthRule, DepthReading
 
 _BASE_HIP_Y = 200.0
 _BASE_KNEE_Y = 340.0     # ROM = 140 px
@@ -185,3 +185,49 @@ if __name__ == "__main__":
             print(f"  FAIL {fn.__name__}"); traceback.print_exc()
     print(f"\n{passed}/{len(fns)} depth-rule tests passed")
     sys.exit(0 if passed == len(fns) else 1)
+
+
+# ---- Knee-bend cap ----------------------------------------------------------------------------
+
+def _body(hip_y: float, knee_y: float, ankle_y: float, v: float = 0.9) -> dict:
+    return {
+        "left_hip": {"x": 220.0, "y": hip_y, "v": v}, "right_hip": {"x": 180.0, "y": hip_y, "v": v},
+        "left_knee": {"x": 220.0, "y": knee_y, "v": v}, "right_knee": {"x": 180.0, "y": knee_y, "v": v},
+        "left_ankle": {"x": 230.0, "y": ankle_y, "v": v}, "right_ankle": {"x": 170.0, "y": ankle_y, "v": v},
+    }
+
+
+def _capped_rule() -> DepthRule:
+    return DepthRule(200.0, 340.0, _FULL_ROM_GATE, min_baseline_span_px=_MIN_SPAN, baseline_ankle_y=480.0)
+
+
+def test_knee_bend_is_zero_standing_and_unchanged_by_camera_shift_or_distance():
+    rule = _capped_rule()
+    standing = rule.read(_body(200.0, 340.0, 480.0))
+    assert standing.knee_bend == pytest.approx(0.0)
+    assert standing.depth_ratio == pytest.approx(0.0)
+    shifted = rule.read(_body(270.0, 410.0, 550.0))          # the whole body 70 px lower
+    assert shifted.knee_bend == pytest.approx(0.0)
+    assert shifted.depth_ratio == pytest.approx(KNEE_BEND_CAP_BASE)   # was 0.5
+    farther = rule.read(_body(280.0, 392.0, 504.0))          # 0.8× about y=600
+    assert farther.knee_bend == pytest.approx(0.0)
+    assert farther.depth_ratio == pytest.approx(KNEE_BEND_CAP_BASE)
+
+
+def test_bent_knees_leave_real_depth_uncapped():
+    rule = _capped_rule()
+    parallel = rule.read(_body(340.0, 360.0, 470.0))          # hip at standing knee height, shins tilted
+    assert parallel.knee_bend > 0.7
+    assert parallel.depth_ratio == pytest.approx(1.0)
+    assert parallel.full_depth
+
+
+def test_no_cap_without_an_ankle_reference_or_usable_ankles():
+    legacy = DepthRule(200.0, 340.0, _FULL_ROM_GATE, min_baseline_span_px=_MIN_SPAN)
+    assert legacy.read(_body(270.0, 410.0, 550.0)).depth_ratio == pytest.approx(0.5)
+    assert legacy.read(_body(270.0, 410.0, 550.0)).knee_bend is None
+    rule = _capped_rule()
+    hidden = _body(270.0, 410.0, 550.0)
+    hidden["left_ankle"]["v"] = 0.1
+    assert rule.read(hidden).knee_bend is None
+    assert rule.read(hidden).depth_ratio == pytest.approx(0.5)

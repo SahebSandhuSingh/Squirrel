@@ -4,8 +4,13 @@
  * It is the browser coach's proven tracking (Exercise_Mechanics--main/frontend-react/src/pose):
  * MediaPipe PoseLandmarker (lite model, GPU with a CPU fallback, one pose, VIDEO mode) on the front
  * camera, smoothed by the same One Euro filter (MIN_CUTOFF 1.5, BETA 15, D_CUTOFF 1), drawn as a
- * mirrored selfie view with a skeleton. Each tracked frame goes to the app as
- *   { type: 'frame', w, h, lm: [x, y, z, v] × 33 (normalized, UN-mirrored) }   or   lm: null (no body)
+ * mirrored selfie view with a skeleton. The WHOLE camera frame is shown (letterboxed, not cropped
+ * to fill the screen): a landscape camera on a portrait phone would otherwise lose most of its
+ * width, so the view looks zoomed in and the person cannot see what the tracker sees.
+ * Each tracked frame goes to the app as
+ *   { type: 'frame', t, w, h, lm: [x, y, z, v] × 33 (normalized, UN-mirrored) }   or   lm: null (no body)
+ * where t is the page's capture time (ms): the app times frames by when they were taken, not by
+ * when a message crossed into it (WebView messages can arrive late or in bursts).
  * and the app turns it into the server's pixel keypoints (workout/coach.ts).
  *
  * App → page:  { type: 'skeleton', color: 'green' | 'red' | 'white' }, { type: 'active', value: bool }
@@ -36,7 +41,8 @@ export function trackerHtml(assets: TrackerAssets, facing: 'user' | 'environment
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <style>
   html,body{margin:0;height:100%;background:#0a0a0a;overflow:hidden}
-  video,canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  video,canvas{position:absolute;inset:0;width:100%;height:100%}
+  video{object-fit:contain}
   .mirror{transform:scaleX(-1)}
 </style></head>
 <body>
@@ -84,8 +90,8 @@ function draw(lm) {
   ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
   ctx.clearRect(0, 0, w, h);
   if (!lm) return;
-  // object-fit: cover — map normalized video coords onto the cropped view.
-  const vw = video.videoWidth, vh = video.videoHeight, s = Math.max(w / vw, h / vh);
+  // object-fit: contain — map normalized video coords onto the letterboxed view.
+  const vw = video.videoWidth, vh = video.videoHeight, s = Math.min(w / vw, h / vh);
   const ox = (w - vw * s) / 2, oy = (h - vh * s) / 2;
   const P = (p) => [ox + p.x * vw * s, oy + p.y * vh * s];
   ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.strokeStyle = COLORS[color] || COLORS.white;
@@ -135,14 +141,14 @@ async function start() {
       const res = landmarker.detectForVideo(video, now);
       if (!res.landmarks || res.landmarks.length === 0) {
         resetFilter(); draw(null);
-        post({ type: 'frame', w: video.videoWidth, h: video.videoHeight, lm: null });
+        post({ type: 'frame', t: +now.toFixed(1), w: video.videoWidth, h: video.videoHeight, lm: null });
       } else {
         const t = now / 1000;
         const lm = res.landmarks[0].map((p, i) => ({ x: fx[i].f(p.x, t), y: fy[i].f(p.y, t), z: fz[i].f(p.z ?? 0, t), visibility: p.visibility }));
         draw(lm);
         const flat = [];
         for (const p of lm) flat.push(+p.x.toFixed(5), +p.y.toFixed(5), +(p.z ?? 0).toFixed(5), +(p.visibility ?? 1).toFixed(3));
-        post({ type: 'frame', w: video.videoWidth, h: video.videoHeight, lm: flat });
+        post({ type: 'frame', t: +now.toFixed(1), w: video.videoWidth, h: video.videoHeight, lm: flat });
       }
     }
     requestAnimationFrame(loop);
@@ -157,7 +163,7 @@ start();
 /** A page message as the app receives it. */
 export type TrackerMessage =
   | { type: 'status'; status: 'loading' | 'ready' | 'denied' | 'error'; detail?: string }
-  | { type: 'frame'; w: number; h: number; lm: number[] | null };
+  | { type: 'frame'; t?: number; w: number; h: number; lm: number[] | null };
 
 export function parseTrackerMessage(raw: unknown): TrackerMessage | null {
   let value: unknown = raw;
@@ -172,8 +178,9 @@ export function parseTrackerMessage(raw: unknown): TrackerMessage | null {
   if (!m || typeof m !== 'object') return null;
   if (m.type === 'status' && typeof (m as { status?: unknown }).status === 'string') return m as TrackerMessage;
   if (m.type === 'frame') {
-    const f = m as { w?: unknown; h?: unknown; lm?: unknown };
+    const f = m as { t?: unknown; w?: unknown; h?: unknown; lm?: unknown };
     if (typeof f.w !== 'number' || typeof f.h !== 'number' || f.w <= 0 || f.h <= 0) return null;
+    if (f.t !== undefined && (typeof f.t !== 'number' || !Number.isFinite(f.t))) return null;
     if (f.lm !== null && !(Array.isArray(f.lm) && f.lm.length === 33 * 4 && f.lm.every((n) => typeof n === 'number'))) return null;
     return m as TrackerMessage;
   }

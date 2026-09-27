@@ -401,6 +401,7 @@ def _build_rule(rule_id: str, module: ModuleType, template: dict, baseline: dict
             knee_y,
             template["full_rom_gate"],
             min_baseline_span_px=template["min_baseline_span_px"],
+            baseline_ankle_y=_optional_midpoint_axis(baseline, "left_ankle", "right_ankle", "y"),
         )
     if rule_id == "stance_width":
         return module.StanceWidthRule(
@@ -435,6 +436,15 @@ def _fsm_inputs(config: ExerciseConfiguration) -> dict:
     }
     values["max_frame_delta_ms"] = config.scoring["max_frame_delta_ms"]
     return values
+
+
+def _optional_midpoint_axis(baseline: dict, left: str, right: str, axis: str) -> float | None:
+    """The midpoint when the baseline holds both landmarks numerically, else None (the depth
+    rule then runs without its knee-bend cap)."""
+    try:
+        return _midpoint_axis(baseline, left, right, axis)
+    except SquatAdapterConfigurationError:
+        return None
 
 
 def _midpoint_axis(baseline: dict, left: str, right: str, axis: str) -> float:

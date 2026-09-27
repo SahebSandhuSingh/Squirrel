@@ -37,7 +37,13 @@ export const WS_RECONNECT_MS = 2000;
 export const WS_BACKPRESSURE_CAP = 1 << 16;
 
 /** One tracked camera frame: smoothed, normalized landmarks (x, y, z, visibility), or none. */
-export type PoseFrame = { width: number; height: number; landmarks: [number, number, number, number][] | null };
+export type PoseFrame = {
+  width: number;
+  height: number;
+  landmarks: [number, number, number, number][] | null;
+  /** When the tracker captured the frame, on the tracker page's own clock (ms), if it says. */
+  capturedAt?: number;
+};
 
 export type Keypoint = { x: number; y: number; z: number; v: number };
 export type FrameMessage = { t_ms: number; keypoints: Record<string, Keypoint> };
@@ -121,6 +127,10 @@ export class CoachSession {
   // Logical clock: stops while paused (browser coach usePose.ts logicalNow).
   private pausedTotal = 0;
   private pausedAt: number | null = null;
+  // Tracker clock → logical clock: the smallest delivery delay seen, so frames are timed by when
+  // they were captured even when messages from the tracker arrive late or in bursts.
+  private captureOffset: number | null = null;
+  private lastFrameT = -Infinity;
   private readonly now: () => number;
   private readonly WS: typeof WebSocket;
 
@@ -156,7 +166,7 @@ export class CoachSession {
     const ws = this.ws;
     if (!sending || !ws || ws.readyState !== 1 /* OPEN */) return;
     if ((ws.bufferedAmount ?? 0) > WS_BACKPRESSURE_CAP) return;
-    ws.send(JSON.stringify(toFrameMessage(frame, this.logicalNow())));
+    ws.send(JSON.stringify(toFrameMessage(frame, this.frameTime(frame))));
   }
 
   pause(): void {
@@ -327,6 +337,21 @@ export class CoachSession {
   }
 
   // ---------------------------------------------------------------- helpers
+
+  /** The frame's time on the logical clock: its capture time when known, never going backwards
+   *  (the server requires increasing t_ms). */
+  private frameTime(frame: PoseFrame): number {
+    const now = this.logicalNow();
+    let t = now;
+    if (frame.capturedAt !== undefined) {
+      const offset = now - frame.capturedAt;
+      if (this.captureOffset === null || offset < this.captureOffset) this.captureOffset = offset;
+      t = frame.capturedAt + this.captureOffset;
+    }
+    t = Math.max(t, this.lastFrameT);
+    this.lastFrameT = t;
+    return t;
+  }
 
   private logicalNow(): number {
     const live = this.pausedAt !== null ? this.now() - this.pausedAt : 0;
