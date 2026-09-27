@@ -8,6 +8,8 @@ export const LOCKED = {
   mealWater: true,
   /** Events: /events, /event/[id], event cards, map event markers, joining. */
   events: true,
+  /** Partner Hunt: find a workout buddy. Every /partner-hunt route shows the locked screen. */
+  partnerHunt: true,
 } as const;
 
 /** Missions that belong to a locked feature. */
@@ -19,4 +21,5 @@ export const LOCKED_MISSIONS = new Set<string>([
 export const COMING_SOON = {
   mealWater: 'Meal & water tracking is coming soon',
   events: 'Events are coming soon',
+  partnerHunt: 'Partner Hunt is coming soon',
 } as const;

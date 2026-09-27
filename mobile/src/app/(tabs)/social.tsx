@@ -1,3 +1,5 @@
+import { SoonPill } from '@/components/Locked';
+import { LOCKED } from '@/data/features';
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
@@ -59,6 +61,23 @@ export default function Social() {
 
       <Segmented items={FEEDS} value={feed} onChange={setFeed} style={{ marginTop: 16 }} />
 
+      {/* Partner Hunt: locked until launch; opens the Coming soon screen */}
+      <PressScale onPress={() => router.push('/partner-hunt')} style={styles.hunt} scaleTo={0.98} accessibilityLabel={LOCKED.partnerHunt ? 'Partner Hunt, find your workout buddy, coming soon' : 'Partner Hunt'}>
+        <View style={styles.huntIcon}>
+          <Icon name="account-heart-outline" size={24} color={colors.primary} />
+          {LOCKED.partnerHunt && (
+            <View style={styles.huntLock}>
+              <Icon name="lock" size={10} color={colors.onPrimary} />
+            </View>
+          )}
+        </View>
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={styles.huntTitle}>Partner Hunt</Text>
+          <Text style={styles.huntSub} numberOfLines={1}>Find your workout buddy</Text>
+        </View>
+        {LOCKED.partnerHunt ? <SoonPill /> : <Icon name="chevron-right" size={22} color={colors.dim} />}
+      </PressScale>
+
       {feed === 'Nearby' && (
         <Text style={styles.nearbyNote}>
           <Icon name="map-marker" size={13} color={colors.secondary} /> Posts from {city.name} · switch city from Home or Explore
@@ -118,6 +137,11 @@ export default function Social() {
 }
 
 const styles = StyleSheet.create({
+  hunt: { flexDirection: 'row', alignItems: 'center', marginTop: 12, marginBottom: 12, backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.lineHi, padding: 12 },
+  huntIcon: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(215,255,31,0.1)', borderWidth: 1, borderColor: 'rgba(215,255,31,0.35)' },
+  huntLock: { position: 'absolute', right: -5, top: -5, width: 18, height: 18, borderRadius: 9, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.bg },
+  huntTitle: { color: colors.text, fontFamily: fonts.label, fontSize: 17, letterSpacing: 1, textTransform: 'uppercase' },
+  huntSub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, marginTop: 1 },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   addStory: { position: 'absolute', right: 0, bottom: 0, width: 22, height: 22, borderRadius: 11, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.bg },
   storyName: { color: colors.sub, fontFamily: fonts.medium, fontSize: 11, marginTop: 6 },

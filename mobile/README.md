@@ -31,6 +31,7 @@ Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-h
 | `/exercise/select` | **Start Exercise** picker (opened from Home). Lists the Exercise backend's catalog (`GET /api/exercises`) with plan, time and estimated calories; Start creates a real session (`POST /api/users/{id}/sessions`) |
 | `/exercise/train/[key]` | Active exercise: the backend plan (sets × reps/seconds, rest). Tap each rep, or a real countdown for timed sets; camera mirror; pause/finish. Completion updates missions, XP and Home's Active/kcal rings |
 | `/exercise`, `/exercise/profile`, `/exercise/plan/[key]`, `/exercise/session/[id]` | Form Coach hub, coach profile, custom plan, session report (Exercise backend) |
+| `/partner-hunt/*` | **Partner Hunt** (locked · Coming soon): "Find your workout buddy". Card on the Social tab; every route (index, preferences, matching, buddy/[id], connect/[id]) shows the locked preview while `LOCKED.partnerHunt` is on |
 | `/leaderboard` | **Campus Leaderboard**: students on your campus ranked by territory area (daily, weekly, all-time) |
 | `/welcome` | Landing: cinematic sunset city, avatar + squirrel mascot, Get Started |
 | `/avatar` | **Make It You**: body, hair, outfit, shoes, accessories, gear, emotes and pet mascot |
@@ -58,6 +59,7 @@ Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-h
 
 `src/data/features.ts` holds the launch switches. While a flag is on, the feature stays visible as **Coming soon** but can't be used. Every entry point is blocked: buttons, routes and the `AppState` actions.
 - `LOCKED.mealWater`: Log water / Log a meal (Create sheet), the water and meal daily missions, and the Hydro Homie badge.
+- `LOCKED.partnerHunt`: the Social tab card and every `/partner-hunt` route (the layout renders the locked preview). The future flow and model (preferences by campus, interests, activities, availability and goals; buddy profile; connection status) are in `data/partnerHunt.ts`. There is no matching logic and no buddy data yet.
 - `LOCKED.events`: `/events` (preview + banner), `/event/[id]` (locked screen), event cards and Join pills, Explore event markers, the Home meetups carousel, joining, and the "Join a crew event" weekly mission.
 
 Locked missions are listed last and left out of the done/XP counters and claimable rewards. Set a flag to `false` at launch.
