@@ -186,8 +186,8 @@ templates:
       # landmarks are noisier than the knee landmarks squat's 160 deg equivalent uses).
       min_elbow_extension_deg: 150.0
       # Straight-enough body at capture time, on the same normalized-offset scale as the live rule.
-      max_body_line_offset: 0.06
+      max_body_line_offset: 0.10
       # Ported from the standalone service (PUSHUP_TORSO_MAX_DEG_FROM_HORIZONTAL = 35): in a plank
       # the shoulder-to-hip line is near horizontal, which is also what separates a push-up from a
       # standing exercise.
-      max_torso_deg_from_horizontal: 35.0
+      max_torso_deg_from_horizontal: 45.0

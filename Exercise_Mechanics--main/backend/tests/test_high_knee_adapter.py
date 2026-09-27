@@ -558,3 +558,26 @@ def test_a_slow_camera_counts_every_lift():
 
 def test_feet_that_barely_settle_between_lifts_still_count():
     assert _count_lifts(_alternating_high_knees(7, frame_ms=33, rest=0.12)) == 20
+
+
+def _scaled(points: dict, scale: float, *, drop_shoulders: bool = False) -> dict:
+    """The same body as the camera sees it `scale` times as big (closer or further away)."""
+    out = {name: {**p, "x": 200.0 + (p["x"] - 200.0) * scale, "y": 550.0 + (p["y"] - 550.0) * scale} for name, p in points.items()}
+    if drop_shoulders:
+        for name in ("left_shoulder", "right_shoulder"):
+            out[name]["v"] = 0.1
+    return out
+
+
+@pytest.mark.parametrize(
+    ("scale", "drop_shoulders"),
+    [(0.75, False), (1.3, False), (1.0, True)],
+    ids=["further-than-setup", "closer-than-setup", "shoulders-out-of-frame"],
+)
+def test_high_knees_count_away_from_the_setup_spot_or_with_shoulders_hidden(scale, drop_shoulders):
+    adapter = _adapter(duration=60_000)
+    status = None
+    for left, right, t in _alternating_high_knees(5, frame_ms=33):
+        points = _scaled(_keypoints(left, right), scale, drop_shoulders=drop_shoulders)
+        status = adapter.process(TrainingFrame(t, points))
+    assert status["movement"]["counted_lifts"] == 14

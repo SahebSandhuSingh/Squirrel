@@ -82,7 +82,8 @@ def test_real_bicep_curl_bundle_validates_and_exposes_decisions():
     # (which records keypoints + per-joint median only) and never live.
     assert bundle.templates["stance_width"]["scoring"] == {"role": "monitor"}
     assert bundle.templates["arms_extended"]["setup_policy"]["min_elbow_extension_deg"] == 150
-    assert bundle.contexts["pre_check"]["stance_width"] is True
+    # Feet position has no bearing on a curl: the stance check is off, only the arms are checked.
+    assert bundle.contexts["pre_check"]["stance_width"] is False
     assert bundle.contexts["pre_check"]["arms_extended"] is True
     for setup_only in ("stance_width", "arms_extended"):
         assert bundle.contexts["baseline_capture"][setup_only] is False
@@ -124,7 +125,7 @@ def test_baseline_capture_records_median_without_condition_templates(tmp_path):
     setup = build_setup_config(bundle)
     assert setup.baseline_capture_templates == ()
     assert setup.baseline_required is True
-    assert setup.pre_check_templates == ("stance_width", "arms_extended")
+    assert setup.pre_check_templates == ("arms_extended",)
 
 
 def test_capture_condition_without_required_baseline_rejected(tmp_path):

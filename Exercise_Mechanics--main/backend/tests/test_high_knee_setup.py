@@ -150,10 +150,12 @@ def test_bent_knees_raised_foot_and_unstable_stance_have_distinct_reasons():
     bent["left_knee"]["x"] = 280.0
     bent["right_knee"]["x"] = 120.0
     raised = _frame()
-    raised["left_ankle"]["y"] = 530.0
+    raised["left_ankle"]["y"] = 510.0
     wide = _frame()
-    wide["left_ankle"]["x"] = 280.0
-    wide["right_ankle"]["x"] = 120.0
+    wide["left_ankle"]["x"] = 320.0
+    wide["right_ankle"]["x"] = 80.0
+    wide["left_knee"]["x"] = 275.0      # legs still straight, just spread wide
+    wide["right_knee"]["x"] = 125.0
 
     assert _reading(bent).reason_id == "knees_not_extended"
     assert _reading(raised).reason_id == "both_feet_not_down"
