@@ -36,21 +36,21 @@ def _drive(detector, sequence):
 
 
 _FULL = [
-    (0.0, 0), (0.2, 100), (0.5, 200), (0.8, 300), (0.9, 400),
+    (0.0, 0), (0.35, 100), (0.5, 200), (0.8, 300), (0.9, 400),
     (0.8, 500), (0.5, 600), (0.05, 700),
 ]
 _SHALLOW = [
-    (0.0, 0), (0.2, 100), (0.5, 200), (0.6, 300),
-    (0.5, 400), (0.2, 500), (0.05, 600),
+    (0.0, 0), (0.35, 100), (0.5, 200), (0.6, 300),
+    (0.5, 400), (0.3, 500), (0.05, 600),
 ]
 _INVALID = [
-    (0.0, 0), (0.2, 100), (0.25, 200), (0.2, 300), (0.15, 400), (0.05, 500),
+    (0.0, 0), (0.32, 100), (0.36, 200), (0.33, 300), (0.28, 400), (0.05, 500),
 ]
 
 
 @pytest.mark.parametrize(
     ("sequence", "classification", "peak"),
-    [(_FULL, "full_rom", 0.9), (_SHALLOW, "shallow", 0.6), (_INVALID, "invalid", 0.25)],
+    [(_FULL, "full_rom", 0.9), (_SHALLOW, "shallow", 0.6), (_INVALID, "invalid", 0.36)],
 )
 def test_full_shallow_and_low_peak_cycles_remain_distinct(
     sequence,
@@ -86,8 +86,8 @@ def test_threshold_vibration_does_not_duplicate_cycles():
     states = [
         detector.update(progress, timestamp)
         for progress, timestamp in [
-            (0.0, 0), (0.16, 100), (0.14, 150), (0.18, 200), (0.35, 300),
-            (0.30, 400), (0.20, 500), (0.09, 600), (0.12, 650), (0.08, 700),
+            (0.0, 0), (0.31, 100), (0.29, 150), (0.33, 200), (0.5, 300),
+            (0.45, 400), (0.3, 500), (0.24, 600), (0.27, 650), (0.23, 700),
         ]
     ]
     cycles = [state.cycle for state in states if state.cycle is not None]
@@ -113,7 +113,7 @@ def test_long_tracking_gap_invalidates_open_cycle_on_recovery():
     detector.update(0.0, 0)
     detector.update(0.4, 100)
     detector.update(None, 150)
-    state = detector.update(0.3, 400)  # exceeds configured 100 ms frame-gap boundary
+    state = detector.update(0.3, 1300)  # exceeds the configured 1000 ms tracking-gap limit
     assert state.cycle is not None
     assert state.cycle.classification == "invalid"
     assert state.cycle.tracking_invalid is True

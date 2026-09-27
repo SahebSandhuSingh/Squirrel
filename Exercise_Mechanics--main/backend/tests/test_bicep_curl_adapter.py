@@ -118,7 +118,7 @@ def _frame(
 # Sequences in normalized progress space (same shape as the squat adapter fixtures).
 _FULL = [(0.0, 0), (0.3, 100), (0.6, 200), (0.9, 300), (0.95, 400), (0.9, 500), (0.7, 600), (0.3, 700), (0.05, 800)]
 _SHALLOW = [(0.0, 0), (0.3, 100), (0.6, 200), (0.7, 300), (0.5, 400), (0.3, 500), (0.05, 600)]
-_INVALID = [(0.0, 0), (0.15, 100), (0.2, 200), (0.15, 300), (0.12, 400), (0.05, 500)]
+_INVALID = [(0.0, 0), (0.28, 100), (0.35, 200), (0.3, 300), (0.27, 400), (0.05, 500)]
 
 
 def _adapter(target_reps: int = 3, *, enabled_rules: tuple[str, ...] = ()):
@@ -196,29 +196,28 @@ def test_invalid_micro_attempt_has_no_score_or_set_progress():
 
 # --------------------------------------------------------------------- dual-arm ROM
 
-def test_weaker_arm_drives_progress_and_rom_payload():
-    # Left curled deep, right lagging -> progress is the weaker (right) arm.
+def test_leading_arm_drives_progress_and_rom_payload():
+    # Left curled deep, right lagging -> progress is the leading (left) arm.
     status = _adapter().process(_frame(0.8, 0, right_progress=0.4))
     rom = status["rom"]
     assert rom["left_ratio"] == pytest.approx(0.8, abs=1e-3)
     assert rom["right_ratio"] == pytest.approx(0.4, abs=1e-3)
-    assert rom["ratio"] == pytest.approx(0.4, abs=1e-3)  # min of the two
-    assert rom["weaker_side"] == "right"
-    # The left arm alone clears the gate; the rep does not, because the weaker arm rules.
-    assert rom["full_rom"] is False
+    assert rom["ratio"] == pytest.approx(0.8, abs=1e-3)  # max of the two
+    assert rom["weaker_side"] == "right"                 # still named for coaching
+    assert rom["full_rom"] is True
     assert rom["left_full"] is True and rom["right_full"] is False
 
 
-def test_rep_is_full_only_when_both_arms_reach_gate():
-    # Left reaches the gate every frame, right never does -> the rep is shallow, not full.
-    seq = [(0.0, 0), (0.5, 100), (0.9, 200), (0.95, 300), (0.9, 400), (0.4, 500), (0.05, 600)]
-    adapter = _adapter()
+def test_single_arm_curls_count():
+    # The right arm hangs throughout (the app's single-arm curl): every left curl counts.
+    adapter = _adapter(target_reps=3)
     status = None
-    for progress, ts in seq:
-        # right arm capped at 0.6 (below the gate)
-        status = adapter.process(_frame(progress, ts, right_progress=min(progress, 0.6)))
-    assert status["counters"]["full_rom"] == 0
-    assert status["counters"]["shallow"] == 1
+    for rep in range(2):
+        for progress, ts in _FULL:
+            status = adapter.process(_frame(progress, rep * 1000 + ts, right_progress=0.0))
+        status = adapter.process(_frame(0.0, rep * 1000 + 900, right_progress=0.0))
+    assert status["counters"]["qualified"] == 2
+    assert status["counters"]["full_rom"] == 2
 
 
 def test_elbow_flare_reaches_rank_one_issue_cue_and_configured_score_penalty():
@@ -296,13 +295,16 @@ def test_lateral_torso_warning_is_green_silent_and_unpenalized():
 
 # ------------------------------------------------------------------- tracking + set
 
-def test_missing_keypoint_pauses_tracking():
+def test_missing_shoulder_pauses_tracking_but_a_hidden_arm_does_not():
     adapter = _adapter()
     frame = _keypoints(0.5, v=0.9)
-    del frame["right_wrist"]
+    del frame["right_shoulder"]
     status = adapter.process(TrainingFrame(0, frame))
     assert status["tracking"]["available"] is False
     assert status["rom"]["available"] is False
+    frame = _keypoints(0.5, v=0.9)
+    del frame["right_wrist"]
+    assert adapter.process(TrainingFrame(100, frame))["rom"]["available"] is True
 
 
 def test_set_completes_after_target_reps():
@@ -434,3 +436,33 @@ def adapter_for(**live_flags: bool):
     return build_bicep_curl_adapter(
         baseline=_BASELINE, target_reps=1, config=replace(_CONFIG, contexts=contexts)
     )
+
+
+def _smooth_reps(count, *, frame_ms, period_ms=2000.0, rest=0.0, peak=1.0):
+    from math import cos, pi
+    frames, t = [], 0.0
+    while t <= count * period_ms + 300:
+        phase = (t % period_ms) / period_ms if t < count * period_ms else 0.0
+        frames.append((rest + (peak - rest) * (1 - cos(2 * pi * phase)) / 2, t))
+        t += frame_ms
+    return frames
+
+
+def _count_curls(sequence, **frame_options):
+    adapter = _adapter(target_reps=10)
+    status = None
+    for progress, t in sequence:
+        status = adapter.process(_frame(progress, t, **frame_options))
+    return status["set"]["completed_reps"]
+
+
+def test_a_slow_camera_counts_every_curl():
+    assert _count_curls(_smooth_reps(3, frame_ms=150)) == 3
+
+
+def test_lowering_without_fully_straightening_still_counts():
+    assert _count_curls(_smooth_reps(3, frame_ms=33, rest=0.2)) == 3
+
+
+def test_quick_back_to_back_curls_each_count():
+    assert _count_curls(_smooth_reps(4, frame_ms=33, period_ms=1200)) == 4

@@ -256,11 +256,9 @@ class BicepCurlAdapter:
     def _observation(self, reading) -> RepObservation:
         """Turn one curl frame into the movement facts the FSM acts on.
 
-        The two reductions are deliberately different. A curl is FULL only when the weaker arm
-        reaches the gate (`min`), but it has STARTED and ENDED according to the leading arm
-        (`max`) — the movement is under way as soon as either arm leaves rest, and it is not over
-        until the higher arm is back down. Driving the return from the weaker arm ends the rep the
-        instant the FIRST arm lowers, while the other is still curled."""
+        Everything follows the leading arm (`max`): the movement is under way as soon as either
+        arm leaves rest, reaches full range when either arm does, and is over once the higher arm
+        is back down — so both-arm, alternating and one-arm curls all count."""
         return RepObservation(
             progress=reading.progress,
             movement_started=reading.leading_ratio > self._descent_trigger,
@@ -379,7 +377,7 @@ class BicepCurlAdapter:
                 "percent": _percent(rom.progress) if rom is not None else None,
                 "full_rom_gate": self._rom.full_rom_gate,
                 "full_rom": (rom.full_rom if rom is not None else None),
-                # Per-arm detail so coaching can name the limiting side; the weaker arm is the signal.
+                # Per-arm detail so coaching can name the arm that curled less; the leading arm is the signal.
                 "left_ratio": (round(rom.left_ratio, 3) if rom is not None else None),
                 "right_ratio": (round(rom.right_ratio, 3) if rom is not None else None),
                 "left_percent": _percent(rom.left_ratio) if rom is not None else None,
@@ -521,6 +519,7 @@ def _fsm_inputs(config: ExerciseConfiguration) -> dict:
         )
     }
     values["max_frame_delta_ms"] = config.scoring["max_frame_delta_ms"]
+    values["max_tracking_gap_ms"] = config.fsm.get("max_tracking_gap_ms")
     return values
 
 

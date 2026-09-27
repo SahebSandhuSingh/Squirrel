@@ -172,14 +172,13 @@ class TestBodyLineFault:
 
 
 class TestCameraCheck:
-    """A confirmed front-on view pauses the machine: it is unmeasurable, not merely imperfect."""
+    """A front-on view only cues: it never stops push-ups from counting."""
 
-    def test_a_front_on_set_counts_no_reps_and_says_why(self):
+    def test_a_front_on_rep_still_counts(self):
         status = Driver().rep(FULL, lateral=FRONT_ON_LATERAL_PX, far_v=0.9)
-        assert status["counters"]["qualified"] == 0
-        assert status["counters"]["attempts"] == 0
-        assert status["tracking"]["available"] is False
-        assert status["tracking"]["invalidated_by"] == ["side_view_orientation"]
+        assert status["counters"]["qualified"] == 1
+        assert status["tracking"]["available"] is True
+        assert status["tracking"]["invalidated_by"] == []
 
     def test_the_user_is_told_what_to_fix(self):
         driver = Driver()
@@ -194,21 +193,12 @@ class TestCameraCheck:
         assert status["cue"]["rule_id"] == "side_view_orientation"
         assert "side to the camera" in status["cue"]["text"]
 
-    def test_unmeasurable_is_distinct_from_untracked(self):
-        """Landmarks can be perfectly readable and still not mean anything from this angle."""
-        status = Driver().rep(FULL, lateral=FRONT_ON_LATERAL_PX, far_v=0.9)
-        assert status["tracking"]["unavailable_rule_ids"] == []
-        assert status["tracking"]["invalidated_by"] == ["side_view_orientation"]
-
-    def test_turning_back_resumes_the_set(self):
-        """Recovery costs a moment: the hysteresis has to clear AND the machine needs to see a
-        resting top-of-push-up frame again before it will open a new attempt — the same contract
-        the FSM applies after any tracking loss, so a rep cannot resume mid-descent."""
+    def test_turning_front_on_and_back_keeps_counting(self):
         driver = Driver()
         driver.rep(FULL, lateral=FRONT_ON_LATERAL_PX, far_v=0.9)
         driver.rest()
         status = driver.rep(FULL)
-        assert status["counters"]["qualified"] == 1
+        assert status["counters"]["qualified"] == 2
         assert status["tracking"]["available"] is True
         assert status["tracking"]["invalidated_by"] == []
 
@@ -303,3 +293,35 @@ class TestWiring:
     def test_target_reps_must_be_a_positive_integer(self):
         with pytest.raises(PushUpAdapterConfigurationError, match="positive integer"):
             build_pushup_adapter(baseline=_BASELINE, target_reps=0, config=_CONFIG)
+
+
+def _smooth_reps(count, *, frame_ms, period_ms=2000.0, rest=0.0, peak=1.0):
+    """`count` back-to-back reps (a smooth down-and-up), sampled every `frame_ms`, returning only
+    to `rest` between them."""
+    from math import cos, pi
+    frames, t = [], 0.0
+    while t <= count * period_ms + 300:
+        phase = (t % period_ms) / period_ms if t < count * period_ms else 0.0
+        frames.append((rest + (peak - rest) * (1 - cos(2 * pi * phase)) / 2, t))
+        t += frame_ms
+    return frames
+
+
+class TestRealCameras:
+    """Every real push-up counts (configs/fsm.yaml)."""
+
+    def _count(self, sequence):
+        a = adapter(target_reps=10)
+        status = None
+        for progress, t in sequence:
+            status = a.process(frame(progress, t))
+        return status["set"]["completed_reps"]
+
+    def test_a_slow_camera_counts_every_push_up(self):
+        assert self._count(_smooth_reps(3, frame_ms=150)) == 3
+
+    def test_pressing_up_without_locking_out_still_counts(self):
+        assert self._count(_smooth_reps(3, frame_ms=33, rest=0.2)) == 3
+
+    def test_quick_back_to_back_push_ups_each_count(self):
+        assert self._count(_smooth_reps(4, frame_ms=33, period_ms=1200)) == 4

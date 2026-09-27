@@ -2,7 +2,7 @@
 
 Synthetic shoulder/elbow/wrist/hip landmarks place each wrist at a chosen height, so every
 biomechanical claim is checked in isolation (no FSM, no rep counting): the per-arm ratio math
-against the person's baseline hang, the weaker-arm `progress`, the full-ROM gate, the shallow-vs-full
+against the person's baseline hang, the leading-arm `progress`, the full-ROM gate, the shallow-vs-full
 verdict a rep machine will use, body translation and baseline-scale invariance, shrug isolation,
 the dual-arm limiting-side report, and the baseline/keypoint guards.
 
@@ -128,12 +128,12 @@ def test_wrist_below_the_resting_hang_is_negative_progress():
     assert r.progress < 0.0
 
 
-def test_progress_is_the_weaker_arm():
+def test_progress_is_the_leading_arm_so_either_arm_counts():
     r = _rule().read(_kps(1.0, 0.4))
     assert r.left_ratio == pytest.approx(1.0, abs=1e-9)
     assert r.right_ratio == pytest.approx(0.4, abs=1e-9)
-    assert r.progress == pytest.approx(r.right_ratio)
-    assert r.weaker_side == "right"
+    assert r.progress == pytest.approx(r.left_ratio)
+    assert r.weaker_side == "right"   # still named for coaching
 
 
 def test_whole_body_vertical_translation_is_invariant():
@@ -193,18 +193,20 @@ def test_arms_are_measured_independently():
 
 # ── the full-ROM gate / shallow verdict ──────────────────────────────────────────
 
-def test_full_rom_only_when_both_arms_reach_gate():
+def test_full_rom_when_the_leading_arm_reaches_gate():
     deep = _FULL_ROM_GATE + 0.05
     both = _rule().read(_kps(deep, deep))
     assert both.left_full and both.right_full
     assert both.full_rom is True
     assert both.shortfall is None
-    # One arm short of the gate -> not full (shallow when the peak later clears min_rep_peak).
-    one_short = _rule().read(_kps(deep, _FULL_ROM_GATE - 0.2))
-    assert one_short.left_full and not one_short.right_full
-    assert one_short.full_rom is False
-    assert one_short.weaker_side == "right"
-    assert one_short.shortfall is not None and one_short.shortfall > 0
+    # A single-arm curl: the other arm hangs. Full, with the resting arm named for coaching.
+    single = _rule().read(_kps(deep, 0.0))
+    assert single.left_full and not single.right_full
+    assert single.full_rom is True
+    assert single.weaker_side == "right"
+    short = _rule().read(_kps(_FULL_ROM_GATE - 0.2, 0.0))
+    assert short.full_rom is False
+    assert short.shortfall is not None and short.shortfall > 0
 
 
 def test_is_full_rom_gate_boundary():
@@ -216,23 +218,40 @@ def test_is_full_rom_gate_boundary():
 
 # ── keypoint + construction guards ───────────────────────────────────────────────
 
-def test_missing_keypoint_returns_none():
+def test_missing_shoulder_or_hip_returns_none():
     frame = _kps(0.5, 0.5)
-    del frame["right_wrist"]
+    del frame["right_shoulder"]
+    assert _rule().read(frame) is None
+    frame = _kps(0.5, 0.5)
+    frame["left_hip"]["v"] = 0.1
     assert _rule().read(frame) is None
 
 
-def test_low_confidence_returns_none():
+def test_one_hidden_arm_is_read_from_the_other():
+    frame = _kps(0.2, 0.8)
+    del frame["left_wrist"]
+    r = _rule().read(frame)
+    assert r.progress == pytest.approx(0.8, abs=1e-9)
+    assert r.left_ratio == pytest.approx(r.right_ratio)
+    frame = _kps(0.2, 0.8)
+    frame["right_elbow"]["v"] = 0.1
+    assert _rule().read(frame).progress == pytest.approx(0.2, abs=1e-9)
+
+
+def test_no_measurable_arm_returns_none():
     frame = _kps(0.5, 0.5)
-    frame["left_elbow"]["v"] = 0.1
+    del frame["left_wrist"]
+    frame["right_elbow"]["v"] = 0.1
     assert _rule().read(frame) is None
 
 
-def test_live_upper_arm_below_minimum_returns_none():
-    """A collapsed shoulder→elbow span means the person is turned away or the joints have merged;
-    the normalization would divide by noise."""
-    frame = _kps(0.5, 0.5)
+def test_live_upper_arm_below_minimum_is_not_measured():
+    """A collapsed shoulder→elbow span means the arm is turned away or the joints have merged;
+    the normalization would divide by noise, so that arm is left out (both out: no reading)."""
+    frame = _kps(0.5, 0.9)
     frame["left_elbow"]["y"] = frame["left_shoulder"]["y"] + 5.0
+    assert _rule().read(frame).progress == pytest.approx(0.9, abs=1e-9)
+    frame["right_elbow"]["y"] = frame["right_shoulder"]["y"] + 5.0
     assert _rule().read(frame) is None
 
 

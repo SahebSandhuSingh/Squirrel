@@ -61,6 +61,7 @@ class HighKneeLiftDetector:
         reset_dwell_ms: float,
         stale_phase_ms: float,
         max_frame_delta_ms: float,
+        max_tracking_gap_ms: float | None = None,
     ) -> None:
         if side not in {"left", "right"}:
             raise ValueError("lift detector side must be 'left' or 'right'")
@@ -77,6 +78,7 @@ class HighKneeLiftDetector:
             reset_dwell_ms=reset_dwell_ms,
             stale_phase_ms=stale_phase_ms,
             max_frame_delta_ms=max_frame_delta_ms,
+            max_tracking_gap_ms=max_tracking_gap_ms,
         )
         self._reached_gate = reached_gate
         self._attempt_started_t_ms: float | None = None
@@ -194,4 +196,5 @@ def high_knee_lift_detector(
         reset_dwell_ms=fsm["reset_dwell_ms"],
         stale_phase_ms=fsm["stale_phase_ms"],
         max_frame_delta_ms=max_frame_delta_ms,
+        max_tracking_gap_ms=fsm.get("max_tracking_gap_ms"),
     )

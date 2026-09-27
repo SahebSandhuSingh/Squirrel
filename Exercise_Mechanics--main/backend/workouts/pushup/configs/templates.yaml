@@ -150,12 +150,9 @@ templates:
     clear_frames: 2
     # Degeneracy floor: below this torso length the ratios are meaningless.
     min_torso_length_px: 60.0
-    # A confirmed front-on view does not merely cue: it PAUSES the rep machine, exactly as a loss of
-    # tracking does. Both live signals are sagittal-plane measurements, so a squared-up body does not
-    # produce a worse reading, it produces a meaningless one — and a meaningless reading that still
-    # counted reps would hand the set summary numbers nobody can stand behind. Ported from the
-    # standalone service, where a failed orientation check withheld the frame's joint angles outright.
-    invalidates_measurement: true
+    # A front-on view only cues ("Turn your side to the camera"); it never pauses counting. Pausing
+    # the rep machine on this check (a provisional threshold) stopped real push-ups from counting.
+    invalidates_measurement: false
     scoring:
       # It still never SCORES: a wrong camera angle is not a fault in the user's form. It cues,
       # it pauses, it contributes nothing to any rep score.

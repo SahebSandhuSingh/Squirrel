@@ -5,7 +5,7 @@ completely on its own — no rep FSM, no phase machine, no rep counting. From a 
 shoulder + elbow + wrist landmarks it answers, for BOTH arms:
 
     1. HOW FAR HAS THE WRIST RISEN right now?  → a normalized per-arm `*_ratio` signal
-    2. Is the rep deep enough for FULL?         → the `is_full_rom()` gate on the WEAKER arm
+    2. Is the rep deep enough for FULL?         → the `is_full_rom()` gate on the LEADING arm
 
 Division of responsibility (why this is FSM-free), identical to the squat depth rule:
     • This rule owns WHAT "full curl" means (one gate) and how the curl is measured.
@@ -36,14 +36,14 @@ The measurement (the load-bearing part) — WRIST HEIGHT, not elbow angle:
     accepted setup fixes camera distance for the set. `z` is unreliable on a front-view camera, so
     this is a 2D measurement.
 
-`progress` — the movement's headline value — is the WEAKER arm, `min(left_ratio, right_ratio)`. A
-rep therefore only reaches the full-ROM gate when BOTH arms reach it; if one arm curls short the rep
-is shallow, and the limiting side is reported so coaching can name it.
+`progress` — the movement's headline value — is the LEADING arm, `max(left_ratio, right_ratio)`
+(also reported as `leading_ratio`). A curl with either arm counts: both arms together, alternating
+arms, or one arm while the other is out of view. Requiring BOTH arms (the weaker-arm `min`) meant
+alternating curls, and any frame where one arm was hidden, never counted. The weaker arm is still
+reported (`weaker_side`, the per-arm ratios) so coaching can name a side that curls short.
 
-`leading_ratio` is the opposite reduction, `max(...)`, and it is what says the rep is OVER: the
-movement has returned to rest only once the arm furthest through the curl is back down. Reporting
-only the weaker arm would end a rep the moment the FIRST arm lowered, while the other was still
-curled — see `engine.rep_fsm.RepObservation`.
+Only the shoulders and hips are required live (the body frame). Each arm is measured when its
+elbow and wrist are usable; with one arm out of view, the visible arm stands in for both.
 
 Thresholds are NOT hardcoded here. `target_offset`, `min_upper_arm_px` and `full_rom_gate` are
 passed verbatim from the curl template; the curl ROM signal deliberately has no hysteresis.
@@ -62,12 +62,14 @@ RULE_ID = "curl_rom"
 REQUIRED_KEYPOINTS = (
     "left_shoulder",
     "right_shoulder",
-    "left_elbow",
-    "right_elbow",
-    "left_wrist",
-    "right_wrist",
     "left_hip",
     "right_hip",
+)
+# Per arm, optional live: a curl is read from whichever arms are usable.
+_ARM_JOINTS = ("elbow", "wrist")
+# The baseline (arms hanging, captured at setup) still needs both arms: it fixes each arm's scale.
+BASELINE_KEYPOINTS = REQUIRED_KEYPOINTS + tuple(
+    f"{side}_{joint}" for side in ("left", "right") for joint in _ARM_JOINTS
 )
 
 _SIDES = ("left", "right")
@@ -89,18 +91,18 @@ class CurlRomReading:
     compares peaks against the gate, so precision matters); presentation rounding is a caller
     concern."""
 
-    progress: float          # min(left_ratio, right_ratio) — the weaker arm; the FSM signal
+    progress: float          # max(left_ratio, right_ratio) — the leading arm; the FSM signal
     leading_ratio: float     # max(left_ratio, right_ratio) — the arm furthest through the curl
     left_ratio: float        # 0.0 at the baseline hang → 1.0 at the target height (>1 beyond it)
     right_ratio: float
     left_offset: float       # raw normalized wrist offset below the baseline shoulder target
     right_offset: float
     full_rom_gate: float      # the sole full-ROM boundary from exercise config
-    full_rom: bool            # did BOTH arms reach the gate (progress ≥ gate)
+    full_rom: bool            # did the leading arm reach the gate (progress ≥ gate)
     left_full: bool           # did the left arm alone reach the gate
     right_full: bool          # did the right arm alone reach the gate
-    weaker_side: str          # 'left' or 'right' — the limiting arm (the min)
-    shortfall: float | None   # gate − progress when the weaker arm is short; None at/over the gate
+    weaker_side: str          # 'left' or 'right' — the arm that curled less (coaching only)
+    shortfall: float | None   # gate − progress when the curl is short; None at/over the gate
 
 
 class CurlRomRule:
@@ -131,7 +133,7 @@ class CurlRomRule:
     ) -> None:
         if not full_rom_gate > 0.0:
             raise ValueError(f"full ROM gate must be positive, got {full_rom_gate}")
-        points = reference_xy(baseline, REQUIRED_KEYPOINTS)
+        points = reference_xy(baseline, BASELINE_KEYPOINTS)
         if points is None:
             raise ValueError(
                 "curl baseline requires finite shoulder, elbow, wrist and hip coordinates"
@@ -179,10 +181,10 @@ class CurlRomRule:
     def read(self, keypoints: dict) -> CurlRomReading | None:
         """Compute this frame's curl progress from live shoulder, elbow, wrist and hip landmarks.
 
-        Returns None when any required landmark is missing or below CONFIDENCE_MIN, when either
-        upper arm reads implausibly short (the person is turned away or the joints have collapsed),
-        or when the arithmetic is not finite — the caller must treat this frame as "no reading"
-        (never advance a rep or score on partial data)."""
+        An arm is measured when its elbow and wrist are usable and its upper arm reads plausibly
+        long; an arm that is not stands in as the other arm's reading. Returns None when a shoulder
+        or hip is missing or below CONFIDENCE_MIN, or when neither arm can be measured — the caller
+        must treat this frame as "no reading" (never advance a rep or score on partial data)."""
         pts = usable_xy(keypoints, REQUIRED_KEYPOINTS)
         if pts is None:
             return None
@@ -194,28 +196,33 @@ class CurlRomRule:
         ratios: dict[str, float] = {}
         offsets: dict[str, float] = {}
         for side in _SIDES:
+            arm = usable_xy(keypoints, tuple(f"{side}_{joint}" for joint in _ARM_JOINTS))
+            if arm is None:
+                continue
             shoulder = pts[f"{side}_shoulder"]
-            elbow = pts[f"{side}_elbow"]
-            wrist = pts[f"{side}_wrist"]
+            elbow = arm[f"{side}_elbow"]
+            wrist = arm[f"{side}_wrist"]
             upper_arm = hypot(shoulder[0] - elbow[0], shoulder[1] - elbow[1])
             if not upper_arm >= self._min_upper_arm_px:
-                return None
+                continue
             wrist_height = _height(wrist, hip_midpoint, up_axis)
             offset = (
                 self._baseline_shoulder_height[side] - wrist_height
             ) / self._upper_arm[side]
             ratio = (self._rest[side] - offset) / self._span[side]
             if not (isfinite(offset) and isfinite(ratio)):
-                return None
+                continue
             offsets[side] = offset
             ratios[side] = ratio
+        if not ratios:
+            return None
+        for side, other in (("left", "right"), ("right", "left")):
+            if side not in ratios:
+                ratios[side], offsets[side] = ratios[other], offsets[other]
 
-        progress = min(ratios["left"], ratios["right"])
-        # Both reductions are reported because a double-arm rep needs BOTH: it is full only when
-        # the weaker arm reaches the gate, and over only when the LEADING arm has come back down.
-        # A single scalar cannot answer both questions — see engine.rep_fsm.RepObservation.
-        leading = max(ratios["left"], ratios["right"])
-        # Ties resolve to the left arm; only the min value matters for the FSM signal.
+        progress = max(ratios["left"], ratios["right"])
+        leading = progress
+        # Ties resolve to the left arm; coaching only.
         weaker_side = "left" if ratios["left"] <= ratios["right"] else "right"
 
         return CurlRomReading(
@@ -239,7 +246,7 @@ class CurlRomRule:
 
     def is_full_rom(self, progress: float) -> bool:
         """The gate: True once `progress` reaches the configured full-ROM boundary. Applied to a
-        rep's PEAK `progress` (the weaker arm), peak < gate ⇒ the rep is SHALLOW. The single
+        rep's PEAK `progress` (the leading arm), peak < gate ⇒ the rep is SHALLOW. The single
         definition of a full curl, so the per-frame `full_rom` and the per-rep shallow verdict can
         never disagree (both go through here)."""
         return progress >= self._full_rom_gate

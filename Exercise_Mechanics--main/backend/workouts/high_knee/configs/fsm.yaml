@@ -26,11 +26,16 @@ transitions:
   - {from: reset, to: reset, when: tracking_recovery_failed, action: reset_attempt}
   - {from: reset, to: setup, when: reset_dwell_elapsed, action: reset_attempt, emit: rep_cycle_completed}
 
-# Initial development concepts only. Phase 4/5 rig evidence owns production tuning.
-movement_start: 0.15
-reset: 0.10
-min_lift_peak: 0.30
-turnaround_ms: 150
-reset_dwell_ms: 200
+# Progress is 0 at the standing knee height and 1 with the knee at hip height. A lift: the knee
+# rises past min_lift_peak, then drops back within `reset` of standing. The generous band and short
+# dwell keep up with fast, bouncy high knees where the foot barely settles between lifts.
+movement_start: 0.30
+reset: 0.25
+min_lift_peak: 0.40
+turnaround_ms: 100
+reset_dwell_ms: 100
 stale_phase_ms: 5000
+# Slow cameras (under 10 frames a second) and a joint hidden for a moment must not throw the rep
+# away; only a longer dropout does.
+max_tracking_gap_ms: 1000
 
