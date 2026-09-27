@@ -392,7 +392,7 @@ export const CityMap = React.memo(function CityMap(props: {
         </LinearGradient>
         <RadialGradient id={`${uid}vig`} cx="0.5" cy="0.5" r="0.75">
           <Stop offset="0.55" stopColor="#0B0A18" stopOpacity={0} />
-          <Stop offset="1" stopColor="#05060B" stopOpacity={0.75} />
+          <Stop offset="1" stopColor="#05040C" stopOpacity={0.75} />
         </RadialGradient>
         <RadialGradient id={`${uid}glow`} cx="0.5" cy="0.5" r="0.5">
           <Stop offset="0" stopColor={art.purple} stopOpacity={0.22} />
@@ -405,10 +405,10 @@ export const CityMap = React.memo(function CityMap(props: {
       <Ellipse cx={230} cy={300} rx={260} ry={300} fill={`url(#${uid}glow)`} />
 
       {/* streets + blocks */}
-      <Path d={geo.streets} stroke="#23273E" strokeWidth={1.6} fill="none" />
-      <Path d={geo.blocks[0]} fill="#141729" stroke="#141729" strokeWidth={5} strokeLinejoin="round" />
-      <Path d={geo.blocks[1]} fill="#181B31" stroke="#181B31" strokeWidth={5} strokeLinejoin="round" />
-      <Path d={geo.blocks[2]} fill="#1D213A" stroke="#1D213A" strokeWidth={5} strokeLinejoin="round" />
+      <Path d={geo.streets} stroke="#2B2140" strokeWidth={1.6} fill="none" />
+      <Path d={geo.blocks[0]} fill="#15122B" stroke="#15122B" strokeWidth={5} strokeLinejoin="round" />
+      <Path d={geo.blocks[1]} fill="#1A1633" stroke="#1A1633" strokeWidth={5} strokeLinejoin="round" />
+      <Path d={geo.blocks[2]} fill="#201A3D" stroke="#201A3D" strokeWidth={5} strokeLinejoin="round" />
       <Path d={geo.windows[0]} fill={art.amber} opacity={0.55} />
       <Path d={geo.windows[1]} fill={art.pinkHi} opacity={0.55} />
       <Path d={geo.windows[2]} fill={art.cyan} opacity={0.5} />
@@ -446,7 +446,7 @@ export const CityMap = React.memo(function CityMap(props: {
 
       {/* bridge + cyan boulevard */}
       <Path d={BRIDGE_D} transform="translate(2 3)" fill="#000000" opacity={0.5} />
-      <Path d={BRIDGE_D} fill="#252943" stroke="#373C5F" strokeWidth={1.5} strokeLinejoin="round" />
+      <Path d={BRIDGE_D} fill="#2A2246" stroke="#3E3363" strokeWidth={1.5} strokeLinejoin="round" />
       <Path d="M190.5 272 L192.5 374 M210 272 L212 374" stroke={art.violet} strokeWidth={1.4} strokeOpacity={0.9} />
       <Path d={`${circ(191, 290, 1.4)} ${circ(191.6, 312, 1.4)} ${circ(192, 334, 1.4)} ${circ(192.3, 356, 1.4)} ${circ(210.5, 290, 1.4)} ${circ(211, 312, 1.4)} ${circ(211.4, 334, 1.4)} ${circ(211.8, 356, 1.4)}`} fill={art.sunTop} />
       <Neon d={CYAN_AVE} color={art.cyan} w={0.9} />
@@ -456,24 +456,24 @@ export const CityMap = React.memo(function CityMap(props: {
       {/* running route */}
       {route ? (
         <G>
-          <Path d={ROUTE_D} stroke={art.route} strokeOpacity={0.14} strokeWidth={3} fill="none" strokeDasharray="2 5" strokeLinecap="round" />
-          <AnimatedPath d={ROUTE_D} stroke={art.route} strokeOpacity={0.16} strokeWidth={16} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} strokeDashoffset={offset} />
-          <AnimatedPath d={ROUTE_D} stroke={art.route} strokeOpacity={0.4} strokeWidth={8} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} strokeDashoffset={offset} />
-          <AnimatedPath d={ROUTE_D} stroke={art.route} strokeWidth={4} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} strokeDashoffset={offset} />
-          <AnimatedPath d={ROUTE_D} stroke="#E1E8FF" strokeWidth={1.3} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} strokeDashoffset={offset} />
+          <Path d={ROUTE_D} stroke={art.lime} strokeOpacity={0.14} strokeWidth={3} fill="none" strokeDasharray="2 5" strokeLinecap="round" />
+          <AnimatedPath d={ROUTE_D} stroke={art.lime} strokeOpacity={0.16} strokeWidth={16} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} strokeDashoffset={offset} />
+          <AnimatedPath d={ROUTE_D} stroke={art.lime} strokeOpacity={0.4} strokeWidth={8} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} strokeDashoffset={offset} />
+          <AnimatedPath d={ROUTE_D} stroke={art.lime} strokeWidth={4} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} strokeDashoffset={offset} />
+          <AnimatedPath d={ROUTE_D} stroke="#FFE1F3" strokeWidth={1.3} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} strokeDashoffset={offset} />
 
           {/* start */}
-          <Circle cx={start.x} cy={start.y} r={11} fill={art.route} opacity={0.18} />
+          <Circle cx={start.x} cy={start.y} r={11} fill={art.lime} opacity={0.18} />
           <Circle cx={start.x} cy={start.y} r={8} fill="none" stroke="#FFFFFF" strokeWidth={1.8} strokeDasharray="3 2.5" />
-          <Circle cx={start.x} cy={start.y} r={4} fill={art.route} stroke="#FFFFFF" strokeWidth={1.4} />
+          <Circle cx={start.x} cy={start.y} r={4} fill={art.lime} stroke="#FFFFFF" strokeWidth={1.4} />
 
           {/* finish flag */}
           <Circle cx={end.x} cy={end.y} r={10} fill={art.pink} opacity={0.18} />
-          <Circle cx={end.x} cy={end.y} r={4.5} fill="#FFFFFF" stroke={art.route} strokeWidth={2} />
+          <Circle cx={end.x} cy={end.y} r={4.5} fill="#FFFFFF" stroke={art.lime} strokeWidth={2} />
           <Path d={`M${f(end.x)} ${f(end.y)} V${f(end.y - 22)}`} stroke="#FFFFFF" strokeWidth={1.8} strokeLinecap="round" />
           <Path
             d={`M${f(end.x)} ${f(end.y - 22)} h14 l-3.5 5 l3.5 5 h-14 Z`}
-            fill={art.route}
+            fill={art.lime}
             stroke="#FFFFFF"
             strokeWidth={1.2}
             strokeLinejoin="round"
@@ -564,25 +564,25 @@ export const RunRoute = React.memo(function RunRoute(props: { progress?: Animate
     <Svg width="100%" height="100%" viewBox="0 0 400 700" preserveAspectRatio="xMidYMid slice" style={style}>
       <Defs>
         <LinearGradient id={`${uid}fade`} x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor={art.route} stopOpacity={0.35} />
-          <Stop offset="1" stopColor={art.route} stopOpacity={1} />
+          <Stop offset="0" stopColor={art.lime} stopOpacity={0.35} />
+          <Stop offset="1" stopColor={art.lime} stopOpacity={1} />
         </LinearGradient>
         <RadialGradient id={`${uid}hg`} cx="0.5" cy="0.5" r="0.5">
-          <Stop offset="0" stopColor={art.route} stopOpacity={0.7} />
-          <Stop offset="1" stopColor={art.route} stopOpacity={0} />
+          <Stop offset="0" stopColor={art.lime} stopOpacity={0.7} />
+          <Stop offset="1" stopColor={art.lime} stopOpacity={0} />
         </RadialGradient>
       </Defs>
       {/* whole route, faint */}
-      <Path d={shapes.full} fill={art.route} opacity={0.2} />
-      {shapes.ahead ? <Path d={shapes.ahead} fill={art.route} opacity={0.6} /> : null}
+      <Path d={shapes.full} fill={art.lime} opacity={0.2} />
+      {shapes.ahead ? <Path d={shapes.ahead} fill={art.lime} opacity={0.6} /> : null}
       {/* completed part: glow + body + hot core */}
-      {shapes.glow ? <Path d={shapes.glow} fill={art.route} opacity={0.16} /> : null}
+      {shapes.glow ? <Path d={shapes.glow} fill={art.lime} opacity={0.16} /> : null}
       {shapes.done ? <Path d={shapes.done} fill={`url(#${uid}fade)`} /> : null}
-      {shapes.core ? <Path d={shapes.core} fill="#E6ECFF" opacity={0.85} /> : null}
+      {shapes.core ? <Path d={shapes.core} fill="#FFE6F5" opacity={0.85} /> : null}
 
       {/* current position */}
       <Ellipse cx={head.x} cy={head.y} rx={hw * 3.2} ry={hw * 2.2} fill={`url(#${uid}hg)`} />
-      <Circle cx={head.x} cy={head.y} r={hw * 1.35} fill={art.route} opacity={0.3} />
+      <Circle cx={head.x} cy={head.y} r={hw * 1.35} fill={art.lime} opacity={0.3} />
       <Circle cx={head.x} cy={head.y} r={hw} fill="#FFFFFF" />
       <Circle cx={head.x} cy={head.y} r={hw * 0.66} fill={art.purple} />
       <Circle cx={head.x - hw * 0.2} cy={head.y - hw * 0.22} r={hw * 0.2} fill="#FFFFFF" opacity={0.7} />

@@ -61,15 +61,20 @@ Locked missions are listed last and left out of the done/XP counters and claimab
 
 **Campus, not city.** Each city in `data/cities.ts` has a `campus`, and the leaderboard ranks students on that campus. The Run Module's leaderboard API only offers `scope=global` today, so signed-in rows are labelled as all runners until a campus scope exists.
 
-## Look & feel — "Voltage" (white + electric blue)
+## Look & feel: website palette + GTA-style type
 
-A bright, clean **light** theme for a Gen-Z / college crowd, with GTA-style type:
-- **Canvas:** white `#FFFFFF`, with soft blue-grey cards (`#F4F6FB` / `#E9EDF7`, border `#E1E6F0`) and near-black ink text `#0B0F1A`.
-- **Colours:** **electric blue `#2F5BFF`** for every action and everything that's "yours" (your territory, your rank, your route); ink as the second voice; amber `#FFB020` for coins and rewards; pink `#FF4D8D` for rivals.
-- **Art:** the city illustrations stay dark (a blue-hour city: electric-blue neon, indigo skies, amber sun and windows). Anything drawn on top of artwork uses `colors.onImage` (white) and dark `imageChip` chips, so it stays readable.
-- **Type:** Anton for headlines and big numbers (heavy, condensed, slanted −6° like GTA title cards). Barlow Condensed for labels, buttons and italic callouts; Inter for body text.
-  - These are free Google Fonts lookalikes: GTA's own fonts are proprietary or commercial.
-- **Brand:** the squirrel-with-dumbbell logo is the app icon (on electric blue), the splash and the favicon, and appears in the in-app header. The Welcome screen uses a text wordmark and the waving mascot.
+- **Colours:** from the Squirrel Social website (www.squirrelsocial.in):
+  - **Canvas:** near-black `#060606`, with graphite panels (`#111113` / `#17171A`) and `#27272B` lines.
+  - **Lime `#D7FF1F`:** every action and everything that's "yours".
+  - **Pink `#FF2D9B`:** the second voice.
+  - **Variety:** purple `#A855F7`, orange `#FF8A1F` and yellow `#FFD21F`.
+  - **Text:** muted text is `#A9A9AE`.
+- **Type (GTA VI style):**
+  - **Anton:** heavy condensed headlines and big numbers, slanted −6° like GTA title cards.
+  - **Barlow Condensed:** labels, buttons and italic callouts.
+  - **Inter:** body text.
+  - GTA VI's own typeface is proprietary; these are the closest free Google Fonts.
+- **Art:** the illustrations use the website palette (neon lime and pink city).
 
 All UI tokens live in `src/theme.ts`; illustration colours live in `src/art/palette.ts`.
 

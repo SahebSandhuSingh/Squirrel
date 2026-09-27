@@ -8,7 +8,7 @@ import type { StickerKind } from '@/types';
 /* helpers                                                             */
 /* ------------------------------------------------------------------ */
 
-const INK = '#0F1224';
+const INK = '#1A0D26';
 
 function useUid(): string {
   return React.useId().replace(/[^a-zA-Z0-9_-]/g, '');
@@ -98,14 +98,14 @@ const STICKERS: Record<StickerKind, Def> = {
     shine: [26, 40],
     draw: (uid) => (
       <G>
-        <Shaded id={`${uid}a`} d={CAL_BODY} fill={art.cloud} shade="#BBBED7" />
+        <Shaded id={`${uid}a`} d={CAL_BODY} fill={art.cloud} shade="#C9B8DA" />
         <Path d="M19 35 C19 32 21 30 24 30 H96 C99 30 101 32 101 35 V48 H19 Z" fill={art.pink} stroke={INK} strokeWidth={2.4} strokeLinejoin="round" />
         <Path d="M22 33 H98" stroke={art.pinkHi} strokeWidth={2.5} strokeLinecap="round" />
         <Path
           d="M27 55 h9 v7 h-9 Z M40 55 h9 v7 h-9 Z M84 55 h9 v7 h-9 Z M27 66 h9 v7 h-9 Z M84 66 h9 v7 h-9 Z M27 77 h9 v7 h-9 Z M84 77 h9 v7 h-9 Z M27 88 h9 v5 h-9 Z M40 88 h9 v5 h-9 Z M71 88 h9 v5 h-9 Z M84 88 h9 v5 h-9 Z M71 55 h9 v7 h-9 Z"
-          fill="#CED1E4"
+          fill="#D9CCE6"
         />
-        <Path d="M33 20 h8 v18 h-8 Z M79 20 h8 v18 h-8 Z" fill="#313448" stroke={INK} strokeWidth={2} strokeLinejoin="round" />
+        <Path d="M33 20 h8 v18 h-8 Z M79 20 h8 v18 h-8 Z" fill="#3B2F4A" stroke={INK} strokeWidth={2} strokeLinejoin="round" />
         <Path d="M35 22 v14 M81 22 v14" stroke="#FFFFFF" strokeOpacity={0.35} strokeWidth={1.6} />
         <Shaded id={`${uid}b`} d={flame(61, 50, 0.5)} fill={art.orange} shade={art.coral} hi={art.sunTop} s={0.5} />
         <Path d={flame(60, 70, 0.26)} fill={art.yellow} />
@@ -136,7 +136,7 @@ const STICKERS: Record<StickerKind, Def> = {
         <Path d="M26 54 H78" stroke={INK} strokeWidth={5} strokeLinecap="round" />
         <Path d="M26 54 H78" stroke={art.pink} strokeWidth={2.6} strokeLinecap="round" />
         <Path d="M30 52 H49 C50 52 50.5 53 50.5 54 C50 60 46 64 40 64 C34 64 30 60 29 55 C29 53 29.5 52 30 52 Z M55 52 H74 C74.5 52 75 53 75 55 C74 60 70 64 64 64 C58 64 54 60 53.5 54 C53.5 53 54 52 55 52 Z" fill={art.pink} stroke={INK} strokeWidth={2} strokeLinejoin="round" />
-        <Path d="M33 55 H47 C46.5 59 44 61 40 61 C36 61 33.5 59 33 55 Z M57 55 H71 C70.5 59 68 61 64 61 C60 61 57.5 59 57 55 Z" fill="#151935" />
+        <Path d="M33 55 H47 C46.5 59 44 61 40 61 C36 61 33.5 59 33 55 Z M57 55 H71 C70.5 59 68 61 64 61 C60 61 57.5 59 57 55 Z" fill="#241238" />
         <Path d="M36 56 L39 56 L36.5 60 Z M60 56 L63 56 L60.5 60 Z" fill="#FFFFFF" opacity={0.8} />
       </G>
     ),
@@ -150,7 +150,7 @@ const STICKERS: Record<StickerKind, Def> = {
       <G>
         <Defs>
           <RadialGradient id={`${uid}bg`} cx="0.5" cy="0.45" r="0.6">
-            <Stop offset="0" stopColor="#122050" />
+            <Stop offset="0" stopColor="#4A1250" />
             <Stop offset="1" stopColor={art.night2} />
           </RadialGradient>
         </Defs>
@@ -159,7 +159,7 @@ const STICKERS: Record<StickerKind, Def> = {
         <Path d={heart(60, 64, 29)} fill="none" stroke={art.pink} strokeOpacity={0.18} strokeWidth={16} strokeLinejoin="round" />
         <Path d={heart(60, 64, 29)} fill="none" stroke={art.pink} strokeOpacity={0.35} strokeWidth={9} strokeLinejoin="round" />
         <Path d={heart(60, 64, 29)} fill="none" stroke={art.pink} strokeWidth={4.5} strokeLinejoin="round" />
-        <Path d={heart(60, 64, 29)} fill="none" stroke="#E3EAFF" strokeWidth={1.6} strokeLinejoin="round" />
+        <Path d={heart(60, 64, 29)} fill="none" stroke="#FFE3F4" strokeWidth={1.6} strokeLinejoin="round" />
         <Path d={heart(60, 64, 15)} fill="none" stroke={art.cyan} strokeOpacity={0.3} strokeWidth={8} strokeLinejoin="round" />
         <Path d={heart(60, 64, 15)} fill="none" stroke={art.cyan} strokeWidth={3} strokeLinejoin="round" />
         <Path d={heart(60, 64, 15)} fill="none" stroke="#E6FBFF" strokeWidth={1.1} strokeLinejoin="round" />
@@ -313,7 +313,7 @@ export const StickerArt = React.memo(function StickerArt(props: { kind: StickerK
         {/* drop shadow of the vinyl */}
         <Path d={def.sil} transform="translate(2 4)" fill="#000000" stroke="#000000" strokeWidth={14} strokeLinejoin="round" opacity={0.4} />
         {/* white die-cut border with a faint paper edge */}
-        <Path d={def.sil} fill="#DBDDEC" stroke="#DBDDEC" strokeWidth={14.5} strokeLinejoin="round" />
+        <Path d={def.sil} fill="#E4D9EE" stroke="#E4D9EE" strokeWidth={14.5} strokeLinejoin="round" />
         <Path d={def.sil} fill="#FFFFFF" stroke="#FFFFFF" strokeWidth={12} strokeLinejoin="round" />
         {def.draw(uid)}
         {/* shine */}

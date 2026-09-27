@@ -34,8 +34,8 @@ export const hairStyles: HairStyle[] = ['bun', 'ponytail', 'long', 'bob', 'curly
 export const topStyles: TopStyle[] = ['crop', 'hoodie', 'tee', 'tank', 'jacket'];
 export const bottomStyles: BottomStyle[] = ['joggers', 'leggings', 'shorts'];
 export const accessoryStyles: AccessoryStyle[] = ['none', 'shades', 'cap', 'headband', 'headphones'];
-export const outfitColors = ['#16101E', '#2F5BFF', '#7090FF', '#FFFFFF', '#00B2FF', '#FF4D8D', '#12B76A', '#FFB020'];
-export const shoeColors = ['#FFFFFF', '#2F5BFF', '#FFFFFF', '#16101E', '#FFB020', '#7090FF'];
+export const outfitColors = ['#16101E', '#D7FF1F', '#A855F7', '#FFFFFF', '#5FB8FF', '#FF2D9B', '#3DF0A0', '#FFD21F'];
+export const shoeColors = ['#FFFFFF', '#D7FF1F', '#FFFFFF', '#16101E', '#FFD21F', '#A855F7'];
 export { hairColors, skinTones };
 
 export const emotes: { id: string; label: string; pose: 'wave' | 'flex' | 'run' | 'yoga' | 'lift' | 'stand' }[] = [
@@ -57,11 +57,11 @@ export const pets: { id: string; label: string; pose: 'idle' | 'sit' | 'wave' | 
 /** Starter presets shown as the thumbnail row. */
 export const presetLooks: AvatarLook[] = [
   { body: 'female', skin: skinTones[2], hair: 'bun', hairColor: hairColors[0], top: 'crop', topColor: '#16101E', bottom: 'joggers', bottomColor: '#1B1524', shoeColor: '#FFFFFF', accessory: 'none' },
-  { body: 'female', skin: skinTones[0], hair: 'ponytail', hairColor: hairColors[3], top: 'tank', topColor: '#2F5BFF', bottom: 'leggings', bottomColor: '#16101E', shoeColor: '#FFFFFF', accessory: 'headband' },
-  { body: 'female', skin: skinTones[4], hair: 'afro', hairColor: hairColors[0], top: 'hoodie', topColor: '#7090FF', bottom: 'shorts', bottomColor: '#16101E', shoeColor: '#FFFFFF', accessory: 'none' },
+  { body: 'female', skin: skinTones[0], hair: 'ponytail', hairColor: hairColors[3], top: 'tank', topColor: '#D7FF1F', bottom: 'leggings', bottomColor: '#16101E', shoeColor: '#FFFFFF', accessory: 'headband' },
+  { body: 'female', skin: skinTones[4], hair: 'afro', hairColor: hairColors[0], top: 'hoodie', topColor: '#A855F7', bottom: 'shorts', bottomColor: '#16101E', shoeColor: '#FFFFFF', accessory: 'none' },
   { body: 'male', skin: skinTones[3], hair: 'short', hairColor: hairColors[0], top: 'tee', topColor: '#FFFFFF', bottom: 'shorts', bottomColor: '#16101E', shoeColor: '#FFFFFF', accessory: 'none' },
-  { body: 'male', skin: skinTones[1], hair: 'curly', hairColor: hairColors[1], top: 'jacket', topColor: '#FF4D8D', bottom: 'joggers', bottomColor: '#1B1524', shoeColor: '#2F5BFF', accessory: 'shades' },
-  { body: 'male', skin: skinTones[5], hair: 'buzz', hairColor: hairColors[0], top: 'hoodie', topColor: '#2F5BFF', bottom: 'joggers', bottomColor: '#16101E', shoeColor: '#FFFFFF', accessory: 'headphones' },
+  { body: 'male', skin: skinTones[1], hair: 'curly', hairColor: hairColors[1], top: 'jacket', topColor: '#FF2D9B', bottom: 'joggers', bottomColor: '#1B1524', shoeColor: '#D7FF1F', accessory: 'shades' },
+  { body: 'male', skin: skinTones[5], hair: 'buzz', hairColor: hairColors[0], top: 'hoodie', topColor: '#D7FF1F', bottom: 'joggers', bottomColor: '#16101E', shoeColor: '#FFFFFF', accessory: 'headphones' },
 ];
 
 /**

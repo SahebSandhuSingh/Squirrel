@@ -1,58 +1,56 @@
 /**
- * Design tokens — "Voltage": white + electric blue. A bright, clean LIGHT theme for a
- * Gen-Z / college crowd. White canvas, soft blue-grey cards, ELECTRIC BLUE for every action
- * and everything that's "yours", near-black ink for text, amber for coins/rewards.
- * The city artwork stays dark, so anything drawn on top of it uses `onImage` (white).
- * Type is heavy, condensed and slanted (GTA-style title cards).
+ * Design tokens: the Squirrel Social website palette (www.squirrelsocial.in /
+ * squirrel-social-site), a near-black canvas with graphite panels, electric LIME for every
+ * action and everything that's "yours", and hot PINK as the second voice, with purple,
+ * orange and yellow for variety. Type is GTA-style: heavy condensed, slanted headlines.
  */
 export const colors = {
-  bg: '#FFFFFF',
-  bg2: '#F4F6FB',
-  card: '#F4F6FB',
-  cardHi: '#E9EDF7',
-  glass: 'rgba(255,255,255,0.94)',
-  line: '#E1E6F0',
-  lineHi: '#C7CFE0',
+  bg: '#060606',
+  bg2: '#0B0B0D',
+  card: '#111113',
+  cardHi: '#17171A',
+  glass: 'rgba(17,17,19,0.88)',
+  line: '#27272B',
+  lineHi: '#3A3A40',
 
-  /** Primary action / "yours" colour — electric blue. */
-  primary: '#2F5BFF',
-  primarySoft: '#7090FF',
-  primaryDeep: '#1B3FD6',
-  /** Secondary voice — ink. */
-  secondary: '#0B0F1A',
-  orange: '#FF8A00',
-  pink: '#FF4D8D',
-  purple: '#2F5BFF',
-  violet: '#7090FF',
-  blue: '#00B2FF',
-  gold: '#FFB020',
-  coral: '#FF4D4D',
-  green: '#12B76A',
+  /** Primary action / "yours" colour (website --lime). */
+  primary: '#D7FF1F',
+  primarySoft: '#E8FF7A',
+  primaryDeep: '#9DBF00',
+  /** Secondary accent (website --pink). */
+  secondary: '#FF2D9B',
+  orange: '#FF8A1F',
+  pink: '#FF2D9B',
+  purple: '#A855F7',
+  violet: '#C084FC',
+  blue: '#5FB8FF',
+  gold: '#FFD21F',
+  coral: '#FF5C7A',
+  green: '#3DF0A0',
 
-  text: '#0B0F1A',
-  sub: '#3A4256',
-  dim: '#6B7489',
-  mute: '#A0A8BA',
-  onPrimary: '#FFFFFF',
-  onSecondary: '#FFFFFF',
+  text: '#F4F4F4',
+  sub: '#D4D4D8',
+  dim: '#A9A9AE',
+  mute: '#6E6E75',
+  onPrimary: '#0B0B0B',
+  onSecondary: '#0B0B0B',
 
-  /** Text / icons drawn on top of the (dark) city artwork and photos. */
+  /** Text / icons drawn on top of artwork and photos. */
   onImage: '#FFFFFF',
   onImageSub: 'rgba(255,255,255,0.82)',
   /** Dark translucent chip used on top of artwork. */
-  imageChip: 'rgba(8,12,24,0.72)',
+  imageChip: 'rgba(6,6,6,0.72)',
 };
 
 export const gradients = {
-  primary: ['#5A7BFF', '#2F5BFF', '#1B3FD6'] as const,
-  secondary: ['#2A3142', '#0B0F1A', '#000000'] as const,
-  purple: ['#5A7BFF', '#2F5BFF', '#1B3FD6'] as const,
-  gold: ['#FFD27A', '#FFB020', '#E08E00'] as const,
-  sunset: ['#1D1C1E', '#1B3FD6', '#2F5BFF', '#7090FF'] as const,
-  screen: ['#FFFFFF', '#F7F9FD'] as const,
-  card: ['#FFFFFF', '#F4F6FB'] as const,
-  /** Always dark: used over artwork so white text stays legible. */
-  scrim: ['rgba(8,12,24,0)', 'rgba(8,12,24,0.6)', 'rgba(8,12,24,0.92)'] as const,
+  primary: ['#E6FF6A', '#D7FF1F', '#B8E600'] as const,
+  secondary: ['#FF6FBF', '#FF2D9B', '#D6127C'] as const,
+  purple: ['#C084FC', '#A855F7', '#7E22CE'] as const,
+  gold: ['#FFE580', '#FFD21F', '#F0A81C'] as const,
+  sunset: ['#2B0B3F', '#6B1553', '#D0356E', '#FF8A4C'] as const,
+  screen: ['#0B0B0D', '#060606'] as const,
+  card: ['#17171A', '#111113'] as const,
+  scrim: ['rgba(6,6,6,0)', 'rgba(6,6,6,0.65)', 'rgba(6,6,6,0.96)'] as const,
 };
 
 /** GTA-style type: heavy condensed headlines, condensed (often italic) labels, clean body. */

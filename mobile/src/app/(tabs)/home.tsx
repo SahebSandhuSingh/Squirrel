@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
   playBtn: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', shadowColor: colors.primary, shadowOpacity: 0.8, shadowRadius: 14, shadowOffset: { width: 0, height: 0 } },
   hint: { color: colors.mute, fontSize: 12, textAlign: 'center', marginTop: 8, fontFamily: fonts.regular },
   leader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 4 },
-  leaderMe: { backgroundColor: 'rgba(47,91,255,0.08)', borderRadius: radius.md, marginHorizontal: -6, paddingHorizontal: 10 },
+  leaderMe: { backgroundColor: 'rgba(215,255,31,0.08)', borderRadius: radius.md, marginHorizontal: -6, paddingHorizontal: 10 },
   rank: { color: colors.dim, fontFamily: fonts.display, fontSize: 18, width: 34 },
   leaderName: { color: colors.text, fontFamily: fonts.bold, fontSize: 14 },
   leaderSub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 11 },
