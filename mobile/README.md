@@ -38,7 +38,7 @@ Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-h
 | `/profile` *(tab)* | Cover, level card, highlights, badges, equipped cosmetics, posts/activity/saved grid |
 | `/run` | Live run: 3-2-1 countdown, route animation, live stats, music/camera, hold-to-finish, summary |
 | `/missions` | Daily / Weekly / Special missions with completion and claim states |
-| `/progress` | Your Progress: Day/Week/Month/Year charts, stat cards, streak heatmap, recent activity |
+| `/progress` | **Your Progress**, in four sections:<br>• **Today:** goal ring, today's XP, activities done, XP left, run XP, streak and a level bar.<br>• **Progress:** Day/Week/Month/Year with Steps/Active/Calories/Workouts, a tap-to-read bar chart and the streak calendar with active days.<br>• **Your performance:** change vs the previous period, campus rank and milestones in reach.<br>• **Next:** the best next action (claim, run, or log a mission). |
 | `/crews`, `/crew/[id]` | Find Your Crew (Nearby/Online/Campus/Interests), crew detail with members, events and posts |
 | `/events`, `/event/[id]` | Events preview behind a "Coming soon" banner; the detail route shows a locked screen |
 | `/level-up` | RPG level-up reveal: rays, mascot, XP bar, staggered reward cards, next unlock |

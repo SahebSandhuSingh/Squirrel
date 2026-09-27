@@ -38,6 +38,8 @@ type AppState = {
   levelXp: number;
   coins: number;
   addXp: (xp: number, coins?: number) => { leveledUp: boolean };
+  /** XP earned today (every addXp award: runs, missions, rewards). */
+  xpToday: number;
   // missions
   missions: Mission[];
   logMission: (id: string) => void;
@@ -114,6 +116,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [districtState, setDistrictState] = useState<Record<string, District[]>>({});
   const districts = useMemo(() => districtState[cityId] ?? districtsForCity(cityId), [districtState, cityId]);
   const [runXpToday, setRunXpToday] = useState(0);
+  const [xpToday, setXpToday] = useState(0);
 
   const toast = useCallback((text: string, icon?: string, color?: string) => {
     const id = ++toastId.current;
@@ -130,6 +133,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         leveledUp = after > before;
         return prevXp + gain;
       });
+      if (gain > 0) setXpToday((t) => t + gain);
       if (coinGain) setCoins((c) => c + coinGain);
       return { leveledUp };
     },
@@ -328,6 +332,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     runXpToday,
     districts,
     syncServerXp: (total) => setXp(total),
+    xpToday,
     toasts,
     toast,
   };
