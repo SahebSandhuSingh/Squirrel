@@ -25,6 +25,8 @@ export type LiveView = {
   score: number | null;
   /** Setup capture progress (0..1) while holding still. */
   capture: number | null;
+  /** Seconds left to get into position, while getting ready. */
+  getReady: number | null;
 };
 
 const isTimed = (t: CoachState['train']): t is WSTimedTrainContract =>
@@ -34,10 +36,19 @@ export function liveView(s: CoachState | null, tracker: TrackerStatus, targetRep
   const timedPlan = s?.measure === 'time';
   const base: LiveView = {
     status: '', cue: null, skeleton: 'white', count: 0, target: timedPlan ? targetSeconds : targetReps,
-    timed: timedPlan, progress: 0, score: null, capture: null,
+    timed: timedPlan, progress: 0, score: null, capture: null, getReady: null,
   };
   if (tracker === 'loading') return { ...base, status: 'Starting body tracking…' };
   if (!s) return { ...base, status: 'Getting your workout ready…' };
+
+  if (s.phase === 'getready') {
+    return {
+      ...base,
+      getReady: s.getReadyLeft,
+      status: s.inView ? 'Stand straight and hold still' : 'Step back: your whole body needs to be in view',
+      skeleton: s.inView ? 'green' : 'red',
+    };
+  }
 
   if (s.phase === 'setup') {
     const d = s.setup;

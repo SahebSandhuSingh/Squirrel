@@ -349,6 +349,7 @@ function LiveWorkout({ userId }: { userId: string }) {
     };
     const unsubscribe = c.subscribe((s) => {
       const structural = !shown || s.phase !== shown.phase || s.set !== shown.set || s.restLeft !== shown.restLeft
+        || s.getReadyLeft !== shown.getReadyLeft || s.inView !== shown.inView
         || s.error !== shown.error || s.paused !== shown.paused || s.results.length !== shown.results.length;
       if (structural) {
         if (timer) clearTimeout(timer);
@@ -494,6 +495,15 @@ function LiveWorkout({ userId }: { userId: string }) {
         </View>
       )}
 
+      {/* Getting into position: the camera stays visible; the set starts on its own */}
+      {phase === 'getready' && view.getReady != null && !blocking && (
+        <View style={[styles.getReady, { top: insets.top + 156 }]} pointerEvents="none">
+          <Text style={styles.kicker}>Get in position · set {state?.set ?? 1} of {sets}</Text>
+          <Display size={56} color={colors.primary}>{view.getReady}</Display>
+          <Text style={styles.getReadySub}>Stand where your whole body is in view, stand straight and hold still. Tracking starts automatically.</Text>
+        </View>
+      )}
+
       {/* Rest between sets */}
       {phase === 'rest' && (
         <View style={styles.overlay}>
@@ -588,4 +598,6 @@ const styles = StyleSheet.create({
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(6,6,6,0.9)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
   kicker: { color: colors.primary, fontFamily: fonts.mono, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 },
   overlaySub: { color: colors.sub, fontFamily: fonts.medium, fontSize: 15, marginTop: 6, textAlign: 'center' },
+  getReady: { position: 'absolute', left: 20, right: 20, alignItems: 'center', paddingVertical: 12, paddingHorizontal: 18, borderRadius: 20, backgroundColor: 'rgba(6,6,6,0.62)' },
+  getReadySub: { color: colors.text, fontFamily: fonts.medium, fontSize: 13, marginTop: 2, textAlign: 'center' },
 });

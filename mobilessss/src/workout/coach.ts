@@ -36,6 +36,15 @@ export const START_SPLASH_MS = 900;
 export const WS_RECONNECT_MS = 2000;
 export const WS_BACKPRESSURE_CAP = 1 << 16;
 
+/** Time to get into position (step back, stand straight) before each set's setup begins. Tracking
+ *  runs so the person sees themselves, but nothing is sent: when it runs out, the server's
+ *  stillness check and standing-baseline capture start on their own. */
+export const GET_READY_SECONDS = 10;
+/** "Whole body in view": a shoulder, hip, knee and ankle, each from either side (side-on
+ *  exercises such as the push-up hide the far limbs), tracked and inside the picture. */
+const IN_VIEW_PAIRS = [[11, 12], [23, 24], [25, 26], [27, 28]] as const;
+const IN_VIEW_MIN_VISIBILITY = 0.5;
+
 /** One tracked camera frame: smoothed, normalized landmarks (x, y, z, visibility), or none. */
 export type PoseFrame = {
   width: number;
@@ -64,7 +73,7 @@ export function toFrameMessage(frame: PoseFrame, tMs: number): FrameMessage {
   return { t_ms: tMs, keypoints };
 }
 
-export type CoachPhase = 'setup' | 'starting' | 'training' | 'rest' | 'done';
+export type CoachPhase = 'getready' | 'setup' | 'starting' | 'training' | 'rest' | 'done';
 
 export type SetResult = {
   set: number;
@@ -85,6 +94,10 @@ export type CoachState = {
   train: WSTrain | null;
   /** Seconds of rest left, while resting. */
   restLeft: number | null;
+  /** Seconds left to get into position, while getting ready. */
+  getReadyLeft: number | null;
+  /** While getting ready: whether the whole body is in the picture (null before the first frame). */
+  inView: boolean | null;
   results: SetResult[];
   /** The last error the server reported, or a connection that cannot recover. */
   error: WSError | null;
@@ -122,6 +135,7 @@ export class CoachSession {
   private socketFor: 'setup' | 'train' | null = null;
   private timers = new Set<ReturnType<typeof setTimeout>>();
   private restTimer: ReturnType<typeof setInterval> | null = null;
+  private countdownTimer: ReturnType<typeof setInterval> | null = null;
   private refreshedOnce = false;
   private disposed = false;
   // Logical clock: stops while paused (browser coach usePose.ts logicalNow).
@@ -138,7 +152,8 @@ export class CoachSession {
     this.now = opts.now ?? (() => (globalThis.performance ? globalThis.performance.now() : Date.now()));
     this.WS = opts.WebSocketImpl ?? globalThis.WebSocket;
     this.state = {
-      phase: 'setup', set: 1, totalSets: opts.sets, measure: opts.measure, paused: false, connected: false,
+      phase: 'getready', set: 1, totalSets: opts.sets, measure: opts.measure, paused: false, connected: false,
+      getReadyLeft: null, inView: null,
       setup: null, train: null, restLeft: null, results: [], error: null, fatal: false,
     };
   }
@@ -156,11 +171,16 @@ export class CoachSession {
   }
 
   start(): void {
-    this.open('setup');
+    this.getReady();
   }
 
   /** Feed one tracked camera frame. Sent only when the server should be seeing it. */
   frame(frame: PoseFrame): void {
+    if (this.state.phase === 'getready') {
+      const inView = wholeBodyInView(frame);
+      if (inView !== this.state.inView) this.update({ inView });
+      return;
+    }
     const { phase, paused } = this.state;
     const sending = phase === 'setup' || phase === 'starting' || (phase === 'training' && !paused);
     const ws = this.ws;
@@ -332,7 +352,23 @@ export class CoachSession {
   private nextSet(): void {
     if (this.restTimer) clearInterval(this.restTimer);
     this.restTimer = null;
-    this.update({ phase: 'setup', set: this.state.set + 1, restLeft: null, setup: null, train: null, error: null });
+    this.update({ set: this.state.set + 1, restLeft: null, setup: null, train: null, error: null });
+    this.getReady();
+  }
+
+  private getReady(): void {
+    this.update({ phase: 'getready', getReadyLeft: GET_READY_SECONDS, inView: null });
+    this.countdownTimer = setInterval(() => {
+      const left = (this.state.getReadyLeft ?? 0) - 1;
+      if (left <= 0) this.beginSetup();
+      else this.update({ getReadyLeft: left });
+    }, 1000);
+  }
+
+  private beginSetup(): void {
+    if (this.countdownTimer) clearInterval(this.countdownTimer);
+    this.countdownTimer = null;
+    this.update({ phase: 'setup', getReadyLeft: null, inView: null, setup: null });
     this.open('setup');
   }
 
@@ -371,6 +407,8 @@ export class CoachSession {
     this.timers.clear();
     if (this.restTimer) clearInterval(this.restTimer);
     this.restTimer = null;
+    if (this.countdownTimer) clearInterval(this.countdownTimer);
+    this.countdownTimer = null;
   }
 
   private update(patch: Partial<CoachState>): void {
@@ -378,4 +416,15 @@ export class CoachSession {
     this.state = { ...this.state, ...patch };
     this.listeners.forEach((listener) => listener(this.state));
   }
+}
+
+/** Whether a shoulder, hip, knee and ankle are each tracked and inside the picture. */
+export function wholeBodyInView(frame: PoseFrame): boolean {
+  const lm = frame.landmarks;
+  if (!lm) return false;
+  const seen = (i: number) => {
+    const p = lm[i];
+    return !!p && p[3] >= IN_VIEW_MIN_VISIBILITY && p[0] >= 0 && p[0] <= 1 && p[1] >= 0 && p[1] <= 1;
+  };
+  return IN_VIEW_PAIRS.every(([left, right]) => seen(left) || seen(right));
 }
