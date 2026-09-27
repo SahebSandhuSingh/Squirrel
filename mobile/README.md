@@ -28,6 +28,9 @@ Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-h
 | `/sign-in` | Sign in (account service), demo mode, or developer token |
 | `/territory` | Own your block: district map, zone control, decay |
 | `/challenges` | Daily, head-to-head and group challenges (auto-resolve) |
+| `/exercise/select` | **Start Exercise** picker (opened from Home). Lists the Exercise backend's catalog (`GET /api/exercises`) with plan, time and estimated calories; Start creates a real session (`POST /api/users/{id}/sessions`) |
+| `/exercise/train/[key]` | Active exercise: the backend plan (sets × reps/seconds, rest). Tap each rep, or a real countdown for timed sets; camera mirror; pause/finish. Completion updates missions, XP and Home's Active/kcal rings |
+| `/exercise`, `/exercise/profile`, `/exercise/plan/[key]`, `/exercise/session/[id]` | Form Coach hub, coach profile, custom plan, session report (Exercise backend) |
 | `/leaderboard` | **Campus Leaderboard**: students on your campus ranked by territory area (daily, weekly, all-time) |
 | `/welcome` | Landing: cinematic sunset city, avatar + squirrel mascot, Get Started |
 | `/avatar` | **Make It You**: body, hair, outfit, shoes, accessories, gear, emotes and pet mascot |

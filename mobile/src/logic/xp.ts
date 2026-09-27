@@ -29,3 +29,19 @@ export function runXp(km: number, territoryCaptured: boolean, runXpAlreadyToday:
 
 export const levelFromXp = (xp: number) => Math.floor(xp / XP_PER_LEVEL) + 1;
 export const xpIntoLevel = (xp: number) => xp % XP_PER_LEVEL;
+
+/**
+ * Exercise XP (app-side: the Exercise Mechanics backend awards none). A completed session
+ * earns 30 + 2 per rep (or +1 per 10 s for timed sets), capped at 100 per session.
+ */
+export const EXERCISE_COMPLETION_XP = 30;
+export const EXERCISE_SESSION_XP_CAP = 100;
+export function exerciseXp(reps: number, timedSeconds: number): { total: number; lines: XpLine[] } {
+  const lines: XpLine[] = [{ label: 'Exercise completed', xp: EXERCISE_COMPLETION_XP }];
+  if (reps > 0) lines.push({ label: `${reps} reps`, xp: reps * 2 });
+  if (timedSeconds > 0) lines.push({ label: `${Math.round(timedSeconds)} s of work`, xp: Math.floor(timedSeconds / 10) });
+  const raw = lines.reduce((s, l) => s + l.xp, 0);
+  const total = Math.min(raw, EXERCISE_SESSION_XP_CAP);
+  if (total < raw) lines.push({ label: `Session cap (${EXERCISE_SESSION_XP_CAP} XP)`, xp: total - raw });
+  return { total, lines };
+}

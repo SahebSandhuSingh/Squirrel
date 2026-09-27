@@ -1,3 +1,5 @@
+import { EXERCISE_LIBRARY } from '@/data/exercises';
+import { useExerciseCatalog } from '@/hooks/useExercise';
 import { COMING_SOON, LOCKED, LOCKED_MISSIONS } from '@/data/features';
 import { useEffect } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -24,7 +26,10 @@ const greeting = () => {
 export default function Home() {
   const { me, missions, logMission, claimed, claimable, claimRewards, events, joinedEvents, toggleEvent, city, districts } = useApp();
   const { mode } = useAuth();
-  const { syncServerXp, toast } = useApp();
+  const { syncServerXp, toast, exerciseToday } = useApp();
+  // Today's rings add what you logged with the form coach.
+  const activeMin = today.active.value + exerciseToday.minutes;
+  const kcalToday = today.kcal.value + exerciseToday.kcal;
   // Signed in: the server's XP total (derived from real activity) replaces the demo figure.
   useEffect(() => {
     if (mode !== 'live') return;
@@ -70,10 +75,11 @@ export default function Home() {
           </View>
           <View style={styles.rings}>
             <RingStat progress={today.steps.value / today.steps.goal} color={colors.green} color2={colors.secondary} icon="shoe-print" value={today.steps.value.toLocaleString('en-IN')} label="Steps" />
-            <RingStat progress={today.active.value / today.active.goal} color={colors.secondary} color2={colors.blue} icon="timer-outline" value={`${today.active.value}m`} label="Active" />
-            <RingStat progress={today.kcal.value / today.kcal.goal} color={colors.orange} color2={colors.gold} icon="fire" value={String(today.kcal.value)} label="kcal" />
+            <RingStat progress={activeMin / today.active.goal} color={colors.secondary} color2={colors.blue} icon="timer-outline" value={`${activeMin}m`} label="Active" />
+            <RingStat progress={kcalToday / today.kcal.goal} color={colors.orange} color2={colors.gold} icon="fire" value={String(kcalToday)} label="kcal" />
             <RingStat progress={Math.min(1, today.streak / 14)} color={colors.violet} color2={colors.primary} icon="lightning-bolt" value={`${today.streak}d`} label="Streak" />
           </View>
+          <StartExercise />
         </Card>
       </FadeIn>
 
@@ -221,6 +227,40 @@ export default function Home() {
   );
 }
 
+/** Start Exercise: the footer of Today's progress. Opens the exercise picker (backend catalog). */
+function StartExercise() {
+  const { activeExercise, exerciseToday } = useApp();
+  const catalog = useExerciseCatalog();
+  const ready = catalog.data?.filter((e) => e.status === 'enabled').length;
+  const activeName = activeExercise ? EXERCISE_LIBRARY.find((e) => e.key === activeExercise.key)?.name ?? 'Exercise' : null;
+  const sub = activeName
+    ? `${activeName} in progress · tap to resume`
+    : exerciseToday.sessions
+      ? `${exerciseToday.sessions} done today · ${exerciseToday.minutes} min · keep it going`
+      : ready
+        ? `${ready} exercises ready · form-coached reps`
+        : 'Form-coached reps and timed sets';
+  const open = () =>
+    activeExercise
+      ? router.push({ pathname: '/exercise/train/[key]', params: { key: activeExercise.key, session: activeExercise.sessionId ?? '' } })
+      : router.push('/exercise/select');
+  return (
+    <PressScale onPress={open} scaleTo={0.985} style={styles.exRow} accessibilityLabel={activeName ? `Resume ${activeName}` : 'Start Exercise'}>
+      <View style={styles.exIcon}>
+        <Icon name={activeName ? 'play-circle' : 'arm-flex'} size={22} color={colors.onPrimary} />
+      </View>
+      <View style={{ flex: 1, marginLeft: 12 }}>
+        <Text style={styles.exTitle}>{activeName ? 'Resume exercise' : 'Start Exercise'}</Text>
+        <Text style={styles.exSub} numberOfLines={1}>{sub}</Text>
+      </View>
+      <View style={styles.exGo}>
+        <Text style={styles.exGoText}>{activeName ? 'Resume' : 'Start'}</Text>
+        <Icon name="arrow-right" size={16} color={colors.onPrimary} />
+      </View>
+    </PressScale>
+  );
+}
+
 function RingStat({ progress, color, color2, icon, value, label }: { progress: number; color: string; color2: string; icon: React.ComponentProps<typeof Icon>['name']; value: string; label: string }) {
   return (
     <View style={{ alignItems: 'center', flex: 1 }}>
@@ -234,6 +274,12 @@ function RingStat({ progress, color, color2, icon, value, label }: { progress: n
 }
 
 const styles = StyleSheet.create({
+  exRow: { flexDirection: 'row', alignItems: 'center', marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.line },
+  exIcon: { width: 42, height: 42, borderRadius: 13, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  exTitle: { color: colors.text, fontFamily: fonts.label, fontSize: 17, letterSpacing: 1, textTransform: 'uppercase' },
+  exSub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, marginTop: 1 },
+  exGo: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.primary, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 8, marginLeft: 8 },
+  exGoText: { color: colors.onPrimary, fontFamily: fonts.labelBold, fontSize: 13, letterSpacing: 1, textTransform: 'uppercase' },
   zone: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 2, borderColor: colors.primary, padding: 14, transform: [{ rotate: '-0.6deg' }], shadowColor: colors.primary, shadowOpacity: 0.25, shadowRadius: 14, shadowOffset: { width: 0, height: 0 } },
   zoneKicker: { color: colors.primary, fontFamily: fonts.monoBold, fontSize: 10, letterSpacing: 1.4 },
   zonePct: { color: colors.primary, fontFamily: fonts.labelBold, fontSize: 18 },

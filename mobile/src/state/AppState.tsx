@@ -8,7 +8,7 @@ import { STARTER_OWNED, shopItemById } from '@/data/shop';
 import { CURRENT_USER_ID, userById, users, type User } from '@/data/users';
 import type { AvatarLook } from '@/types';
 import { districtsForCity, type District } from '@/data/territory';
-import { runXp, type XpLine } from '@/logic/xp';
+import { exerciseXp, runXp, type XpLine } from '@/logic/xp';
 import type { Verdict } from '@/logic/track';
 
 export const XP_PER_LEVEL = 2000;
@@ -70,10 +70,21 @@ type AppState = {
   districts: District[];
   /** Replace the local XP total with the server's (GET /v1/users/me/xp). */
   syncServerXp: (total: number) => void;
+  // exercise
+  /** The exercise session in progress (one at a time), or null. */
+  activeExercise: ActiveExercise | null;
+  beginExercise: (a: Omit<ActiveExercise, 'startedAt'>) => boolean;
+  endExercise: () => void;
+  /** Record a finished exercise: missions, XP and today's activity. */
+  completeExercise: (c: CompletedExercise) => { xp: number; lines: XpLine[]; leveledUp: boolean };
+  exerciseToday: { sessions: number; minutes: number; kcal: number };
   // feedback
   toasts: ToastMsg[];
   toast: (text: string, icon?: string, color?: string) => void;
 };
+
+export type ActiveExercise = { key: string; sessionId?: string; startedAt: number };
+export type CompletedExercise = { key: string; slug: string; reps: number; timedSeconds: number; activeSeconds: number; kcal: number };
 
 export type FinishRunInput = { km: number; minutes: number; verdict: Verdict; districtId?: string; serverXp?: number; serverLines?: XpLine[] };
 export type FinishRunResult = { xp: number; lines: XpLine[]; capped: boolean; leveledUp: boolean; captured?: District };
@@ -117,6 +128,9 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const districts = useMemo(() => districtState[cityId] ?? districtsForCity(cityId), [districtState, cityId]);
   const [runXpToday, setRunXpToday] = useState(0);
   const [xpToday, setXpToday] = useState(0);
+  const [activeExercise, setActiveExercise] = useState<ActiveExercise | null>(null);
+  const activeExerciseRef = useRef<ActiveExercise | null>(null);
+  const [exerciseToday, setExerciseToday] = useState({ sessions: 0, minutes: 0, kcal: 0 });
 
   const toast = useCallback((text: string, icon?: string, color?: string) => {
     const id = ++toastId.current;
@@ -332,6 +346,35 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     runXpToday,
     districts,
     syncServerXp: (total) => setXp(total),
+    activeExercise,
+    beginExercise: useCallback((a: Omit<ActiveExercise, 'startedAt'>) => {
+      // Guard against duplicate sessions (double taps, two screens): first one wins.
+      if (activeExerciseRef.current) return false;
+      const active = { ...a, startedAt: Date.now() };
+      activeExerciseRef.current = active;
+      setActiveExercise(active);
+      return true;
+    }, []),
+    endExercise: useCallback(() => {
+      activeExerciseRef.current = null;
+      setActiveExercise(null);
+    }, []),
+    completeExercise: useCallback(
+      (c: CompletedExercise) => {
+        const minutes = Math.max(1, Math.round(c.activeSeconds / 60));
+        const bump = (id: string, by: number) =>
+          setMissions((all) => all.map((m) => (m.id === id && !LOCKED_MISSIONS.has(id) ? { ...m, current: Math.min(m.goal, +(m.current + by).toFixed(2)) } : m)));
+        if (c.slug === 'squat' && c.reps > 0) bump('m-squats', c.reps);
+        bump('m-active', minutes);
+        bump('w-workouts', 1);
+        setExerciseToday((t) => ({ sessions: t.sessions + 1, minutes: t.minutes + minutes, kcal: t.kcal + c.kcal }));
+        const x = exerciseXp(c.reps, c.timedSeconds);
+        const { leveledUp } = addXp(x.total, Math.round(x.total / 4));
+        return { xp: x.total, lines: x.lines, leveledUp };
+      },
+      [addXp],
+    ),
+    exerciseToday,
     xpToday,
     toasts,
     toast,

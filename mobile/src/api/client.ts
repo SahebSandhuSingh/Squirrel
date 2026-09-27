@@ -26,13 +26,31 @@ function parseRetryAfter(v: string | null): number | undefined {
   return Number.isFinite(at) ? Math.max(0, at - Date.now()) : undefined;
 }
 
-/** JSON fetch against the Run Module backend with the bearer token attached. */
-export async function api<T>(path: string, init: { method?: string; body?: unknown; timeoutMs?: number } = {}): Promise<T> {
-  if (!API_URL) throw new ApiError(0, 'API not configured (demo mode)');
+/** Pull a readable message out of an error body: `{ message }`, `{ error }`, or FastAPI's `{ detail }`. */
+function errorMessage(json: unknown, fallback: string): string {
+  const b = json as { message?: unknown; error?: unknown; detail?: unknown } | undefined;
+  if (typeof b?.message === 'string') return b.message;
+  if (typeof b?.error === 'string') return b.error;
+  if (typeof b?.detail === 'string') return b.detail;
+  // FastAPI validation errors: detail = [{ loc, msg }, …]
+  if (Array.isArray(b?.detail)) {
+    const msgs = b.detail.map((d: { msg?: unknown; loc?: unknown[] }) => (typeof d?.msg === 'string' ? `${d.loc?.slice(-1)[0] ?? 'field'}: ${d.msg}` : null)).filter(Boolean);
+    if (msgs.length) return msgs.join('; ');
+  }
+  return fallback;
+}
+
+/**
+ * JSON fetch with the bearer token attached. Defaults to the Run Module backend;
+ * pass `base` to reach another service (e.g. the Exercise backend) through the same client.
+ */
+export async function api<T>(path: string, init: { method?: string; body?: unknown; timeoutMs?: number; base?: string } = {}): Promise<T> {
+  const base = init.base ?? API_URL;
+  if (!base) throw new ApiError(0, 'API not configured (demo mode)');
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), init.timeoutMs ?? 15000);
   try {
-    const res = await fetch(`${API_URL}${path}`, {
+    const res = await fetch(`${base}${path}`, {
       method: init.method ?? (init.body !== undefined ? 'POST' : 'GET'),
       headers: {
         Accept: 'application/json',
@@ -50,8 +68,7 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
       json = text;
     }
     if (!res.ok) {
-      const msg = (json as { message?: string; error?: string } | undefined)?.message ?? (json as { error?: string } | undefined)?.error ?? res.statusText;
-      throw new ApiError(res.status, msg, json, parseRetryAfter(res.headers.get('Retry-After')));
+      throw new ApiError(res.status, errorMessage(json, res.statusText || `HTTP ${res.status}`), json, parseRetryAfter(res.headers.get('Retry-After')));
     }
     return json as T;
   } catch (e) {

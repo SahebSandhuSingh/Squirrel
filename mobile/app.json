@@ -32,7 +32,15 @@
           "locationWhenInUsePermission": "Squirrel Social uses your location to track runs and claim territory."
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Squirrel Social uses the camera so you can see your form while you exercise.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ]
     ],
     "splash": {
       "image": "./assets/splash-icon.png",
