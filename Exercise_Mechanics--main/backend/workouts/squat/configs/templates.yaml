@@ -88,7 +88,9 @@ templates:
     tuning_status: ready
     fault_label: "Short depth"
     active_phases: [descent, bottom, ascent]
-    required_keypoints: [left_hip, right_hip, left_knee, right_knee]
+    # Hips only: the knees are optional live (rules/depth.py), so knees at the bottom edge of the
+    # camera never stop a rep from counting.
+    required_keypoints: [left_hip, right_hip]
     issue: "The squat does not reach the intended depth."
     cue: "Go to the target depth with control."
     coaching: "You're cutting your squats short. Sit down until your hips reach at least the top of your knees, own the bottom for a beat, then drive up — full depth is where the strength is built."

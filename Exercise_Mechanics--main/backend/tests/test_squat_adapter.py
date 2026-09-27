@@ -388,7 +388,7 @@ def test_explicit_builder_registry_matches_enabled_catalog():
     assert validate_training_builders() == ("bicep_curl", "high_knee", "pushup", "squat")
 
 
-# ---- Camera movement is not a squat (knee-bend cap, rules/depth.py) ----------------------------
+# ---- Squats seen by real cameras (rules/depth.py) ------------------------------------------------
 
 _SWEEP = [(0.0, 0), (0.3, 100), (0.6, 200), (0.9, 300), (0.95, 400), (0.9, 500), (0.6, 600), (0.3, 700), (0.0, 800)]
 
@@ -419,25 +419,6 @@ def _drive_points(adapter, sequence, points_for):
     for value, timestamp in sequence:
         status = adapter.process(TrainingFrame(timestamp, points_for(value)))
     return status
-
-
-def test_camera_sliding_down_with_straight_legs_counts_no_rep():
-    # Old signal: the hip moved 95 px down the frame, so this was a full "rep".
-    assert _moved(_keypoints(0.0), shift_y=95.0)["left_hip"]["y"] - _keypoints(0.0)["left_hip"]["y"] == 95.0
-    adapter = build_squat_adapter(baseline=_baseline(), target_reps=3)
-    status = _drive_points(adapter, _SWEEP, lambda p: _moved(_keypoints(0.0), shift_y=p * 100.0))
-
-    assert status["counters"]["attempts"] == 0
-    assert status["set"]["completed_reps"] == 0
-
-
-def test_stepping_back_with_straight_legs_counts_no_rep():
-    # Scaling about a low point moves the hips down the frame: the old signal read ~0.5 depth.
-    adapter = build_squat_adapter(baseline=_baseline(), target_reps=3)
-    status = _drive_points(adapter, _SWEEP, lambda p: _moved(_keypoints(0.0), scale=1.0 - p * 0.2))
-
-    assert status["counters"]["attempts"] == 0
-    assert status["set"]["completed_reps"] == 0
 
 
 def test_realistic_squats_still_count_full_depth_including_near_the_gate():
@@ -499,3 +480,28 @@ def test_standing_with_soft_knees_between_squats_still_counts():
 def test_quick_back_to_back_squats_each_count():
     status = _drive_points(build_squat_adapter(baseline=_baseline(), target_reps=5), _squats(4, frame_ms=33, period_ms=1300), _real_squat)
     assert status["set"]["completed_reps"] == 4
+
+
+def _close_camera_squat(progress: float) -> dict:
+    """A front-view squat close to the camera, as in a real session: the knees come toward the
+    camera and drop almost as far as the hips (standing hip 750 / knee 1043 px; at 0.56 depth the
+    hips are at 915 and the knees at 1160), and the knees and ankles leave the bottom of the image."""
+    hip_y = 750.0 + progress * 293.0
+    knee_y = 1043.0 + progress * 209.0
+    knee_v = 0.9 if progress < 0.3 else 0.3
+    return {
+        "left_shoulder": {"x": 640.0, "y": 560.0, "v": 0.9}, "right_shoulder": {"x": 430.0, "y": 555.0, "v": 0.9},
+        "left_hip": {"x": 600.0, "y": hip_y, "v": 0.9}, "right_hip": {"x": 470.0, "y": hip_y, "v": 0.9},
+        "left_knee": {"x": 600.0 + progress * 150, "y": knee_y, "v": knee_v},
+        "right_knee": {"x": 470.0 - progress * 150, "y": knee_y, "v": knee_v},
+        "left_ankle": {"x": 590.0, "y": 1330.0, "v": 0.2}, "right_ankle": {"x": 480.0, "y": 1330.0, "v": 0.2},
+    }
+
+
+def test_squats_close_to_the_camera_count():
+    # Knee/shin guards read this as straight legs and no rep ever counted.
+    baseline = {name: {"x": p["x"], "y": p["y"]} for name, p in _close_camera_squat(0.0).items()}
+    baseline["left_ankle"]["y"] = baseline["right_ankle"]["y"] = 1330.0
+    adapter = build_squat_adapter(baseline=baseline, target_reps=5)
+    status = _drive_points(adapter, _squats(3, frame_ms=66, peak=0.56), _close_camera_squat)
+    assert status["set"]["completed_reps"] == 3

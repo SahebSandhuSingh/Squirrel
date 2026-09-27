@@ -2,7 +2,7 @@
 
 This is one biomechanical rule kernel (template id `depth`, "Short depth"), built to stand
 completely on its own — no rep FSM, no phase machine, no rep counting. It answers two
-questions from a single frame's hip + knee landmarks:
+questions from a single frame's hip landmarks (the live knees are optional):
 
     1. HOW DEEP is the squat right now?      → a normalized `depth_ratio` signal
     2. Is that deep enough for a FULL rep?    → the `is_full_depth()` gate
@@ -35,21 +35,11 @@ For squat (an FSM-1 / descend-first movement) `depth_ratio` doubles as the rep m
 progress signal (0 at rest → grows to a peak at the bottom). A different exercise would
 supply its own signal kernel; this one stays squat-specific but FSM-agnostic.
 
-Knee-bend cap (camera-movement guard). The signal above is a hip position IN THE IMAGE, so
-anything that moves the hip down the frame reads as depth: a propped or hand-held phone that
-slides or tilts, stepping toward a camera above hip height, bending over. With the standing ankle
-height in the baseline, each frame also measures how bent the knees are:
-
-    knee_bend = 1 − (thigh_span / shin_span) / (baseline_thigh_span / baseline_shin_span)
-
-    thigh_span = knee_mid_y − hip_mid_y,  shin_span = ankle_mid_y − knee_mid_y
-
-A camera shift moves hip, knee and ankle together and a change of distance scales them together,
-so the ratio only changes when the knees bend: 0 standing, ≈0.8–1.0 at parallel (it trails
-depth_ratio a little because the shins tilt forward). depth_ratio is capped at
-KNEE_BEND_CAP_BASE + KNEE_BEND_CAP_SLOPE · knee_bend, a bound a real squat never reaches but a
-straight-legged frame (≈0.1) cannot even start a rep with. Without a
-usable ankle pair (or a baseline without ankles) the cap is not applied.
+Only the hips are required live. When the camera is close, the knees sit at the bottom edge of
+the image as the person squats and lose confidence; depth must not depend on them. The signal is
+deliberately just the hip drop: guards built from knee or shin lengths in the image read a real
+front-view squat as straight legs (the knees come toward the camera and drop in the image) and
+stopped every rep from counting.
 
 Thresholds are NOT hardcoded here. ``full_rom_gate`` is passed verbatim from the squat template
 and is the sole credit boundary; depth deliberately has no hysteresis.
@@ -63,13 +53,8 @@ from backend.core.keypoints import usable_xy
 
 RULE_ID = "depth"
 # Anatomical inputs are stable kernel metadata; thresholds remain in configuration.
-REQUIRED_KEYPOINTS = ("left_hip", "right_hip", "left_knee", "right_knee")
-ANKLE_KEYPOINTS = ("left_ankle", "right_ankle")
-# Depth may not exceed BASE + SLOPE · knee_bend (see "Knee-bend cap" above). Structural, not tuning:
-# SLOPE leaves every real squat's depth well under the cap (knee_bend trails depth by up to ~0.25
-# near parallel); BASE sits under the descent trigger (0.25), so straight legs never start a rep.
-KNEE_BEND_CAP_BASE = 0.15
-KNEE_BEND_CAP_SLOPE = 2.0
+REQUIRED_KEYPOINTS = ("left_hip", "right_hip")
+KNEE_KEYPOINTS = ("left_knee", "right_knee")   # optional: only for hip_below_knee
 
 
 @dataclass(frozen=True)
@@ -78,11 +63,11 @@ class DepthReading:
     compares peaks against the gate, so precision matters); presentation rounding is a caller
     concern."""
     depth_ratio:    float          # 0.0 standing → 1.0 hip at standing-knee height (>1 deeper)
-    hip_below_knee: bool           # live ATG indicator (hip below the CURRENT knee) — informational only
+    hip_below_knee: bool | None    # live ATG indicator (hip below the CURRENT knee), None without
+                                   # usable knees — informational only
     full_rom_gate:  float          # the sole full-ROM boundary from exercise config
     full_depth:     bool           # did THIS frame reach the gate (depth_ratio ≥ gate)
     shortfall:      float | None   # distance below the gate; None when at/over the gate
-    knee_bend:      float | None = None  # 0 straight → ≈1 thigh level; None without ankles
 
 
 class DepthRule:
@@ -95,7 +80,6 @@ class DepthRule:
         baseline_knee_y: standing knee-midpoint y (mean of the baseline left/right knee y).
         full_rom_gate:   the sole full-rep credit point (e.g. 0.85).
         min_baseline_span_px: reject a baseline whose hip→knee span is below this.
-        baseline_ankle_y: standing ankle-midpoint y; enables the knee-bend cap (None: no cap).
 
     Raises ValueError on an anatomically impossible baseline (knee not below hip), an
     implausibly small ROM or a non-positive gate — the wiring
@@ -109,7 +93,6 @@ class DepthRule:
         full_rom_gate: float,
         *,
         min_baseline_span_px: float,
-        baseline_ankle_y: float | None = None,
     ) -> None:
         # Image y grows downward → a standing knee sits BELOW (greater y than) the hip.
         if not baseline_knee_y > baseline_hip_y:
@@ -128,16 +111,13 @@ class DepthRule:
 
         self._baseline_hip_y = float(baseline_hip_y)
         self._rom = float(rom)
-        # Standing thigh/shin span ratio, the knee-bend reference; None disables the cap.
-        shin = None if baseline_ankle_y is None else float(baseline_ankle_y) - float(baseline_knee_y)
-        self._baseline_thigh_shin = rom / shin if shin is not None and shin > 0 else None
         self._full_rom_gate = float(full_rom_gate)
 
     # ------------------------------------------------------------------
     def read(self, keypoints: dict) -> DepthReading | None:
-        """Compute this frame's depth from the live hip + knee landmarks.
+        """Compute this frame's depth from the live hip landmarks.
 
-        Returns None when any required hip/knee landmark is missing or below CONFIDENCE_MIN —
+        Returns None when either hip landmark is missing or below CONFIDENCE_MIN —
         a low-confidence joint carries ±jitter that would corrupt the signal, so the caller
         must treat this frame as "no reading" (never advance a rep or score on partial data)."""
         pts = usable_xy(keypoints, REQUIRED_KEYPOINTS)
@@ -145,34 +125,20 @@ class DepthRule:
             return None
 
         hip_mid_y = (pts["left_hip"][1] + pts["right_hip"][1]) / 2.0
-        knee_mid_y = (pts["left_knee"][1] + pts["right_knee"][1]) / 2.0
         depth = (hip_mid_y - self._baseline_hip_y) / self._rom
-        knee_bend = self._knee_bend(keypoints, hip_mid_y, knee_mid_y)
-        if knee_bend is not None:
-            depth = min(depth, KNEE_BEND_CAP_BASE + KNEE_BEND_CAP_SLOPE * knee_bend)
+        knees = usable_xy(keypoints, KNEE_KEYPOINTS)
+        hip_below_knee = (
+            None if knees is None
+            else hip_mid_y > (knees["left_knee"][1] + knees["right_knee"][1]) / 2.0
+        )
 
         return DepthReading(
             depth_ratio=depth,
-            hip_below_knee=hip_mid_y > knee_mid_y,
+            hip_below_knee=hip_below_knee,
             full_rom_gate=self._full_rom_gate,
             full_depth=self.is_full_depth(depth),
             shortfall=(round(self._full_rom_gate - depth, 3) if depth < self._full_rom_gate else None),
-            knee_bend=knee_bend,
         )
-
-    def _knee_bend(self, keypoints: dict, hip_mid_y: float, knee_mid_y: float) -> float | None:
-        """How bent the knees are, from the thigh/shin vertical spans against the baseline's
-        (see "Knee-bend cap"). None when there is no ankle reference or no usable ankle pair."""
-        if self._baseline_thigh_shin is None:
-            return None
-        ankles = usable_xy(keypoints, ANKLE_KEYPOINTS)
-        if ankles is None:
-            return None
-        ankle_mid_y = (ankles["left_ankle"][1] + ankles["right_ankle"][1]) / 2.0
-        shin = ankle_mid_y - knee_mid_y
-        if shin <= 0:
-            return None
-        return 1.0 - ((knee_mid_y - hip_mid_y) / shin) / self._baseline_thigh_shin
 
     @property
     def baseline_hip_y(self) -> float:
