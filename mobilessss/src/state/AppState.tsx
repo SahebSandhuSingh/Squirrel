@@ -1,13 +1,13 @@
+import { COMING_SOON, isLocked, LOCKED_MISSIONS } from '@/data/features';
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { DEFAULT_CITY_ID, cityById, type City } from '@/data/cities';
 import { crewsForCity, eventsForCity, placesForCity, type Crew, type EventItem, type Place } from '@/data/community';
 import { seedMissions, type Mission } from '@/data/missions';
-import { seedPosts, type Post } from '@/data/posts';
 import { STARTER_OWNED, shopItemById } from '@/data/shop';
-import { CURRENT_USER_ID, userById, users, type User } from '@/data/users';
+import { CURRENT_USER_ID, userById, type User } from '@/data/users';
 import type { AvatarLook } from '@/types';
 import { districtsForCity, type District } from '@/data/territory';
-import { runXp, type XpLine } from '@/logic/xp';
+import { exerciseXp, runXp, type XpLine } from '@/logic/xp';
 import type { Verdict } from '@/logic/track';
 
 export const XP_PER_LEVEL = 2000;
@@ -37,6 +37,8 @@ type AppState = {
   levelXp: number;
   coins: number;
   addXp: (xp: number, coins?: number) => { leveledUp: boolean };
+  /** XP earned today (every addXp award: runs, missions, rewards). */
+  xpToday: number;
   // missions
   missions: Mission[];
   logMission: (id: string) => void;
@@ -53,24 +55,28 @@ type AppState = {
   toggleCrew: (id: string) => void;
   joinedEvents: Set<string>;
   toggleEvent: (id: string) => void;
-  following: Set<string>;
-  toggleFollow: (id: string) => void;
-  liked: Set<string>;
-  toggleLike: (id: string) => void;
-  saved: Set<string>;
-  toggleSave: (id: string) => void;
-  posts: Post[];
-  addPost: (p: Omit<Post, 'id' | 'authorId' | 'cityId' | 'area' | 'minutesAgo' | 'likes' | 'comments'>) => void;
+  // Follows, likes, saves and posts live in the Social service (src/api/social.ts).
   // runs & territory
   finishRun: (run: FinishRunInput) => FinishRunResult;
   runXpToday: number;
   districts: District[];
   /** Replace the local XP total with the server's (GET /v1/users/me/xp). */
   syncServerXp: (total: number) => void;
+  // exercise
+  /** The exercise session in progress (one at a time), or null. */
+  activeExercise: ActiveExercise | null;
+  beginExercise: (a: Omit<ActiveExercise, 'startedAt'>) => boolean;
+  endExercise: () => void;
+  /** Record a finished exercise: missions, XP and today's activity. */
+  completeExercise: (c: CompletedExercise) => { xp: number; lines: XpLine[]; leveledUp: boolean };
+  exerciseToday: { sessions: number; minutes: number; kcal: number };
   // feedback
   toasts: ToastMsg[];
   toast: (text: string, icon?: string, color?: string) => void;
 };
+
+export type ActiveExercise = { key: string; sessionId?: string; startedAt: number };
+export type CompletedExercise = { key: string; slug: string; reps: number; timedSeconds: number; activeSeconds: number; kcal: number };
 
 export type FinishRunInput = { km: number; minutes: number; verdict: Verdict; districtId?: string; serverXp?: number; serverLines?: XpLine[] };
 export type FinishRunResult = { xp: number; lines: XpLine[]; capped: boolean; leveledUp: boolean; captured?: District };
@@ -97,12 +103,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [claimed, setClaimed] = useState<Set<string>>(new Set());
   const [owned, setOwned] = useState<Set<string>>(new Set(STARTER_OWNED));
   const [equipped, setEquipped] = useState<Set<string>>(new Set(['a-shades']));
-  const [joinedCrews, setJoinedCrews] = useState<Set<string>>(new Set(['pune-crew-2']));
+  const [joinedCrews, setJoinedCrews] = useState<Set<string>>(new Set(['pune-crew-1']));
   const [joinedEvents, setJoinedEvents] = useState<Set<string>>(new Set());
-  const [following, setFollowing] = useState<Set<string>>(new Set(['u_rhea', 'u_meera', 'u_zoya', 'u_isha']));
-  const [liked, setLiked] = useState<Set<string>>(new Set(['p3']));
-  const [saved, setSaved] = useState<Set<string>>(new Set());
-  const [posts, setPosts] = useState<Post[]>(seedPosts);
   const [toasts, setToasts] = useState<ToastMsg[]>([]);
   const toastId = useRef(0);
 
@@ -113,6 +115,10 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [districtState, setDistrictState] = useState<Record<string, District[]>>({});
   const districts = useMemo(() => districtState[cityId] ?? districtsForCity(cityId), [districtState, cityId]);
   const [runXpToday, setRunXpToday] = useState(0);
+  const [xpToday, setXpToday] = useState(0);
+  const [activeExercise, setActiveExercise] = useState<ActiveExercise | null>(null);
+  const activeExerciseRef = useRef<ActiveExercise | null>(null);
+  const [exerciseToday, setExerciseToday] = useState({ sessions: 0, minutes: 0, kcal: 0 });
 
   const toast = useCallback((text: string, icon?: string, color?: string) => {
     const id = ++toastId.current;
@@ -129,6 +135,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         leveledUp = after > before;
         return prevXp + gain;
       });
+      if (gain > 0) setXpToday((t) => t + gain);
       if (coinGain) setCoins((c) => c + coinGain);
       return { leveledUp };
     },
@@ -137,6 +144,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 
   const logMission = useCallback(
     (id: string) => {
+      if (LOCKED_MISSIONS.has(id)) return; // feature not launched yet
       setMissions((currentMissions) => {
         const m = currentMissions.find((x) => x.id === id);
         if (!m || m.current >= m.goal) return currentMissions;
@@ -149,7 +157,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     [toast],
   );
 
-  const ready = useMemo(() => missions.filter((m) => m.current >= m.goal && !claimed.has(m.id)), [missions, claimed]);
+  const ready = useMemo(() => missions.filter((m) => m.current >= m.goal && !claimed.has(m.id) && !LOCKED_MISSIONS.has(m.id)), [missions, claimed]);
   const claimable = useMemo(
     () => ({ xp: ready.reduce((s, m) => s + m.xp, 0), coins: ready.reduce((s, m) => s + m.coins, 0), count: ready.length }),
     [ready],
@@ -163,7 +171,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setMissions((currentMissions) => {
       const claimedSet = new Set(claimed);
       readyMissions = currentMissions
-        .filter((m) => m.current >= m.goal && !claimedSet.has(m.id))
+        .filter((m) => m.current >= m.goal && !claimedSet.has(m.id) && !LOCKED_MISSIONS.has(m.id))
         .map((m) => m.id);
       claimableXp = readyMissions.reduce((s, id) => {
         const m = currentMissions.find((x) => x.id === id);
@@ -286,6 +294,10 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     }, [crews, toast]),
     joinedEvents,
     toggleEvent: useCallback((id: string) => {
+      if (isLocked('events')) {
+        toast(COMING_SOON.events, 'lock', '#A9A9AE');
+        return;
+      }
       const ev = events.find((e) => e.id === id);
       if (!joinedEvents.has(id) && ev) {
         toast(`You're going to ${ev.title} · +${ev.xp} XP on check-in`, 'calendar-check', '#D7FF1F');
@@ -293,35 +305,40 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       }
       setJoinedEvents((s) => toggled(s, id));
     }, [events, joinedEvents, toast]),
-    following,
-    toggleFollow: useCallback((id: string) => {
-      setFollowing((s) => {
-        if (!s.has(id)) toast(`Following @${users.find((u) => u.id === id)?.handle ?? ''}`, 'account-check', '#D7FF1F');
-        return toggled(s, id);
-      });
-    }, [toast]),
-    liked,
-    toggleLike: useCallback((id: string) => setLiked((s) => toggled(s, id)), []),
-    saved,
-    toggleSave: useCallback((id: string) => {
-      setSaved((s) => {
-        if (!s.has(id)) toast('Saved to your collection', 'bookmark', '#FFD21F');
-        return toggled(s, id);
-      });
-    }, [toast]),
-    posts,
-    addPost: useCallback((p) => {
-      setPosts((all) => [
-        { ...p, id: `me-${Date.now()}`, authorId: me.id, cityId, area: city.areas[0], minutesAgo: 0, likes: 0, comments: 0 },
-        ...all,
-      ]);
-      toast('Posted to your feed · +20 XP', 'send', '#D7FF1F');
-      setXp((x) => x + 20);
-    }, [cityId, city, me.id, toast]),
     finishRun,
     runXpToday,
     districts,
     syncServerXp: (total) => setXp(total),
+    activeExercise,
+    beginExercise: useCallback((a: Omit<ActiveExercise, 'startedAt'>) => {
+      // Guard against duplicate sessions (double taps, two screens): first one wins.
+      if (activeExerciseRef.current) return false;
+      const active = { ...a, startedAt: Date.now() };
+      activeExerciseRef.current = active;
+      setActiveExercise(active);
+      return true;
+    }, []),
+    endExercise: useCallback(() => {
+      activeExerciseRef.current = null;
+      setActiveExercise(null);
+    }, []),
+    completeExercise: useCallback(
+      (c: CompletedExercise) => {
+        const minutes = Math.max(1, Math.round(c.activeSeconds / 60));
+        const bump = (id: string, by: number) =>
+          setMissions((all) => all.map((m) => (m.id === id && !LOCKED_MISSIONS.has(id) ? { ...m, current: Math.min(m.goal, +(m.current + by).toFixed(2)) } : m)));
+        if (c.slug === 'squat' && c.reps > 0) bump('m-squats', c.reps);
+        bump('m-active', minutes);
+        bump('w-workouts', 1);
+        setExerciseToday((t) => ({ sessions: t.sessions + 1, minutes: t.minutes + minutes, kcal: t.kcal + c.kcal }));
+        const x = exerciseXp(c.reps, c.timedSeconds);
+        const { leveledUp } = addXp(x.total, Math.round(x.total / 4));
+        return { xp: x.total, lines: x.lines, leveledUp };
+      },
+      [addXp],
+    ),
+    exerciseToday,
+    xpToday,
     toasts,
     toast,
   };

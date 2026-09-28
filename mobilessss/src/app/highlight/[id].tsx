@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Scene } from '@/art/Scene';
@@ -20,7 +21,7 @@ export default function HighlightViewer() {
   const { me } = useApp();
   const h = highlightById(id);
   const [i, setI] = useState(0);
-  const bar = useRef(new Animated.Value(0)).current;
+  const bar = useAnimatedValue(0);
   const count = h?.slides.length ?? 0;
 
   useEffect(() => {

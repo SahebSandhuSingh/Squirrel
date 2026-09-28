@@ -21,7 +21,7 @@ export type Mission = {
 
 export const seedMissions: Mission[] = [
   { id: 'm-steps', tab: 'Daily', title: 'Walk 5,000 steps', icon: 'shoe-sneaker', color: '#D7FF1F', current: 2340, goal: 5000, step: 500, xp: 50, coins: 25, mascot: 'run' },
-  { id: 'm-squats', tab: 'Daily', title: 'Do 10 squats', icon: 'dumbbell', color: '#A855F7', current: 6, goal: 10, step: 1, xp: 40, coins: 20, mascot: 'lift' },
+  { id: 'm-squats', tab: 'Daily', title: 'Do 10 squats', icon: 'arm-flex', color: '#A855F7', current: 6, goal: 10, step: 1, xp: 40, coins: 20, mascot: 'lift' },
   { id: 'm-water', tab: 'Daily', title: 'Drink 2L water', icon: 'water', color: '#5FB8FF', current: 1, goal: 2, unit: 'L', step: 0.25, xp: 30, coins: 15, mascot: 'drink' },
   { id: 'm-meal', tab: 'Daily', title: 'Log a healthy meal', icon: 'silverware-fork-knife', color: '#FFD21F', current: 0, goal: 3, step: 1, xp: 30, coins: 15 },
   { id: 'm-active', tab: 'Daily', title: 'Be active for 30 mins', icon: 'run', color: '#FF2D9B', current: 12, goal: 30, unit: 'mins', step: 5, xp: 40, coins: 20, mascot: 'cheer' },

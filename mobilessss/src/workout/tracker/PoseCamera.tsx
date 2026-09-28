@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import { View } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { POSE_ASSETS_URL } from '@/api/config';
@@ -14,7 +14,9 @@ export function PoseCamera({ active, skeleton, onFrame, onStatus, style }: PoseC
   const ref = useRef<WebView>(null);
   const html = useMemo(() => trackerHtml(trackerAssets(POSE_ASSETS_URL)), []);
   const handlers = useRef({ onFrame, onStatus });
-  handlers.current = { onFrame, onStatus };
+  useLayoutEffect(() => {
+    handlers.current = { onFrame, onStatus };
+  });
 
   const send = (msg: object) => ref.current?.injectJavaScript(`window.__host && window.__host(${JSON.stringify(msg)}); true;`);
   useEffect(() => send({ type: 'skeleton', color: skeleton }), [skeleton]);

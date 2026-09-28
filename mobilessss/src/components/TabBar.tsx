@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,7 +18,7 @@ const ICONS: Record<string, [IconName, IconName]> = {
 };
 
 function TabItem({ focused, label, icons, onPress }: { focused: boolean; label: string; icons: [IconName, IconName]; onPress: () => void }) {
-  const v = useRef(new Animated.Value(focused ? 1 : 0)).current;
+  const v = useAnimatedValue(focused ? 1 : 0);
   useEffect(() => {
     Animated.spring(v, { toValue: focused ? 1 : 0, useNativeDriver: NATIVE, speed: 20, bounciness: 8 }).start();
   }, [focused, v]);

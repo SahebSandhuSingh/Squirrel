@@ -4,6 +4,8 @@
  *   EXPO_PUBLIC_EXERCISE_API_URL  Exercise Mechanics backend (FastAPI, routes under /api)
  *   EXPO_PUBLIC_AUTH_URL          Where accounts live. Defaults to the Exercise backend, whose
  *                                 /api/auth issues the token both backends accept.
+ *   EXPO_PUBLIC_SOCIAL_API_URL    Profile + Social service (routes under /v1). Unset: the social screens
+ *                                 show sample data.
  * With no API URL the app runs in demo mode on the seed data in src/data/.
  */
 const trim = (v: string | undefined) => (v ?? '').replace(/\/$/, '');
@@ -18,3 +20,6 @@ export const AUTH_CONFIGURED = AUTH_URL.length > 0;
 /** Optional: one folder serving MediaPipe's vision_bundle.mjs, wasm/ and pose_landmarker_lite.task.
  *  Unset: jsDelivr and Google's model storage, as the browser coach uses. */
 export const POSE_ASSETS_URL = trim(process.env.EXPO_PUBLIC_POSE_ASSETS_URL);
+
+export const SOCIAL_API_URL = trim(process.env.EXPO_PUBLIC_SOCIAL_API_URL);
+export const SOCIAL_API_CONFIGURED = SOCIAL_API_URL.length > 0;

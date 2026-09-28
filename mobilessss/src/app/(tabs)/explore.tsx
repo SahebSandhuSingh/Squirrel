@@ -1,37 +1,45 @@
+import { useLocks } from '@/components/Locked';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 import { router } from 'expo-router';
 import { CityMap } from '@/art/CityMap';
 import { Avatar } from '@/components/Avatar';
 import { CityChip } from '@/components/TopBar';
 import { Chips, Display, Icon, IconButton, NATIVE, PressScale, Pulse, SearchBar, TAB_BAR_SPACE, Tagline, tap } from '@/components/ui';
-import type { Place, PlaceKind } from '@/data/community';
-import { users } from '@/data/users';
+import type { Place } from '@/data/community';
+import { profileApi, type Follower, type Page } from '@/api/social';
+import { useRemote } from '@/api/useRemote';
+import { toAvatarUser } from '@/components/socialParts';
+import { useSocialEnabled } from '@/hooks/useSocial';
 import { useApp } from '@/state/AppState';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, radius } from '@/theme';
 
-const FILTERS = ['All', 'Gyms', 'Runs', 'Cafes', 'Events'] as const;
+const FILTERS = ['All', 'Runs', 'Cafes', 'Events'] as const;
 type Filter = (typeof FILTERS)[number];
-const FILTER_ICONS = { All: 'map-marker-multiple', Gyms: 'dumbbell', Runs: 'run-fast', Cafes: 'coffee', Events: 'calendar-star' } as const;
+const FILTER_ICONS = { All: 'map-marker-multiple', Runs: 'run-fast', Cafes: 'coffee', Events: 'calendar-star' } as const;
 
 /** EXPLORE — stylised neon city map with live places, runs and events. */
 export default function Explore() {
   const insets = useSafeAreaInsets();
   const { places, city, joinedEvents, toggleEvent, events } = useApp();
+  const locks = useLocks();
+  /** Event places belong to the Events feature: inert while it's locked. */
+  const lockedPlace = (p: Place) => p.kind === 'Events' && locks.locked('events');
   const [filter, setFilter] = useState<Filter>('All');
   const [q, setQ] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
   const [showRoute, setShowRoute] = useState(true);
   const listRef = useRef<ScrollView>(null);
-  const route = useRef(new Animated.Value(0)).current;
+  const route = useAnimatedValue(0);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     route.setValue(0);
     Animated.timing(route, { toValue: 1, duration: 2200, easing: Easing.inOut(Easing.cubic), useNativeDriver: false }).start();
-  }, [city.id, showRoute]);
+  }, [city.id, showRoute, route]);
 
   const handleSearchChange = useCallback((text: string) => {
     setQ(text);
@@ -48,7 +56,10 @@ export default function Explore() {
     () => places.filter((p) => (filter === 'All' || p.kind === filter) && (!term || p.name.toLowerCase().includes(term) || p.kind.toLowerCase().includes(term))),
     [places, filter, term],
   );
-  const people = useMemo(() => (term.length > 1 ? users.filter((u) => u.name.toLowerCase().includes(term) || u.handle.includes(term)).slice(0, 4) : []), [term]);
+  // People come from the Social service (signed in only); places stay city data.
+  const socialOn = useSocialEnabled();
+  const peopleRes = useRemote<Page<Follower>>(socialOn && term.length > 1 ? `social:search:${term}` : null, () => profileApi.search(term));
+  const people = term.length > 1 ? (peopleRes.data?.items ?? []).slice(0, 4) : [];
 
   const select = (p: Place) => {
     tap();
@@ -59,6 +70,7 @@ export default function Explore() {
 
   const act = (p: Place) => {
     if (p.kind === 'Runs') router.push('/run');
+    else if (lockedPlace(p)) locks.notify('events');
     else if (p.eventId) router.push({ pathname: '/event/[id]', params: { id: p.eventId } });
     else router.push('/crews');
   };
@@ -69,7 +81,7 @@ export default function Explore() {
       <View style={StyleSheet.absoluteFill}>
         <CityMap seed={city.id.length * 7} route={showRoute} routeProgress={route} style={StyleSheet.absoluteFill} />
         {visible.map((p) => (
-          <Marker key={p.id} place={p} active={selected === p.id} onPress={() => select(p)} />
+          <Marker key={p.id} place={p} active={selected === p.id} locked={lockedPlace(p)} onPress={() => select(p)} />
         ))}
         <View style={styles.me}>
           <Pulse size={44} color={colors.purple} />
@@ -91,17 +103,17 @@ export default function Explore() {
           </View>
         </View>
         <View style={{ marginTop: 10 }}>
-          <SearchBar placeholder="Search gyms, runs, cafes, people..." value={q} onChangeText={handleSearchChange} />
+          <SearchBar placeholder="Search runs, cafes, people..." value={q} onChangeText={handleSearchChange} />
         </View>
         <Chips items={FILTERS} value={filter} onChange={setFilter} icons={FILTER_ICONS} />
         {people.length > 0 && (
           <View style={styles.people}>
             {people.map((u) => (
-              <Pressable key={u.id} style={styles.personRow} onPress={() => router.push({ pathname: '/user/[id]', params: { id: u.id } })}>
-                <Avatar user={u} size={34} link={false} />
+              <Pressable key={u.id} style={styles.personRow} onPress={() => router.push(u.is_me ? '/profile' : { pathname: '/user/[id]', params: { id: u.id } })}>
+                <Avatar user={toAvatarUser(u, u.is_me)} size={34} link={false} />
                 <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={styles.pName}>{u.name}</Text>
-                  <Text style={styles.pMeta}>@{u.handle} · {u.area}</Text>
+                  <Text style={styles.pName}>{u.display_name}</Text>
+                  <Text style={styles.pMeta}>@{u.username}{u.area ? ` · ${u.area}` : ''}</Text>
                 </View>
                 <Icon name="chevron-right" size={20} color={colors.dim} />
               </Pressable>
@@ -120,7 +132,7 @@ export default function Explore() {
         </View>
         <ScrollView ref={listRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingHorizontal: 16 }} snapToInterval={232} decelerationRate="fast">
           {visible.map((p) => {
-            const ev = p.eventId ? events.find((e) => e.id === p.eventId) : undefined;
+            const ev = p.eventId && !locks.locked('events') ? events.find((e) => e.id === p.eventId) : undefined;
             const going = ev ? joinedEvents.has(ev.id) : false;
             return (
               <PressScale key={p.id} onPress={() => select(p)} style={[styles.placeCard, selected === p.id && { borderColor: p.color }]}>
@@ -129,16 +141,17 @@ export default function Explore() {
                 </View>
                 <View style={{ flex: 1, marginLeft: 10 }}>
                   <Text style={styles.pName} numberOfLines={1}>{p.name}</Text>
-                  <Text style={styles.pMeta} numberOfLines={1}>{p.kind} · {p.meta}</Text>
+                  <Text style={styles.pMeta} numberOfLines={1}>{p.kind} · {lockedPlace(p) ? 'Coming soon' : p.meta}</Text>
                 </View>
                 <Pressable
                   onPress={() => {
                     tap();
-                    if (ev) toggleEvent(ev.id);
+                    if (lockedPlace(p)) act(p);
+                    else if (ev) toggleEvent(ev.id);
                     else act(p);
                   }}
-                  style={[styles.go, { backgroundColor: going ? colors.cardHi : p.kind === 'Runs' ? colors.primary : colors.secondary }]}>
-                  <Text style={[styles.goText, going && { color: colors.sub }]}>{ev ? (going ? 'Going' : 'Join') : p.kind === 'Runs' ? 'Run' : 'Go'}</Text>
+                  style={[styles.go, { backgroundColor: going || (lockedPlace(p)) ? colors.cardHi : p.kind === 'Runs' ? colors.primary : colors.secondary }]}>
+                  <Text style={[styles.goText, (going || (lockedPlace(p))) && { color: colors.sub }]}>{lockedPlace(p) ? 'Soon' : ev ? (going ? 'Going' : 'Join') : p.kind === 'Runs' ? 'Run' : 'Go'}</Text>
                 </Pressable>
               </PressScale>
             );
@@ -149,8 +162,8 @@ export default function Explore() {
   );
 }
 
-function Marker({ place, active, onPress }: { place: Place; active: boolean; onPress: () => void }) {
-  const s = useRef(new Animated.Value(0)).current;
+function Marker({ place, active, locked, onPress }: { place: Place; active: boolean; locked: boolean; onPress: () => void }) {
+  const s = useAnimatedValue(0);
   useEffect(() => {
     Animated.spring(s, { toValue: 1, useNativeDriver: NATIVE, speed: 10, bounciness: 10, delay: Math.round(place.x * 400) }).start();
   }, [s, place.x]);
@@ -165,7 +178,7 @@ function Marker({ place, active, onPress }: { place: Place; active: boolean; onP
         </View>
         <View style={{ marginLeft: 6 }}>
           <Text style={styles.pinName} numberOfLines={1}>{place.name}</Text>
-          <Text style={styles.pinMeta}>{place.meta}</Text>
+          <Text style={styles.pinMeta}>{locked ? 'Coming soon' : place.meta}</Text>
         </View>
       </Pressable>
     </Animated.View>

@@ -1,137 +1,154 @@
-import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { Mascot } from '@/art/Mascot';
-import { MiniBars, SceneImage, StatCard } from '@/components/cards';
-import { Card, Display, FadeIn, Header, Icon, IconButton, Ring, Screen, Segmented, SectionHeader, Tagline } from '@/components/ui';
-import { heatmap, recentActivities, stats, type Period, type Stat } from '@/data/stats';
-import type { ProgressSession } from '@/api/exercise';
-import { RemoteStatus } from '@/components/ExerciseParts';
-import { useExerciseActivity, useExerciseProgress, useExerciseUser, useReloadOnFocus } from '@/hooks/useExercise';
+import { BadgeArt } from '@/art/Badge';
+import { AnimatedNumber, Button, Card, Display, FadeIn, Header, Icon, IconButton, Kicker, PressScale, ProgressBar, Ring, Screen, Segmented, tap } from '@/components/ui';
+import { LOCKED_MISSIONS } from '@/data/features';
+import { achievements, levelRewards } from '@/data/rewards';
+import { heatmap, stats, today, type Period, type Stat } from '@/data/stats';
+import { territoryBoard } from '@/data/territory';
+import { DAILY_RUN_XP_CAP, XP_PER_LEVEL } from '@/logic/xp';
+import { useApp } from '@/state/AppState';
 import { colors, fonts, radius } from '@/theme';
 
+/**
+ * YOUR PROGRESS: today → progress over time → performance → what to do next.
+ * Everything reads existing app state (XP, level, missions, run XP, streak, campus board)
+ * and the existing activity series in data/stats; nothing here is invented.
+ */
+
 const PERIODS: Period[] = ['Day', 'Week', 'Month', 'Year'];
-const DAY = 86_400_000;
-const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const METRICS = ['steps', 'active', 'kcal', 'workouts'] as const;
+type Metric = (typeof METRICS)[number];
+const METRIC_LABEL: Record<Metric, string> = { steps: 'Steps', active: 'Active', kcal: 'Calories', workouts: 'Workouts' };
+/** Units of each series bucket (the Year series is stored in thousands / hours). */
+const unit = (m: Metric, p: Period) =>
+  m === 'steps' ? (p === 'Year' ? 'k steps' : 'steps') : m === 'kcal' ? (p === 'Year' ? 'k kcal' : 'kcal') : m === 'active' ? (p === 'Year' ? 'h' : 'min') : 'workouts';
+const PREV: Record<Period, string> = { Day: 'yesterday', Week: 'last week', Month: 'last month', Year: 'last year' };
+const HEAT = ['rgba(255,255,255,0.06)', 'rgba(215,255,31,0.25)', 'rgba(215,255,31,0.45)', 'rgba(215,255,31,0.7)', colors.primary];
 
-/** Workouts stat built from the coach's session list, bucketed for the selected period. */
-function liveWorkoutStat(sessions: ProgressSession[], period: Period): Stat {
-  const today = startOfDay(new Date());
-  const count = (from: Date, to: Date) => sessions.filter((s) => s.date >= ymd(from) && s.date < ymd(to)).length;
-  const next = (d: Date, n = 1) => new Date(d.getTime() + n * DAY);
-  let values: number[] = [];
-  let labels: string[] = [];
-  let total = 0;
-  if (period === 'Day' || period === 'Week') {
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(today.getTime() - i * DAY);
-      values.push(count(d, next(d)));
-      labels.push('MTWTFSS'[(d.getDay() + 6) % 7]);
-    }
-    total = period === 'Day' ? values[6] : values.reduce((a, b) => a + b, 0);
-  } else if (period === 'Month') {
-    const first = new Date(today.getFullYear(), today.getMonth(), 1);
-    for (let w = 0; w < 5; w++) {
-      const a = next(first, w * 7);
-      if (a.getMonth() !== first.getMonth()) break;
-      values.push(count(a, next(a, 7)));
-      labels.push(`W${w + 1}`);
-    }
-    total = values.reduce((a, b) => a + b, 0);
-  } else {
-    for (let m = 0; m < 12; m++) {
-      values.push(count(new Date(today.getFullYear(), m, 1), new Date(today.getFullYear(), m + 1, 1)));
-      labels.push('JFMAMJJASOND'[m]);
-    }
-    total = values.reduce((a, b) => a + b, 0);
-  }
-  return { id: 'workouts', label: 'Coached workouts', value: String(total), unit: total === 1 ? 'session' : 'sessions', icon: 'arm-flex', color: '#D7FF1F', series: { labels, values } };
-}
-
-/** 5 weeks × 7 days (Mon-first, ending this week): 4 = trained that day, 0 = not. */
-function liveHeatmap(dates: Set<string>): number[][] {
-  const today = startOfDay(new Date());
-  const monday = new Date(today.getTime() - ((today.getDay() + 6) % 7) * DAY);
-  const start = new Date(monday.getTime() - 28 * DAY);
-  return Array.from({ length: 5 }, (_, w) => Array.from({ length: 7 }, (_, d) => (dates.has(ymd(new Date(start.getTime() + (w * 7 + d) * DAY))) ? 4 : 0)));
-}
-
-const HEAT = [colors.cardHi, 'rgba(215,255,31,0.25)', 'rgba(215,255,31,0.45)', 'rgba(215,255,31,0.7)', '#D7FF1F'];
-
-/** YOUR PROGRESS — fitness-game analytics dashboard. */
 export default function Progress() {
+  const { missions, xpToday, runXpToday, level, levelXp, claimable, claimRewards, logMission } = useApp();
   const [period, setPeriod] = useState<Period>('Week');
-  const data = stats[period];
-  const steps = data[0];
+  const [metric, setMetric] = useState<Metric>('steps');
 
-  // Workouts, streak and recent coached sessions come from the Exercise backend when connected.
-  const coach = useExerciseUser();
-  const year = new Date().getFullYear();
-  const prog = useExerciseProgress(coach?.user_id);
-  const act = useExerciseActivity(coach?.user_id, year);
-  const prevAct = useExerciseActivity(coach?.user_id, year - 1); // the 5-week grid can span New Year
-  useReloadOnFocus(prog.reload, act.reload);
-  const live = !!prog.data;
-  const workouts = useMemo(() => (prog.data ? liveWorkoutStat(prog.data.sessions, period) : null), [prog.data, period]);
-  const heat = useMemo(() => (act.data ? liveHeatmap(new Set([...(act.data ?? []), ...(prevAct.data ?? [])])) : heatmap), [act.data, prevAct.data]);
-  const recentCoached = (prog.data?.sessions ?? []).slice(-3).reverse();
+  // ---- TODAY: daily missions (launched ones) + today's run-XP room
+  const daily = missions.filter((m) => m.tab === 'Daily' && !LOCKED_MISSIONS.has(m.id));
+  const done = daily.filter((m) => m.current >= m.goal);
+  const goalPct = daily.length ? daily.reduce((s, m) => s + Math.min(1, m.current / m.goal), 0) / daily.length : 0;
+  const runRoom = Math.max(0, DAILY_RUN_XP_CAP - runXpToday);
+  const missionXpLeft = daily.filter((m) => m.current < m.goal).reduce((s, m) => s + m.xp, 0);
+  const xpLeft = missionXpLeft + runRoom + claimable.xp;
+
+  // ---- PROGRESS: selected period + metric from the existing activity series
+  const periodStats = stats[period];
+  const stat = periodStats.find((s) => s.id === metric)!;
+  const streak = periodStats.find((s) => s.id === 'streak')!;
+  const thisWeek = heatmap[heatmap.length - 1];
+  const activeDays = thisWeek.filter((v) => v > 0).length;
+
+  // ---- PERFORMANCE
+  const campusRank = territoryBoard.weekly.findIndex((r) => r.me) + 1;
+  const milestones = achievements.filter((a) => a.progress > 0 && a.progress < 1).sort((a, b) => b.progress - a.progress).slice(0, 2);
+  const nextReward = levelRewards.find((r) => r.level > level);
+
+  // ---- NEXT: the single best thing to do right now
+  const nextMission = [...daily].filter((m) => m.current < m.goal).sort((a, b) => b.xp - a.xp)[0];
+  const claim = () => {
+    tap('success');
+    const r = claimRewards();
+    router.push({ pathname: '/level-up', params: { gained: String(r.xp), coins: String(r.coins), leveledUp: r.leveledUp ? '1' : '0' } });
+  };
 
   return (
     <Screen tabBar={false}>
       <Header back title="Your Progress" right={<IconButton icon="share-variant-outline" color={colors.primary} onPress={() => router.push('/compose')} label="Share progress" />} />
-      <Segmented items={PERIODS} value={period} onChange={setPeriod} />
-      <Text style={styles.source}>
-        {live ? 'Steps, active time and kcal are sample data · workouts and streak are live from the coach' : 'Sample data · connect the form coach for live workouts'}
-      </Text>
-      {coach && <RemoteStatus loading={prog.loading} error={prog.error} hasData={live} onRetry={prog.reload} label="workouts" />}
 
-      {/* Hero chart */}
-      <FadeIn key={period}>
-        <Card glow={colors.green}>
+      {/* ================= TODAY ================= */}
+      <Kicker style={{ marginTop: 2 }}>Today</Kicker>
+      <FadeIn>
+        <Card glow={colors.primary} style={{ marginTop: 8 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Ring progress={steps.progress ?? 0} size={92} stroke={9} color={colors.green} color2={colors.secondary}>
-              <Text style={styles.ringPct}>{Math.round((steps.progress ?? 0) * 100)}%</Text>
-              <Text style={styles.ringLbl}>of goal</Text>
-            </Ring>
-            <View style={{ flex: 1, marginLeft: 14 }}>
-              <Text style={styles.kicker}>Steps this {period.toLowerCase()}</Text>
-              <Display size={36}>{steps.value}</Display>
-              <Text style={styles.sub}>{steps.unit} · {steps.delta ?? 'on track'} vs last {period.toLowerCase()}</Text>
+            <TweenRing progress={goalPct} />
+            <View style={{ flex: 1, marginLeft: 16 }}>
+              <Text style={styles.label}>Today&apos;s XP</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                <Text style={styles.plus}>+</Text>
+                <AnimatedNumber value={xpToday} style={styles.heroNum} />
+                <Text style={styles.heroUnit}> XP</Text>
+              </View>
+              <Text style={styles.sub}>
+                {done.length}/{daily.length} missions done · <Text style={{ color: colors.primary }}>{xpLeft} XP</Text> still up for grabs
+              </Text>
             </View>
           </View>
-          <View style={{ marginTop: 16 }}>
-            <MiniBars values={steps.series.values} color={colors.green} height={90} barWidth={steps.series.values.length > 8 ? 12 : 22} />
-            <View style={styles.axis}>
-              {steps.series.labels.map((l, i) => (
-                <Text key={i} style={[styles.axisLbl, { width: steps.series.values.length > 8 ? 12 : 22 }]}>{l}</Text>
-              ))}
+          <View style={styles.todayRow}>
+            <Mini value={`${done.length}/${daily.length}`} label="Activities" />
+            <Mini value={`${xpLeft}`} label="XP left" />
+            <Mini value={`${runXpToday}/${DAILY_RUN_XP_CAP}`} label="Run XP" />
+            <Mini value={`${today.streak}d`} label="Streak" accent />
+          </View>
+          {/* XP progression */}
+          <View style={{ marginTop: 14 }}>
+            <View style={styles.lvlRow}>
+              <Text style={styles.lvl}>LV {level}</Text>
+              <Text style={styles.sub}>
+                {levelXp.toLocaleString('en-IN')} / {XP_PER_LEVEL.toLocaleString('en-IN')} XP · {(XP_PER_LEVEL - levelXp).toLocaleString('en-IN')} to LV {level + 1}
+              </Text>
             </View>
+            <ProgressBar progress={levelXp / XP_PER_LEVEL} color={colors.primary} color2={colors.gold} height={8} style={{ marginTop: 6 }} />
           </View>
         </Card>
       </FadeIn>
 
-      <View style={{ gap: 10, marginTop: 12 }}>
-        {data.slice(1).map((s, i) => (
-          <FadeIn key={`${period}-${s.id}`} index={i}>
-            <StatCard stat={s.id === 'workouts' && workouts ? workouts : s.id === 'streak' && prog.data ? { ...s, label: 'Streak', value: `${prog.data.streak_days} ${prog.data.streak_days === 1 ? 'day' : 'days'}`, delta: undefined, progress: undefined } : s} />
-          </FadeIn>
+      {/* ================= PROGRESS ================= */}
+      <Kicker style={{ marginTop: 26 }}>Progress</Kicker>
+      <Segmented items={PERIODS} value={period} onChange={setPeriod} style={{ marginTop: 8 }} />
+      <View style={styles.chips}>
+        {METRICS.map((m) => (
+          <Pressable key={m} onPress={() => { tap(); setMetric(m); }} style={[styles.chip, metric === m && styles.chipOn]} accessibilityRole="button" accessibilityState={{ selected: metric === m }}>
+            <Text style={[styles.chipText, metric === m && { color: colors.onPrimary }]}>{METRIC_LABEL[m]}</Text>
+          </Pressable>
         ))}
       </View>
+      <FadeIn key={`${period}-${metric}`}>
+        <Card>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+            <View style={{ flexShrink: 1 }}>
+              <Text style={styles.label}>{stat.label} this {period.toLowerCase()}</Text>
+              <Text style={styles.big}>
+                {stat.value}
+                {stat.unit ? <Text style={styles.bigUnit}> {stat.unit}</Text> : null}
+              </Text>
+            </View>
+            {stat.delta && <Delta text={stat.delta} vs={PREV[period]} />}
+          </View>
+          {stat.progress != null && (
+            <View style={{ marginTop: 8 }}>
+              <ProgressBar progress={stat.progress} color={colors.primary} height={6} />
+              <Text style={[styles.sub, { marginTop: 4 }]}>
+                {Math.round(stat.progress * 100)}% of goal · {Math.max(0, 100 - Math.round(stat.progress * 100))}% to go
+              </Text>
+            </View>
+          )}
+          <Bars stat={stat} unitLabel={unit(metric, period)} />
+        </Card>
+      </FadeIn>
 
-      {/* Streak heatmap */}
-      <SectionHeader title="Streak Calendar" />
-      <Card>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-          <Icon name="fire" size={22} color={colors.orange} />
-          <Text style={styles.streak}>{live ? `${prog.data!.streak_days}-day streak` : '12-day streak'}</Text>
-          <Text style={styles.sub}>{live ? '· coached sessions' : '· sample'}</Text>
+      {/* Consistency + streak */}
+      <Card style={{ marginTop: 10 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Icon name="fire" size={22} color={colors.orange} />
+            <Text style={styles.streak}>{today.streak}-day streak</Text>
+          </View>
+          <Text style={styles.sub}>Active {activeDays}/7 days this week</Text>
         </View>
-        <View style={{ gap: 6 }}>
-          {heat.map((row, r) => (
-            <View key={r} style={{ flexDirection: 'row', gap: 6 }}>
+        <View style={{ gap: 5, marginTop: 12 }}>
+          {heatmap.map((row, r) => (
+            <View key={r} style={{ flexDirection: 'row', gap: 5 }}>
               {row.map((v, c) => (
-                <View key={c} style={[styles.cell, { backgroundColor: HEAT[v] }]} />
+                <View key={c} style={[styles.cell, { backgroundColor: HEAT[v] }, r === heatmap.length - 1 && { borderWidth: 1, borderColor: 'rgba(215,255,31,0.35)' }]} />
               ))}
             </View>
           ))}
@@ -141,60 +158,228 @@ export default function Progress() {
             <Text key={i} style={[styles.axisLbl, { flex: 1 }]}>{d}</Text>
           ))}
         </View>
+        <Text style={[styles.sub, { marginTop: 6 }]}>{streak.delta ? `${streak.label}: ${streak.value} · ${streak.delta}` : `${streak.label}: ${streak.value}`}</Text>
       </Card>
 
-      {/* Recent */}
-      <SectionHeader title="Recent Activity" />
-      <View style={{ gap: 10 }}>
-        {recentCoached.map((s) => (
-          <Pressable key={s.session_id} onPress={() => router.push({ pathname: '/exercise/session/[id]', params: { id: s.session_id } })} style={styles.activity} accessibilityLabel="Open session report">
-            <SceneImage kind="gym" seed={s.session_id.length} height={56} style={{ width: 56, borderRadius: radius.sm }} scrim={false} />
+      {/* ================= YOUR PERFORMANCE ================= */}
+      <Kicker style={{ marginTop: 26 }}>Your performance</Kicker>
+      <Card style={{ marginTop: 8, paddingVertical: 4 }}>
+        {periodStats
+          .filter((s): s is Stat & { id: Metric } => (METRICS as readonly string[]).includes(s.id))
+          .map((s, i) => (
+            <Pressable key={s.id} onPress={() => { tap(); setMetric(s.id); }} style={[styles.perfRow, i > 0 && styles.divider]} accessibilityLabel={`${s.label} ${s.value}`}>
+              <Icon name={s.icon} size={18} color={colors.dim} />
+              <Text style={styles.perfLabel}>{s.label}</Text>
+              <Text style={styles.perfValue}>{s.value}</Text>
+              <View style={{ width: 86, alignItems: 'flex-end' }}>{s.delta ? <Delta text={s.delta} compact /> : <Text style={styles.sub}>—</Text>}</View>
+            </Pressable>
+          ))}
+        <PressScale onPress={() => router.push('/leaderboard')} style={[styles.perfRow, styles.divider]} scaleTo={0.99} accessibilityLabel="Campus leaderboard">
+          <Icon name="trophy-outline" size={18} color={colors.gold} />
+          <Text style={styles.perfLabel}>Campus rank</Text>
+          <Text style={styles.perfValue}>#{campusRank} this week</Text>
+          <Icon name="chevron-right" size={18} color={colors.dim} style={{ width: 86, textAlign: 'right' }} />
+        </PressScale>
+      </Card>
+
+      <Text style={[styles.label, { marginTop: 16, marginBottom: 8 }]}>Milestones in reach</Text>
+      <View style={{ gap: 8 }}>
+        {milestones.map((a) => (
+          <PressScale key={a.id} onPress={() => router.push('/rewards')} style={styles.milestone} scaleTo={0.99}>
+            <BadgeArt kind={a.kind} size={40} locked />
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.actTitle} numberOfLines={1}>{s.exercises.filter(Boolean).join(', ') || 'Coached session'}</Text>
-              <Text style={styles.sub}>{s.day} {s.date}, {s.start_time}</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={styles.msTitle}>{a.name}</Text>
+                <Text style={styles.msPct}>{Math.round(a.progress * 100)}%</Text>
+              </View>
+              <Text style={styles.sub} numberOfLines={1}>{a.description}</Text>
+              <ProgressBar progress={a.progress} color={colors.purple} height={5} style={{ marginTop: 6 }} />
             </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.actBig}>{s.reps} reps</Text>
-              <Text style={styles.sub}>{s.score == null ? 'not scored' : `form ${Math.round(s.score)}`}</Text>
-            </View>
-          </Pressable>
+          </PressScale>
         ))}
-        {recentActivities.map((a) => (
-          <View key={a.id} style={styles.activity}>
-            <SceneImage kind={a.scene} seed={a.id.length * 5} height={56} style={{ width: 56, borderRadius: radius.sm }} scrim={false} />
+        {nextReward && (
+          <PressScale onPress={() => router.push('/rewards')} style={styles.milestone} scaleTo={0.99}>
+            <View style={styles.rewardIcon}>
+              <Icon name="gift" size={20} color={colors.onPrimary} />
+            </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.actTitle} numberOfLines={1}>{a.title}</Text>
-              <Text style={styles.sub}>{a.when}</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={styles.msTitle}>LV {nextReward.level} · {nextReward.title}</Text>
+                <Text style={styles.msPct}>{(XP_PER_LEVEL - levelXp).toLocaleString('en-IN')} XP</Text>
+              </View>
+              <Text style={styles.sub} numberOfLines={1}>{nextReward.subtitle}</Text>
+              <ProgressBar progress={levelXp / XP_PER_LEVEL} color={colors.gold} height={5} style={{ marginTop: 6 }} />
             </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.actBig}>{a.km ? `${a.km} km` : `${a.minutes} min`}</Text>
-              <Text style={styles.sub}>{a.kcal} kcal</Text>
-            </View>
-          </View>
-        ))}
+          </PressScale>
+        )}
       </View>
 
-      <SceneImage kind="city-dawn" seed={77} height={160} style={{ marginTop: 20 }} scrim={false}>
-        <Tagline size={22} color={colors.onImage} style={{ position: 'absolute', left: 16, top: 28 }}>
-          Consistency{'\n'}looks good{'\n'}on you.
-        </Tagline>
-        <Mascot pose="drink" size={160} animated style={{ position: 'absolute', right: -4, bottom: -12 }} />
-      </SceneImage>
+      {/* ================= NEXT ================= */}
+      <Kicker style={{ marginTop: 26 }}>Next</Kicker>
+      <Card glow={colors.primary} style={{ marginTop: 8 }}>
+        {claimable.count > 0 ? (
+          <NextAction icon="gift" title={`Claim ${claimable.count} reward${claimable.count > 1 ? 's' : ''}`} sub={`+${claimable.xp} XP · +${claimable.coins} coins waiting`} cta="Claim now" onPress={claim} />
+        ) : runRoom > 0 ? (
+          <NextAction icon="run-fast" title="Go for a run" sub={`Up to +${runRoom} XP left today · 50 + 10/km + 25 for new ground`} cta="Start a run" onPress={() => router.push('/run')} />
+        ) : nextMission ? (
+          <NextAction icon={nextMission.icon} title={nextMission.title} sub={`+${nextMission.xp} XP when you finish`} cta="Log progress" onPress={() => { tap('success'); logMission(nextMission.id); }} />
+        ) : (
+          <NextAction icon="check-decagram" title="Today's goals are done" sub="Rest up. Tomorrow's missions unlock at midnight." cta="See missions" onPress={() => router.push('/missions')} />
+        )}
+        {nextMission && (claimable.count > 0 || runRoom > 0) && (
+          <Pressable onPress={() => router.push('/missions')} style={styles.alsoRow} accessibilityLabel="Open missions">
+            <Icon name={nextMission.icon} size={16} color={colors.dim} />
+            <Text style={[styles.sub, { flex: 1 }]} numberOfLines={1}>
+              Also: {nextMission.title} · +{nextMission.xp} XP
+            </Text>
+            <Icon name="chevron-right" size={16} color={colors.dim} />
+          </Pressable>
+        )}
+      </Card>
     </Screen>
   );
 }
 
+/** Goal ring that fills up on mount / when the value changes. */
+function TweenRing({ progress }: { progress: number }) {
+  const [v] = useState(() => new Animated.Value(0));
+  const [p, setP] = useState(0);
+  useEffect(() => {
+    const id = v.addListener(({ value }) => setP(value));
+    Animated.timing(v, { toValue: progress, duration: 900, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+    return () => v.removeListener(id);
+  }, [progress, v]);
+  return (
+    <Ring progress={p} size={104} stroke={10} color={colors.primary} color2={colors.gold}>
+      <Text style={styles.ringPct}>{Math.round(p * 100)}%</Text>
+      <Text style={styles.ringLbl}>daily goal</Text>
+    </Ring>
+  );
+}
+
+function Mini({ value, label, accent }: { value: string; label: string; accent?: boolean }) {
+  return (
+    <View style={styles.mini}>
+      <Text style={[styles.miniValue, accent && { color: colors.orange }]} numberOfLines={1}>{value}</Text>
+      <Text style={styles.miniLabel} numberOfLines={1}>{label}</Text>
+    </View>
+  );
+}
+
+function Delta({ text, vs, compact }: { text: string; vs?: string; compact?: boolean }) {
+  const down = text.trim().startsWith('-') || text.trim().startsWith('−');
+  const numeric = /^[+\-−]/.test(text.trim());
+  const c = !numeric ? colors.dim : down ? colors.coral : colors.green;
+  return (
+    <View style={{ alignItems: 'flex-end' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+        {numeric && <Icon name={down ? 'arrow-down' : 'arrow-up'} size={compact ? 13 : 15} color={c} />}
+        <Text style={[compact ? styles.deltaSm : styles.delta, { color: numeric ? colors.text : colors.dim }]} numberOfLines={1}>{text.replace(/^[+\-−]/, '')}</Text>
+      </View>
+      {vs && <Text style={styles.deltaVs}>vs {vs}</Text>}
+    </View>
+  );
+}
+
+/** Single-series bar chart; tap a bar to read its value. */
+function Bars({ stat, unitLabel }: { stat: Stat; unitLabel: string }) {
+  const values = stat.series.values;
+  const lastReal = values.reduce((acc, v, i) => (v > 0 ? i : acc), values.length - 1);
+  // The chart remounts when the period or metric changes, so this resets to the latest bucket.
+  const [sel, setSel] = useState(lastReal);
+  const max = useMemo(() => Math.max(1, ...values), [values]);
+  const H = 110;
+  return (
+    <View style={{ marginTop: 16 }}>
+      <View style={styles.tipRow}>
+        <Text style={styles.tip}>
+          {stat.series.labels[sel]} · <Text style={{ color: colors.text }}>{values[sel].toLocaleString('en-IN')}</Text> {unitLabel}
+        </Text>
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: H, gap: 4, borderBottomWidth: 1, borderBottomColor: colors.line }}>
+        {values.map((v, i) => (
+          <Pressable
+            key={i}
+            onPress={() => { tap(); setSel(i); }}
+            style={{ flex: 1, height: H, justifyContent: 'flex-end', alignItems: 'center' }}
+            accessibilityLabel={`${stat.series.labels[i]}: ${v} ${unitLabel}`}
+            hitSlop={4}>
+            <View
+              style={{
+                width: '68%',
+                maxWidth: 22,
+                height: Math.max(v > 0 ? 3 : 0, (v / max) * (H - 6)),
+                borderTopLeftRadius: 4,
+                borderTopRightRadius: 4,
+                backgroundColor: i === sel ? colors.primary : 'rgba(215,255,31,0.38)',
+              }}
+            />
+          </Pressable>
+        ))}
+      </View>
+      <View style={{ flexDirection: 'row', gap: 4, marginTop: 6 }}>
+        {stat.series.labels.map((l, i) => (
+          <Text key={i} style={[styles.axisLbl, { flex: 1 }, i === sel && { color: colors.text }]}>{l}</Text>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function NextAction({ icon, title, sub, cta, onPress }: { icon: React.ComponentProps<typeof Icon>['name']; title: string; sub: string; cta: string; onPress: () => void }) {
+  return (
+    <View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <View style={styles.nextIcon}>
+          <Icon name={icon} size={24} color={colors.onPrimary} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Display size={24} numberOfLines={1}>{title}</Display>
+          <Text style={styles.sub}>{sub}</Text>
+        </View>
+      </View>
+      <Button label={cta} icon="arrow-right" size="md" onPress={onPress} style={{ marginTop: 14 }} />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  source: { color: colors.dim, fontFamily: fonts.mono, fontSize: 10, marginBottom: 10, letterSpacing: 0.6, textTransform: 'uppercase' },
-  ringPct: { color: colors.text, fontFamily: fonts.display, fontSize: 22 },
+  label: { color: colors.dim, fontFamily: fonts.label, fontSize: 13, letterSpacing: 1, textTransform: 'uppercase' },
+  sub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, lineHeight: 17 },
+  plus: { color: colors.primary, fontFamily: fonts.display, fontSize: 30 },
+  heroNum: { color: colors.text, fontFamily: fonts.display, fontSize: 44, lineHeight: 52 },
+  heroUnit: { color: colors.primary, fontFamily: fonts.labelBold, fontSize: 18 },
+  ringPct: { color: colors.text, fontFamily: fonts.display, fontSize: 26 },
   ringLbl: { color: colors.dim, fontFamily: fonts.medium, fontSize: 10, marginTop: -2 },
-  kicker: { color: colors.green, fontFamily: fonts.bold, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },
-  sub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12 },
-  axis: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
+  todayRow: { flexDirection: 'row', gap: 8, marginTop: 16 },
+  mini: { flex: 1, backgroundColor: colors.cardHi, borderRadius: radius.md, paddingVertical: 9, alignItems: 'center' },
+  miniValue: { color: colors.text, fontFamily: fonts.labelBold, fontSize: 18 },
+  miniLabel: { color: colors.dim, fontFamily: fonts.label, fontSize: 10, letterSpacing: 0.8, textTransform: 'uppercase' },
+  lvlRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  lvl: { color: colors.gold, fontFamily: fonts.labelBold, fontSize: 15, letterSpacing: 1 },
+  chips: { flexDirection: 'row', gap: 8, marginTop: 10, marginBottom: 10 },
+  chip: { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card },
+  chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { color: colors.sub, fontFamily: fonts.label, fontSize: 12, letterSpacing: 0.8, textTransform: 'uppercase' },
+  big: { color: colors.text, fontFamily: fonts.display, fontSize: 34 },
+  bigUnit: { color: colors.dim, fontFamily: fonts.label, fontSize: 14 },
+  delta: { fontFamily: fonts.labelBold, fontSize: 16 },
+  deltaSm: { fontFamily: fonts.labelBold, fontSize: 13 },
+  deltaVs: { color: colors.dim, fontFamily: fonts.regular, fontSize: 10 },
+  tipRow: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 6 },
+  tip: { color: colors.dim, fontFamily: fonts.label, fontSize: 12, letterSpacing: 0.6, textTransform: 'uppercase' },
+  axis: { flexDirection: 'row', justifyContent: 'space-between' },
   axisLbl: { color: colors.mute, fontFamily: fonts.semibold, fontSize: 10, textAlign: 'center' },
   streak: { color: colors.text, fontFamily: fonts.bold, fontSize: 15 },
-  cell: { flex: 1, aspectRatio: 1, borderRadius: 6 },
-  activity: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, padding: 10 },
-  actTitle: { color: colors.text, fontFamily: fonts.bold, fontSize: 14 },
-  actBig: { color: colors.text, fontFamily: fonts.display, fontSize: 18 },
+  cell: { flex: 1, aspectRatio: 1.6, borderRadius: 5 },
+  perfRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 },
+  divider: { borderTopWidth: 1, borderTopColor: colors.line },
+  perfLabel: { flex: 1, color: colors.sub, fontFamily: fonts.medium, fontSize: 14 },
+  perfValue: { color: colors.text, fontFamily: fonts.labelBold, fontSize: 16 },
+  milestone: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, padding: 12 },
+  msTitle: { color: colors.text, fontFamily: fonts.bold, fontSize: 14 },
+  msPct: { color: colors.text, fontFamily: fonts.labelBold, fontSize: 14 },
+  rewardIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.gold, alignItems: 'center', justifyContent: 'center' },
+  nextIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  alsoRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.line },
 });

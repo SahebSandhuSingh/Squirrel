@@ -1,11 +1,17 @@
 import React from 'react';
-import { Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Image, Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { router } from 'expo-router';
 import { Portrait } from '@/art/Character';
 import { colors, fonts } from '@/theme';
-import { CURRENT_USER_ID, type User } from '@/data/users';
+import { CURRENT_USER_ID } from '@/data/users';
 import type { AvatarLook } from '@/types';
 import { tap } from '@/components/ui';
+
+/**
+ * Anyone with a face: a demo `User` or a Social API author (see toAvatarUser in
+ * components/socialParts). `photo` (an uploaded avatar) wins over the illustrated look.
+ */
+export type AvatarUser = { id: string; name: string; look: AvatarLook; photo?: string | null; isMe?: boolean };
 
 /** Portrait with optional level chip / online dot; tapping opens the user's profile. */
 export function Avatar({
@@ -18,7 +24,7 @@ export function Avatar({
   link = true,
   style,
 }: {
-  user?: User;
+  user?: AvatarUser;
   look?: AvatarLook;
   size?: number;
   ring?: string | false;
@@ -31,7 +37,11 @@ export function Avatar({
   if (!l) return null;
   const body = (
     <View style={[{ width: size, height: size }, style]}>
-      <Portrait look={l} size={size} ring={ring} />
+      {user?.photo ? (
+        <Image source={{ uri: user.photo }} accessibilityIgnoresInvertColors style={{ width: size, height: size, borderRadius: size / 2, borderWidth: ring ? 2 : 0, borderColor: ring || undefined }} />
+      ) : (
+        <Portrait look={l} size={size} ring={ring} />
+      )}
       {level != null && (
         <View style={{ position: 'absolute', bottom: -4, alignSelf: 'center', backgroundColor: colors.purple, borderRadius: 8, paddingHorizontal: 5, borderWidth: 1.5, borderColor: colors.bg }}>
           <Text style={{ color: colors.onPrimary, fontFamily: fonts.bold, fontSize: Math.max(9, size * 0.16) }}>LV {level}</Text>
@@ -46,7 +56,7 @@ export function Avatar({
       accessibilityLabel={`Open ${user.name}'s profile`}
       onPress={() => {
         tap();
-        router.push(user.id === CURRENT_USER_ID ? '/profile' : { pathname: '/user/[id]', params: { id: user.id } });
+        router.push(user.isMe || user.id === CURRENT_USER_ID ? '/profile' : { pathname: '/user/[id]', params: { id: user.id } });
       }}>
       {body}
     </Pressable>
@@ -54,7 +64,7 @@ export function Avatar({
 }
 
 /** Overlapping avatar stack with "+N". */
-export function AvatarStack({ users, extra, size = 26 }: { users: User[]; extra?: number; size?: number }) {
+export function AvatarStack({ users, extra, size = 26 }: { users: AvatarUser[]; extra?: number; size?: number }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
       {users.slice(0, 4).map((u, i) => (

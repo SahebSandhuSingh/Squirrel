@@ -58,13 +58,13 @@ export default function Welcome() {
         </FadeIn>
       </View>
 
-      <Tape items={['Touch grass (literally)', 'No gym-bro energy', 'Every run leaves a mark', 'Move play connect']} style={{ marginBottom: 14 }} />
+      <Tape items={['Touch grass (literally)', 'No pressure, all vibes', 'Every run leaves a mark', 'Move play connect']} style={{ marginBottom: 14 }} />
 
       <View style={[styles.bottom, { paddingBottom: insets.bottom + 16 }]}>
         <FadeIn delay={450} style={{ gap: 12 }}>
           <Button label="Get started" icon="arrow-right" onPress={getStarted} />
           <Button label="I already have an account" variant="secondary" size="md" onPress={() => router.push('/sign-in')} />
-          <Text style={styles.foot}>free to join · takes 10 sec · zero gym-bro energy required</Text>
+          <Text style={styles.foot}>free to join · takes 10 sec · zero pressure, all vibes</Text>
         </FadeIn>
       </View>
     </View>

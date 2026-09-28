@@ -47,7 +47,7 @@ export function ellipseD(cx: number, cy: number, rx: number, ry: number): string
 }
 
 /** Polygon subpath normalised to clockwise winding. */
-export function polyD(pts: ReadonlyArray<Pt>): string {
+export function polyD(pts: readonly Pt[]): string {
   let area = 0;
   for (let i = 0; i < pts.length; i++) {
     const a = pts[i];
@@ -59,11 +59,11 @@ export function polyD(pts: ReadonlyArray<Pt>): string {
 }
 
 /** Round dots (zero-length strokes rendered with round caps). */
-export function dotsD(pts: ReadonlyArray<Pt>): string {
+export function dotsD(pts: readonly Pt[]): string {
   return pts.map((p) => `M${f(p[0])} ${f(p[1])}h0.01`).join('');
 }
 
-export function lineD(pts: ReadonlyArray<Pt>): string {
+export function lineD(pts: readonly Pt[]): string {
   return pts.map((p, i) => `${i ? 'L' : 'M'}${f(p[0])} ${f(p[1])}`).join('');
 }
 
@@ -75,7 +75,7 @@ export function quad(a: Pt, c: Pt, b: Pt, t: number): Pt {
 
 /* -------------------------------------------------------------- gradients */
 
-export type Stops = ReadonlyArray<readonly [number, string, number?]>;
+export type Stops = readonly (readonly [number, string, number?])[];
 
 /** Per-scene context: owns unique ids and the <Defs> list. */
 export class Ctx {
@@ -142,7 +142,7 @@ export interface WinOpts {
   sx: number;
   sy: number;
   lit: number;
-  palette: ReadonlyArray<readonly [string, number]>;
+  palette: readonly (readonly [string, number])[];
 }
 
 export interface SkyOpts {
@@ -170,11 +170,11 @@ export interface Tower {
 
 export interface SkyResult {
   body: string;
-  win: Array<readonly [string, string]>;
+  win: (readonly [string, string])[];
   towers: Tower[];
 }
 
-function pickWeighted(r: Rng, list: ReadonlyArray<readonly [string, number]>): string {
+function pickWeighted(r: Rng, list: readonly (readonly [string, number])[]): string {
   const total = list.reduce((s, [, w]) => s + w, 0);
   let v = r() * total;
   for (const [c, w] of list) {

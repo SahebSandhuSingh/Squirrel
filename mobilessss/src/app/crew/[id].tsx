@@ -3,7 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Scene } from '@/art/Scene';
 import { Avatar } from '@/components/Avatar';
-import { EventCard, SocialPost } from '@/components/cards';
+import { EventCard } from '@/components/cards';
 import { Button, Display, EmptyState, Icon, IconButton, Scrim, SectionHeader, Tag } from '@/components/ui';
 import { userById } from '@/data/users';
 import { useApp } from '@/state/AppState';
@@ -13,7 +13,7 @@ export default function CrewDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { crews, joinedCrews, toggleCrew, events, joinedEvents, toggleEvent, posts } = useApp();
+  const { crews, joinedCrews, toggleCrew, events, joinedEvents, toggleEvent } = useApp();
   const crew = crews.find((c) => c.id === id);
   if (!crew) {
     return (
@@ -24,7 +24,6 @@ export default function CrewDetail() {
   }
   const joined = joinedCrews.has(crew.id);
   const crewEvents = events.filter((e) => e.scene === crew.scene || e.host.includes(crew.name.split(' ')[0])).slice(0, 3);
-  const crewPosts = posts.filter((p) => p.crewName === crew.name || p.scene === crew.scene).slice(0, 2);
   const members = crew.memberIds.map(userById);
 
   return (
@@ -66,10 +65,7 @@ export default function CrewDetail() {
           ))}
         </View>
 
-        {crewPosts.length > 0 && <SectionHeader title="From the crew" />}
-        {crewPosts.map((p) => (
-          <SocialPost key={p.id} post={p} />
-        ))}
+        {/* Crew posts return once crews exist in the backend (posts carry crew_name today). */}
       </View>
     </ScrollView>
   );

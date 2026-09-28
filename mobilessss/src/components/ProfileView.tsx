@@ -1,21 +1,25 @@
-import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Scene } from '@/art/Scene';
 import { BadgeArt } from '@/art/Badge';
 import { Mascot } from '@/art/Mascot';
-import { Avatar } from '@/components/Avatar';
+import { Avatar, type AvatarUser } from '@/components/Avatar';
 import { ItemArt, SceneImage, StoryCircle } from '@/components/cards';
+import { SignInToSocial, SocialError, toAvatarUser, useFollowToggle } from '@/components/socialParts';
 import { Button, Card, Display, EmptyState, FadeIn, Icon, IconButton, LevelBadge, Scrim, Tag, TAB_BAR_SPACE, XPBar, tap } from '@/components/ui';
+import type { Activity, FollowStatus, Post, PublicProfile } from '@/api/social';
+import { cityById } from '@/data/cities';
 import { highlights } from '@/data/highlights';
+import type { IconName } from '@/data/icons';
+import { describeActivity, timeAgo } from '@/data/posts';
 import { achievements, levelRewards } from '@/data/rewards';
-import { recentActivities } from '@/data/stats';
 import { shopItemById } from '@/data/shop';
-import type { User } from '@/data/users';
-import { useApp, XP_PER_LEVEL } from '@/state/AppState';
+import { useSavedPosts, useUserPosts } from '@/hooks/useSocial';
+import { useApp } from '@/state/AppState';
 import { useAuth } from '@/auth/AuthProvider';
-import type { SceneKind } from '@/types';
+import type { BadgeKind, SceneKind } from '@/types';
 import { colors, fonts, MAX_WIDTH as MAXW, radius } from '@/theme';
 
 const GRID_TABS = [
@@ -25,57 +29,129 @@ const GRID_TABS = [
 ] as const;
 type GridTab = (typeof GRID_TABS)[number]['id'];
 
-const TAG_ICONS: Record<string, React.ComponentProps<typeof Icon>['name']> = {
+const TAG_ICONS: Record<string, IconName> = {
   Runner: 'run',
   Yoga: 'yoga',
   'No Sugar Club': 'food-apple',
-  Gym: 'dumbbell',
+  Strength: 'arm-flex',
   HIIT: 'lightning-bolt',
   Cycling: 'bike',
   Coach: 'whistle',
 };
 
-const EXTRA_SCENES: SceneKind[] = ['city-sunset', 'run', 'rooftop', 'lake', 'yoga', 'gym', 'cafe', 'city-night', 'stadium'];
+const BADGE_KINDS: BadgeKind[] = ['city', 'streak', 'early-bird', 'steps-10k', 'crew', 'first-run', 'hydration', 'yoga', 'lifter', 'explorer', 'social', 'half-marathon'];
+const ACTIVITY_SCENE: Record<Activity['type'], SceneKind> = { run: 'run', ride: 'cycling', workout: 'hiit', yoga: 'yoga', meal: 'brunch' };
+
+/**
+ * What the profile screen renders. Built from the server profile when signed in
+ * (fromServerProfile) or from the local demo identity (fromLocalIdentity), which has no social
+ * data at all — no counts, posts or followers are invented.
+ */
+export type ProfileVM = {
+  id: string;
+  name: string;
+  username: string;
+  avatar: AvatarUser;
+  verified: boolean;
+  bio: string | null;
+  area: string | null;
+  college: string | null;
+  interests: string[];
+  level: number;
+  levelXp: number;
+  xpPerLevel: number;
+  streak: number | null;
+  counts: { posts: number; followers: number; following: number } | null;
+  badges: { id: string; kind: BadgeKind; title: string }[];
+  recentPosts: Post[];
+  recentActivities: Activity[];
+  restricted: boolean;
+  relationship: FollowStatus | null;
+  isPrivate: boolean;
+  live: boolean;
+};
+
+export function fromServerProfile(p: PublicProfile): ProfileVM {
+  const u = p.user;
+  return {
+    id: u.id,
+    name: u.display_name,
+    username: u.username,
+    avatar: toAvatarUser(u, p.is_me),
+    verified: u.verified,
+    bio: u.bio,
+    area: u.area ?? (u.city_id ? cityById(u.city_id).name : null),
+    college: u.college,
+    interests: u.interests,
+    level: p.stats.level,
+    levelXp: p.stats.level_xp,
+    xpPerLevel: p.stats.xp_per_level,
+    streak: p.restricted ? null : p.stats.streak_days,
+    counts: { posts: p.stats.posts, followers: p.stats.followers, following: p.stats.following },
+    badges: p.badges.map((b) => ({ id: b.id, kind: BADGE_KINDS.includes(b.kind as BadgeKind) ? (b.kind as BadgeKind) : 'social', title: b.title })),
+    recentPosts: p.recent_posts,
+    recentActivities: p.recent_activities,
+    restricted: p.restricted,
+    relationship: p.relationship,
+    isPrivate: u.visibility === 'private',
+    live: true,
+  };
+}
+
+const compact = (n: number) => (n >= 10000 ? `${(n / 1000).toFixed(0)}K` : n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n));
 
 /** Rich profile used for "me" (tab) and other users (/user/[id]). */
-export function ProfileView({ user, isMe }: { user: User; isMe: boolean }) {
+export function ProfileView({ vm, isMe, onRefresh, refreshing = false, onChanged }: { vm: ProfileVM; isMe: boolean; onRefresh?: () => void; refreshing?: boolean; onChanged?: () => void }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { level, levelXp, posts, following, toggleFollow, saved, equipped, toast } = useApp();
+  const { equipped, toast } = useApp();
   const [tab, setTab] = useState<GridTab>('posts');
-  const isFollowing = following.has(user.id);
-  const lvl = isMe ? level : user.level;
   const colW = Math.min(width, MAXW);
   const tile = (colW - 4) / 3;
-
-  const userPosts = useMemo(() => posts.filter((p) => p.authorId === user.id), [posts, user.id]);
-  const gridScenes: { scene: SceneKind; seed: number; id: string }[] = useMemo(
-    () => [...userPosts.map((p) => ({ scene: p.scene, seed: p.seed, id: p.id })), ...EXTRA_SCENES.map((s, i) => ({ scene: s, seed: i * 11 + user.id.length, id: `x${i}` }))].slice(0, 9),
-    [userPosts, user.id],
-  );
-  const savedPosts = posts.filter((p) => saved.has(p.id));
+  const lvl = vm.level;
   const nextReward = levelRewards.find((r) => r.level > lvl && r.kind === 'trail') ?? levelRewards.find((r) => r.level > lvl);
-  const badges = achievements.filter((a) => a.progress >= 1);
+  // Demo identity: the local achievements screen's badges. Signed in: badges the server awarded.
+  const badges = vm.live ? vm.badges : achievements.filter((a) => a.progress >= 1).map((a) => ({ id: a.id, kind: a.kind, title: a.name }));
   const equippedItems = [...equipped].map((id) => shopItemById(id)).filter((it): it is NonNullable<ReturnType<typeof shopItemById>> => Boolean(it));
+  const tabs = GRID_TABS.filter((g) => g.id !== 'saved' || isMe);
+  // Follow state lives in the shared store: the button and the follower count move together,
+  // then the profile refetches for the server's numbers.
+  const rel = vm.relationship ?? { following: false, followed_by: false, requested: false };
+  const follow = useFollowToggle(vm.id, { following: rel.following, requested: rel.requested }, vm.username, onChanged);
+  const followerDelta = isMe ? 0 : Number(follow.following) - Number(rel.following);
+  const openList = (kind: 'followers' | 'following') =>
+    vm.live && !vm.restricted ? router.push({ pathname: '/follows', params: { id: vm.id, kind, name: vm.name } }) : undefined;
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ paddingBottom: (isMe ? TAB_BAR_SPACE : 30) + insets.bottom }} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.bg }}
+      contentContainerStyle={{ paddingBottom: (isMe ? TAB_BAR_SPACE : 30) + insets.bottom }}
+      showsVerticalScrollIndicator={false}
+      refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} /> : undefined}>
       {/* Cover */}
       <View style={{ height: 190 + insets.top }}>
-        <Scene kind={isMe ? 'city-sunset' : 'city-night'} seed={user.id.length * 3} aspect={colW / (190 + insets.top)} style={StyleSheet.absoluteFill} />
+        <Scene kind={isMe ? 'city-sunset' : 'city-night'} seed={vm.id.length * 3} aspect={colW / (190 + insets.top)} style={StyleSheet.absoluteFill} />
         <Scrim />
         <View style={[styles.topBar, { top: insets.top + 8 }]}>
           {isMe ? (
-            <View style={styles.cityPill}>
-              <Icon name="map-marker" size={13} color={colors.primarySoft} />
-              <Text style={styles.cityPillText}>{user.area}</Text>
-            </View>
+            vm.area ? (
+              <View style={styles.cityPill}>
+                <Icon name="map-marker" size={13} color={colors.primarySoft} />
+                <Text style={styles.cityPillText}>{vm.area}</Text>
+              </View>
+            ) : (
+              <View />
+            )
           ) : (
             <IconButton icon="chevron-left" size={26} onPress={() => (router.canGoBack() ? router.back() : router.replace('/social'))} label="Back" />
           )}
           <View style={{ flexDirection: 'row', gap: 8 }}>
             {isMe && <IconButton icon="trophy-outline" onPress={() => router.push('/rewards')} label="Rewards" />}
-            <IconButton icon={isMe ? 'cog-outline' : 'dots-horizontal'} onPress={() => (isMe ? router.push({ pathname: '/avatar', params: { from: 'profile' } }) : tap())} label={isMe ? 'Settings' : 'More'} />
+            {isMe ? (
+              <IconButton icon="cog-outline" onPress={() => router.push(vm.live ? '/profile-edit' : { pathname: '/avatar', params: { from: 'profile' } })} label="Settings" />
+            ) : (
+              <IconButton icon="dots-horizontal" onPress={() => tap()} label="More" />
+            )}
           </View>
         </View>
       </View>
@@ -84,50 +160,71 @@ export function ProfileView({ user, isMe }: { user: User; isMe: boolean }) {
         {/* Identity */}
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginTop: -58 }}>
           <View>
-            <Avatar user={user} size={112} ring={colors.primary} link={false} />
+            <Avatar user={vm.avatar} size={112} ring={colors.primary} link={false} />
             <View style={{ position: 'absolute', right: -4, bottom: 2 }}>
               <LevelBadge level={lvl} size="md" />
             </View>
           </View>
           <View style={styles.stats}>
-            {[
-              [String(isMe ? Math.max(user.posts, userPosts.length) : user.posts), 'Posts'],
-              [user.followers >= 1000 ? `${(user.followers / 1000).toFixed(1)}K` : String(user.followers + (isFollowing && !isMe ? 1 : 0)), 'Followers'],
-              [String(isMe ? following.size + 24 : user.following), 'Following'],
-            ].map(([v, l]) => (
-              <View key={l} style={{ alignItems: 'center', flex: 1 }}>
-                <Text style={styles.statV}>{v}</Text>
-                <Text style={styles.statL}>{l}</Text>
-              </View>
+            {(
+              [
+                ['Posts', vm.counts?.posts, undefined],
+                ['Followers', vm.counts ? vm.counts.followers + followerDelta : undefined, () => openList('followers')],
+                ['Following', vm.counts?.following, () => openList('following')],
+              ] as const
+            ).map(([label, value, onPress]) => (
+              <Pressable key={label} onPress={onPress} disabled={!onPress || !vm.live} style={{ alignItems: 'center', flex: 1 }} accessibilityLabel={`${value ?? 'no'} ${label}`}>
+                <Text style={styles.statV}>{value == null ? '—' : compact(value)}</Text>
+                <Text style={styles.statL}>{label}</Text>
+              </Pressable>
             ))}
           </View>
         </View>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 6 }}>
-          <Display size={30}>{user.name}</Display>
-          {user.verified && <Icon name="check-decagram" size={20} color={colors.secondary} />}
+          <Display size={30} numberOfLines={1}>{vm.name}</Display>
+          {vm.verified && <Icon name="check-decagram" size={20} color={colors.secondary} />}
+          {vm.isPrivate && <Icon name="lock-outline" size={18} color={colors.dim} accessibilityLabel="Private account" />}
         </View>
-        <Text style={styles.handle}>@{user.handle}</Text>
-        <Text style={styles.bio}>{user.bio}</Text>
-        <View style={styles.tags}>
-          {user.tags.map((t) => (
-            <Tag key={t} label={t} icon={TAG_ICONS[t] ?? 'star-four-points'} />
-          ))}
-        </View>
+        <Text style={styles.handle}>@{vm.username}</Text>
+        {!!vm.bio && <Text style={styles.bio}>{vm.bio}</Text>}
+        {!!vm.college && (
+          <Text style={styles.meta}>
+            <Icon name="school-outline" size={13} color={colors.dim} /> {vm.college}
+          </Text>
+        )}
+        {vm.interests.length > 0 && (
+          <View style={styles.tags}>
+            {vm.interests.map((t) => (
+              <Tag key={t} label={t} icon={TAG_ICONS[t] ?? 'star-four-points'} />
+            ))}
+          </View>
+        )}
 
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
           {isMe ? (
             <>
-              <Button label="Edit Profile" variant="secondary" size="md" iconLeft="pencil-outline" onPress={() => router.push({ pathname: '/avatar', params: { from: 'profile' } })} style={{ flex: 1 }} />
-              <Button label="Add Friend" variant="secondary" size="md" iconLeft="account-plus-outline" onPress={() => toast('Invite link copied · +50 XP when they join', 'link-variant', colors.secondary)} style={{ flex: 1 }} />
+              <Button label="Edit Profile" variant="secondary" size="md" iconLeft="pencil-outline" onPress={() => router.push(vm.live ? '/profile-edit' : { pathname: '/avatar', params: { from: 'profile' } })} style={{ flex: 1 }} />
+              <Button label="Find People" variant="secondary" size="md" iconLeft="account-search-outline" onPress={() => router.push(vm.live ? '/people' : '/sign-in')} style={{ flex: 1 }} />
             </>
           ) : (
             <>
-              <Button label={isFollowing ? 'Following' : 'Follow'} variant={isFollowing ? 'secondary' : 'primary'} size="md" iconLeft={isFollowing ? 'account-check' : 'account-plus'} onPress={() => toggleFollow(user.id)} style={{ flex: 1 }} />
-              <Button label="Message" variant="secondary" size="md" iconLeft="message-outline" onPress={() => toast(`Messages with ${user.name.split(' ')[0]} are coming soon`, 'message-outline', colors.secondary)} style={{ flex: 1 }} />
+              {vm.relationship && (
+                <Button
+                  label={follow.label}
+                  variant={follow.following || follow.requested ? 'secondary' : 'primary'}
+                  size="md"
+                  iconLeft={follow.following ? 'account-check' : follow.requested ? 'account-clock' : 'account-plus'}
+                  onPress={follow.onPress}
+                  style={{ flex: 1 }}
+                  accessibilityLabel={follow.label}
+                />
+              )}
+              <Button label="Message" variant="secondary" size="md" iconLeft="message-outline" onPress={() => toast(`Messages with ${vm.name.split(' ')[0]} are coming soon`, 'message-outline', colors.secondary)} style={{ flex: 1 }} />
             </>
           )}
         </View>
+        {!isMe && vm.relationship?.followed_by && <Text style={styles.followsYou}>Follows you</Text>}
 
         {/* Level */}
         <FadeIn>
@@ -136,7 +233,12 @@ export function ProfileView({ user, isMe }: { user: User; isMe: boolean }) {
               <LevelBadge level={lvl} size="lg" />
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={styles.levelTitle}>Level {lvl} · {lvl >= 20 ? 'City Legend' : lvl >= 13 ? 'Neon Runner' : 'Rising Squirrel'}</Text>
-                <XPBar value={isMe ? levelXp : 1200} max={XP_PER_LEVEL} style={{ marginTop: 6 }} />
+                <XPBar value={vm.levelXp} max={vm.xpPerLevel} style={{ marginTop: 6 }} />
+                {vm.streak != null && vm.streak > 0 && (
+                  <Text style={styles.streak}>
+                    <Icon name="fire" size={13} color={colors.orange} /> {vm.streak}-day streak
+                  </Text>
+                )}
               </View>
               {isMe && <Mascot pose="cheer" size={64} />}
             </View>
@@ -152,29 +254,37 @@ export function ProfileView({ user, isMe }: { user: User; isMe: boolean }) {
           </Card>
         </FadeIn>
 
-        {/* Highlights */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -16, marginTop: 18 }} contentContainerStyle={{ gap: 6, paddingHorizontal: 12 }}>
-          {highlights.map((h) => (
-            <StoryCircle key={h.id} label={h.label} scene={h.scene} onPress={() => router.push({ pathname: '/highlight/[id]', params: { id: h.id } })} />
-          ))}
-          {isMe && <StoryCircle label="New" isNew onPress={() => router.push('/compose')} />}
-        </ScrollView>
+        {/* Highlights (your own; the story viewer is part of the locked Stories feature) */}
+        {isMe && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -16, marginTop: 18 }} contentContainerStyle={{ gap: 6, paddingHorizontal: 12 }}>
+            {highlights.map((h) => (
+              <StoryCircle key={h.id} label={h.label} scene={h.scene} onPress={() => router.push({ pathname: '/highlight/[id]', params: { id: h.id } })} />
+            ))}
+            <StoryCircle label="New" isNew onPress={() => router.push('/compose')} />
+          </ScrollView>
+        )}
 
         {/* Account (backend connection) */}
         {isMe && <AccountRow />}
 
         {/* Badges */}
-        <Pressable onPress={() => router.push('/rewards')} style={styles.badgeRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.sectionLabel}>Badges · {badges.length}/{achievements.length}</Text>
-            <View style={{ flexDirection: 'row', marginTop: 8, gap: 4 }}>
-              {badges.slice(0, 5).map((b) => (
-                <BadgeArt key={b.id} kind={b.kind} size={46} />
-              ))}
+        {!vm.restricted && (
+          <Pressable onPress={() => router.push('/rewards')} style={styles.badgeRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sectionLabel}>Badges · {badges.length}</Text>
+              {badges.length ? (
+                <View style={{ flexDirection: 'row', marginTop: 8, gap: 4 }}>
+                  {badges.slice(0, 5).map((b) => (
+                    <BadgeArt key={b.id} kind={b.kind} size={46} />
+                  ))}
+                </View>
+              ) : (
+                <Text style={[styles.nextText, { marginTop: 4 }]}>{isMe ? 'Share your first run to earn one.' : 'No badges yet.'}</Text>
+              )}
             </View>
-          </View>
-          <Icon name="chevron-right" size={22} color={colors.dim} />
-        </Pressable>
+            <Icon name="chevron-right" size={22} color={colors.dim} />
+          </Pressable>
+        )}
 
         {/* Equipped cosmetics */}
         {isMe && (
@@ -197,58 +307,122 @@ export function ProfileView({ user, isMe }: { user: User; isMe: boolean }) {
         )}
 
         {/* Grid tabs */}
-        <View style={styles.gridTabs}>
-          {GRID_TABS.map((g) => (
-            <Pressable key={g.id} onPress={() => { tap(); setTab(g.id); }} style={[styles.gridTab, tab === g.id && { borderBottomColor: colors.primary }]} accessibilityLabel={g.id}>
-              <Icon name={g.icon} size={22} color={tab === g.id ? colors.text : colors.dim} />
-            </Pressable>
-          ))}
-        </View>
-      </View>
-
-      <View style={{ width: colW, alignSelf: 'center' }}>
-        {tab === 'posts' && (
-          <View style={styles.grid}>
-            {gridScenes.map((g, i) => (
-              <Pressable key={g.id} onPress={() => (g.id.startsWith('x') ? tap() : router.push({ pathname: '/post/[id]', params: { id: g.id } }))} style={{ width: tile, height: tile * 1.2, margin: 0.66 }}>
-                <SceneImage kind={g.scene} seed={g.seed} height={tile * 1.2} style={{ borderRadius: 2 }} scrim={false} />
-                {i % 4 === 1 && <Icon name="play" size={16} color="#fff" style={{ position: 'absolute', right: 6, top: 6 }} />}
+        {vm.live && !vm.restricted && (
+          <View style={styles.gridTabs}>
+            {tabs.map((g) => (
+              <Pressable key={g.id} onPress={() => { tap(); setTab(g.id); }} style={[styles.gridTab, tab === g.id && { borderBottomColor: colors.primary }]} accessibilityLabel={g.id}>
+                <Icon name={g.icon} size={22} color={tab === g.id ? colors.text : colors.dim} />
               </Pressable>
             ))}
           </View>
         )}
-        {tab === 'activity' && (
-          <View style={{ paddingHorizontal: 16, gap: 10, paddingTop: 12 }}>
-            {recentActivities.map((a) => (
-              <View key={a.id} style={styles.activity}>
-                <SceneImage kind={a.scene} seed={a.id.length} height={58} style={{ width: 58, borderRadius: radius.sm }} scrim={false} />
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={styles.actTitle} numberOfLines={1}>{a.title}</Text>
-                  <Text style={styles.actMeta}>{a.when}</Text>
-                  <Text style={styles.actStats}>
-                    {a.km ? `${a.km} km · ` : ''}
-                    {a.minutes} min · {a.kcal} kcal
-                  </Text>
-                </View>
-                <Icon name={a.icon} size={22} color={colors.primary} />
-              </View>
-            ))}
-          </View>
+      </View>
+
+      <View style={{ width: colW, alignSelf: 'center' }}>
+        {!vm.live ? (
+          <SignInToSocial title="Your posts live here" body="Sign in to post, follow friends and keep your runs, followers and badges in sync." />
+        ) : vm.restricted ? (
+          <EmptyState art={<Mascot pose="sit" size={120} />} title="This account is private" body={vm.relationship?.requested ? 'Request sent. You’ll see their posts once they accept.' : 'Follow to see their posts and activity.'} />
+        ) : tab === 'posts' ? (
+          <PostsGrid vm={vm} tile={tile} isMe={isMe} />
+        ) : tab === 'activity' ? (
+          <ActivityList activities={vm.recentActivities} isMe={isMe} />
+        ) : (
+          <SavedGrid tile={tile} />
         )}
-        {tab === 'saved' &&
-          (savedPosts.length ? (
-            <View style={styles.grid}>
-              {savedPosts.map((p) => (
-                <Pressable key={p.id} onPress={() => router.push({ pathname: '/post/[id]', params: { id: p.id } })} style={{ width: tile, height: tile * 1.2, margin: 0.66 }}>
-                  <SceneImage kind={p.scene} seed={p.seed} height={tile * 1.2} style={{ borderRadius: 2 }} scrim={false} />
-                </Pressable>
-              ))}
-            </View>
-          ) : (
-            <EmptyState art={<Mascot pose="sit" size={120} />} title="Nothing saved yet" body="Tap the bookmark on any post to keep it here." />
-          ))}
       </View>
     </ScrollView>
+  );
+}
+
+function PostTile({ post, tile }: { post: Post; tile: number }) {
+  return (
+    <Pressable onPress={() => router.push({ pathname: '/post/[id]', params: { id: post.id } })} style={{ width: tile, height: tile * 1.2, margin: 0.66 }} accessibilityLabel={post.caption || 'Post'}>
+      {post.media_url ? (
+        <Image source={{ uri: post.media_url }} style={{ width: '100%', height: '100%', borderRadius: 2 }} accessibilityIgnoresInvertColors />
+      ) : (
+        <SceneImage kind={post.backdrop.scene} seed={post.backdrop.seed} height={tile * 1.2} style={{ borderRadius: 2 }} scrim={false} />
+      )}
+      {post.activity && <Icon name={describeActivity(post.activity).icon} size={16} color="#fff" style={{ position: 'absolute', right: 6, top: 6 }} />}
+    </Pressable>
+  );
+}
+
+/** First 9 posts come with the profile (one request); older ones page in from /users/:id/posts. */
+function PostsGrid({ vm, tile, isMe }: { vm: ProfileVM; tile: number; isMe: boolean }) {
+  const [more, setMore] = useState(false);
+  const paged = useUserPosts(vm.id, more);
+  const posts = more && paged.items.length ? paged.items : vm.recentPosts;
+  const total = vm.counts?.posts ?? 0;
+  if (!posts.length) {
+    return (
+      <EmptyState
+        art={<Mascot pose="sit" size={120} />}
+        title="No posts yet"
+        body={isMe ? 'Share a run or a workout and it lands here.' : `${vm.name.split(' ')[0]} hasn't posted yet.`}
+        action={isMe ? 'Create a post' : undefined}
+        onAction={isMe ? () => router.push('/compose') : undefined}
+      />
+    );
+  }
+  return (
+    <>
+      <View style={styles.grid}>
+        {posts.map((p) => (
+          <PostTile key={p.id} post={p} tile={tile} />
+        ))}
+      </View>
+      {more && paged.error ? (
+        <View style={{ paddingHorizontal: 16 }}>
+          <SocialError compact error={paged.error} onRetry={paged.retry} />
+        </View>
+      ) : more && (paged.loading || paged.loadingMore) ? (
+        <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />
+      ) : (!more && total > posts.length) || (more && paged.hasMore) ? (
+        <Button label="Load more" variant="secondary" size="sm" onPress={() => (more ? paged.loadMore() : setMore(true))} style={{ margin: 16 }} />
+      ) : null}
+    </>
+  );
+}
+
+function ActivityList({ activities, isMe }: { activities: Activity[]; isMe: boolean }) {
+  if (!activities.length) {
+    return <EmptyState art={<Mascot pose="run" size={120} />} title="No activity yet" body={isMe ? 'Finish a run or a workout and it shows up here.' : 'Nothing logged yet.'} />;
+  }
+  return (
+    <View style={{ paddingHorizontal: 16, gap: 10, paddingTop: 12 }}>
+      {activities.map((a) => {
+        const d = describeActivity(a);
+        return (
+          <View key={a.id} style={styles.activity}>
+            <SceneImage kind={ACTIVITY_SCENE[a.type]} seed={a.id.length} height={58} style={{ width: 58, borderRadius: radius.sm }} scrim={false} />
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={styles.actTitle} numberOfLines={1}>{a.name ?? a.type[0].toUpperCase() + a.type.slice(1)}</Text>
+              <Text style={styles.actMeta}>{timeAgo(a.started_at)}{a.verified ? ' · verified' : a.source === 'manual' ? ' · self-reported' : ''}</Text>
+              <Text style={styles.actStats}>{d.text}</Text>
+            </View>
+            <Icon name={d.icon} size={22} color={colors.primary} />
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function SavedGrid({ tile }: { tile: number }) {
+  const saved = useSavedPosts();
+  if (saved.loading) return <ActivityIndicator color={colors.primary} style={{ marginVertical: 24 }} />;
+  if (saved.error && !saved.items.length) return <SocialError error={saved.error} onRetry={saved.retry} />;
+  if (!saved.items.length) return <EmptyState art={<Mascot pose="sit" size={120} />} title="Nothing saved yet" body="Tap the bookmark on any post to keep it here." />;
+  return (
+    <>
+      <View style={styles.grid}>
+        {saved.items.map((p) => (
+          <PostTile key={p.id} post={p} tile={tile} />
+        ))}
+      </View>
+      {saved.hasMore && <Button label={saved.loadingMore ? 'Loading…' : 'Load more'} variant="secondary" size="sm" onPress={saved.loadMore} style={{ margin: 16 }} />}
+    </>
   );
 }
 
@@ -266,7 +440,7 @@ function AccountRow() {
       <Icon name={live ? 'cloud-check-outline' : 'cloud-off-outline'} size={22} color={live ? colors.primary : colors.dim} />
       <View style={{ flex: 1, marginLeft: 10 }}>
         <Text style={styles.sectionLabel}>{live ? 'Synced with server' : 'Demo mode'}</Text>
-        <Text style={styles.nextText}>{live ? email ?? 'Signed in with token' : 'Sign in to save runs, XP and territory'}</Text>
+        <Text style={styles.nextText}>{live ? email ?? 'Signed in with token' : 'Sign in to save runs, XP, posts and followers'}</Text>
       </View>
       <Text style={{ color: colors.primary, fontFamily: fonts.label, fontSize: 13, letterSpacing: 1, textTransform: 'uppercase' }}>{live ? 'Sign out' : 'Sign in'}</Text>
     </Pressable>
@@ -283,8 +457,11 @@ const styles = StyleSheet.create({
   statL: { color: colors.dim, fontFamily: fonts.medium, fontSize: 12 },
   handle: { color: colors.dim, fontFamily: fonts.medium, marginTop: 2 },
   bio: { color: colors.sub, fontFamily: fonts.regular, marginTop: 8, lineHeight: 20, fontSize: 14 },
+  meta: { color: colors.dim, fontFamily: fonts.regular, marginTop: 6, fontSize: 13 },
+  followsYou: { color: colors.dim, fontFamily: fonts.mono, fontSize: 11, marginTop: 8, textTransform: 'uppercase' },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   levelTitle: { color: colors.text, fontFamily: fonts.bold, fontSize: 14 },
+  streak: { color: colors.sub, fontFamily: fonts.semibold, fontSize: 12, marginTop: 6 },
   next: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.line },
   nextText: { flex: 1, color: colors.sub, fontFamily: fonts.regular, fontSize: 13 },
   badgeRow: { flexDirection: 'row', alignItems: 'center', marginTop: 16, backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, padding: 12 },

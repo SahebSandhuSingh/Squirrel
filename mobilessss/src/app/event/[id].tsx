@@ -1,3 +1,4 @@
+import { FeatureGate, SoonScreen } from '@/components/Locked';
 import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,7 +11,7 @@ import { userById } from '@/data/users';
 import { useApp } from '@/state/AppState';
 import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
 
-export default function EventDetail() {
+function EventDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -118,3 +119,20 @@ const styles = StyleSheet.create({
   pin: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#fff' },
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 12, backgroundColor: 'rgba(17,17,19,0.97)', borderTopWidth: 1, borderTopColor: colors.line },
 });
+
+/** Events aren't launched yet: the route shows a locked state instead of the detail page. */
+export default function EventRoute() {
+  return (
+    <FeatureGate
+      feature="events"
+      fallback={
+        <SoonScreen
+          title="Events are coming soon"
+          body="Meetups, workshops and crew runs will open here at launch. Until then, keep moving: runs and missions still earn XP."
+          onBack={() => (router.canGoBack() ? router.back() : router.replace('/home'))}
+        />
+      }>
+      <EventDetail />
+    </FeatureGate>
+  );
+}

@@ -3,10 +3,12 @@ import { Platform } from 'react-native';
 import { router } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import { ApiError, setApiToken, setTokenRefresher } from '@/api/client';
-import { API_CONFIGURED, AUTH_CONFIGURED, EXERCISE_API_CONFIGURED } from '@/api/config';
+import { API_CONFIGURED, AUTH_CONFIGURED, EXERCISE_API_CONFIGURED, SOCIAL_API_CONFIGURED } from '@/api/config';
 import { exerciseApi, type ExerciseUser } from '@/api/exercise';
 import { accountApi, type NewAccount, type TokenPair } from '@/auth/account';
 import { jwtSubject } from '@/auth/jwt';
+import { resetSocialState } from '@/state/socialStore';
+import { profileApi } from '@/api/social';
 
 /**
  * Authentication. One Squirrel Social account (Exercise backend, /api/auth) signs in to both
@@ -73,10 +75,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [lastEmail, setLastEmail] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const refreshToken = useRef<string | null>(null);
+  const subject = useRef<string | null>(null);
 
   const clear = useCallback(async () => {
     await Promise.all([KEY, REFRESH_KEY, EMAIL_KEY, NAME_KEY].map(store.del));
     refreshToken.current = null;
+    subject.current = null;
+    resetSocialState();
     setApiToken(null);
     setUserId(null);
     setEmail(null);
@@ -84,8 +89,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const applyAccess = useCallback((access: string) => {
+    const sub = jwtSubject(access);
+    // Never show one account's cached social data (feed, likes, follows) to another. A refresh keeps it.
+    if (sub !== subject.current) resetSocialState();
+    subject.current = sub;
     setApiToken(access);
-    setUserId(jwtSubject(access));
+    setUserId(sub);
   }, []);
 
   /** Persist a fresh pair from sign-in, sign-up or refresh. */
@@ -128,7 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         store.del(LEGACY_EXERCISE_KEY).catch(() => undefined);
         const [t, r, e, n, last] = await Promise.all([store.get(KEY), store.get(REFRESH_KEY), store.get(EMAIL_KEY), store.get(NAME_KEY), store.get(LAST_EMAIL_KEY)]);
         setLastEmail(last);
-        if (t && (API_CONFIGURED || EXERCISE_API_CONFIGURED)) {
+        if (t && (API_CONFIGURED || EXERCISE_API_CONFIGURED || SOCIAL_API_CONFIGURED)) {
           refreshToken.current = r;
           applyAccess(t);
           setEmail(e);
@@ -175,6 +184,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLastEmail(account.email);
       setNotice(null);
       await rememberName({ first_name: account.first_name, last_name: account.last_name });
+      // The Social profile starts as "New Squirrel": give it the name just entered (best effort).
+      if (SOCIAL_API_CONFIGURED) {
+        const displayName = `${account.first_name} ${account.last_name}`.trim().slice(0, 40);
+        if (displayName) profileApi.update({ display_name: displayName }).catch(() => undefined);
+      }
       setMode('live');
     },
     [savePair, rememberName],

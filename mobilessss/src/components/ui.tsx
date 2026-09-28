@@ -1,19 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  Animated,
-  Easing,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-  type PressableProps,
-  type StyleProp,
-  type TextStyle,
-  type ViewStyle,
-} from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Animated, Easing, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type PressableProps, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -46,7 +33,7 @@ export const TAB_BAR_SPACE = 104;
 
 /** Fade + rise on mount. Stagger lists with `index`. */
 export function FadeIn({ children, index = 0, delay = 0, style, from = 14 }: { children: React.ReactNode; index?: number; delay?: number; style?: StyleProp<ViewStyle>; from?: number }) {
-  const v = useRef(new Animated.Value(0)).current;
+  const v = useAnimatedValue(0);
   useEffect(() => {
     Animated.timing(v, { toValue: 1, duration: 420, delay: delay + Math.min(index, 10) * 55, easing: Easing.out(Easing.cubic), useNativeDriver: NATIVE }).start();
   }, [v, index, delay]);
@@ -61,7 +48,7 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 /** Pressable that springs down slightly when touched. */
 export function PressScale({ children, style, scaleTo = 0.97, haptic = true, onPress, accessibilityLabel, accessibilityRole = 'button', accessibilityState, ...rest }: Omit<PressableProps, 'style'> & { children: React.ReactNode; style?: StyleProp<ViewStyle>; scaleTo?: number; haptic?: boolean }) {
-  const s = useRef(new Animated.Value(1)).current;
+  const s = useAnimatedValue(1);
   const to = (v: number) => Animated.spring(s, { toValue: v, useNativeDriver: NATIVE, speed: 40, bounciness: 6 }).start();
   return (
     <AnimatedPressable
@@ -83,7 +70,7 @@ export function PressScale({ children, style, scaleTo = 0.97, haptic = true, onP
 
 /** Looping pulse ring, used for map markers and live indicators. */
 export function Pulse({ size = 40, color = colors.primary, style }: { size?: number; color?: string; style?: StyleProp<ViewStyle> }) {
-  const v = useRef(new Animated.Value(0)).current;
+  const v = useAnimatedValue(0);
   useEffect(() => {
     const loop = Animated.loop(Animated.timing(v, { toValue: 1, duration: 1800, easing: Easing.out(Easing.quad), useNativeDriver: NATIVE }));
     loop.start();
@@ -103,7 +90,7 @@ export function Pulse({ size = 40, color = colors.primary, style }: { size?: num
 
 /** Number that counts up/down to its value. */
 export function AnimatedNumber({ value, style, format = (n) => Math.round(n).toLocaleString('en-IN') }: { value: number; style?: StyleProp<TextStyle>; format?: (n: number) => string }) {
-  const v = useRef(new Animated.Value(value)).current;
+  const v = useAnimatedValue(value);
   const [shown, setShown] = useState(value);
   useEffect(() => {
     const id = v.addListener(({ value: n }) => setShown(n));
@@ -143,6 +130,27 @@ export function Tagline({ children, size = 20, color = colors.text, rotate = -6,
 export function Label({ children, style, color = colors.dim }: { children: React.ReactNode; style?: StyleProp<TextStyle>; color?: string }) {
   return <Text style={[{ color, fontFamily: fonts.label, fontSize: 12, letterSpacing: 1.4, textTransform: 'uppercase' }, style]}>{children}</Text>;
 }
+
+/**
+ * Shared text primitives: one definition per recurring type style, so a palette/type change
+ * happens here instead of in every screen.
+ */
+export const textStyles = StyleSheet.create({
+  /** Small caps line drawn over artwork ("PASHAN LAKE · 2.4 KM LOOP"). */
+  overlayKicker: { color: colors.primarySoft, fontFamily: fonts.bold, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },
+  /** Secondary line drawn over artwork. */
+  overlaySub: { color: colors.onImageSub, fontFamily: fonts.medium, fontSize: 12 },
+  /** Uppercase condensed title of a feature row ("START EXERCISE", "PARTNER HUNT"). */
+  rowTitle: { color: colors.text, fontFamily: fonts.label, fontSize: 17, letterSpacing: 1, textTransform: 'uppercase' },
+  /** Dim one-liner under a row title. */
+  rowSub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, marginTop: 1 },
+});
+
+type TextProps = { children: React.ReactNode; style?: StyleProp<TextStyle>; numberOfLines?: number };
+export const OverlayKicker = ({ children, style, numberOfLines }: TextProps) => <Text style={[textStyles.overlayKicker, style]} numberOfLines={numberOfLines}>{children}</Text>;
+export const OverlaySub = ({ children, style, numberOfLines }: TextProps) => <Text style={[textStyles.overlaySub, style]} numberOfLines={numberOfLines}>{children}</Text>;
+export const RowTitle = ({ children, style, numberOfLines }: TextProps) => <Text style={[textStyles.rowTitle, style]} numberOfLines={numberOfLines}>{children}</Text>;
+export const RowSub = ({ children, style, numberOfLines = 1 }: TextProps) => <Text style={[textStyles.rowSub, style]} numberOfLines={numberOfLines}>{children}</Text>;
 
 /** Website-style section kicker: a short lime rule + Space Mono caps ("— 02 — HOW DOES IT WORK?"). */
 export function Kicker({ children, color = colors.primary, style }: { children: React.ReactNode; color?: string; style?: StyleProp<ViewStyle> }) {
@@ -269,7 +277,7 @@ export function Chips<T extends string>({ items, value, onChange, icons, style }
 export function Segmented<T extends string>({ items, value, onChange, accent = 'primary', style, labels }: { items: readonly T[]; value: T; onChange: (v: T) => void; accent?: 'primary' | 'secondary'; style?: StyleProp<ViewStyle>; labels?: Partial<Record<T, string>> }) {
   const [w, setW] = useState(0);
   const idx = Math.max(0, items.indexOf(value));
-  const x = useRef(new Animated.Value(idx)).current;
+  const x = useAnimatedValue(idx);
   useEffect(() => {
     Animated.spring(x, { toValue: idx, useNativeDriver: NATIVE, speed: 18, bounciness: 5 }).start();
   }, [idx, x]);
@@ -299,7 +307,7 @@ export function Segmented<T extends string>({ items, value, onChange, accent = '
 
 export function ProgressBar({ progress, color = colors.primary, color2, height = 6, style, animated = true }: { progress: number; color?: string; color2?: string; height?: number; style?: StyleProp<ViewStyle>; animated?: boolean }) {
   const p = Math.max(0, Math.min(1, progress));
-  const v = useRef(new Animated.Value(animated ? 0 : p)).current;
+  const v = useAnimatedValue(animated ? 0 : p);
   useEffect(() => {
     Animated.timing(v, { toValue: p, duration: 800, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
   }, [p, v]);

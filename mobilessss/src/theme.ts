@@ -1,7 +1,8 @@
 /**
- * Design tokens, matched to the Squirrel Social website (squirrel-social-site):
- * near-black canvas, graphite cards, electric LIME as the primary action colour,
- * hot PINK as the secondary accent, purple/orange/yellow for variety.
+ * Design tokens: the Squirrel Social website palette (www.squirrelsocial.in /
+ * squirrel-social-site), a near-black canvas with graphite panels, electric LIME for every
+ * action and everything that's "yours", and hot PINK as the second voice, with purple,
+ * orange and yellow for variety. Type is GTA-style: heavy condensed, slanted headlines.
  */
 export const colors = {
   bg: '#060606',
@@ -18,12 +19,12 @@ export const colors = {
   primaryDeep: '#9DBF00',
   /** Secondary accent (website --pink). */
   secondary: '#FF2D9B',
+  orange: '#FF8A1F',
   pink: '#FF2D9B',
   purple: '#A855F7',
   violet: '#C084FC',
   blue: '#5FB8FF',
   gold: '#FFD21F',
-  orange: '#FF8A1F',
   coral: '#FF5C7A',
   green: '#3DF0A0',
 
@@ -52,17 +53,18 @@ export const gradients = {
   scrim: ['rgba(6,6,6,0)', 'rgba(6,6,6,0.65)', 'rgba(6,6,6,0.96)'] as const,
 };
 
+/** GTA-style type: heavy condensed headlines, condensed (often italic) labels, clean body. */
 export const fonts = {
-  /** Brush headline face (website --f-brush). */
-  display: 'Knewave_400Regular',
-  /** Marker scribbles (website --f-marker). */
-  script: 'PermanentMarker_400Regular',
-  /** Condensed uppercase labels, buttons, numbers (website --f-label). */
-  label: 'Oswald_600SemiBold',
-  labelBold: 'Oswald_700Bold',
-  /** Section kickers and meta (website --f-mono). */
-  mono: 'SpaceMono_400Regular',
-  monoBold: 'SpaceMono_700Bold',
+  /** Headlines & big numbers — heavy condensed, rendered with a slight forward slant. */
+  display: 'Anton_400Regular',
+  /** Punchy slanted callouts ("JUST ONE MORE KM"). */
+  script: 'BarlowCondensed_800ExtraBold_Italic',
+  /** Labels, buttons, tabs. */
+  label: 'BarlowCondensed_600SemiBold',
+  labelBold: 'BarlowCondensed_700Bold',
+  /** Kickers and meta. */
+  mono: 'Inter_500Medium',
+  monoBold: 'BarlowCondensed_700Bold_Italic',
   regular: 'Inter_400Regular',
   medium: 'Inter_500Medium',
   semibold: 'Inter_600SemiBold',
@@ -70,10 +72,10 @@ export const fonts = {
   black: 'Inter_900Black',
 };
 
-/** Brush type is already expressive; no extra slant. */
-export const DISPLAY_SKEW = '0deg';
+/** Forward slant applied to display type for the GTA title-card feel. */
+export const DISPLAY_SKEW = '-6deg';
 
-export const radius = { xs: 6, sm: 10, md: 14, lg: 14, xl: 20, pill: 999 };
+export const radius = { xs: 6, sm: 10, md: 14, lg: 16, xl: 22, pill: 999 };
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };
 
 /** Max content width so tablets/web get a centred phone-like column instead of stretched cards. */

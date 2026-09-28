@@ -149,7 +149,7 @@ function Hub({ uid, name }: { uid: string; name: string }) {
         {sessions.data?.map((s) => (
           <PressScale key={s.session_id} onPress={() => router.push({ pathname: '/exercise/session/[id]', params: { id: s.session_id } })} style={styles.row} scaleTo={0.98}>
             <View style={styles.rowIcon}>
-              <Icon name="weight-lifter" size={20} color={colors.primary} />
+              <Icon name="arm-flex" size={20} color={colors.primary} />
             </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
               <Text style={styles.rowTitle} numberOfLines={1}>{s.exercise || 'Session'}</Text>

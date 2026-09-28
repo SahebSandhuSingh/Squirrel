@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -50,28 +51,35 @@ export default function Run() {
   const [accuracy, setAccuracy] = useState<number | null>(null);
   const [music, setMusic] = useState(true);
   const [photos, setPhotos] = useState(0);
-  const [summary, setSummary] = useState<(FinishRunResult & { verdict: Outcome; reason: string; km: number; time: string; pace: string; uploadNote?: string; areaText?: string }) | null>(null);
+  const [summary, setSummary] = useState<(FinishRunResult & { verdict: Outcome; reason: string; km: number; time: string; pace: string; uploadNote?: string; areaText?: string; minutes: number; runId?: string }) | null>(null);
   const [stage, setStage] = useState<keyof typeof STAGE_TEXT>('uploading');
   const [canSkipWait, setCanSkipWait] = useState(false);
   const pollAbort = useRef<AbortController | null>(null);
   useEffect(() => () => pollAbort.current?.abort(), []);
-  const progress = useRef(new Animated.Value(0.62)).current;
-  const pop = useRef(new Animated.Value(0)).current;
+  const progress = useAnimatedValue(0.62);
+  const pop = useAnimatedValue(0);
   const lastKmMarker = useRef(0);
-  const startedAt = useRef(Date.now());
+  const startedAt = useRef(0); // set when the countdown hands over to 'running'
   const phaseRef = useRef<Phase>('countdown');
-  phaseRef.current = phase;
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
 
   // Distance source: real GPS if we can get permission on a device, otherwise a labelled demo.
   useEffect(() => {
     let sub: Location.LocationSubscription | null = null;
     let cancelled = false;
+    const fallBackToDemo = () => {
+      setSource('demo');
+      setSec(DEMO_START);
+      lastKmMarker.current = Math.floor(DEMO_START / DEMO_PACE);
+    };
     (async () => {
-      if (Platform.OS === 'web') return setSource('demo');
+      if (Platform.OS === 'web') return fallBackToDemo();
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (cancelled) return;
-        if (status !== 'granted') return setSource('demo');
+        if (status !== 'granted') return fallBackToDemo();
         setSource('gps');
         sub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 }, (loc) => {
           setAccuracy(loc.coords.accuracy ?? null);
@@ -79,7 +87,7 @@ export default function Run() {
           setTrack((t) => addFix(t, { lat: loc.coords.latitude, lon: loc.coords.longitude, t: loc.timestamp, accuracy: loc.coords.accuracy }));
         });
       } catch {
-        if (!cancelled) setSource('demo');
+        if (!cancelled) fallBackToDemo();
       }
     })();
     return () => {
@@ -87,13 +95,6 @@ export default function Run() {
       sub?.remove();
     };
   }, []);
-
-  useEffect(() => {
-    if (source === 'demo') {
-      setSec(DEMO_START);
-      lastKmMarker.current = Math.floor(DEMO_START / DEMO_PACE);
-    }
-  }, [source]);
 
   // 3-2-1 countdown
   useEffect(() => {
@@ -157,6 +158,7 @@ export default function Run() {
     let serverLines: { label: string; xp: number }[] | undefined;
     let uploadNote: string | undefined;
     let areaText: string | undefined;
+    let runId: string | undefined; // set once the Run Module accepted or flagged the run: shareable to Social
     let districtId: string | undefined = homeDistrict?.id; // local/demo rule: a ≥1 km run claims your home zone
     let serverXpTotal: number | undefined;
 
@@ -211,6 +213,7 @@ export default function Run() {
           serverLines = [{ label: outcome === 'processing' ? 'XP pending (still processing)' : 'XP unavailable right now', xp: 0 }];
         }
         uploadNote = `Run ${r.run_id.slice(0, 8)} · ${r.status}`;
+        if (outcome === 'accepted' || outcome === 'flagged') runId = r.run_id;
       } catch (e) {
         uploadNote = `Couldn't reach the server (${e instanceof Error ? e.message : 'error'}). XP shown is an estimate; the upload is safe to retry.`;
       }
@@ -226,7 +229,7 @@ export default function Run() {
       serverLines,
     });
     if (serverXpTotal != null) syncServerXp(serverXpTotal);
-    setSummary({ ...res, verdict: outcome, reason, km: kmFinal, time, pace, uploadNote, areaText });
+    setSummary({ ...res, verdict: outcome, reason, km: kmFinal, time, pace, uploadNote, areaText, minutes, runId });
     setPhase('done');
   }, [km, movingSec, paceSec, track, source, live, finishRun, homeDistrict, time, syncServerXp]);
 
@@ -399,14 +402,17 @@ export default function Run() {
             )}
             {summary.uploadNote && <Text style={styles.note}>{summary.uploadNote}</Text>}
 
-            {summary.verdict !== 'rejected' && (
+            {/* Only server-recorded runs can be shared: Social fetches the numbers from the Run Module by run_id. */}
+            {summary.runId ? (
               <Button
                 label="Share to feed"
                 iconLeft="send"
-                onPress={() => router.replace({ pathname: '/compose', params: { km: summary.km.toFixed(2), min: String(Math.round(movingSec / 60)), pace: summary.pace } })}
+                onPress={() => router.replace({ pathname: '/compose', params: { run_id: summary.runId as string, km: summary.km.toFixed(2), min: String(summary.minutes), pace: summary.pace } })}
                 style={{ alignSelf: 'stretch', marginTop: 14 }}
               />
-            )}
+            ) : !live && summary.verdict !== 'rejected' ? (
+              <Button label="Sign in to share runs" variant="secondary" iconLeft="login" onPress={() => router.replace('/sign-in')} style={{ alignSelf: 'stretch', marginTop: 14 }} />
+            ) : null}
             <Button
               label={summary.leveledUp ? 'See level up' : summary.captured ? 'View territory' : 'Done'}
               variant="secondary"

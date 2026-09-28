@@ -4,6 +4,7 @@ import { Avatar } from '@/components/Avatar';
 import { FadeIn, Header, Icon, PressScale, Screen } from '@/components/ui';
 import type { IconName } from '@/data/icons';
 import { userById } from '@/data/users';
+import { useFollowList, useSocialEnabled } from '@/hooks/useSocial';
 import { colors, fonts, radius } from '@/theme';
 
 type Note = { id: string; user?: string; icon: IconName; color: string; text: string; time: string; go: Href; unread?: boolean };
@@ -22,6 +23,7 @@ export default function Notifications() {
   return (
     <Screen tabBar={false}>
       <Header back title="Notifications" />
+      <FollowRequestsRow />
       <View style={{ gap: 10, marginTop: 10 }}>
         {NOTES.map((n, i) => (
           <FadeIn key={n.id} index={i}>
@@ -43,6 +45,25 @@ export default function Notifications() {
         ))}
       </View>
     </Screen>
+  );
+}
+
+/** Pending follow requests (private accounts), from GET /v1/users/me/follow-requests. */
+function FollowRequestsRow() {
+  const enabled = useSocialEnabled();
+  const reqs = useFollowList(undefined, 'requests');
+  if (!enabled || !reqs.items.length) return null;
+  const n = reqs.items.length;
+  return (
+    <PressScale onPress={() => router.push({ pathname: '/follows', params: { kind: 'requests' } })} style={[styles.row, { marginTop: 10, borderColor: 'rgba(215,255,31,0.35)' }]}>
+      <View style={[styles.icon, { backgroundColor: `${colors.primary}22` }]}>
+        <Icon name="account-clock" size={22} color={colors.primary} />
+      </View>
+      <Text style={styles.text}>
+        {n}{reqs.hasMore ? '+' : ''} follow request{n === 1 ? '' : 's'} waiting
+      </Text>
+      <Icon name="chevron-right" size={20} color={colors.dim} />
+    </PressScale>
   );
 }
 

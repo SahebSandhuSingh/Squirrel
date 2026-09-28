@@ -1,5 +1,6 @@
-import React, { useEffect, useId, useRef } from 'react';
+import React, { useEffect, useId } from 'react';
 import { Animated, Easing, type StyleProp, type ViewStyle, Platform } from 'react-native';
+import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 import Svg, { Circle, ClipPath, Defs, Ellipse, G, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { art } from './palette';
 import type { MascotAccessory, MascotPose } from '@/types';
@@ -88,7 +89,7 @@ type Hand = 'paw' | 'fist' | 'open';
 type ArmLayer = 'back' | 'mid' | 'top';
 type Arm = { s: Pt; e: Pt; h: Pt; hand: Hand; layer: ArmLayer };
 type Leg = { hip: Pt; knee: Pt; foot: Pt; rot: number; dir: number };
-type Eyes = 'open' | 'happy' | 'closed' | 'determined' | 'wide' | 'relaxed';
+type EyeKind = 'open' | 'happy' | 'closed' | 'determined' | 'wide' | 'relaxed';
 type Mouth = 'smirk' | 'smile' | 'grin' | 'open' | 'grit' | 'o' | 'hidden';
 type TailKind = 'up' | 'run' | 'sit' | 'sleep';
 
@@ -99,7 +100,7 @@ type PoseSpec = {
   arms: [Arm, Arm];
   legs: [Leg, Leg];
   tail: TailKind;
-  eyes: Eyes;
+  eyes: EyeKind;
   mouth: Mouth;
   glassesUp: boolean;
   shadow: number;
@@ -336,7 +337,7 @@ function Torso({ uid }: { uid: string }) {
   );
 }
 
-function Eyes({ kind }: { kind: Eyes }) {
+function Eyes({ kind }: { kind: EyeKind }) {
   if (kind === 'happy') {
     return (
       <>
@@ -768,7 +769,7 @@ type MascotProps = {
 };
 
 export function Mascot({ pose = 'idle', accessory = 'sunglasses', size = 160, animated = false, style }: MascotProps) {
-  const t = useRef(new Animated.Value(0)).current;
+  const t = useAnimatedValue(0);
 
   useEffect(() => {
     if (!animated) return undefined;

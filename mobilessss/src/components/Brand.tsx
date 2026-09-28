@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Animated, Easing, Image, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 import { NATIVE } from '@/components/ui';
 import { colors, fonts } from '@/theme';
 
@@ -23,7 +24,7 @@ export function Wordmark({ size = 28, showLogo = true, color = colors.text }: { 
  * Loops forever; motion is subtle and linear.
  */
 export function Tape({ items, color = colors.primary, rotate = -3, style }: { items: string[]; color?: string; rotate?: number; style?: StyleProp<ViewStyle> }) {
-  const x = useRef(new Animated.Value(0)).current;
+  const x = useAnimatedValue(0);
   const [w, setW] = useState(0);
   useEffect(() => {
     if (!w) return;

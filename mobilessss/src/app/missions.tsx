@@ -1,3 +1,4 @@
+import { LOCKED_MISSIONS } from '@/data/features';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
@@ -15,9 +16,10 @@ const RESETS: Record<MissionTab, string> = { Daily: 'Resets in 5h 12m', Weekly: 
 export default function Missions() {
   const { missions, logMission, claimed, claimable, claimRewards, coins } = useApp();
   const [tab, setTab] = useState<MissionTab>('Daily');
-  const list = missions.filter((m) => m.tab === tab);
-  const done = list.filter((m) => m.current >= m.goal).length;
-  const totalXp = list.reduce((s, m) => s + m.xp, 0);
+  const list = missions.filter((m) => m.tab === tab).sort((a, b) => Number(LOCKED_MISSIONS.has(a.id)) - Number(LOCKED_MISSIONS.has(b.id)));
+  const active = list.filter((m) => !LOCKED_MISSIONS.has(m.id));
+  const done = active.filter((m) => m.current >= m.goal).length;
+  const totalXp = active.reduce((s, m) => s + m.xp, 0);
 
   const onClaim = () => {
     const r = claimRewards();
@@ -29,7 +31,7 @@ export default function Missions() {
       <Header back title="" right={<><Text style={styles.chLink} onPress={() => router.push('/challenges')}>Challenges →</Text><Coins amount={coins} /></>} />
       <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
         <Display size={56} style={{ lineHeight: 56, flex: 1 }}>
-          Today's{'\n'}
+          Today&apos;s{'\n'}
           <Text style={{ color: colors.primary }}>Missions</Text>
         </Display>
         <Mascot pose="cheer" accessory="crown" size={108} animated style={{ marginBottom: -6 }} />
@@ -39,8 +41,8 @@ export default function Missions() {
 
       <View style={styles.summary}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.sumTitle}>{done}/{list.length} complete · {totalXp} XP available</Text>
-          <ProgressBar progress={done / list.length} color={colors.primary} color2={colors.gold} height={6} style={{ marginTop: 8 }} />
+          <Text style={styles.sumTitle}>{done}/{active.length} complete · {totalXp} XP available</Text>
+          <ProgressBar progress={active.length ? done / active.length : 0} color={colors.primary} color2={colors.gold} height={6} style={{ marginTop: 8 }} />
         </View>
         <View style={styles.reset}>
           <Icon name="timer-sand" size={14} color={colors.secondary} />

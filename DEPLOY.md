@@ -100,7 +100,7 @@ they appear on the member's profile and can be shared as posts.
 
 Photo uploads need S3-compatible storage (`SOCIAL_MEDIA_*` in `social-backend/.env.example`, e.g.
 Cloudflare R2's free tier); without it everything else works and uploads answer 503. The app reaches
-the service through `EXPO_PUBLIC_SOCIAL_API_URL`, once its social screens are in `mobilessss`.
+the service through `EXPO_PUBLIC_SOCIAL_API_URL` (section 3).
 
 ## 3. Connect the web app
 
@@ -110,6 +110,7 @@ the service through `EXPO_PUBLIC_SOCIAL_API_URL`, once its social screens are in
    |---|---|
    | `EXPO_PUBLIC_EXERCISE_API_URL` | `https://squirrel-exercise.onrender.com` |
    | `EXPO_PUBLIC_API_URL` | `https://squirrel-run-api.onrender.com` |
+   | `EXPO_PUBLIC_SOCIAL_API_URL` | `https://squirrel-social.onrender.com` (profiles, follows, posts, feed; unset: sample data) |
 
    `https://`, no trailing slash. They are built into the app, so:
 2. **Deployments → latest → ⋯ → Redeploy.**

@@ -1,3 +1,4 @@
+import { SoonBanner, useLocks } from '@/components/Locked';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
@@ -14,6 +15,7 @@ type Tab = (typeof TABS)[number];
 /** EVENTS — nearby, online and joined. */
 export default function Events() {
   const { events, joinedEvents, toggleEvent, city, toast } = useApp();
+  const locks = useLocks();
   const [tab, setTab] = useState<Tab>('Nearby');
   const list = events
     .filter((e) => (tab === 'My Events' ? joinedEvents.has(e.id) : tab === 'Online' ? e.online : !e.online))
@@ -27,10 +29,11 @@ export default function Events() {
         right={
           <>
             <CityChip />
-            <IconButton icon="plus" onPress={() => { toast('Hosting opens at Level 15 · keep moving!', 'lock-clock', colors.violet); }} label="Host event" />
+            <IconButton icon="plus" onPress={locks.guard('events', () => toast('Hosting opens at Level 15 · keep moving!', 'lock-clock', colors.violet))} label="Host event" />
           </>
         }
       />
+      {locks.locked('events') && <SoonBanner title="Events · coming soon" body="Meetups, workshops and crew runs are launching soon. Here's a preview; joining opens at launch." />}
       <Segmented items={TABS} value={tab} onChange={setTab} />
       {tab !== 'My Events' && (
         <Text style={styles.count}>

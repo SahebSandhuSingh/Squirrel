@@ -1,5 +1,8 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { FeatureGate, SoonPill, useLocks } from '@/components/Locked';
+import { LOCKED_MISSIONS } from '@/data/features';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, Image, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Scene } from '@/art/Scene';
@@ -8,14 +11,18 @@ import { StickerArt } from '@/art/Sticker';
 import { RewardArt } from '@/art/Reward';
 import { Mascot } from '@/art/Mascot';
 import { Avatar, AvatarStack } from '@/components/Avatar';
-import { Card, CoinIcon, Icon, IconBadge, NATIVE, PressScale, ProgressBar, Scrim, TogglePill, tap } from '@/components/ui';
+import { Card, CoinIcon, Icon, IconBadge, NATIVE, PressScale, ProgressBar, Scrim, TogglePill, tap, textStyles } from '@/components/ui';
 import type { Crew, EventItem } from '@/data/community';
 import { formatEventDate } from '@/data/community';
 import type { Mission } from '@/data/missions';
 import { describeActivity, timeAgo, type Post } from '@/data/posts';
+import { socialErrorText, type Follower } from '@/api/social';
+import { confirmAction, FollowPill, toAvatarUser, useFollowToggle } from '@/components/socialParts';
+import { usePostView } from '@/hooks/useSocial';
+import { deletePost, toggleLike, toggleSave } from '@/state/socialStore';
 import { rarityColor, type ShopItem } from '@/data/shop';
 import type { Stat } from '@/data/stats';
-import { userById, type User } from '@/data/users';
+import { userById } from '@/data/users';
 import { useApp } from '@/state/AppState';
 import type { RewardArtKind, SceneKind } from '@/types';
 import { colors, fonts, radius } from '@/theme';
@@ -41,11 +48,25 @@ export function SceneImage({ kind, seed, height, aspect, style, children, scrim 
 const fmt = (n: number) => (Number.isInteger(n) ? n.toLocaleString('en-IN') : n.toFixed(n % 1 === 0.5 ? 1 : 2).replace(/0$/, ''));
 
 export function MissionCard({ mission: m, onLog, claimed, compact }: { mission: Mission; onLog: () => void; claimed: boolean; compact?: boolean }) {
-  const done = m.current >= m.goal;
-  const pop = useRef(new Animated.Value(done ? 1 : 0)).current;
+  const locked = LOCKED_MISSIONS.has(m.id);
+  const done = !locked && m.current >= m.goal;
+  const pop = useAnimatedValue(done ? 1 : 0);
   useEffect(() => {
     if (done) Animated.spring(pop, { toValue: 1, useNativeDriver: NATIVE, speed: 12, bounciness: 14 }).start();
   }, [done, pop]);
+
+  if (locked) {
+    return (
+      <View style={[styles.mission, { opacity: 0.6 }]} accessibilityLabel={`${m.title}, coming soon`}>
+        <IconBadge icon={m.icon} color={colors.mute} size={compact ? 40 : 46} />
+        <View style={{ flex: 1, marginHorizontal: 12 }}>
+          <Text style={[styles.mTitle, { color: colors.sub }]} numberOfLines={1}>{m.title}</Text>
+          <Text style={styles.mSub}>Not available yet</Text>
+        </View>
+        <SoonPill />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.mission, done && { borderColor: claimed ? 'rgba(215,255,31,0.35)' : `${m.color}99`, backgroundColor: claimed ? 'rgba(215,255,31,0.05)' : colors.card }]}>
@@ -107,30 +128,38 @@ export function CrewCard({ crew, joined, onToggle }: { crew: Crew; joined: boole
 }
 
 export function EventCard({ event, going, onToggle, variant = 'row' }: { event: EventItem; going: boolean; onToggle: () => void; variant?: 'row' | 'hero' }) {
+  // Lock-aware: while Events are locked every usage renders the same inert "Coming soon" card.
+  const locks = useLocks();
+  const locked = locks.locked('events');
   const attendees = event.attendeeIds.map(userById);
-  const open = () => router.push({ pathname: '/event/[id]', params: { id: event.id } });
+  const open = locks.guard('events', () => router.push({ pathname: '/event/[id]', params: { id: event.id } }));
+  const a11y = locked ? `${event.title}, coming soon` : event.title;
   if (variant === 'hero') {
     return (
-      <PressScale onPress={open} style={{ width: 250 }} scaleTo={0.98}>
+      <PressScale onPress={open} style={[{ width: 250 }, locked && styles.lockedCard]} scaleTo={0.98} accessibilityLabel={a11y}>
         <SceneImage kind={event.scene} seed={event.title.length} height={150} scrim="strong">
-          <View style={styles.heroBadge}>
-            <Icon name={event.icon} size={13} color={colors.onImage} />
-            <Text style={styles.heroBadgeText}>+{event.xp} XP</Text>
-          </View>
+          <FeatureGate feature="events" fallback={<SoonPill onImage style={styles.heroLock} />}>
+            <View style={styles.heroBadge}>
+              <Icon name={event.icon} size={13} color={colors.onImage} />
+              <Text style={styles.heroBadgeText}>+{event.xp} XP</Text>
+            </View>
+          </FeatureGate>
           <View style={{ position: 'absolute', left: 12, right: 12, bottom: 10 }}>
             <Text style={styles.heroTitle} numberOfLines={1}>{event.title}</Text>
-            <Text style={styles.heroMeta} numberOfLines={1}>{formatEventDate(event.startsAt)}</Text>
+            <Text style={textStyles.overlaySub} numberOfLines={1}>{formatEventDate(event.startsAt)}</Text>
           </View>
         </SceneImage>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
           <AvatarStack users={attendees} extra={event.going + (going ? 1 : 0)} size={22} />
-          <TogglePill on={going} onPress={onToggle} labelOff="Join" labelOn="Going" color={colors.primary} style={{ minWidth: 70, paddingVertical: 6 }} />
+          <FeatureGate feature="events">
+            <TogglePill on={going} onPress={onToggle} labelOff="Join" labelOn="Going" color={colors.primary} style={{ minWidth: 70, paddingVertical: 6 }} />
+          </FeatureGate>
         </View>
       </PressScale>
     );
   }
   return (
-    <PressScale onPress={open} style={styles.row} scaleTo={0.985}>
+    <PressScale onPress={open} style={[styles.row, locked && styles.lockedCard]} scaleTo={0.985} accessibilityLabel={a11y}>
       <SceneImage kind={event.scene} seed={event.title.length} height={112} style={{ width: 118, borderRadius: radius.md }} scrim="strong">
         <View style={{ position: 'absolute', left: 6, bottom: 6 }}>
           <AvatarStack users={attendees.slice(0, 3)} extra={event.going + (going ? 1 : 0)} size={20} />
@@ -150,7 +179,9 @@ export function EventCard({ event, going, onToggle, variant = 'row' }: { event: 
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={styles.xpSmall}>+{event.xp} XP</Text>
-          <TogglePill on={going} onPress={onToggle} labelOff="Join" labelOn="Going" color={colors.primary} style={{ paddingVertical: 7 }} />
+          <FeatureGate feature="events">
+            <TogglePill on={going} onPress={onToggle} labelOff="Join" labelOn="Going" color={colors.primary} style={{ paddingVertical: 7 }} />
+          </FeatureGate>
         </View>
       </View>
     </PressScale>
@@ -161,46 +192,81 @@ export function EventCard({ event, going, onToggle, variant = 'row' }: { event: 
 // Social
 // ---------------------------------------------------------------------------
 
-export function SocialPost({ post }: { post: Post }) {
-  const { liked, toggleLike, saved, toggleSave, following, toggleFollow, me } = useApp();
-  const author = post.authorId === me.id ? me : userById(post.authorId);
-  const isLiked = liked.has(post.id);
-  const heart = useRef(new Animated.Value(0)).current;
+export function SocialPost({ post: raw, onDeleted }: { post: Post; onDeleted?: () => void }) {
+  const { toast } = useApp();
+  const post = usePostView(raw);
+  const author = post.author;
+  const avatarUser = toAvatarUser(author, post.is_mine);
+  const follow = useFollowToggle(author.id, { following: post.following_author, requested: post.requested_author }, author.username);
+  const [heart] = useState(() => new Animated.Value(0));
   const lastTap = useRef<number>(0);
-  const baseLikes = useRef(post.likes);
+  const fail = (e: unknown) => toast(socialErrorText(e), 'alert-circle-outline', colors.coral);
 
   const like = () => {
     tap('impact');
-    if (!isLiked) {
+    if (!post.liked_by_me) {
       heart.setValue(0);
       Animated.sequence([
         Animated.spring(heart, { toValue: 1, useNativeDriver: NATIVE, speed: 20, bounciness: 12 }),
         Animated.timing(heart, { toValue: 0, duration: 350, delay: 250, easing: Easing.in(Easing.quad), useNativeDriver: NATIVE }),
       ]).start();
     }
-    toggleLike(post.id);
+    toggleLike(post).catch(fail);
+  };
+  const save = () => {
+    tap();
+    toggleSave(post)
+      .then((saved) => saved && toast('Saved to your collection', 'bookmark', '#FFD21F'))
+      .catch(fail);
+  };
+  const remove = async () => {
+    if (!(await confirmAction('Delete post?', 'This removes the post, its likes and comments.'))) return;
+    deletePost(post.id)
+      .then(() => {
+        toast('Post deleted', 'delete-outline', colors.dim);
+        onDeleted?.();
+      })
+      .catch(fail);
   };
   const act = post.activity ? describeActivity(post.activity) : null;
-  const self = author.id === me.id;
+  const showFollow = !post.is_mine && !follow.following && !follow.requested;
+  const overlay = (
+    <>
+      {act && (
+        <View style={styles.actChip}>
+          <Icon name={act.icon} size={14} color={colors.primary} />
+          <Text style={styles.actText}>{act.text}</Text>
+          {post.activity?.verified && <Icon name="check-decagram" size={13} color={colors.primary} accessibilityLabel="Verified activity" />}
+        </View>
+      )}
+      {post.sticker && <StickerArt kind={post.sticker} size={78} style={{ position: 'absolute', right: 10, top: 10, transform: [{ rotate: '8deg' }] }} />}
+      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', opacity: heart, transform: [{ scale: heart.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) }] }]}>
+        <Icon name="heart" size={96} color={colors.primary} style={{ textShadowColor: colors.primary, textShadowRadius: 20 }} />
+      </Animated.View>
+    </>
+  );
 
   return (
     <View style={styles.post}>
       <View style={styles.postHead}>
-        <Avatar user={author} size={40} />
+        <Avatar user={avatarUser} size={40} />
         <View style={{ flex: 1, marginLeft: 10 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <Text style={styles.author}>{author.name}</Text>
+            <Text style={styles.author} numberOfLines={1}>{author.display_name}</Text>
             {author.verified && <Icon name="check-decagram" size={14} color={colors.secondary} />}
             <Text style={styles.lvl}>LV {author.level}</Text>
           </View>
           <Text style={styles.meta} numberOfLines={1}>
-            {timeAgo(post.minutesAgo)} · {post.area}
-            {post.crewName ? ` · ${post.crewName}` : ''}
+            {[timeAgo(post.created_at), post.area, post.crew_name].filter(Boolean).join(' · ')}
           </Text>
         </View>
-        {!self && !following.has(author.id) ? (
-          <Pressable onPress={() => toggleFollow(author.id)} hitSlop={8} style={styles.followBtn}>
+        {showFollow ? (
+          <Pressable onPress={follow.onPress} hitSlop={8} style={styles.followBtn} accessibilityLabel={`Follow ${author.display_name}`}>
             <Text style={styles.followText}>Follow</Text>
+          </Pressable>
+        ) : post.is_mine ? (
+          <Pressable onPress={remove} hitSlop={8} accessibilityLabel="Delete post">
+            <Icon name="dots-horizontal" size={22} color={colors.dim} />
           </Pressable>
         ) : (
           <Icon name="dots-horizontal" size={22} color={colors.dim} />
@@ -210,57 +276,56 @@ export function SocialPost({ post }: { post: Post }) {
       <Pressable
         onPress={() => {
           const now = Date.now();
-          if (now - lastTap.current < 300 && !isLiked) {
-            like();
-          }
+          if (now - lastTap.current < 300 && !post.liked_by_me) like();
           lastTap.current = now;
         }}>
-        <SceneImage kind={post.scene} seed={post.seed} aspect={1.2} style={{ borderRadius: 0 }} scrim={false}>
-          {act && (
-            <View style={styles.actChip}>
-              <Icon name={act.icon} size={14} color={colors.primary} />
-              <Text style={styles.actText}>{act.text}</Text>
-            </View>
-          )}
-          {post.sticker && <StickerArt kind={post.sticker} size={78} style={{ position: 'absolute', right: 10, top: 10, transform: [{ rotate: '8deg' }] }} />}
-          <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', opacity: heart, transform: [{ scale: heart.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) }] }]}>
-            <Icon name="heart" size={96} color={colors.primary} style={{ textShadowColor: colors.primary, textShadowRadius: 20 }} />
-          </Animated.View>
-        </SceneImage>
+        {post.media_url ? (
+          <View style={{ aspectRatio: 1 / 1.2, backgroundColor: colors.cardHi }}>
+            <Image source={{ uri: post.media_url }} style={StyleSheet.absoluteFill} resizeMode="cover" accessibilityIgnoresInvertColors />
+            {overlay}
+          </View>
+        ) : (
+          <SceneImage kind={post.backdrop.scene} seed={post.backdrop.seed} aspect={1.2} style={{ borderRadius: 0 }} scrim={false}>
+            {overlay}
+          </SceneImage>
+        )}
       </Pressable>
 
       <View style={styles.actions}>
-        <Pressable onPress={like} style={styles.action} hitSlop={6} accessibilityLabel={isLiked ? 'Unlike' : 'Like'}>
-          <Icon name={isLiked ? 'heart' : 'heart-outline'} size={24} color={isLiked ? colors.primary : colors.text} />
-          <Text style={styles.count}>{(baseLikes.current + (isLiked ? 1 : 0)).toLocaleString('en-IN')}</Text>
+        <Pressable onPress={like} style={styles.action} hitSlop={6} accessibilityLabel={post.liked_by_me ? 'Unlike' : 'Like'}>
+          <Icon name={post.liked_by_me ? 'heart' : 'heart-outline'} size={24} color={post.liked_by_me ? colors.primary : colors.text} />
+          <Text style={styles.count}>{post.likes_count.toLocaleString('en-IN')}</Text>
         </Pressable>
         <Pressable onPress={() => router.push({ pathname: '/post/[id]', params: { id: post.id } })} style={styles.action} hitSlop={6} accessibilityLabel="Comments">
           <Icon name="comment-outline" size={22} color={colors.text} />
-          <Text style={styles.count}>{post.comments}</Text>
+          <Text style={styles.count}>{post.comments_count.toLocaleString('en-IN')}</Text>
         </Pressable>
         <Pressable style={styles.action} hitSlop={6} onPress={() => tap()} accessibilityLabel="Share">
           <Icon name="send-outline" size={21} color={colors.text} />
         </Pressable>
         <View style={{ flex: 1 }} />
-        <Pressable onPress={() => { tap(); toggleSave(post.id); }} hitSlop={6} accessibilityLabel={saved.has(post.id) ? 'Unsave' : 'Save'}>
-          <Icon name={saved.has(post.id) ? 'bookmark' : 'bookmark-outline'} size={24} color={saved.has(post.id) ? colors.gold : colors.text} />
+        <Pressable onPress={save} hitSlop={6} accessibilityLabel={post.saved_by_me ? 'Unsave' : 'Save'}>
+          <Icon name={post.saved_by_me ? 'bookmark' : 'bookmark-outline'} size={24} color={post.saved_by_me ? colors.gold : colors.text} />
         </Pressable>
       </View>
-      <Text style={styles.caption}>
-        <Text style={{ fontFamily: fonts.bold }}>{author.handle} </Text>
-        {post.caption}
-      </Text>
+      {!!post.caption && (
+        <Text style={styles.caption}>
+          <Text style={{ fontFamily: fonts.bold }}>{author.username} </Text>
+          {post.caption}
+        </Text>
+      )}
     </View>
   );
 }
 
-export function UserChip({ user, following, onFollow }: { user: User; following: boolean; onFollow: () => void }) {
+/** Suggested person: avatar, name, first interest · area, Follow. */
+export function UserChip({ user }: { user: Follower }) {
   return (
     <View style={styles.userChip}>
-      <Avatar user={user} size={60} level={user.level} />
-      <Text style={[styles.title, { fontSize: 13, marginTop: 10 }]} numberOfLines={1}>{user.name}</Text>
-      <Text style={[styles.meta, { fontSize: 11 }]} numberOfLines={1}>{user.tags[0]} · {user.area}</Text>
-      <TogglePill on={following} onPress={onFollow} labelOff="Follow" labelOn="Following" color={colors.primary} style={{ marginTop: 8, minWidth: 0, alignSelf: 'stretch', paddingVertical: 6 }} />
+      <Avatar user={toAvatarUser(user, user.is_me)} size={60} level={user.level} />
+      <Text style={[styles.title, { fontSize: 13, marginTop: 10 }]} numberOfLines={1}>{user.display_name}</Text>
+      <Text style={[styles.meta, { fontSize: 11 }]} numberOfLines={1}>{[user.interests[0], user.area ?? `@${user.username}`].filter(Boolean).join(' · ')}</Text>
+      <FollowPill userId={user.id} server={{ following: user.following, requested: user.requested }} username={user.username} style={{ marginTop: 8, minWidth: 0, alignSelf: 'stretch', paddingVertical: 6 }} />
     </View>
   );
 }
@@ -299,7 +364,7 @@ export function MiniBars({ values, color, height = 44, highlightLast = true, bar
 }
 
 function GrowBar({ w, h, color, opacity, delay }: { w: number; h: number; color: string; opacity: number; delay: number }) {
-  const v = useRef(new Animated.Value(0)).current;
+  const v = useAnimatedValue(0);
   useEffect(() => {
     v.setValue(0);
     Animated.timing(v, { toValue: h, duration: 520, delay, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
@@ -385,6 +450,8 @@ export function RewardCard({ kind, title, subtitle, locked, style }: { kind: Rew
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
+  lockedCard: { opacity: 0.6 },
+  heroLock: { position: 'absolute', top: 10, left: 10 },
   mission: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, padding: 12, overflow: 'hidden' },
   mTitle: { color: colors.text, fontFamily: fonts.bold, fontSize: 15 },
   mSub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, marginTop: 2 },
@@ -400,7 +467,6 @@ const styles = StyleSheet.create({
   heroBadge: { position: 'absolute', top: 10, left: 10, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(10,10,10,0.7)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.pill },
   heroBadgeText: { color: colors.gold, fontFamily: fonts.bold, fontSize: 11 },
   heroTitle: { color: colors.onImage, fontFamily: fonts.display, fontSize: 22, letterSpacing: 0.4 },
-  heroMeta: { color: colors.onImageSub, fontFamily: fonts.medium, fontSize: 12 },
   post: { backgroundColor: colors.card, borderRadius: radius.xl, overflow: 'hidden', marginBottom: 16, borderWidth: 1, borderColor: colors.line },
   postHead: { flexDirection: 'row', alignItems: 'center', padding: 12 },
   author: { color: colors.text, fontFamily: fonts.bold, fontSize: 15 },

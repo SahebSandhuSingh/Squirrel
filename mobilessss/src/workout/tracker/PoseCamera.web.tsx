@@ -1,4 +1,4 @@
-import { createElement, useEffect, useMemo, useRef } from 'react';
+import { createElement, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import { View } from 'react-native';
 import { POSE_ASSETS_URL } from '@/api/config';
 import { parseTrackerMessage, trackerAssets, trackerHtml } from './trackerHtml';
@@ -9,7 +9,9 @@ export function PoseCamera({ active, skeleton, onFrame, onStatus, style }: PoseC
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const html = useMemo(() => trackerHtml(trackerAssets(POSE_ASSETS_URL)), []);
   const handlers = useRef({ onFrame, onStatus });
-  handlers.current = { onFrame, onStatus };
+  useLayoutEffect(() => {
+    handlers.current = { onFrame, onStatus };
+  });
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {

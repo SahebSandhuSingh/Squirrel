@@ -9,13 +9,14 @@ import { Scene } from '@/art/Scene';
 import { Mascot } from '@/art/Mascot';
 import { PoseSkeleton, squatPose, type Joint } from '@/components/PoseSkeleton';
 import { Button, Display, Icon, Ring, tap } from '@/components/ui';
-import { exerciseByKey, PLAN_BOUNDS } from '@/data/exercises';
+import { estimateKcal, exerciseByKey, PLAN_BOUNDS } from '@/data/exercises';
 import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
 import { useKeepAwake } from 'expo-keep-awake';
 import { EXERCISE_API_URL } from '@/api/config';
 import { ApiError, getApiToken, refreshApiToken } from '@/api/client';
 import { exerciseApi } from '@/api/exercise';
 import { invalidateExercise, useExerciseUser } from '@/hooks/useExercise';
+import { useApp } from '@/state/AppState';
 import { CoachSession, type CoachState, type PoseFrame } from '@/workout/coach';
 import { liveView } from '@/workout/liveView';
 import { PoseCamera } from '@/workout/tracker/PoseCamera';
@@ -28,6 +29,10 @@ import type { TrackerStatus } from '@/workout/tracker/types';
  * saved, so reports, history and XP follow.
  *
  * Not signed in, or no coach server configured: the guided demo (clearly labelled, nothing saved).
+ *
+ * The live workout is the app's active exercise while it is open (home's Resume, the exercise
+ * picker's one-at-a-time guard), and on finishing it feeds missions, XP and today's activity
+ * (AppState.completeExercise) once.
  */
 export default function Train() {
   const user = useExerciseUser();
@@ -155,11 +160,11 @@ function DemoWorkout() {
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
-      {/* Background: live camera, or the gym scene when the camera isn't available */}
+      {/* Background: live camera, or the exercise scene when the camera isn't available */}
       {showCamera ? (
         <CameraView style={StyleSheet.absoluteFill} facing={facing} mirror={facing === 'front'} active={!paused && phase !== 'done'} onMountError={() => setCamFailed(true)} />
       ) : (
-        <Scene kind="gym" seed={9} aspect={0.46} style={StyleSheet.absoluteFill} />
+        <Scene kind={ex.scene} seed={9} aspect={0.46} style={StyleSheet.absoluteFill} />
       )}
       <LinearGradient colors={['rgba(6,6,6,0.55)', 'rgba(6,6,6,0.05)', 'rgba(6,6,6,0.05)', 'rgba(6,6,6,0.85)']} locations={[0, 0.22, 0.6, 1]} style={StyleSheet.absoluteFill} />
 
@@ -313,10 +318,18 @@ function LiveWorkout({ userId }: { userId: string }) {
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const coach = useRef<CoachSession | null>(null);
+  const { beginExercise, endExercise, completeExercise } = useApp();
 
   useEffect(() => {
     if (perm && !perm.granted && perm.canAskAgain) requestPerm();
   }, [perm, requestPerm]);
+
+  // The active exercise while this screen is open (the picker may already have marked it).
+  useEffect(() => {
+    beginExercise({ key: ex.key, sessionId: params.session ? String(params.session) : undefined });
+    return () => endExercise();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // A workout started without a saved plan saves one now: the server coaches only saved sessions.
   // It runs alongside the get-ready countdown. A server that is waking up (free hosting sleeps)
@@ -423,6 +436,19 @@ function LiveWorkout({ userId }: { userId: string }) {
   const scored = results.filter((r) => r.score != null);
   const avgScore = scored.length ? Math.round(scored.reduce((a, r) => a + (r.score ?? 0), 0) / scored.length) : null;
   const trackingOn = !done && phase !== 'rest';
+
+  // Finished: missions, XP and today's activity, once. An empty workout records nothing.
+  const recorded = useRef(false);
+  useEffect(() => {
+    if (!done || recorded.current) return;
+    recorded.current = true;
+    if (totalCount === 0 && (!timed || elapsed < 10)) return;
+    completeExercise({
+      key: ex.key, slug: ex.slug, reps: timed ? 0 : totalCount, timedSeconds: timed ? elapsed : 0,
+      activeSeconds: elapsed, kcal: estimateKcal(ex, elapsed),
+    });
+    endExercise();
+  }, [done, totalCount, timed, elapsed, ex, completeExercise, endExercise]);
   const cameraReady = !!perm?.granted || Platform.OS === 'web';
   const blocking = setupError ?? (state?.fatal ? state.error?.detail ?? 'The coach stopped this workout.' : null);
 
@@ -432,7 +458,7 @@ function LiveWorkout({ userId }: { userId: string }) {
       {cameraReady && !blocking ? (
         <PoseCamera key={trackerKey} active={trackingOn} skeleton={view.skeleton} onFrame={onFrame} onStatus={onStatus} style={StyleSheet.absoluteFill} />
       ) : (
-        <Scene kind="gym" seed={9} aspect={0.46} style={StyleSheet.absoluteFill} />
+        <Scene kind={ex.scene} seed={9} aspect={0.46} style={StyleSheet.absoluteFill} />
       )}
       <LinearGradient colors={['rgba(6,6,6,0.55)', 'rgba(6,6,6,0)', 'rgba(6,6,6,0)', 'rgba(6,6,6,0.8)']} locations={[0, 0.22, 0.62, 1]} style={StyleSheet.absoluteFill} pointerEvents="none" />
 

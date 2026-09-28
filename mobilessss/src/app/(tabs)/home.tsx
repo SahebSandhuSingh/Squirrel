@@ -1,3 +1,10 @@
+import { EXERCISE_LIBRARY } from '@/data/exercises';
+import { useExerciseCatalog } from '@/hooks/useExercise';
+import { LOCKED_MISSIONS } from '@/data/features';
+import { useLocks } from '@/components/Locked';
+import { activityLine, timeAgo } from '@/data/posts';
+import { BlockSkeleton, SocialError, toAvatarUser } from '@/components/socialParts';
+import { useFeed, useSocialEnabled } from '@/hooks/useSocial';
 import { useEffect } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
@@ -5,48 +12,16 @@ import { Mascot } from '@/art/Mascot';
 import { Avatar } from '@/components/Avatar';
 import { EventCard, MissionCard, SceneImage } from '@/components/cards';
 import { CityChip, TopBar } from '@/components/TopBar';
-import { Button, Card, Display, FadeIn, Icon, PressScale, Ring, Screen, SectionHeader, Tagline } from '@/components/ui';
+import { Button, Card, Display, FadeIn, Icon, OverlayKicker, OverlaySub, PressScale, Ring, RowSub, RowTitle, Screen, SectionHeader, Tagline } from '@/components/ui';
 import { today } from '@/data/stats';
 import { users } from '@/data/users';
 import { territoryBoard } from '@/data/territory';
 import { useAuth } from '@/auth/AuthProvider';
 import { Tape } from '@/components/Brand';
 import { xpApi } from '@/api/endpoints';
-import { API_CONFIGURED, EXERCISE_API_CONFIGURED } from '@/api/config';
-import { useExerciseProgress, useExerciseUser } from '@/hooks/useExercise';
+import { API_CONFIGURED } from '@/api/config';
 import { useApp } from '@/state/AppState';
 import { colors, fonts, radius } from '@/theme';
-
-/** Entry to the form coach; live numbers from GET /api/users/{id}/progress when a coach profile exists. */
-function FormCoachCard() {
-  const user = useExerciseUser();
-  const { data: p, error } = useExerciseProgress(user?.user_id);
-  const sub = !EXERCISE_API_CONFIGURED
-    ? 'Rep-by-rep form scores · not connected'
-    : !user
-      ? 'Set up your profile to get scored reps'
-      : error && !p
-        ? "Couldn't reach the coach · tap to retry"
-        : p
-          ? p.totals.sessions === 0
-            ? 'No sessions yet · plan your first'
-            : `${p.this_week} this week · avg form ${p.avg_form ?? '—'} · ${p.streak_days}d streak`
-          : 'Loading your form…';
-  return (
-    <PressScale onPress={() => router.push('/exercise')} style={styles.coach} scaleTo={0.98} accessibilityLabel="Form coach">
-      <View style={styles.coachIcon}>
-        <Icon name="weight-lifter" size={24} color={colors.onPrimary} />
-      </View>
-      <View style={{ flex: 1, marginLeft: 12 }}>
-        <Text style={styles.coachTitle}>Form Coach</Text>
-        <Text style={styles.coachSub} numberOfLines={1}>{sub}</Text>
-      </View>
-      <Pressable onPress={() => router.push({ pathname: '/exercise/train/[key]', params: { key: 'squat', sets: '3', value: '15', rest: '45' } })} style={styles.coachGo} accessibilityLabel="Start a squat workout" hitSlop={6}>
-        <Icon name="play" size={20} color={colors.onPrimary} />
-      </Pressable>
-    </PressScale>
-  );
-}
 
 const greeting = () => {
   const h = new Date().getHours();
@@ -56,7 +31,16 @@ const greeting = () => {
 export default function Home() {
   const { me, missions, logMission, claimed, claimable, claimRewards, events, joinedEvents, toggleEvent, city, districts } = useApp();
   const { mode } = useAuth();
-  const { syncServerXp } = useApp();
+  const { syncServerXp, exerciseToday } = useApp();
+  const locks = useLocks();
+  const eventsLocked = locks.locked('events');
+  // Crew Activity: the first page of the server's "Following" feed (people you follow + you).
+  const socialOn = useSocialEnabled();
+  const crewFeed = useFeed('following', null, { limit: 4 });
+  const crewActivity = crewFeed.items.slice(0, 4);
+  // Today's rings add what you logged with the form coach.
+  const activeMin = today.active.value + exerciseToday.minutes;
+  const kcalToday = today.kcal.value + exerciseToday.kcal;
   // Signed in: the server's XP total (derived from real activity) replaces the demo figure.
   useEffect(() => {
     if (mode !== 'live' || !API_CONFIGURED) return;
@@ -65,8 +49,10 @@ export default function Home() {
   }, [mode]);
   const held = districts.filter((d) => d.status === 'yours');
   const home = held[0] ?? districts[0];
-  const daily = missions.filter((m) => m.tab === 'Daily');
-  const doneCount = daily.filter((m) => m.current >= m.goal).length;
+  // Locked (not-yet-launched) missions stay visible at the end but don't count.
+  const daily = missions.filter((m) => m.tab === 'Daily').sort((a, b) => Number(LOCKED_MISSIONS.has(a.id)) - Number(LOCKED_MISSIONS.has(b.id)));
+  const activeDaily = daily.filter((m) => !LOCKED_MISSIONS.has(m.id));
+  const doneCount = activeDaily.filter((m) => m.current >= m.goal).length;
   const upcoming = events.filter((e) => !e.online).slice(0, 5);
   const leaders = territoryBoard.weekly.slice(0, 4);
 
@@ -92,7 +78,7 @@ export default function Home() {
       <FadeIn index={1}>
         <Card style={{ marginTop: 14, paddingVertical: 16 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <Text style={styles.cardTitle}>Today's progress</Text>
+            <Text style={styles.cardTitle}>Today&apos;s progress</Text>
             <Pressable onPress={() => router.push('/progress')} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Text style={styles.link}>Stats</Text>
               <Icon name="chevron-right" size={16} color={colors.primary} />
@@ -100,10 +86,11 @@ export default function Home() {
           </View>
           <View style={styles.rings}>
             <RingStat progress={today.steps.value / today.steps.goal} color={colors.green} color2={colors.secondary} icon="shoe-print" value={today.steps.value.toLocaleString('en-IN')} label="Steps" />
-            <RingStat progress={today.active.value / today.active.goal} color={colors.secondary} color2={colors.blue} icon="timer-outline" value={`${today.active.value}m`} label="Active" />
-            <RingStat progress={today.kcal.value / today.kcal.goal} color={colors.orange} color2={colors.gold} icon="fire" value={String(today.kcal.value)} label="kcal" />
+            <RingStat progress={activeMin / today.active.goal} color={colors.secondary} color2={colors.blue} icon="timer-outline" value={`${activeMin}m`} label="Active" />
+            <RingStat progress={kcalToday / today.kcal.goal} color={colors.orange} color2={colors.gold} icon="fire" value={String(kcalToday)} label="kcal" />
             <RingStat progress={Math.min(1, today.streak / 14)} color={colors.violet} color2={colors.primary} icon="lightning-bolt" value={`${today.streak}d`} label="Streak" />
           </View>
+          <StartExercise />
         </Card>
       </FadeIn>
 
@@ -113,9 +100,9 @@ export default function Home() {
           <SceneImage kind="run" seed={4} height={132} scrim="strong">
             <View style={styles.runCta}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.kicker}>{city.venues?.runs?.[0] ?? 'City Loop'} · 2.4 km loop</Text>
+                <OverlayKicker>{city.venues?.runs?.[0] ?? 'City Loop'} · 2.4 km loop</OverlayKicker>
                 <Display size={30} color={colors.onImage}>Start a run</Display>
-                <Text style={styles.runSub}>Earn up to +150 XP · 3 friends running now</Text>
+                <OverlaySub>Earn up to +150 XP · 3 friends running now</OverlaySub>
               </View>
               <View style={styles.playBtn}>
                 <Icon name="play" size={30} color={colors.onPrimary} />
@@ -125,13 +112,8 @@ export default function Home() {
         </PressScale>
       </FadeIn>
 
-      {/* Form coach (Exercise Mechanics backend) */}
-      <FadeIn index={3}>
-        <FormCoachCard />
-      </FadeIn>
-
       {/* Missions */}
-      <SectionHeader kicker="01 — Today" title="Today's Missions" action={`${doneCount}/${daily.length} done`} onAction={() => router.push('/missions')} />
+      <SectionHeader kicker="01 — Today" title="Today's Missions" action={`${doneCount}/${activeDaily.length} done`} onAction={() => router.push('/missions')} />
       <View style={{ gap: 10 }}>
         {daily.map((m, i) => (
           <FadeIn key={m.id} index={i}>
@@ -148,7 +130,7 @@ export default function Home() {
       />
       {!claimable.count && <Text style={styles.hint}>Tap + on a mission to log progress. Complete one to claim XP & coins.</Text>}
 
-      <Tape items={['Touch grass (literally)', 'Every run leaves a mark', 'Claim your block', 'No gym-bro energy']} color={colors.secondary} rotate={2} style={{ marginTop: 26, marginBottom: -6 }} />
+      <Tape items={['Touch grass (literally)', 'Every run leaves a mark', 'Claim your block', 'No pressure, all vibes']} color={colors.secondary} rotate={2} style={{ marginTop: 26, marginBottom: -6 }} />
 
       {/* Territory */}
       <SectionHeader kicker="02 — Territory" title="Own your block" action="Map" onAction={() => router.push('/territory')} />
@@ -174,7 +156,7 @@ export default function Home() {
         <View style={styles.battle}>
           <Icon name="sword-cross" size={26} color={colors.secondary} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.battleTitle}>Choose your battle</Text>
+            <RowTitle>Choose your battle</RowTitle>
             <Text style={styles.zoneInfo}>You vs Rhea · 18.4 vs 21.1 km this week</Text>
           </View>
           <Icon name="chevron-right" size={24} color={colors.secondary} />
@@ -192,17 +174,8 @@ export default function Home() {
         </SceneImage>
       </FadeIn>
 
-      {/* Events */}
-      <SectionHeader kicker="03 — Meetups" title={`Happening in ${city.name}`} action="All events" onAction={() => router.push('/events')} />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingRight: 16 }} style={{ marginHorizontal: -16 }}>
-        <View style={{ width: 16 }} />
-        {upcoming.map((e) => (
-          <EventCard key={e.id} event={e} variant="hero" going={joinedEvents.has(e.id)} onToggle={() => toggleEvent(e.id)} />
-        ))}
-      </ScrollView>
-
-      {/* Leaderboard — ranked by territory area, like the backend */}
-      <SectionHeader kicker="04 — Who's moving" title="City Leaderboard" action="By area" onAction={() => router.push('/leaderboard')} />
+      {/* Campus leaderboard — students on your campus, ranked by territory area */}
+      <SectionHeader kicker={`03 — ${city.campus}`} title="Campus Leaderboard" action="By area" onAction={() => router.push('/leaderboard')} />
       <Card style={{ paddingVertical: 6 }}>
         {leaders.map((r, i) => {
           const u = r.me ? me : users.find((x) => x.id === r.userId)!;
@@ -220,34 +193,92 @@ export default function Home() {
         })}
       </Card>
 
+      {/* Events */}
+      <SectionHeader
+        kicker={eventsLocked ? '04 — Meetups · coming soon' : '04 — Meetups'}
+        title={`Happening in ${city.name}`}
+        action={eventsLocked ? 'Coming soon' : 'All events'}
+        onAction={locks.guard('events', () => router.push('/events'))}
+      />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingRight: 16 }} style={{ marginHorizontal: -16 }}>
+        <View style={{ width: 16 }} />
+        {upcoming.map((e) => (
+          <EventCard key={e.id} event={e} variant="hero" going={joinedEvents.has(e.id)} onToggle={() => toggleEvent(e.id)} />
+        ))}
+      </ScrollView>
+
       {/* Friends activity */}
       <SectionHeader kicker="05 — Right now" title="Crew Activity" action="Feed" onAction={() => router.push('/social')} />
-      <View style={{ gap: 10 }}>
-        {[
-          { u: 'u_rhea', text: 'ran 7.2 km at 5\'42"/km', icon: 'run-fast' as const, t: '2h' },
-          { u: 'u_meera', text: 'is hosting Yoga in the Park', icon: 'yoga' as const, t: '3h' },
-          { u: 'u_zoya', text: 'unlocked the Early Bird badge', icon: 'medal' as const, t: '5h' },
-          { u: 'u_aarav', text: 'hit a new squat PR · 80 kg', icon: 'weight-lifter' as const, t: '6h' },
-        ].map((a, i) => {
-          const u = users.find((x) => x.id === a.u)!;
-          return (
-            <FadeIn key={a.u} index={i}>
-              <View style={styles.activity}>
-                <Avatar user={u} size={38} />
-                <Text style={styles.activityText} numberOfLines={2}>
-                  <Text style={{ fontFamily: fonts.bold, color: colors.text }}>{u.name.split(' ')[0]} </Text>
-                  {a.text}
-                </Text>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Icon name={a.icon} size={18} color={colors.primary} />
-                  <Text style={styles.leaderSub}>{a.t}</Text>
-                </View>
-              </View>
-            </FadeIn>
-          );
-        })}
-      </View>
+      {!socialOn ? (
+        <Card>
+          <Text style={styles.hint}>Sign in to see what the people you follow are up to.</Text>
+        </Card>
+      ) : crewFeed.error && crewActivity.length === 0 ? (
+        <SocialError compact error={crewFeed.error} onRetry={crewFeed.retry} />
+      ) : crewFeed.loading && crewActivity.length === 0 ? (
+        <BlockSkeleton height={120} />
+      ) : crewActivity.length === 0 ? (
+        <Card>
+          <Text style={styles.hint}>Nothing yet. Follow people on Social and their runs and workouts show up here.</Text>
+        </Card>
+      ) : (
+        <View style={{ gap: 10 }}>
+          {crewActivity.map((p, i) => {
+            const u = toAvatarUser(p.author, p.is_mine);
+            const line = activityLine(p);
+            return (
+              <FadeIn key={p.id} index={i}>
+                <PressScale onPress={() => router.push({ pathname: '/post/[id]', params: { id: p.id } })} style={styles.activity} scaleTo={0.985} accessibilityLabel={`${u.name} ${line.text}`}>
+                  <Avatar user={u} size={38} />
+                  <Text style={styles.activityText} numberOfLines={2}>
+                    <Text style={{ fontFamily: fonts.bold, color: colors.text }}>{p.is_mine ? 'You' : u.name.split(' ')[0]} </Text>
+                    {line.text}
+                  </Text>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Icon name={line.icon} size={18} color={colors.primary} />
+                    <Text style={styles.leaderSub}>{timeAgo(p.created_at)}</Text>
+                  </View>
+                </PressScale>
+              </FadeIn>
+            );
+          })}
+        </View>
+      )}
     </Screen>
+  );
+}
+
+/** Start Exercise: the footer of Today's progress. Opens the exercise picker (backend catalog). */
+function StartExercise() {
+  const { activeExercise, exerciseToday } = useApp();
+  const catalog = useExerciseCatalog();
+  const ready = catalog.data?.filter((e) => e.status === 'enabled').length;
+  const activeName = activeExercise ? EXERCISE_LIBRARY.find((e) => e.key === activeExercise.key)?.name ?? 'Exercise' : null;
+  const sub = activeName
+    ? `${activeName} in progress · tap to resume`
+    : exerciseToday.sessions
+      ? `${exerciseToday.sessions} done today · ${exerciseToday.minutes} min · keep it going`
+      : ready
+        ? `${ready} exercises ready · form-coached reps`
+        : 'Form-coached reps and timed sets';
+  const open = () =>
+    activeExercise
+      ? router.push({ pathname: '/exercise/train/[key]', params: { key: activeExercise.key, session: activeExercise.sessionId ?? '' } })
+      : router.push('/exercise/select');
+  return (
+    <PressScale onPress={open} scaleTo={0.985} style={styles.exRow} accessibilityLabel={activeName ? `Resume ${activeName}` : 'Start Exercise'}>
+      <View style={styles.exIcon}>
+        <Icon name={activeName ? 'play-circle' : 'arm-flex'} size={22} color={colors.onPrimary} />
+      </View>
+      <View style={{ flex: 1, marginLeft: 12 }}>
+        <RowTitle>{activeName ? 'Resume exercise' : 'Start Exercise'}</RowTitle>
+        <RowSub>{sub}</RowSub>
+      </View>
+      <View style={styles.exGo}>
+        <Text style={styles.exGoText}>{activeName ? 'Resume' : 'Start'}</Text>
+        <Icon name="arrow-right" size={16} color={colors.onPrimary} />
+      </View>
+    </PressScale>
   );
 }
 
@@ -264,17 +295,15 @@ function RingStat({ progress, color, color2, icon, value, label }: { progress: n
 }
 
 const styles = StyleSheet.create({
-  coach: { flexDirection: 'row', alignItems: 'center', marginTop: 12, backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, padding: 12 },
-  coachIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-  coachGo: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-  coachTitle: { color: colors.text, fontFamily: fonts.label, fontSize: 17, letterSpacing: 1, textTransform: 'uppercase' },
-  coachSub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, marginTop: 1 },
+  exRow: { flexDirection: 'row', alignItems: 'center', marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.line },
+  exIcon: { width: 42, height: 42, borderRadius: 13, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  exGo: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.primary, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 8, marginLeft: 8 },
+  exGoText: { color: colors.onPrimary, fontFamily: fonts.labelBold, fontSize: 13, letterSpacing: 1, textTransform: 'uppercase' },
   zone: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 2, borderColor: colors.primary, padding: 14, transform: [{ rotate: '-0.6deg' }], shadowColor: colors.primary, shadowOpacity: 0.25, shadowRadius: 14, shadowOffset: { width: 0, height: 0 } },
   zoneKicker: { color: colors.primary, fontFamily: fonts.monoBold, fontSize: 10, letterSpacing: 1.4 },
   zonePct: { color: colors.primary, fontFamily: fonts.labelBold, fontSize: 18 },
   zoneInfo: { color: colors.dim, fontFamily: fonts.mono, fontSize: 10, marginTop: 6 },
   battle: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)', padding: 14 },
-  battleTitle: { color: colors.text, fontFamily: fonts.label, fontSize: 17, letterSpacing: 1, textTransform: 'uppercase' },
   hello: { color: colors.sub, fontFamily: fonts.semibold, fontSize: 15, flexShrink: 1 },
   cardTitle: { color: colors.text, fontFamily: fonts.bold, fontSize: 15 },
   link: { color: colors.primary, fontFamily: fonts.semibold, fontSize: 13 },
@@ -282,8 +311,6 @@ const styles = StyleSheet.create({
   ringValue: { color: colors.text, fontFamily: fonts.display, fontSize: 18, marginTop: 6, letterSpacing: 0.3 },
   ringLabel: { color: colors.dim, fontFamily: fonts.medium, fontSize: 11 },
   runCta: { position: 'absolute', left: 16, right: 16, bottom: 14, flexDirection: 'row', alignItems: 'flex-end' },
-  kicker: { color: colors.primarySoft, fontFamily: fonts.bold, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },
-  runSub: { color: colors.onImageSub, fontFamily: fonts.medium, fontSize: 12 },
   playBtn: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', shadowColor: colors.primary, shadowOpacity: 0.8, shadowRadius: 14, shadowOffset: { width: 0, height: 0 } },
   hint: { color: colors.mute, fontSize: 12, textAlign: 'center', marginTop: 8, fontFamily: fonts.regular },
   leader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 4 },
