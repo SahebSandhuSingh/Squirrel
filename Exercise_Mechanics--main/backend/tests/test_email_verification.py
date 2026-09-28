@@ -1,4 +1,4 @@
-"""Sign-up email verification: IISER Kolkata addresses only, and a 6-digit emailed code."""
+"""Sign-up email verification: college (.ac.in) addresses only, and a 6-digit emailed code."""
 
 from __future__ import annotations
 
@@ -65,16 +65,24 @@ def test_an_iiser_kolkata_address_gets_a_code_and_signs_up_with_it(app, outbox):
     assert _claims(login["access_token"])["ev"] is True
 
 
-@pytest.mark.parametrize("email", ["someone@gmail.com", "x@iiserkol.ac.in.evil.com", "x@notiiserkol.ac.in"])
+@pytest.mark.parametrize("email", ["someone@gmail.com", "x@iiserkol.ac.in.evil.com", "x@fakeac.in", "x@ac.in.com"])
 def test_other_domains_cannot_sign_up(app, outbox, email):
     assert call(app, "POST", "/api/auth/email-code", json={"email": email}).status == 403
     r = call(app, "POST", "/api/auth/register", json={**_ACCOUNT, "email": email, "code": "123456"})
-    assert r.status == 403 and "@iiserkol.ac.in" in r.json()["detail"]
+    assert r.status == 403 and "college (.ac.in)" in r.json()["detail"]
     assert outbox == []
 
 
-def test_a_subdomain_of_the_institute_is_allowed(app, outbox):
-    assert call(app, "POST", "/api/auth/email-code", json={"email": "x@students.iiserkol.ac.in"}).status == 202
+@pytest.mark.parametrize("email", ["x@students.iiserkol.ac.in", "x@iitb.ac.in", "x@du.ac.in"])
+def test_any_ac_in_college_can_sign_up(app, outbox, email):
+    assert call(app, "POST", "/api/auth/email-code", json={"email": email}).status == 202
+
+
+def test_a_narrower_allow_list_names_its_domains(app, monkeypatch, outbox):
+    monkeypatch.setenv(config.ALLOWED_EMAIL_DOMAINS_ENV, "iiserkol.ac.in")
+    assert call(app, "POST", "/api/auth/email-code", json={"email": "x@iitb.ac.in"}).json()["detail"].startswith(
+        "Sign-up is open to @iiserkol.ac.in")
+    assert call(app, "POST", "/api/auth/email-code", json={"email": "x@iiserkol.ac.in"}).status == 202
 
 
 def test_register_needs_the_code(app, outbox):

@@ -75,7 +75,10 @@ def check_domain(email: str) -> None:
 
 
 def allowed_domains_text() -> str:
+    """For the refusal message: "college (.ac.in)" for the default, else "@a.b or @c.d"."""
     domains = config.allowed_email_domains() or ()
+    if domains == ("ac.in",):
+        return "college (.ac.in)"
     return " or ".join(f"@{d}" for d in domains)
 
 

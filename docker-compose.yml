@@ -139,7 +139,7 @@ services:
       SOCIAL_INTERNAL_TOKEN: *social-token
       # Sign-up: college addresses only, confirmed by an emailed code (backend/auth/email_codes.py).
       # Without SMTP_* or RESEND_API_KEY the code is printed in this service's log.
-      SQUIRREL_ALLOWED_EMAIL_DOMAINS: ${SQUIRREL_ALLOWED_EMAIL_DOMAINS:-iiserkol.ac.in}
+      SQUIRREL_ALLOWED_EMAIL_DOMAINS: ${SQUIRREL_ALLOWED_EMAIL_DOMAINS:-ac.in}
       SQUIRREL_EMAIL_VERIFICATION: ${SQUIRREL_EMAIL_VERIFICATION:-on}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}

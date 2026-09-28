@@ -104,8 +104,8 @@ the service through `EXPO_PUBLIC_SOCIAL_API_URL` (section 3).
 
 ## 2c. Sign-up emails, community and push notifications
 
-**Sign-up is for IISER Kolkata only.** An account needs an `@iiserkol.ac.in` address (or a
-subdomain of it) and the 6-digit code emailed to it (`SQUIRREL_ALLOWED_EMAIL_DOMAINS`,
+**Sign-up is for college addresses only.** An account needs an address ending in `.ac.in` (any
+Indian college: `iiserkol.ac.in`, `iitb.ac.in`, …) and the 6-digit code emailed to it (`SQUIRREL_ALLOWED_EMAIL_DOMAINS`,
 `SQUIRREL_EMAIL_VERIFICATION` on squirrel-exercise). Existing accounts keep signing in as before.
 
 The code has to reach the inbox. On **squirrel-exercise → Environment**, set one of:

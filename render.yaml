@@ -65,10 +65,10 @@ services:
         generateValue: true
       - key: SQUIRREL_PUBLIC_BASE_URL
         value: https://squirrelsocial.app
-      # Sign-up is open to these email domains only, and needs the 6-digit code emailed to the
+      # Sign-up is open to these email domains only (ac.in: any Indian college address), and needs the 6-digit code emailed to the
       # address (backend/auth/email_codes.py). "*" would open it to any address.
       - key: SQUIRREL_ALLOWED_EMAIL_DOMAINS
-        value: iiserkol.ac.in
+        value: ac.in
       - key: SQUIRREL_EMAIL_VERIFICATION
         value: "on"
       # How the codes are emailed (backend/mailer.py). Gmail: SMTP_USER = the Gmail address,

@@ -368,7 +368,7 @@ side is in [`mobile/nearby/`](../mobile/nearby/).
 
 | Module | Routes |
 |---|---|
-| `backend/auth/` | `POST /api/auth/email-code` (emails a 6-digit sign-up code), `/register` (needs it), `/login`, `/refresh`. Returns a short-lived access token (`Authorization: Bearer …`, with `"ev": true` for an account that verified its email) and a single-use refresh token. Sign-up is open to `SQUIRREL_ALLOWED_EMAIL_DOMAINS` (default `iiserkol.ac.in`); codes go out by Gmail SMTP (`SMTP_USER`, `SMTP_PASSWORD`) or Resend (`RESEND_API_KEY`, `EMAIL_FROM`), else to the log (`backend/mailer.py`) |
+| `backend/auth/` | `POST /api/auth/email-code` (emails a 6-digit sign-up code), `/register` (needs it), `/login`, `/refresh`. Returns a short-lived access token (`Authorization: Bearer …`, with `"ev": true` for an account that verified its email) and a single-use refresh token. Sign-up is open to `SQUIRREL_ALLOWED_EMAIL_DOMAINS` (default `ac.in`: any address ending in .ac.in); codes go out by Gmail SMTP (`SMTP_USER`, `SMTP_PASSWORD`) or Resend (`RESEND_API_KEY`, `EMAIL_FROM`), else to the log (`backend/mailer.py`) |
 | `backend/live.py` | `GET /api/live`: how many people are in a coached workout right now |
 | `backend/nearby/` | `GET/PUT /api/nearby/settings`, `POST /api/proximity/session`, `/detection`, `/confirm`, `GET /api/nearby`, `POST /api/nearby/connect`, `GET /api/connections`, `POST /api/notifications/nearby` |
 | `backend/deeplinks/` | `/join` and `/invite/{token}` (store redirect or landing page), `POST /api/invites`, `/join/qr.svg`, `/join/poster`, `/.well-known/*` |

@@ -20,7 +20,7 @@ export type TokenPair = {
   refresh_token_expires_at: number;
 };
 
-/** `code`: the 6-digit code emailed by `emailCode` (sign-up is open to IISER Kolkata addresses). */
+/** `code`: the 6-digit code emailed by `emailCode` (sign-up is open to .ac.in college addresses). */
 export type NewAccount = { email: string; password: string; first_name: string; last_name: string; code: string };
 
 const auth = (path: string, body: unknown) => api<TokenPair>(`/api/auth${path}`, { body, base: AUTH_URL, anonymous: true });
@@ -30,7 +30,7 @@ function explain(e: unknown, fallback: string): never {
   if (e instanceof ApiError) {
     if (e.status === 401) throw new Error('Wrong email or password.');
     if (e.status === 409) throw new Error('An account with this email already exists. Sign in instead.');
-    if (e.status === 403) throw new Error(e.message || 'Use your @iiserkol.ac.in college email.');
+    if (e.status === 403) throw new Error(e.message || 'Use your college email (ending in .ac.in).');
     if (e.status === 0) throw new Error("Can't reach the server. Check your connection and try again.");
     throw new Error(e.message || fallback);
   }

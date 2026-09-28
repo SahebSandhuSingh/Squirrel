@@ -17,7 +17,7 @@ const RESEND_AFTER_S = 30;
  * Sign in or create a Squirrel Social account (Exercise backend, /api/auth). The same account
  * signs in to the Run Module. Without a configured server: demo mode, or a developer token.
  * `/sign-in?mode=create` opens on "create account" (Welcome → Get started). A new account needs a
- * college email (IISER Kolkata): "Send code" emails a 6-digit code, which creates the account.
+ * college email (ending in .ac.in): "Send code" emails a 6-digit code, which creates the account.
  * `?invite=<code>` pre-fills the friend's invite code (claimed once the account exists).
  */
 export default function SignIn() {
@@ -140,7 +140,7 @@ export default function SignIn() {
               </View>
             </View>
           )}
-          <TextInput ref={emailRef} style={styles.input} value={email} onChangeText={setEmail} placeholder={creating ? 'College email (@iiserkol.ac.in)' : 'Email'} placeholderTextColor={colors.mute}
+          <TextInput ref={emailRef} style={styles.input} value={email} onChangeText={setEmail} placeholder={creating ? 'College email (…@college.ac.in)' : 'Email'} placeholderTextColor={colors.mute}
             autoCapitalize="none" autoCorrect={false} keyboardType="email-address" autoComplete="email" textContentType={creating ? 'emailAddress' : 'username'}
             returnKeyType="next" onSubmitEditing={() => passwordRef.current?.focus()} submitBehavior="submit" />
           <View>

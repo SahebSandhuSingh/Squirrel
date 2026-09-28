@@ -65,9 +65,10 @@ def auth_required() -> bool:
 
 
 # Sign-up is open only to these email domains (SQUIRREL_ALLOWED_EMAIL_DOMAINS, comma-separated; a
-# subdomain of one counts too). "*" allows any address. IISER Kolkata only by default.
+# subdomain of one counts too). "*" allows any address. By default any Indian academic address
+# (anything ending in .ac.in, e.g. iiserkol.ac.in, iitb.ac.in).
 ALLOWED_EMAIL_DOMAINS_ENV = "SQUIRREL_ALLOWED_EMAIL_DOMAINS"
-DEFAULT_ALLOWED_EMAIL_DOMAINS = "iiserkol.ac.in"
+DEFAULT_ALLOWED_EMAIL_DOMAINS = "ac.in"
 
 
 def allowed_email_domains() -> tuple[str, ...] | None:

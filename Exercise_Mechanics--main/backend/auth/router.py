@@ -6,7 +6,7 @@
   • POST /api/auth/refresh  — rotate a refresh token into a fresh token pair.
 
 All are rate-limited (auth/throttle.py): 429 with Retry-After when over a limit. Sign-up is open to
-the allowed email domains only (config.allowed_email_domains: IISER Kolkata by default), and needs
+the allowed email domains only (config.allowed_email_domains: any .ac.in address by default), and needs
 the emailed code while config.email_verification_required() is on.
 """
 
