@@ -58,7 +58,7 @@ def _atomic_write_json(path: Path, payload: dict) -> None:
 
 
 def register_account(email: str, password: str, first_name: str, last_name: str,
-                     profile: dict | None = None) -> str:
+                     profile: dict | None = None, *, email_verified: bool = False) -> str:
     """Create the credential and the account's profile. Raises EmailTaken on a duplicate.
 
     `profile` carries any further sign-up fields (gender, height, date of birth, …), stored in the
@@ -76,6 +76,8 @@ def register_account(email: str, password: str, first_name: str, last_name: str,
         "email": normalize_email(email),
         "created_at": created_at,
     }
+    if email_verified:
+        profile_doc["email_verified_at"] = created_at
     if connection.enabled():
         try:
             db_accounts.create_account(user_id, normalize_email(email), hash_password(password), profile_doc)
@@ -150,3 +152,16 @@ def consume_refresh_token(token: str, now: float | None = None) -> str | None:
     if record.get("expires_at", 0) <= (now if now is not None else time.time()):
         return None
     return record.get("user_id")
+
+
+def email_verified(user_id: str) -> bool:
+    """Whether the account proved its email address at sign-up (auth/email_codes.py)."""
+    if connection.enabled():
+        profile = db_accounts.read_profile(user_id)
+    else:
+        try:
+            with open(user_dir(user_id) / PROFILE_FILENAME) as f:
+                profile = json.load(f)
+        except (FileNotFoundError, ValueError):
+            profile = None
+    return bool(profile and profile.get("email_verified_at"))

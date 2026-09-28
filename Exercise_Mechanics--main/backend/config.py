@@ -62,3 +62,25 @@ REQUIRE_AUTH_ENV = "EXERCISE_REQUIRE_AUTH"
 
 def auth_required() -> bool:
     return os.environ.get(REQUIRE_AUTH_ENV, "").strip().lower() not in ("0", "false", "no", "off")
+
+
+# Sign-up is open only to these email domains (SQUIRREL_ALLOWED_EMAIL_DOMAINS, comma-separated; a
+# subdomain of one counts too). "*" allows any address. IISER Kolkata only by default.
+ALLOWED_EMAIL_DOMAINS_ENV = "SQUIRREL_ALLOWED_EMAIL_DOMAINS"
+DEFAULT_ALLOWED_EMAIL_DOMAINS = "iiserkol.ac.in"
+
+
+def allowed_email_domains() -> tuple[str, ...] | None:
+    """The allowed domains, or None when any address may sign up."""
+    raw = os.environ.get(ALLOWED_EMAIL_DOMAINS_ENV, DEFAULT_ALLOWED_EMAIL_DOMAINS)
+    domains = tuple(d.strip().lower().lstrip("@") for d in raw.split(",") if d.strip())
+    return None if not domains or "*" in domains else domains
+
+
+# A new account needs the 6-digit code emailed to its address (auth/email_codes.py). On unless
+# SQUIRREL_EMAIL_VERIFICATION is 0/false/no/off (local development and older tests).
+EMAIL_VERIFICATION_ENV = "SQUIRREL_EMAIL_VERIFICATION"
+
+
+def email_verification_required() -> bool:
+    return os.environ.get(EMAIL_VERIFICATION_ENV, "").strip().lower() not in ("0", "false", "no", "off")

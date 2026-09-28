@@ -346,7 +346,8 @@ def profile_with_latest_body(user_id: str) -> dict | None:
 CORE_PROFILE_FIELDS = ("gender", "height_cm", "weight_kg", "date_of_birth", "mobile")
 
 
-def onboard(core: dict, *, password: str | None = None, now: datetime | None = None) -> dict:
+def onboard(core: dict, *, password: str | None = None, now: datetime | None = None,
+            email_verified: bool = False) -> dict:
     """Sign-up page 1: create the user, with their height and weight as the first measurement.
 
     With a password this creates a sign-in account (auth.store; the id is a UUID). Without one,
@@ -358,7 +359,8 @@ def onboard(core: dict, *, password: str | None = None, now: datetime | None = N
         identity = create_user_record(core)
     else:
         extra = {k: v for k, v in core.items() if k not in ("first_name", "last_name", "email")}
-        user_id = auth_store.register_account(core["email"], password, core["first_name"], core["last_name"], extra)
+        user_id = auth_store.register_account(core["email"], password, core["first_name"], core["last_name"], extra,
+                                              email_verified=email_verified)
         identity = {"user_id": user_id, "first_name": core["first_name"], "last_name": core["last_name"]}
     user_id = identity["user_id"]
     try:

@@ -19,7 +19,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend import config
-from backend.auth.router import count_sign_up, token_pair
+from backend.auth.router import check_sign_up_email, count_sign_up, token_pair
 from backend.auth.store import EmailTaken
 from backend.core.ids import safe_user_id
 from backend.profiles import service as profiles
@@ -44,6 +44,9 @@ class UserProfile(BaseModel):
     # Required while sign-in is enforced; only the browser coach, with auth switched off for local
     # development, still creates password-less users.
     password:      str | None = Field(default=None, min_length=8, max_length=200)
+    # The emailed sign-up code (POST /api/auth/email-code), needed with a password while
+    # verification is on: the same gate as /api/auth/register.
+    code:          str | None = Field(default=None, min_length=6, max_length=6, pattern=r"^\d{6}$")
 
     @field_validator("date_of_birth")
     @classmethod
@@ -55,13 +58,16 @@ class UserProfile(BaseModel):
 def create_user(profile: UserProfile, request: Request) -> dict:
     if profile.password is None and config.auth_required():
         raise HTTPException(status_code=422, detail="password is required to create an account")
+    verified = False
     if profile.password is not None:
-        count_sign_up(request)  # the same sign-up limit as /api/auth/register
+        count_sign_up(request)  # the same sign-up limit and email gate as /api/auth/register
+        verified = check_sign_up_email(profile.email, profile.code)
     try:
-        identity = profiles.onboard(profile.model_dump(exclude={"password"}), password=profile.password)
+        identity = profiles.onboard(profile.model_dump(exclude={"password", "code"}), password=profile.password,
+                                    email_verified=verified)
     except EmailTaken:
         raise HTTPException(status_code=409, detail="an account with this email already exists") from None
-    return {**identity, **token_pair(identity["user_id"])} if profile.password else identity
+    return {**identity, **token_pair(identity["user_id"], verified=verified)} if profile.password else identity
 
 
 class CoachProfile(BaseModel):

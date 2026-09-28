@@ -20,7 +20,7 @@ from backend import config
 from backend.auth import throttle
 
 ACCOUNTS_DB_URL = os.environ.get("TEST_ACCOUNTS_DATABASE_URL", "")
-_ACCOUNT_TABLES = "user_refresh_tokens, user_accounts, user_profile_data, user_profiles, auth_throttle"
+_ACCOUNT_TABLES = "user_refresh_tokens, user_accounts, user_profile_data, user_profiles, auth_throttle, email_verification_codes"
 
 
 @pytest.fixture(scope="session")
@@ -43,6 +43,12 @@ def _isolated_auth_storage(tmp_path_factory, monkeypatch, _accounts_database):
     monkeypatch.setattr(config, "INVITES_DIR", root / "invites")
     monkeypatch.setenv(config.AUTH_SECRET_ENV, "test-signing-secret")
     monkeypatch.delenv(config.REQUIRE_AUTH_ENV, raising=False)
+    # Sign-up's email gate is tested in test_email_verification.py; elsewhere any address signs up
+    # without a code.
+    monkeypatch.setenv(config.EMAIL_VERIFICATION_ENV, "off")
+    monkeypatch.setenv(config.ALLOWED_EMAIL_DOMAINS_ENV, "*")
+    for name in ("SMTP_USER", "SMTP_PASSWORD", "RESEND_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.delenv("DATABASE_URL", raising=False)
     throttle.reset_memory()
     if _accounts_database:

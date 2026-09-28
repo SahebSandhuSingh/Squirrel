@@ -1,7 +1,7 @@
 """Password hashing and token primitives (stdlib only).
 
-Access tokens are standard JWTs (HS256) carrying only the user id (`sub`) and expiry, short-lived
-and stateless. They are signed with the same secret the Run Module verifies with (`JWT_SECRET`), so
+Access tokens are standard JWTs (HS256) carrying the user id (`sub`), expiry and, for an account
+that verified its email at sign-up, `ev`; short-lived and stateless. They are signed with the same secret the Run Module verifies with (`JWT_SECRET`), so
 one sign-in works against both backends. Refresh tokens are opaque random strings; only their
 SHA-256 is stored server-side (see store.py) and each refresh rotates them.
 """
@@ -87,16 +87,24 @@ def _secret() -> bytes:
 _JWT_HEADER = _b64e(json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode())
 
 
+def signing_secret() -> bytes:
+    """The key tokens are signed with (also the HMAC key of stored email codes)."""
+    return _secret()
+
+
 def _sign(signing_input: str) -> str:
     return _b64e(hmac.new(_secret(), signing_input.encode(), hashlib.sha256).digest())
 
 
-def issue_access_token(user_id: str, now: float | None = None) -> tuple[str, int]:
-    """Return (token, expires_at_epoch_seconds)."""
+def issue_access_token(user_id: str, now: float | None = None, *, email_verified: bool = False) -> tuple[str, int]:
+    """Return (token, expires_at_epoch_seconds). An account that proved its email address at sign-up
+    (auth/email_codes.py) carries `"ev": true`, for the Social service's founding-member badges."""
     iat = int(now if now is not None else time.time())
     exp = iat + config.ACCESS_TOKEN_TTL_SECONDS
-    payload = _b64e(json.dumps({"sub": user_id, "iat": iat, "exp": exp, "typ": "access"},
-                               separators=(",", ":")).encode())
+    claims = {"sub": user_id, "iat": iat, "exp": exp, "typ": "access"}
+    if email_verified:
+        claims["ev"] = True
+    payload = _b64e(json.dumps(claims, separators=(",", ":")).encode())
     signing_input = f"{_JWT_HEADER}.{payload}"
     return f"{signing_input}.{_sign(signing_input)}", exp
 

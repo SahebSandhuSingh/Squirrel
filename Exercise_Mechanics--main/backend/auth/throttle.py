@@ -4,6 +4,8 @@
     failed logins from one address  50 per 15 minutes
     sign-ups from one address       20 per hour
     refreshes from one address      1000 per 15 minutes
+    sign-up codes to one email      5 per hour
+    sign-up codes from one address  30 per hour
 
 The per-account limit is the real protection against password guessing. The per-address limits are
 loose on purpose: mobile carriers put many phones behind one public address (CGNAT), so a tight one
@@ -41,6 +43,8 @@ LOGIN_EMAIL = Limit("login-email", 5, 15 * 60)
 LOGIN_IP = Limit("login-ip", 50, 15 * 60)
 SIGNUP_IP = Limit("signup-ip", 20, 60 * 60)
 REFRESH_IP = Limit("refresh-ip", 1000, 15 * 60)
+EMAIL_CODE_EMAIL = Limit("email-code-email", 5, 60 * 60)
+EMAIL_CODE_IP = Limit("email-code-ip", 30, 60 * 60)
 
 _memory: dict[str, tuple[float, int]] = {}
 _memory_lock = threading.Lock()
