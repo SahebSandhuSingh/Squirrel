@@ -16,10 +16,11 @@ Other commands:
 
 ```bash
 npm run typecheck       # tsc --noEmit
+npm run lint            # expo lint (eslint-config-expo)
 npx expo start --web    # browser preview at phone size
 ```
 
-Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-haptics`, `expo-font`, Google Fonts), so no custom dev build is needed. It uses no paid APIs, and all data is local demo data.
+Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-haptics`, `expo-font`, Google Fonts), so no custom dev build is needed. It uses no paid APIs. Profile and Social come from the Social service (`../social-backend`); runs and XP come from the Run Module; the rest is still local demo data (see the table below).
 
 ## Screens
 
@@ -38,8 +39,11 @@ Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-h
 | `/home` *(tab)* | Top bar (avatar, level, XP, coins), greeting, activity rings, Start Run, missions, campus leaderboard, events carousel (coming soon), crew activity |
 | `/explore` *(tab)* | Stylised neon city map: pulsing markers, animated route, filters, search (places + people), place carousel |
 | **＋** *(tab)* | Create menu: start run, post, log workout; log water, log a meal and find an event are locked (coming soon) |
-| `/social` *(tab)* | Stories, For You / Following / Nearby feed, suggested people, crews teaser |
-| `/profile` *(tab)* | Cover, level card, highlights, badges, equipped cosmetics, posts/activity/saved grid |
+| `/social` *(tab)* | For You / Following / Nearby feeds from the Social service (cursor-paged, pull to refresh), suggested people, crews teaser |
+| `/profile` *(tab)* | Server profile: counts, level (Run Module XP), streak, badges, posts/activity/saved grid; highlights and equipped cosmetics stay local |
+| `/profile-edit` | Username (live availability check), name, bio, city/area, college, interests, visibility |
+| `/people` | Search people by @username or name, suggestions |
+| `/follows` | Followers / following of anyone, or your follow requests (`kind=requests`) |
 | `/run` | Live run: 3-2-1 countdown, route animation, live stats, music/camera, hold-to-finish, summary |
 | `/missions` | Daily / Weekly / Special missions with completion and claim states |
 | `/progress` | **Your Progress**, in four sections:<br>• **Today:** goal ring, today's XP, activities done, XP left, run XP, streak and a level bar.<br>• **Progress:** Day/Week/Month/Year with Steps/Active/Calories/Workouts, a tap-to-read bar chart and the streak calendar with active days.<br>• **Your performance:** change vs the previous period, campus rank and milestones in reach.<br>• **Next:** the best next action (claim, run, or log a mission). |
@@ -48,10 +52,10 @@ Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-h
 | `/level-up` | RPG level-up reveal: rays, mascot, XP bar, staggered reward cards, next unlock |
 | `/rewards` | Level road, achievement badges, sticker collection |
 | `/shop`, `/item/[id]` | Shop (20+ items, rarities, level locks) and item sheet (buy / equip) |
-| `/compose` | Post composer: backdrop, sticker and activity (pre-filled after a run) |
-| `/post/[id]` | Post with comments |
+| `/compose` | Post composer: backdrop, sticker, optional self-reported activity; after a run it shares the Run Module `run_id` (the server fetches the numbers) |
+| `/post/[id]` | Post with paged comments (add, delete your own) |
 | `/highlight/[id]` | Full-screen story viewer for profile highlights |
-| `/user/[id]` | Any user's profile, with Follow |
+| `/user/[id]` | Any user's profile, with Follow / Requested / Following |
 | `/city` | City picker |
 | `/notifications` | Activity notifications |
 
@@ -98,9 +102,10 @@ This follows the *Frontend ↔ Backend Compatibility Assessment*.
 | **Anti-cheat** | Run summary shows *accepted / flagged / rejected* (server verdict when live, local plausibility check otherwise) |
 | **Territory** | New `/territory` screen (zones, control %, rivals, contested, 14-day decay) and area-based leaderboard (`/leaderboard`). Demo data until the territory endpoints are wired |
 | **Challenges** | New `/challenges` screen (daily, head-to-head, group), auto-resolving with no claim. Missions stay as a separate frontend feature (company decision, §4.3) |
-| **Still frontend-only** | Coins, cosmetics, social feed, crews/events, badges. They need backend models (§5) |
+| **Profile + Social** | `src/api/social.ts` (typed endpoints on the same `api()` client), `src/hooks/useSocial.ts` (profile, feeds, lists, comments), `src/state/socialStore.ts` (optimistic like/save/follow with rollback, shared across screens). Needs a live session: demo mode shows a sign-in prompt instead of made-up people. Backend: `../social-backend` |
+| **Still frontend-only** | Coins, cosmetics, crews/events, missions, challenges, highlights, the notifications list (except follow requests), leaderboard names. They need backend models (§5) |
 
-To point the app at a backend, copy `.env.example` to `.env`, then set `EXPO_PUBLIC_API_URL` (and `EXPO_PUBLIC_AUTH_URL` when the account service exists).
+To point the app at a backend, copy `.env.example` to `.env`, then set `EXPO_PUBLIC_API_URL` (and `EXPO_PUBLIC_AUTH_URL` when the account service exists). `EXPO_PUBLIC_SOCIAL_API_URL` points at the Social service and defaults to `EXPO_PUBLIC_API_URL`. Until the account service exists, mint a local token with `social-backend/scripts/dev_token.py` and paste it on the sign-in screen.
 
 ## Architecture
 
@@ -119,8 +124,11 @@ src/
     CityMap.tsx        Stylised city map + animated run route
     palette.ts         Shared art palette so everything belongs to one visual universe
   components/          ui.tsx (primitives + motion), cards.tsx, Avatar, TopBar, TabBar, ProfileView, Sheet, Toast
-  data/                Typed demo data: cities, users, community (crews/events/places), missions, posts, shop, rewards, stats
-  state/AppState.tsx   App state: identity, city, XP/level, coins, missions, shop, follows, likes, posts, toasts
+  api/social.ts        Profile + Social API (types + endpoints); socialRules.ts mirrors the server's input rules
+  hooks/useSocial.ts   useMyProfile, usePublicProfile, useFeed, usePost, useComments, useFollowList, useFollow …
+  data/                Typed demo data: cities, users, community (crews/events/places), missions, shop, rewards, stats; posts.ts = post display helpers
+  state/AppState.tsx   App state: identity, city, XP/level, coins, missions, shop, toasts
+  state/socialStore.ts Optimistic social actions + patches shared across screens
   types.ts             Shared domain types (AvatarLook, SceneKind, ProductKind…)
   theme.ts             Colour, gradient, font and radius tokens
 assets/                App icon, splash, and PNG exports of the illustration set (see assets/README.md)
@@ -128,7 +136,7 @@ assets/                App icon, splash, and PNG exports of the illustration set
 
 **The city is data, not code.** `data/cities.ts` defines Pune, Mumbai, Bangalore, Delhi, Hyderabad, London and New York. Crews, events and map places are generated from each city's venues (`crewsForCity`, `eventsForCity`, `placesForCity`), and the Nearby feed filters by the active city. To add a city, add one entry. Pune is only the default demo city.
 
-**Users aren't hard-coded.** `CURRENT_USER_ID` picks the signed-in user, every profile is rendered by `ProfileView` from a `User`, and `/user/[id]` shows anyone else's profile.
+**Users aren't hard-coded.** Signed in, your profile is `GET /v1/users/me/profile` and `/user/[id]` loads anyone's from the Social service; `ProfileView` renders both. The demo `users` list only feeds the demo-only modules (crews, events, leaderboard, challenges).
 
 **Backend-ready.** Screens read everything through `useApp()`. Replacing the demo data with API calls means swapping the seed arrays and generator functions in `data/`, and backing the `AppState` actions with requests. The component tree doesn't need to change.
 
@@ -138,4 +146,4 @@ assets/                App icon, splash, and PNG exports of the illustration set
 
 - Without GPS (web, or permission denied) run distance is simulated from pace.
 - The Explore map is illustrative. A real tile map (`react-native-maps`) would need a development build.
-- State is in memory and resets on reload.
+- Local (non-social) state is in memory and resets on reload; social data lives on the server.

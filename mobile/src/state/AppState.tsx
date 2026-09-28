@@ -3,9 +3,8 @@ import React, { createContext, useCallback, useContext, useMemo, useRef, useStat
 import { DEFAULT_CITY_ID, cityById, type City } from '@/data/cities';
 import { crewsForCity, eventsForCity, placesForCity, type Crew, type EventItem, type Place } from '@/data/community';
 import { seedMissions, type Mission } from '@/data/missions';
-import { seedPosts, type Post } from '@/data/posts';
 import { STARTER_OWNED, shopItemById } from '@/data/shop';
-import { CURRENT_USER_ID, userById, users, type User } from '@/data/users';
+import { CURRENT_USER_ID, userById, type User } from '@/data/users';
 import type { AvatarLook } from '@/types';
 import { districtsForCity, type District } from '@/data/territory';
 import { exerciseXp, runXp, type XpLine } from '@/logic/xp';
@@ -56,14 +55,7 @@ type AppState = {
   toggleCrew: (id: string) => void;
   joinedEvents: Set<string>;
   toggleEvent: (id: string) => void;
-  following: Set<string>;
-  toggleFollow: (id: string) => void;
-  liked: Set<string>;
-  toggleLike: (id: string) => void;
-  saved: Set<string>;
-  toggleSave: (id: string) => void;
-  posts: Post[];
-  addPost: (p: Omit<Post, 'id' | 'authorId' | 'cityId' | 'area' | 'minutesAgo' | 'likes' | 'comments'>) => void;
+  // Follows, likes, saves and posts live in the Social service (src/api/social.ts).
   // runs & territory
   finishRun: (run: FinishRunInput) => FinishRunResult;
   runXpToday: number;
@@ -113,10 +105,6 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [equipped, setEquipped] = useState<Set<string>>(new Set(['a-shades']));
   const [joinedCrews, setJoinedCrews] = useState<Set<string>>(new Set(['pune-crew-1']));
   const [joinedEvents, setJoinedEvents] = useState<Set<string>>(new Set());
-  const [following, setFollowing] = useState<Set<string>>(new Set(['u_rhea', 'u_meera', 'u_zoya', 'u_isha']));
-  const [liked, setLiked] = useState<Set<string>>(new Set(['p3']));
-  const [saved, setSaved] = useState<Set<string>>(new Set());
-  const [posts, setPosts] = useState<Post[]>(seedPosts);
   const [toasts, setToasts] = useState<ToastMsg[]>([]);
   const toastId = useRef(0);
 
@@ -317,31 +305,6 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       }
       setJoinedEvents((s) => toggled(s, id));
     }, [events, joinedEvents, toast]),
-    following,
-    toggleFollow: useCallback((id: string) => {
-      setFollowing((s) => {
-        if (!s.has(id)) toast(`Following @${users.find((u) => u.id === id)?.handle ?? ''}`, 'account-check', '#D7FF1F');
-        return toggled(s, id);
-      });
-    }, [toast]),
-    liked,
-    toggleLike: useCallback((id: string) => setLiked((s) => toggled(s, id)), []),
-    saved,
-    toggleSave: useCallback((id: string) => {
-      setSaved((s) => {
-        if (!s.has(id)) toast('Saved to your collection', 'bookmark', '#FFD21F');
-        return toggled(s, id);
-      });
-    }, [toast]),
-    posts,
-    addPost: useCallback((p) => {
-      setPosts((all) => [
-        { ...p, id: `me-${Date.now()}`, authorId: me.id, cityId, area: city.areas[0], minutesAgo: 0, likes: 0, comments: 0 },
-        ...all,
-      ]);
-      toast('Posted to your feed · +20 XP', 'send', '#D7FF1F');
-      setXp((x) => x + 20);
-    }, [cityId, city, me.id, toast]),
     finishRun,
     runXpToday,
     districts,

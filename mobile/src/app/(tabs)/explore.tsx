@@ -7,7 +7,10 @@ import { Avatar } from '@/components/Avatar';
 import { CityChip } from '@/components/TopBar';
 import { Chips, Display, Icon, IconButton, NATIVE, PressScale, Pulse, SearchBar, TAB_BAR_SPACE, Tagline, tap } from '@/components/ui';
 import type { Place, PlaceKind } from '@/data/community';
-import { users } from '@/data/users';
+import { profileApi, type Follower, type Page } from '@/api/social';
+import { useRemote } from '@/api/useRemote';
+import { toAvatarUser } from '@/components/socialParts';
+import { useSocialEnabled } from '@/hooks/useSocial';
 import { useApp } from '@/state/AppState';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, radius } from '@/theme';
@@ -52,7 +55,10 @@ export default function Explore() {
     () => places.filter((p) => (filter === 'All' || p.kind === filter) && (!term || p.name.toLowerCase().includes(term) || p.kind.toLowerCase().includes(term))),
     [places, filter, term],
   );
-  const people = useMemo(() => (term.length > 1 ? users.filter((u) => u.name.toLowerCase().includes(term) || u.handle.includes(term)).slice(0, 4) : []), [term]);
+  // People come from the Social service (signed in only); places stay city data.
+  const socialOn = useSocialEnabled();
+  const peopleRes = useRemote<Page<Follower>>(socialOn && term.length > 1 ? `social:search:${term}` : null, () => profileApi.search(term));
+  const people = term.length > 1 ? (peopleRes.data?.items ?? []).slice(0, 4) : [];
 
   const select = (p: Place) => {
     tap();
@@ -102,11 +108,11 @@ export default function Explore() {
         {people.length > 0 && (
           <View style={styles.people}>
             {people.map((u) => (
-              <Pressable key={u.id} style={styles.personRow} onPress={() => router.push({ pathname: '/user/[id]', params: { id: u.id } })}>
-                <Avatar user={u} size={34} link={false} />
+              <Pressable key={u.id} style={styles.personRow} onPress={() => router.push(u.is_me ? '/profile' : { pathname: '/user/[id]', params: { id: u.id } })}>
+                <Avatar user={toAvatarUser(u, u.is_me)} size={34} link={false} />
                 <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={styles.pName}>{u.name}</Text>
-                  <Text style={styles.pMeta}>@{u.handle} · {u.area}</Text>
+                  <Text style={styles.pName}>{u.display_name}</Text>
+                  <Text style={styles.pMeta}>@{u.username}{u.area ? ` · ${u.area}` : ''}</Text>
                 </View>
                 <Icon name="chevron-right" size={20} color={colors.dim} />
               </Pressable>

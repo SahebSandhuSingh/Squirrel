@@ -2,8 +2,10 @@ import { EXERCISE_LIBRARY } from '@/data/exercises';
 import { useExerciseCatalog } from '@/hooks/useExercise';
 import { LOCKED_MISSIONS } from '@/data/features';
 import { useLocks } from '@/components/Locked';
-import { activityLine, selectFeed, timeAgo } from '@/data/posts';
-import { useEffect, useMemo } from 'react';
+import { activityLine, timeAgo } from '@/data/posts';
+import { BlockSkeleton, SocialError, toAvatarUser } from '@/components/socialParts';
+import { useFeed, useSocialEnabled } from '@/hooks/useSocial';
+import { useEffect } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Mascot } from '@/art/Mascot';
@@ -12,7 +14,7 @@ import { EventCard, MissionCard, SceneImage } from '@/components/cards';
 import { CityChip, TopBar } from '@/components/TopBar';
 import { Button, Card, Display, FadeIn, Icon, OverlayKicker, OverlaySub, PressScale, Ring, RowSub, RowTitle, Screen, SectionHeader, Tagline } from '@/components/ui';
 import { today } from '@/data/stats';
-import { userById, users } from '@/data/users';
+import { users } from '@/data/users';
 import { territoryBoard } from '@/data/territory';
 import { useAuth } from '@/auth/AuthProvider';
 import { Tape } from '@/components/Brand';
@@ -28,11 +30,13 @@ const greeting = () => {
 export default function Home() {
   const { me, missions, logMission, claimed, claimable, claimRewards, events, joinedEvents, toggleEvent, city, districts } = useApp();
   const { mode } = useAuth();
-  const { syncServerXp, exerciseToday, posts, following } = useApp();
+  const { syncServerXp, exerciseToday } = useApp();
   const locks = useLocks();
   const eventsLocked = locks.locked('events');
-  // Crew Activity: the Social "Following" feed (same shared posts + selector), latest 4.
-  const crewActivity = useMemo(() => selectFeed(posts, 'Following', { following, meId: me.id, cityId: city.id }).slice(0, 4), [posts, following, me.id, city.id]);
+  // Crew Activity: the first page of the server's "Following" feed (people you follow + you).
+  const socialOn = useSocialEnabled();
+  const crewFeed = useFeed('following', null, { limit: 4 });
+  const crewActivity = crewFeed.items.slice(0, 4);
   // Today's rings add what you logged with the form coach.
   const activeMin = today.active.value + exerciseToday.minutes;
   const kcalToday = today.kcal.value + exerciseToday.kcal;
@@ -204,26 +208,34 @@ export default function Home() {
 
       {/* Friends activity */}
       <SectionHeader kicker="05 — Right now" title="Crew Activity" action="Feed" onAction={() => router.push('/social')} />
-      {crewActivity.length === 0 ? (
+      {!socialOn ? (
+        <Card>
+          <Text style={styles.hint}>Sign in to see what the people you follow are up to.</Text>
+        </Card>
+      ) : crewFeed.error && crewActivity.length === 0 ? (
+        <SocialError compact error={crewFeed.error} onRetry={crewFeed.retry} />
+      ) : crewFeed.loading && crewActivity.length === 0 ? (
+        <BlockSkeleton height={120} />
+      ) : crewActivity.length === 0 ? (
         <Card>
           <Text style={styles.hint}>Nothing yet. Follow people on Social and their runs and workouts show up here.</Text>
         </Card>
       ) : (
         <View style={{ gap: 10 }}>
           {crewActivity.map((p, i) => {
-            const u = p.authorId === me.id ? me : userById(p.authorId);
+            const u = toAvatarUser(p.author, p.is_mine);
             const line = activityLine(p);
             return (
               <FadeIn key={p.id} index={i}>
                 <PressScale onPress={() => router.push({ pathname: '/post/[id]', params: { id: p.id } })} style={styles.activity} scaleTo={0.985} accessibilityLabel={`${u.name} ${line.text}`}>
                   <Avatar user={u} size={38} />
                   <Text style={styles.activityText} numberOfLines={2}>
-                    <Text style={{ fontFamily: fonts.bold, color: colors.text }}>{p.authorId === me.id ? 'You' : u.name.split(' ')[0]} </Text>
+                    <Text style={{ fontFamily: fonts.bold, color: colors.text }}>{p.is_mine ? 'You' : u.name.split(' ')[0]} </Text>
                     {line.text}
                   </Text>
                   <View style={{ alignItems: 'flex-end' }}>
                     <Icon name={line.icon} size={18} color={colors.primary} />
-                    <Text style={styles.leaderSub}>{timeAgo(p.minutesAgo)}</Text>
+                    <Text style={styles.leaderSub}>{timeAgo(p.created_at)}</Text>
                   </View>
                 </PressScale>
               </FadeIn>

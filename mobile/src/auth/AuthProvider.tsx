@@ -4,7 +4,11 @@ import * as SecureStore from 'expo-secure-store';
 import { setApiToken } from '@/api/client';
 import type { ExerciseUser } from '@/api/exercise';
 import { jwtSubject } from '@/auth/jwt';
-import { API_CONFIGURED, AUTH_CONFIGURED, AUTH_URL } from '@/api/config';
+import { API_CONFIGURED, AUTH_CONFIGURED, AUTH_URL, SOCIAL_API_CONFIGURED } from '@/api/config';
+import { resetSocialState } from '@/state/socialStore';
+
+// A token is useful once any bearer-token service is configured (Run Module and/or Social).
+const BACKEND_CONFIGURED = API_CONFIGURED || SOCIAL_API_CONFIGURED;
 
 /**
  * Authentication. Every Run Module endpoint needs `Authorization: Bearer <token>` (RS256).
@@ -63,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch {
           // corrupt cache: treat as no exercise profile
         }
-        if (t && API_CONFIGURED) {
+        if (t && BACKEND_CONFIGURED) {
           setApiToken(t);
           setUserId(jwtSubject(t));
           setEmail(e);
@@ -76,6 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signInWithToken = useCallback(async (t: string) => {
+    resetSocialState(); // never show one account's cached social data to another
     await store.set(KEY, t);
     setApiToken(t);
     setUserId(jwtSubject(t));
@@ -100,6 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await Promise.all([store.del(KEY), store.del(EMAIL_KEY), store.del(EXERCISE_KEY)]);
     setExerciseUserState(null);
     setApiToken(null);
+    resetSocialState();
     setUserId(null);
     setEmail(null);
     setMode('signed-out');
@@ -112,7 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <Ctx.Provider value={{ mode, email, userId, apiConfigured: API_CONFIGURED, authConfigured: AUTH_CONFIGURED, signIn, signInWithToken, continueDemo: () => setMode('demo'), signOut, exerciseUser, setExerciseUser }}>
+    <Ctx.Provider value={{ mode, email, userId, apiConfigured: BACKEND_CONFIGURED, authConfigured: AUTH_CONFIGURED, signIn, signInWithToken, continueDemo: () => setMode('demo'), signOut, exerciseUser, setExerciseUser }}>
       {children}
     </Ctx.Provider>
   );

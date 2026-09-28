@@ -1,3 +1,6 @@
+import { profileApi, socialErrorText } from '@/api/social';
+import { invalidateRemote } from '@/api/useRemote';
+import { useSocialEnabled } from '@/hooks/useSocial';
 import { useState, useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -41,6 +44,7 @@ export default function AvatarScreen() {
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const { look, setLook, pet, setPet, gear, setGear, owned, level, equipped, toggleEquip, toast } = useApp();
+  const socialOn = useSocialEnabled();
   const { from } = useLocalSearchParams<{ from?: string }>();
   const editing = from === 'profile';
   const [cat, setCat] = useState<AvatarCategory>('Outfit');
@@ -256,7 +260,16 @@ export default function AvatarScreen() {
             icon={editing ? 'check' : 'arrow-right'}
             onPress={() => {
               if (editing) {
-                toast('Look saved', 'check-circle', colors.green);
+                if (socialOn) {
+                  // Signed in: your look is part of your public profile (PATCH avatar_look).
+                  profileApi
+                    .update({ avatar_look: look })
+                    .then(() => {
+                      invalidateRemote('social:');
+                      toast('Look saved', 'check-circle', colors.green);
+                    })
+                    .catch((e) => toast(socialErrorText(e), 'alert-circle-outline', colors.coral));
+                } else toast('Look saved', 'check-circle', colors.green);
                 router.back();
               } else router.replace('/home');
             }}

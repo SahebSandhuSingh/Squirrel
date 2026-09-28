@@ -1,33 +1,40 @@
-import { selectFeed, type Feed, type Post } from '@/data/posts';
+import { FEED_KIND, FEEDS, type Feed, type Post } from '@/data/posts';
 import { FeatureGate, useLocks } from '@/components/Locked';
-import React, { useCallback, useMemo, useState } from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Mascot } from '@/art/Mascot';
 import { Avatar } from '@/components/Avatar';
 import { SceneImage, SocialPost, UserChip } from '@/components/cards';
-import { Display, EmptyState, FadeIn, Icon, IconButton, OverlayKicker, OverlaySub, PressScale, RowSub, RowTitle, Screen, SectionHeader, Segmented, TAB_BAR_SPACE, tap } from '@/components/ui';
-import { users } from '@/data/users';
+import { EmptyFeed, FeedSkeleton, SignInToSocial, SocialError, toAvatarUser } from '@/components/socialParts';
+import { Display, FadeIn, Icon, IconButton, OverlayKicker, OverlaySub, PressScale, RowSub, RowTitle, Screen, SectionHeader, Segmented, TAB_BAR_SPACE, tap } from '@/components/ui';
+import { profileApi, type Follower } from '@/api/social';
+import { useRemote } from '@/api/useRemote';
+import { useFeed, useMyProfile, useSocialEnabled } from '@/hooks/useSocial';
 import { useApp } from '@/state/AppState';
 import { colors, fonts, radius } from '@/theme';
 
-const FEEDS: readonly Feed[] = ['For You', 'Following', 'Nearby'];
+const EMPTY_BODY: Record<Feed, (city: string) => string> = {
+  'For You': () => 'Your feed is waiting for chaos. Post a run, a workout or a vibe.',
+  Following: () => 'Follow people to fill this feed. Your own posts show here too.',
+  Nearby: (city) => `Nothing from ${city} yet. Be the first to post a run.`,
+};
 
-/** SOCIAL — feed, stories, people and crews. */
+/** SOCIAL — feed, stories, people and crews. Every post, like and follow comes from the Social service. */
 export default function Social() {
+  const enabled = useSocialEnabled();
   const [feed, setFeed] = useState<Feed>('For You');
-  const { posts, following, toggleFollow, me, city, crews, joinedCrews } = useApp();
+  const { city, crews, joinedCrews } = useApp();
   const locks = useLocks();
   const huntLocked = locks.locked('partnerHunt');
-
-  const list = useMemo(() => selectFeed(posts, feed, { following, meId: me.id, cityId: city.id }), [posts, feed, following, me.id, city.id]);
-
-  const storyUsers = users.filter((u) => u.id !== me.id).slice(0, 8);
-  const suggested = users.filter((u) => u.id !== me.id && !following.has(u.id)).slice(0, 5);
-  const myCrews = crews.filter((c) => joinedCrews.has(c.id));
-
   const insets = useSafeAreaInsets();
+
+  const posts = useFeed(FEED_KIND[feed], city.id);
+  const me = useMyProfile();
+  const suggested = useRemote<{ items: Follower[] }>(enabled ? 'social:suggestions' : null, () => profileApi.suggestions(10));
+  const people = suggested.data?.items ?? [];
+  const toFollow = people.filter((u) => !u.following && !u.requested).slice(0, 5);
+  const myCrews = crews.filter((c) => joinedCrews.has(c.id));
 
   // Crew teaser sits after the 3rd post, as before.
   const renderPost = useCallback(
@@ -57,40 +64,41 @@ export default function Social() {
     [myCrews.length, crews.length, city.name],
   );
 
+  const myAvatar = me.data ? toAvatarUser(me.data.user, true) : undefined;
+
   const header = (
     <>
       <View style={styles.head}>
         <Display size={34}>Social</Display>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <IconButton icon="account-search-outline" onPress={() => router.push('/crews')} label="Find crews" />
-          <IconButton icon="bell-outline" badge={3} onPress={() => router.push('/notifications')} label="Notifications" />
+          <IconButton icon="bell-outline" onPress={() => router.push('/notifications')} label="Notifications" />
         </View>
       </View>
 
-      {/* Stories */}
+      {/* Stories: you + people to discover (story viewer is locked until launch) */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -16, marginTop: 10 }} contentContainerStyle={{ gap: 12, paddingHorizontal: 16 }}>
-        <Pressable onPress={() => { tap(); router.push('/compose'); }} style={{ alignItems: 'center', width: 66 }} accessibilityLabel="Add story">
+        <Pressable onPress={() => { tap(); router.push('/compose'); }} style={{ alignItems: 'center', width: 66 }} accessibilityLabel="New post">
           <View>
-            <Avatar user={me} size={62} ring={colors.lineHi} link={false} />
+            {myAvatar ? <Avatar user={myAvatar} size={62} ring={colors.lineHi} link={false} /> : <View style={styles.storyBlank} />}
             <View style={styles.addStory}>
               <Icon name="plus" size={14} color={colors.onPrimary} />
             </View>
           </View>
           <Text style={styles.storyName}>Your story</Text>
         </Pressable>
-        {storyUsers.map((u, i) => (
+        {people.slice(0, 8).map((u, i) => (
           <Pressable
             key={u.id}
             onPress={() => {
               tap();
-              // No story viewer yet: say so, then open the profile (what the avatar always did).
               if (locks.locked('stories')) locks.notify('stories');
               router.push({ pathname: '/user/[id]', params: { id: u.id } });
             }}
             style={{ alignItems: 'center', width: 66 }}
-            accessibilityLabel={`${u.name}'s story, coming soon. Opens profile`}>
-            <Avatar user={u} size={62} ring={i < 5 ? colors.primary : colors.lineHi} link={false} />
-            <Text style={styles.storyName} numberOfLines={1}>{u.name.split(' ')[0]}</Text>
+            accessibilityLabel={`${u.display_name}'s story, coming soon. Opens profile`}>
+            <Avatar user={toAvatarUser(u)} size={62} ring={i < 5 ? colors.primary : colors.lineHi} link={false} />
+            <Text style={styles.storyName} numberOfLines={1}>{u.display_name.split(' ')[0]}</Text>
           </Pressable>
         ))}
       </ScrollView>
@@ -122,38 +130,59 @@ export default function Social() {
         </Text>
       )}
 
-      {/* Suggested users section (only for For You feed) */}
-      {feed === 'For You' && suggested.length > 0 && (
+      {feed === 'For You' && toFollow.length > 0 && (
         <View style={{ marginBottom: 16 }}>
           <SectionHeader title="Suggested for you" action="See all" onAction={() => router.push('/crews')} />
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -16 }} contentContainerStyle={{ gap: 10, paddingHorizontal: 16 }}>
-            {suggested.map((u) => (
-              <UserChip key={u.id} user={u} following={following.has(u.id)} onFollow={() => toggleFollow(u.id)} />
+            {toFollow.map((u) => (
+              <UserChip key={u.id} user={u} />
             ))}
           </ScrollView>
         </View>
       )}
-
     </>
   );
 
-  // The feed is virtualised: it grows with real posts, the header scrolls with it.
+  if (!enabled) {
+    return (
+      <Screen>
+        <Display size={34}>Social</Display>
+        <SignInToSocial body="Sign in to see real posts from runners near you, follow friends and share your runs." />
+      </Screen>
+    );
+  }
+
+  const empty = posts.loading ? (
+    <FeedSkeleton />
+  ) : posts.error ? (
+    <SocialError error={posts.error} onRetry={posts.retry} />
+  ) : (
+    <EmptyFeed body={EMPTY_BODY[feed](city.name)} onCreate={() => router.push('/compose')} />
+  );
+
+  // The feed is virtualised and paged from the server; the header scrolls with it.
   return (
     <Screen scroll={false}>
       <FlatList
-        data={list}
+        data={posts.items}
         keyExtractor={(p) => p.id}
         renderItem={renderPost}
         ListHeaderComponent={header}
-        ListEmptyComponent={
-          <EmptyState
-            art={<Mascot pose="sleep" size={140} />}
-            title="Quiet around here"
-            body={feed === 'Nearby' ? `No posts in ${city.name} yet. Be the first to post a run!` : feed === 'Following' ? 'Follow people to fill your feed.' : 'No posts yet. Be the first to share!'}
-            action="Create a post"
-            onAction={() => router.push('/compose')}
-          />
+        ListEmptyComponent={empty}
+        ListFooterComponent={
+          posts.items.length > 0 ? (
+            posts.error ? (
+              <SocialError compact error={posts.error} onRetry={posts.retry} />
+            ) : posts.loadingMore ? (
+              <ActivityIndicator color={colors.primary} style={{ marginVertical: 18 }} />
+            ) : !posts.hasMore ? (
+              <Text style={styles.end}>You’re all caught up</Text>
+            ) : null
+          ) : null
         }
+        onEndReached={posts.loadMore}
+        onEndReachedThreshold={0.6}
+        refreshControl={<RefreshControl refreshing={posts.refreshing} onRefresh={() => { posts.refresh(); suggested.reload(); }} tintColor={colors.primary} colors={[colors.primary]} />}
         contentContainerStyle={{ paddingBottom: TAB_BAR_SPACE + insets.bottom }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -171,7 +200,9 @@ const styles = StyleSheet.create({
   huntLock: { position: 'absolute', right: -5, top: -5, width: 18, height: 18, borderRadius: 9, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.bg },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   addStory: { position: 'absolute', right: 0, bottom: 0, width: 22, height: 22, borderRadius: 11, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.bg },
+  storyBlank: { width: 62, height: 62, borderRadius: 31, backgroundColor: colors.cardHi, borderWidth: 2, borderColor: colors.lineHi },
   storyName: { color: colors.sub, fontFamily: fonts.medium, fontSize: 11, marginTop: 6 },
   nearbyNote: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, marginBottom: 12 },
   arrow: { width: 46, height: 46, borderRadius: radius.md, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  end: { color: colors.mute, fontFamily: fonts.mono, fontSize: 11, textAlign: 'center', marginVertical: 18, textTransform: 'uppercase' },
 });

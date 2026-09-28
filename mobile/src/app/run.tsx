@@ -49,7 +49,7 @@ export default function Run() {
   const [accuracy, setAccuracy] = useState<number | null>(null);
   const [music, setMusic] = useState(true);
   const [photos, setPhotos] = useState(0);
-  const [summary, setSummary] = useState<(FinishRunResult & { verdict: Outcome; reason: string; km: number; time: string; pace: string; uploadNote?: string; areaText?: string }) | null>(null);
+  const [summary, setSummary] = useState<(FinishRunResult & { verdict: Outcome; reason: string; km: number; time: string; pace: string; uploadNote?: string; areaText?: string; minutes: number; runId?: string }) | null>(null);
   const [stage, setStage] = useState<keyof typeof STAGE_TEXT>('uploading');
   const [canSkipWait, setCanSkipWait] = useState(false);
   const pollAbort = useRef<AbortController | null>(null);
@@ -156,6 +156,7 @@ export default function Run() {
     let serverLines: { label: string; xp: number }[] | undefined;
     let uploadNote: string | undefined;
     let areaText: string | undefined;
+    let runId: string | undefined; // set once the Run Module accepted or flagged the run: shareable to Social
     let districtId: string | undefined = homeDistrict?.id; // local/demo rule: a ≥1 km run claims your home zone
     let serverXpTotal: number | undefined;
 
@@ -210,6 +211,7 @@ export default function Run() {
           serverLines = [{ label: outcome === 'processing' ? 'XP pending (still processing)' : 'XP unavailable right now', xp: 0 }];
         }
         uploadNote = `Run ${r.run_id.slice(0, 8)} · ${r.status}`;
+        if (outcome === 'accepted' || outcome === 'flagged') runId = r.run_id;
       } catch (e) {
         uploadNote = `Couldn't reach the server (${e instanceof Error ? e.message : 'error'}). XP shown is an estimate; the upload is safe to retry.`;
       }
@@ -225,7 +227,7 @@ export default function Run() {
       serverLines,
     });
     if (serverXpTotal != null) syncServerXp(serverXpTotal);
-    setSummary({ ...res, verdict: outcome, reason, km: kmFinal, time, pace, uploadNote, areaText });
+    setSummary({ ...res, verdict: outcome, reason, km: kmFinal, time, pace, uploadNote, areaText, minutes, runId });
     setPhase('done');
   }, [km, movingSec, paceSec, track, source, live, finishRun, homeDistrict, time, syncServerXp]);
 
@@ -398,14 +400,17 @@ export default function Run() {
             )}
             {summary.uploadNote && <Text style={styles.note}>{summary.uploadNote}</Text>}
 
-            {summary.verdict !== 'rejected' && (
+            {/* Only server-recorded runs can be shared: Social fetches the numbers from the Run Module by run_id. */}
+            {summary.runId ? (
               <Button
                 label="Share to feed"
                 iconLeft="send"
-                onPress={() => router.replace({ pathname: '/compose', params: { km: summary.km.toFixed(2), min: String(Math.round(movingSec / 60)), pace: summary.pace } })}
+                onPress={() => router.replace({ pathname: '/compose', params: { run_id: summary.runId as string, km: summary.km.toFixed(2), min: String(summary.minutes), pace: summary.pace } })}
                 style={{ alignSelf: 'stretch', marginTop: 14 }}
               />
-            )}
+            ) : !live && summary.verdict !== 'rejected' ? (
+              <Button label="Sign in to share runs" variant="secondary" iconLeft="login" onPress={() => router.replace('/sign-in')} style={{ alignSelf: 'stretch', marginTop: 14 }} />
+            ) : null}
             <Button
               label={summary.leveledUp ? 'See level up' : summary.captured ? 'View territory' : 'Done'}
               variant="secondary"
