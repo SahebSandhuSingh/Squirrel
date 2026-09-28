@@ -1,5 +1,4 @@
-import { SoonScreen } from '@/components/Locked';
-import { LOCKED } from '@/data/features';
+import { FeatureGate, SoonScreen } from '@/components/Locked';
 import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -123,14 +122,17 @@ const styles = StyleSheet.create({
 
 /** Events aren't launched yet: the route shows a locked state instead of the detail page. */
 export default function EventRoute() {
-  if (LOCKED.events) {
-    return (
-      <SoonScreen
-        title="Events are coming soon"
-        body="Meetups, workshops and crew runs will open here at launch. Until then, keep moving: runs and missions still earn XP."
-        onBack={() => (router.canGoBack() ? router.back() : router.replace('/home'))}
-      />
-    );
-  }
-  return <EventDetail />;
+  return (
+    <FeatureGate
+      feature="events"
+      fallback={
+        <SoonScreen
+          title="Events are coming soon"
+          body="Meetups, workshops and crew runs will open here at launch. Until then, keep moving: runs and missions still earn XP."
+          onBack={() => (router.canGoBack() ? router.back() : router.replace('/home'))}
+        />
+      }>
+      <EventDetail />
+    </FeatureGate>
+  );
 }

@@ -61,3 +61,36 @@ export const describeActivity = (a: Activity) => {
       return { icon: 'food-apple' as const, text: a.name };
   }
 };
+
+// ---------------------------------------------------------------------------
+// Feed selection: one source of truth for Social's feed and Home's Crew Activity
+// ---------------------------------------------------------------------------
+
+export type Feed = 'For You' | 'Following' | 'Nearby';
+
+/** Newest-first posts for a feed. `Following` = people you follow + your own posts. */
+export function selectFeed(posts: Post[], feed: Feed, ctx: { following: Set<string>; meId: string; cityId: string }): Post[] {
+  const sorted = [...posts].sort((a, b) => a.minutesAgo - b.minutesAgo);
+  if (feed === 'Following') return sorted.filter((p) => ctx.following.has(p.authorId) || p.authorId === ctx.meId);
+  if (feed === 'Nearby') return sorted.filter((p) => p.cityId === ctx.cityId);
+  return sorted;
+}
+
+/** A one-line activity summary for a post ("ran 5.1 km · 32 min"), falling back to its caption. */
+export function activityLine(p: Post): { icon: ReturnType<typeof describeActivity>['icon'] | 'image-outline'; text: string } {
+  const a = p.activity;
+  if (!a) return { icon: 'image-outline', text: p.caption };
+  const { icon } = describeActivity(a);
+  switch (a.type) {
+    case 'run':
+      return { icon, text: `ran ${a.km} km · ${a.minutes} min` };
+    case 'ride':
+      return { icon, text: `rode ${a.km} km · ${a.minutes} min` };
+    case 'workout':
+      return { icon, text: `did ${a.name} · ${a.minutes} min` };
+    case 'yoga':
+      return { icon, text: `did ${a.minutes} min of yoga` };
+    case 'meal':
+      return { icon, text: `shared ${a.name}` };
+  }
+}

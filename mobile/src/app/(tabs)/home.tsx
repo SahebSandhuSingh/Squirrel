@@ -1,16 +1,18 @@
 import { EXERCISE_LIBRARY } from '@/data/exercises';
 import { useExerciseCatalog } from '@/hooks/useExercise';
-import { COMING_SOON, LOCKED, LOCKED_MISSIONS } from '@/data/features';
-import { useEffect } from 'react';
+import { LOCKED_MISSIONS } from '@/data/features';
+import { useLocks } from '@/components/Locked';
+import { activityLine, selectFeed, timeAgo } from '@/data/posts';
+import { useEffect, useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Mascot } from '@/art/Mascot';
 import { Avatar } from '@/components/Avatar';
 import { EventCard, MissionCard, SceneImage } from '@/components/cards';
 import { CityChip, TopBar } from '@/components/TopBar';
-import { Button, Card, Display, FadeIn, Icon, PressScale, Ring, Screen, SectionHeader, Tagline } from '@/components/ui';
+import { Button, Card, Display, FadeIn, Icon, OverlayKicker, OverlaySub, PressScale, Ring, RowSub, RowTitle, Screen, SectionHeader, Tagline } from '@/components/ui';
 import { today } from '@/data/stats';
-import { users } from '@/data/users';
+import { userById, users } from '@/data/users';
 import { territoryBoard } from '@/data/territory';
 import { useAuth } from '@/auth/AuthProvider';
 import { Tape } from '@/components/Brand';
@@ -26,7 +28,11 @@ const greeting = () => {
 export default function Home() {
   const { me, missions, logMission, claimed, claimable, claimRewards, events, joinedEvents, toggleEvent, city, districts } = useApp();
   const { mode } = useAuth();
-  const { syncServerXp, toast, exerciseToday } = useApp();
+  const { syncServerXp, exerciseToday, posts, following } = useApp();
+  const locks = useLocks();
+  const eventsLocked = locks.locked('events');
+  // Crew Activity: the Social "Following" feed (same shared posts + selector), latest 4.
+  const crewActivity = useMemo(() => selectFeed(posts, 'Following', { following, meId: me.id, cityId: city.id }).slice(0, 4), [posts, following, me.id, city.id]);
   // Today's rings add what you logged with the form coach.
   const activeMin = today.active.value + exerciseToday.minutes;
   const kcalToday = today.kcal.value + exerciseToday.kcal;
@@ -89,9 +95,9 @@ export default function Home() {
           <SceneImage kind="run" seed={4} height={132} scrim="strong">
             <View style={styles.runCta}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.kicker}>{city.venues?.runs?.[0] ?? 'City Loop'} · 2.4 km loop</Text>
+                <OverlayKicker>{city.venues?.runs?.[0] ?? 'City Loop'} · 2.4 km loop</OverlayKicker>
                 <Display size={30} color={colors.onImage}>Start a run</Display>
-                <Text style={styles.runSub}>Earn up to +150 XP · 3 friends running now</Text>
+                <OverlaySub>Earn up to +150 XP · 3 friends running now</OverlaySub>
               </View>
               <View style={styles.playBtn}>
                 <Icon name="play" size={30} color={colors.onPrimary} />
@@ -145,7 +151,7 @@ export default function Home() {
         <View style={styles.battle}>
           <Icon name="sword-cross" size={26} color={colors.secondary} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.battleTitle}>Choose your battle</Text>
+            <RowTitle>Choose your battle</RowTitle>
             <Text style={styles.zoneInfo}>You vs Rhea · 18.4 vs 21.1 km this week</Text>
           </View>
           <Icon name="chevron-right" size={24} color={colors.secondary} />
@@ -184,10 +190,10 @@ export default function Home() {
 
       {/* Events */}
       <SectionHeader
-        kicker={LOCKED.events ? '04 — Meetups · coming soon' : '04 — Meetups'}
+        kicker={eventsLocked ? '04 — Meetups · coming soon' : '04 — Meetups'}
         title={`Happening in ${city.name}`}
-        action={LOCKED.events ? 'Coming soon' : 'All events'}
-        onAction={() => (LOCKED.events ? toast(COMING_SOON.events, 'lock', colors.dim) : router.push('/events'))}
+        action={eventsLocked ? 'Coming soon' : 'All events'}
+        onAction={locks.guard('events', () => router.push('/events'))}
       />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingRight: 16 }} style={{ marginHorizontal: -16 }}>
         <View style={{ width: 16 }} />
@@ -198,31 +204,33 @@ export default function Home() {
 
       {/* Friends activity */}
       <SectionHeader kicker="05 — Right now" title="Crew Activity" action="Feed" onAction={() => router.push('/social')} />
-      <View style={{ gap: 10 }}>
-        {[
-          { u: 'u_rhea', text: 'ran 7.2 km at 5\'42"/km', icon: 'run-fast' as const, t: '2h' },
-          { u: 'u_meera', text: 'is hosting Yoga in the Park', icon: 'yoga' as const, t: '3h' },
-          { u: 'u_zoya', text: 'unlocked the Early Bird badge', icon: 'medal' as const, t: '5h' },
-          { u: 'u_aarav', text: 'hit a new squat PR · 80 kg', icon: 'arm-flex' as const, t: '6h' },
-        ].map((a, i) => {
-          const u = users.find((x) => x.id === a.u)!;
-          return (
-            <FadeIn key={a.u} index={i}>
-              <View style={styles.activity}>
-                <Avatar user={u} size={38} />
-                <Text style={styles.activityText} numberOfLines={2}>
-                  <Text style={{ fontFamily: fonts.bold, color: colors.text }}>{u.name.split(' ')[0]} </Text>
-                  {a.text}
-                </Text>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Icon name={a.icon} size={18} color={colors.primary} />
-                  <Text style={styles.leaderSub}>{a.t}</Text>
-                </View>
-              </View>
-            </FadeIn>
-          );
-        })}
-      </View>
+      {crewActivity.length === 0 ? (
+        <Card>
+          <Text style={styles.hint}>Nothing yet. Follow people on Social and their runs and workouts show up here.</Text>
+        </Card>
+      ) : (
+        <View style={{ gap: 10 }}>
+          {crewActivity.map((p, i) => {
+            const u = p.authorId === me.id ? me : userById(p.authorId);
+            const line = activityLine(p);
+            return (
+              <FadeIn key={p.id} index={i}>
+                <PressScale onPress={() => router.push({ pathname: '/post/[id]', params: { id: p.id } })} style={styles.activity} scaleTo={0.985} accessibilityLabel={`${u.name} ${line.text}`}>
+                  <Avatar user={u} size={38} />
+                  <Text style={styles.activityText} numberOfLines={2}>
+                    <Text style={{ fontFamily: fonts.bold, color: colors.text }}>{p.authorId === me.id ? 'You' : u.name.split(' ')[0]} </Text>
+                    {line.text}
+                  </Text>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Icon name={line.icon} size={18} color={colors.primary} />
+                    <Text style={styles.leaderSub}>{timeAgo(p.minutesAgo)}</Text>
+                  </View>
+                </PressScale>
+              </FadeIn>
+            );
+          })}
+        </View>
+      )}
     </Screen>
   );
 }
@@ -250,8 +258,8 @@ function StartExercise() {
         <Icon name={activeName ? 'play-circle' : 'arm-flex'} size={22} color={colors.onPrimary} />
       </View>
       <View style={{ flex: 1, marginLeft: 12 }}>
-        <Text style={styles.exTitle}>{activeName ? 'Resume exercise' : 'Start Exercise'}</Text>
-        <Text style={styles.exSub} numberOfLines={1}>{sub}</Text>
+        <RowTitle>{activeName ? 'Resume exercise' : 'Start Exercise'}</RowTitle>
+        <RowSub>{sub}</RowSub>
       </View>
       <View style={styles.exGo}>
         <Text style={styles.exGoText}>{activeName ? 'Resume' : 'Start'}</Text>
@@ -276,8 +284,6 @@ function RingStat({ progress, color, color2, icon, value, label }: { progress: n
 const styles = StyleSheet.create({
   exRow: { flexDirection: 'row', alignItems: 'center', marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.line },
   exIcon: { width: 42, height: 42, borderRadius: 13, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-  exTitle: { color: colors.text, fontFamily: fonts.label, fontSize: 17, letterSpacing: 1, textTransform: 'uppercase' },
-  exSub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, marginTop: 1 },
   exGo: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.primary, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 8, marginLeft: 8 },
   exGoText: { color: colors.onPrimary, fontFamily: fonts.labelBold, fontSize: 13, letterSpacing: 1, textTransform: 'uppercase' },
   zone: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 2, borderColor: colors.primary, padding: 14, transform: [{ rotate: '-0.6deg' }], shadowColor: colors.primary, shadowOpacity: 0.25, shadowRadius: 14, shadowOffset: { width: 0, height: 0 } },
@@ -285,7 +291,6 @@ const styles = StyleSheet.create({
   zonePct: { color: colors.primary, fontFamily: fonts.labelBold, fontSize: 18 },
   zoneInfo: { color: colors.dim, fontFamily: fonts.mono, fontSize: 10, marginTop: 6 },
   battle: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)', padding: 14 },
-  battleTitle: { color: colors.text, fontFamily: fonts.label, fontSize: 17, letterSpacing: 1, textTransform: 'uppercase' },
   hello: { color: colors.sub, fontFamily: fonts.semibold, fontSize: 15, flexShrink: 1 },
   cardTitle: { color: colors.text, fontFamily: fonts.bold, fontSize: 15 },
   link: { color: colors.primary, fontFamily: fonts.semibold, fontSize: 13 },
@@ -293,8 +298,6 @@ const styles = StyleSheet.create({
   ringValue: { color: colors.text, fontFamily: fonts.display, fontSize: 18, marginTop: 6, letterSpacing: 0.3 },
   ringLabel: { color: colors.dim, fontFamily: fonts.medium, fontSize: 11 },
   runCta: { position: 'absolute', left: 16, right: 16, bottom: 14, flexDirection: 'row', alignItems: 'flex-end' },
-  kicker: { color: colors.primarySoft, fontFamily: fonts.bold, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },
-  runSub: { color: colors.onImageSub, fontFamily: fonts.medium, fontSize: 12 },
   playBtn: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', shadowColor: colors.primary, shadowOpacity: 0.8, shadowRadius: 14, shadowOffset: { width: 0, height: 0 } },
   hint: { color: colors.mute, fontSize: 12, textAlign: 'center', marginTop: 8, fontFamily: fonts.regular },
   leader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 4 },

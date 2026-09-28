@@ -1,7 +1,41 @@
+import { useCallback, useMemo } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Mascot } from '@/art/Mascot';
 import { Button, Display, Header, Icon, Screen } from '@/components/ui';
+import { COMING_SOON, isLocked, type Feature } from '@/data/features';
+import { useApp } from '@/state/AppState';
 import { colors, fonts, radius } from '@/theme';
+
+/**
+ * The one place UI asks "is this feature launched?".
+ *   locked(f)        → boolean, from LOCKED
+ *   notify(f)        → the feature's "Coming soon" toast
+ *   guard(f, action) → a press handler: runs `action` when unlocked, otherwise notifies
+ */
+export function useLocks() {
+  const { toast } = useApp();
+  const notify = useCallback((f: Feature) => toast(COMING_SOON[f], 'lock', colors.dim), [toast]);
+  return useMemo(
+    () => ({
+      locked: isLocked,
+      notify,
+      guard:
+        (f: Feature, action: () => void) =>
+        () =>
+          isLocked(f) ? notify(f) : action(),
+    }),
+    [notify],
+  );
+}
+
+/**
+ * Renders `children` only when `feature` is launched; otherwise `fallback`
+ * (default: the "Coming soon" pill). Works for inline UI and for whole routes.
+ */
+export function FeatureGate({ feature, fallback, children }: { feature: Feature; fallback?: React.ReactNode; children: React.ReactNode }) {
+  if (isLocked(feature)) return <>{fallback ?? <SoonPill />}</>;
+  return <>{children}</>;
+}
 
 /** Small "Coming soon" pill with a lock, for cards, tiles and buttons. */
 export function SoonPill({ style, onImage }: { style?: StyleProp<ViewStyle>; onImage?: boolean }) {

@@ -1,4 +1,4 @@
-import { COMING_SOON, LOCKED, LOCKED_MISSIONS } from '@/data/features';
+import { COMING_SOON, isLocked, LOCKED_MISSIONS } from '@/data/features';
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { DEFAULT_CITY_ID, cityById, type City } from '@/data/cities';
 import { crewsForCity, eventsForCity, placesForCity, type Crew, type EventItem, type Place } from '@/data/community';
@@ -306,7 +306,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     }, [crews, toast]),
     joinedEvents,
     toggleEvent: useCallback((id: string) => {
-      if (LOCKED.events) {
+      if (isLocked('events')) {
         toast(COMING_SOON.events, 'lock', '#A9A9AE');
         return;
       }

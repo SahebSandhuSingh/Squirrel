@@ -1,4 +1,4 @@
-import { COMING_SOON, LOCKED } from '@/data/features';
+import { useLocks } from '@/components/Locked';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
@@ -19,7 +19,10 @@ const FILTER_ICONS = { All: 'map-marker-multiple', Runs: 'run-fast', Cafes: 'cof
 /** EXPLORE — stylised neon city map with live places, runs and events. */
 export default function Explore() {
   const insets = useSafeAreaInsets();
-  const { places, city, joinedEvents, toggleEvent, events, toast } = useApp();
+  const { places, city, joinedEvents, toggleEvent, events } = useApp();
+  const locks = useLocks();
+  /** Event places belong to the Events feature: inert while it's locked. */
+  const lockedPlace = (p: Place) => p.kind === 'Events' && locks.locked('events');
   const [filter, setFilter] = useState<Filter>('All');
   const [q, setQ] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
@@ -60,7 +63,7 @@ export default function Explore() {
 
   const act = (p: Place) => {
     if (p.kind === 'Runs') router.push('/run');
-    else if (p.kind === 'Events' && LOCKED.events) toast(COMING_SOON.events, 'lock', colors.dim);
+    else if (lockedPlace(p)) locks.notify('events');
     else if (p.eventId) router.push({ pathname: '/event/[id]', params: { id: p.eventId } });
     else router.push('/crews');
   };
@@ -71,7 +74,7 @@ export default function Explore() {
       <View style={StyleSheet.absoluteFill}>
         <CityMap seed={city.id.length * 7} route={showRoute} routeProgress={route} style={StyleSheet.absoluteFill} />
         {visible.map((p) => (
-          <Marker key={p.id} place={p} active={selected === p.id} onPress={() => select(p)} />
+          <Marker key={p.id} place={p} active={selected === p.id} locked={lockedPlace(p)} onPress={() => select(p)} />
         ))}
         <View style={styles.me}>
           <Pulse size={44} color={colors.purple} />
@@ -122,7 +125,7 @@ export default function Explore() {
         </View>
         <ScrollView ref={listRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingHorizontal: 16 }} snapToInterval={232} decelerationRate="fast">
           {visible.map((p) => {
-            const ev = p.eventId && !LOCKED.events ? events.find((e) => e.id === p.eventId) : undefined;
+            const ev = p.eventId && !locks.locked('events') ? events.find((e) => e.id === p.eventId) : undefined;
             const going = ev ? joinedEvents.has(ev.id) : false;
             return (
               <PressScale key={p.id} onPress={() => select(p)} style={[styles.placeCard, selected === p.id && { borderColor: p.color }]}>
@@ -131,17 +134,17 @@ export default function Explore() {
                 </View>
                 <View style={{ flex: 1, marginLeft: 10 }}>
                   <Text style={styles.pName} numberOfLines={1}>{p.name}</Text>
-                  <Text style={styles.pMeta} numberOfLines={1}>{p.kind} · {p.kind === 'Events' && LOCKED.events ? 'Coming soon' : p.meta}</Text>
+                  <Text style={styles.pMeta} numberOfLines={1}>{p.kind} · {lockedPlace(p) ? 'Coming soon' : p.meta}</Text>
                 </View>
                 <Pressable
                   onPress={() => {
                     tap();
-                    if (p.kind === 'Events' && LOCKED.events) act(p);
+                    if (lockedPlace(p)) act(p);
                     else if (ev) toggleEvent(ev.id);
                     else act(p);
                   }}
-                  style={[styles.go, { backgroundColor: going || (p.kind === 'Events' && LOCKED.events) ? colors.cardHi : p.kind === 'Runs' ? colors.primary : colors.secondary }]}>
-                  <Text style={[styles.goText, (going || (p.kind === 'Events' && LOCKED.events)) && { color: colors.sub }]}>{p.kind === 'Events' && LOCKED.events ? 'Soon' : ev ? (going ? 'Going' : 'Join') : p.kind === 'Runs' ? 'Run' : 'Go'}</Text>
+                  style={[styles.go, { backgroundColor: going || (lockedPlace(p)) ? colors.cardHi : p.kind === 'Runs' ? colors.primary : colors.secondary }]}>
+                  <Text style={[styles.goText, (going || (lockedPlace(p))) && { color: colors.sub }]}>{lockedPlace(p) ? 'Soon' : ev ? (going ? 'Going' : 'Join') : p.kind === 'Runs' ? 'Run' : 'Go'}</Text>
                 </Pressable>
               </PressScale>
             );
@@ -152,7 +155,7 @@ export default function Explore() {
   );
 }
 
-function Marker({ place, active, onPress }: { place: Place; active: boolean; onPress: () => void }) {
+function Marker({ place, active, locked, onPress }: { place: Place; active: boolean; locked: boolean; onPress: () => void }) {
   const s = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.spring(s, { toValue: 1, useNativeDriver: NATIVE, speed: 10, bounciness: 10, delay: Math.round(place.x * 400) }).start();
@@ -168,7 +171,7 @@ function Marker({ place, active, onPress }: { place: Place; active: boolean; onP
         </View>
         <View style={{ marginLeft: 6 }}>
           <Text style={styles.pinName} numberOfLines={1}>{place.name}</Text>
-          <Text style={styles.pinMeta}>{place.kind === 'Events' && LOCKED.events ? 'Coming soon' : place.meta}</Text>
+          <Text style={styles.pinMeta}>{locked ? 'Coming soon' : place.meta}</Text>
         </View>
       </Pressable>
     </Animated.View>

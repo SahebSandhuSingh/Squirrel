@@ -1,4 +1,5 @@
-import { COMING_SOON, LOCKED } from '@/data/features';
+import { useLocks } from '@/components/Locked';
+import { isLocked, type Feature } from '@/data/features';
 import { StyleSheet, Text, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 import { Mascot } from '@/art/Mascot';
@@ -8,7 +9,7 @@ import type { IconName } from '@/data/icons';
 import { useApp } from '@/state/AppState';
 import { colors, fonts, radius } from '@/theme';
 
-type Action = { label: string; sub: string; icon: IconName; color: string; go?: Href; mission?: string; locked?: keyof typeof LOCKED };
+type Action = { label: string; sub: string; icon: IconName; color: string; go?: Href; mission?: string; locked?: Feature };
 
 const ACTIONS: Action[] = [
   { label: 'Start a run', sub: 'GPS · live stats', icon: 'run-fast', color: colors.primary, go: '/run' },
@@ -19,11 +20,12 @@ const ACTIONS: Action[] = [
   { label: 'Find an event', sub: 'Join the crew', icon: 'calendar-star', color: colors.orange, go: '/events', locked: 'events' },
 ];
 
-const isLocked = (a: Action) => !!a.locked && LOCKED[a.locked];
+const lockedAction = (a: Action) => !!a.locked && isLocked(a.locked);
 
 /** Central CREATE action sheet. */
 export default function Create() {
   const { logMission, toast, missions } = useApp();
+  const locks = useLocks();
   return (
     <Sheet>
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -38,10 +40,10 @@ export default function Create() {
           <PressScale
             key={a.label}
             style={styles.action}
-            accessibilityLabel={isLocked(a) ? `${a.label}, coming soon` : a.label}
+            accessibilityLabel={lockedAction(a) ? `${a.label}, coming soon` : a.label}
             onPress={() => {
-              if (isLocked(a)) {
-                toast(COMING_SOON[a.locked!], 'lock', colors.dim);
+              if (lockedAction(a)) {
+                locks.notify(a.locked!);
                 return;
               }
               if (a.mission) {
@@ -58,16 +60,16 @@ export default function Create() {
                 router.push(a.go);
               }
             }}>
-            <View style={[styles.icon, isLocked(a) ? styles.iconLocked : { backgroundColor: `${a.color}22`, borderColor: `${a.color}66` }]}>
-              <Icon name={a.icon} size={26} color={isLocked(a) ? colors.mute : a.color} />
-              {isLocked(a) && (
+            <View style={[styles.icon, lockedAction(a) ? styles.iconLocked : { backgroundColor: `${a.color}22`, borderColor: `${a.color}66` }]}>
+              <Icon name={a.icon} size={26} color={lockedAction(a) ? colors.mute : a.color} />
+              {lockedAction(a) && (
                 <View style={styles.lockBadge}>
                   <Icon name="lock" size={11} color={colors.onPrimary} />
                 </View>
               )}
             </View>
-            <Text style={[styles.label, isLocked(a) && { color: colors.dim }]}>{a.label}</Text>
-            <Text style={styles.actSub}>{isLocked(a) ? 'Coming soon' : a.sub}</Text>
+            <Text style={[styles.label, lockedAction(a) && { color: colors.dim }]}>{a.label}</Text>
+            <Text style={styles.actSub}>{lockedAction(a) ? 'Coming soon' : a.sub}</Text>
           </PressScale>
         ))}
       </View>

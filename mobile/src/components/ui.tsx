@@ -144,6 +144,27 @@ export function Label({ children, style, color = colors.dim }: { children: React
   return <Text style={[{ color, fontFamily: fonts.label, fontSize: 12, letterSpacing: 1.4, textTransform: 'uppercase' }, style]}>{children}</Text>;
 }
 
+/**
+ * Shared text primitives: one definition per recurring type style, so a palette/type change
+ * happens here instead of in every screen.
+ */
+export const textStyles = StyleSheet.create({
+  /** Small caps line drawn over artwork ("PASHAN LAKE · 2.4 KM LOOP"). */
+  overlayKicker: { color: colors.primarySoft, fontFamily: fonts.bold, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },
+  /** Secondary line drawn over artwork. */
+  overlaySub: { color: colors.onImageSub, fontFamily: fonts.medium, fontSize: 12 },
+  /** Uppercase condensed title of a feature row ("START EXERCISE", "PARTNER HUNT"). */
+  rowTitle: { color: colors.text, fontFamily: fonts.label, fontSize: 17, letterSpacing: 1, textTransform: 'uppercase' },
+  /** Dim one-liner under a row title. */
+  rowSub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, marginTop: 1 },
+});
+
+type TextProps = { children: React.ReactNode; style?: StyleProp<TextStyle>; numberOfLines?: number };
+export const OverlayKicker = ({ children, style, numberOfLines }: TextProps) => <Text style={[textStyles.overlayKicker, style]} numberOfLines={numberOfLines}>{children}</Text>;
+export const OverlaySub = ({ children, style, numberOfLines }: TextProps) => <Text style={[textStyles.overlaySub, style]} numberOfLines={numberOfLines}>{children}</Text>;
+export const RowTitle = ({ children, style, numberOfLines }: TextProps) => <Text style={[textStyles.rowTitle, style]} numberOfLines={numberOfLines}>{children}</Text>;
+export const RowSub = ({ children, style, numberOfLines = 1 }: TextProps) => <Text style={[textStyles.rowSub, style]} numberOfLines={numberOfLines}>{children}</Text>;
+
 /** Website-style section kicker: a short lime rule + Space Mono caps ("— 02 — HOW DOES IT WORK?"). */
 export function Kicker({ children, color = colors.primary, style }: { children: React.ReactNode; color?: string; style?: StyleProp<ViewStyle> }) {
   return (

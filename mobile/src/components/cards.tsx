@@ -1,5 +1,5 @@
-import { SoonPill } from '@/components/Locked';
-import { COMING_SOON, LOCKED, LOCKED_MISSIONS } from '@/data/features';
+import { FeatureGate, SoonPill, useLocks } from '@/components/Locked';
+import { LOCKED_MISSIONS } from '@/data/features';
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -10,7 +10,7 @@ import { StickerArt } from '@/art/Sticker';
 import { RewardArt } from '@/art/Reward';
 import { Mascot } from '@/art/Mascot';
 import { Avatar, AvatarStack } from '@/components/Avatar';
-import { Card, CoinIcon, Icon, IconBadge, NATIVE, PressScale, ProgressBar, Scrim, TogglePill, tap } from '@/components/ui';
+import { Card, CoinIcon, Icon, IconBadge, NATIVE, PressScale, ProgressBar, Scrim, TogglePill, tap, textStyles } from '@/components/ui';
 import type { Crew, EventItem } from '@/data/community';
 import { formatEventDate } from '@/data/community';
 import type { Mission } from '@/data/missions';
@@ -123,32 +123,38 @@ export function CrewCard({ crew, joined, onToggle }: { crew: Crew; joined: boole
 }
 
 export function EventCard({ event, going, onToggle, variant = 'row' }: { event: EventItem; going: boolean; onToggle: () => void; variant?: 'row' | 'hero' }) {
-  const { toast } = useApp();
+  // Lock-aware: while Events are locked every usage renders the same inert "Coming soon" card.
+  const locks = useLocks();
+  const locked = locks.locked('events');
   const attendees = event.attendeeIds.map(userById);
-  const open = () => (LOCKED.events ? toast(COMING_SOON.events, 'lock', colors.dim) : router.push({ pathname: '/event/[id]', params: { id: event.id } }));
-  const join = LOCKED.events ? <SoonPill /> : null;
+  const open = locks.guard('events', () => router.push({ pathname: '/event/[id]', params: { id: event.id } }));
+  const a11y = locked ? `${event.title}, coming soon` : event.title;
   if (variant === 'hero') {
     return (
-      <PressScale onPress={open} style={{ width: 250 }} scaleTo={0.98}>
+      <PressScale onPress={open} style={[{ width: 250 }, locked && styles.lockedCard]} scaleTo={0.98} accessibilityLabel={a11y}>
         <SceneImage kind={event.scene} seed={event.title.length} height={150} scrim="strong">
-          <View style={styles.heroBadge}>
-            <Icon name={event.icon} size={13} color={colors.onImage} />
-            <Text style={styles.heroBadgeText}>+{event.xp} XP</Text>
-          </View>
+          <FeatureGate feature="events" fallback={<SoonPill onImage style={styles.heroLock} />}>
+            <View style={styles.heroBadge}>
+              <Icon name={event.icon} size={13} color={colors.onImage} />
+              <Text style={styles.heroBadgeText}>+{event.xp} XP</Text>
+            </View>
+          </FeatureGate>
           <View style={{ position: 'absolute', left: 12, right: 12, bottom: 10 }}>
             <Text style={styles.heroTitle} numberOfLines={1}>{event.title}</Text>
-            <Text style={styles.heroMeta} numberOfLines={1}>{formatEventDate(event.startsAt)}</Text>
+            <Text style={textStyles.overlaySub} numberOfLines={1}>{formatEventDate(event.startsAt)}</Text>
           </View>
         </SceneImage>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
           <AvatarStack users={attendees} extra={event.going + (going ? 1 : 0)} size={22} />
-          {join ?? <TogglePill on={going} onPress={onToggle} labelOff="Join" labelOn="Going" color={colors.primary} style={{ minWidth: 70, paddingVertical: 6 }} />}
+          <FeatureGate feature="events">
+            <TogglePill on={going} onPress={onToggle} labelOff="Join" labelOn="Going" color={colors.primary} style={{ minWidth: 70, paddingVertical: 6 }} />
+          </FeatureGate>
         </View>
       </PressScale>
     );
   }
   return (
-    <PressScale onPress={open} style={styles.row} scaleTo={0.985}>
+    <PressScale onPress={open} style={[styles.row, locked && styles.lockedCard]} scaleTo={0.985} accessibilityLabel={a11y}>
       <SceneImage kind={event.scene} seed={event.title.length} height={112} style={{ width: 118, borderRadius: radius.md }} scrim="strong">
         <View style={{ position: 'absolute', left: 6, bottom: 6 }}>
           <AvatarStack users={attendees.slice(0, 3)} extra={event.going + (going ? 1 : 0)} size={20} />
@@ -168,7 +174,9 @@ export function EventCard({ event, going, onToggle, variant = 'row' }: { event: 
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={styles.xpSmall}>+{event.xp} XP</Text>
-          {join ?? <TogglePill on={going} onPress={onToggle} labelOff="Join" labelOn="Going" color={colors.primary} style={{ paddingVertical: 7 }} />}
+          <FeatureGate feature="events">
+            <TogglePill on={going} onPress={onToggle} labelOff="Join" labelOn="Going" color={colors.primary} style={{ paddingVertical: 7 }} />
+          </FeatureGate>
         </View>
       </View>
     </PressScale>
@@ -403,6 +411,8 @@ export function RewardCard({ kind, title, subtitle, locked, style }: { kind: Rew
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
+  lockedCard: { opacity: 0.6 },
+  heroLock: { position: 'absolute', top: 10, left: 10 },
   mission: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, padding: 12, overflow: 'hidden' },
   mTitle: { color: colors.text, fontFamily: fonts.bold, fontSize: 15 },
   mSub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, marginTop: 2 },
@@ -418,7 +428,6 @@ const styles = StyleSheet.create({
   heroBadge: { position: 'absolute', top: 10, left: 10, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(10,10,10,0.7)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.pill },
   heroBadgeText: { color: colors.gold, fontFamily: fonts.bold, fontSize: 11 },
   heroTitle: { color: colors.onImage, fontFamily: fonts.display, fontSize: 22, letterSpacing: 0.4 },
-  heroMeta: { color: colors.onImageSub, fontFamily: fonts.medium, fontSize: 12 },
   post: { backgroundColor: colors.card, borderRadius: radius.xl, overflow: 'hidden', marginBottom: 16, borderWidth: 1, borderColor: colors.line },
   postHead: { flexDirection: 'row', alignItems: 'center', padding: 12 },
   author: { color: colors.text, fontFamily: fonts.bold, fontSize: 15 },
