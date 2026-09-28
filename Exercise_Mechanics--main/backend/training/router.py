@@ -17,7 +17,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from backend import config
+from backend import config, live
 from backend.auth.tokens import verify_access_token
 from backend.config import user_dir
 from backend.db.exercise_sessions import sync_session
@@ -378,8 +378,12 @@ async def train_ws(websocket: WebSocket) -> None:
         f"[ws/train] user={access.user_id} exercise={access.exercise_id} "
         f"session={access.session_id} set={access.set_no} adapter=ready"
     )
-    previous_t_ms: float | None = None
+    with live.training(access.user_id):
+        await _train_loop(websocket, access, adapter, capture)
 
+
+async def _train_loop(websocket: WebSocket, access, adapter, capture) -> None:
+    previous_t_ms: float | None = None
     try:
         while True:
             try:

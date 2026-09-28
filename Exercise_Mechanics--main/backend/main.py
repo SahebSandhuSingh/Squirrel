@@ -38,7 +38,8 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.activity_matching.router import router as activity_matching_router
 from backend.activity_rating.router import router as activity_rating_router
-from backend.auth.deps import require_path_user
+from backend import live
+from backend.auth.deps import current_user, require_path_user
 from backend.auth.router import router as auth_router
 from backend.cors import add_cors
 from backend.db import connection as db_connection
@@ -120,6 +121,13 @@ app.include_router(auth_router)
 app.include_router(nearby_router)
 app.include_router(deeplinks_router)   # /join, /invite/*, /.well-known/* — must precede the SPA mount
 app.include_router(setup_ws_router)
+
+
+@app.get("/api/live")
+def live_counts(_user: str = Depends(current_user)) -> dict:
+    """How many people are in a coached workout right now (the app's live counter; counts only)."""
+    return {"working_out_now": live.working_out_now()}
+
 
 # Mounted last so /ws + /api take precedence. html=True serves index.html at /.
 app.mount("/", StaticFiles(directory=str(FRONTEND_DIST), html=True), name="frontend")
