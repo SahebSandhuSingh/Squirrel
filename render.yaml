@@ -4,8 +4,9 @@
 #   squirrel-exercise   Exercise Mechanics API + live-coaching sockets
 #   squirrel-run-api    Run Module API, with its background workers in the same process
 #                       (RUN_WORKERS_IN_API) and its migrations applied at startup (MIGRATE_ON_START)
-#   squirrel-social     Profile + Social API: profiles, follows, posts, feed (Alembic migrations at
-#                       startup). Finished workouts and runs are published to it by the other two.
+#   squirrel-social     Profile + Social API: profiles, follows, posts, feed, crews, events, challenges,
+#                       waitlist, boards and notifications (Alembic migrations at startup). Finished
+#                       workouts, runs and territory steals are published to it by the other two.
 #   squirrel-redis      Render Key Value (Redis) for the Run Module's queues and leaderboard
 #
 # The free plan has no disks, background workers or pre-deploy commands, hence the two switches
@@ -64,6 +65,24 @@ services:
         generateValue: true
       - key: SQUIRREL_PUBLIC_BASE_URL
         value: https://squirrelsocial.app
+      # Sign-up is open to these email domains only, and needs the 6-digit code emailed to the
+      # address (backend/auth/email_codes.py). "*" would open it to any address.
+      - key: SQUIRREL_ALLOWED_EMAIL_DOMAINS
+        value: iiserkol.ac.in
+      - key: SQUIRREL_EMAIL_VERIFICATION
+        value: "on"
+      # How the codes are emailed (backend/mailer.py). Gmail: SMTP_USER = the Gmail address,
+      # SMTP_PASSWORD = an app password. Render's free plan blocks outgoing SMTP ports, so on it set
+      # RESEND_API_KEY (+ EMAIL_FROM on a domain verified with Resend) instead. With neither, codes
+      # only go to the service log.
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
 
   - type: web
     name: squirrel-run-api
@@ -120,6 +139,15 @@ services:
         sync: false
       # Photo uploads need S3-compatible storage (SOCIAL_MEDIA_* in social-backend/.env.example);
       # without it everything else works and uploads answer 503.
+      # Hostels members pick from for hostel vs hostel, comma-separated (unset: hidden).
+      - key: SOCIAL_HOSTELS
+        sync: false
+      # The web app's address, for invite links, e.g. https://squirrel-social.vercel.app
+      - key: SOCIAL_APP_URL
+        sync: false
+      # Only if the Expo project has "enhanced push security" on (expo.dev → project → Access tokens).
+      - key: EXPO_ACCESS_TOKEN
+        sync: false
 
   - type: keyvalue
     name: squirrel-redis

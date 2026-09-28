@@ -169,6 +169,26 @@ Runs can't be self-reported (`manual` excludes `run`).
 Rate limits (per user, 429 + `Retry-After`): posts 10/min and 100/day, comments 30/min, likes and
 saves 120/min, follows 60/min, profile updates 20/min, username checks 60/min, uploads 20/min.
 
+### Community (migration `0002_community`)
+
+| Route | What |
+|---|---|
+| `GET /v1/me/membership` · `POST /v1/me/referral {code}` | Waitlist place (everyone is admitted; 3 verified friends with your code move you to the front), invite code and link, founding badge (first 15 verified: Founding Squirrel, first 500: Founding 500; "verified" = the token's `ev` claim) |
+| `GET /v1/community/config` | Hostels to pick from (`SOCIAL_HOSTELS`), founding and referral rules |
+| `GET /v1/stats/daily?days=7` | Campus totals per local day (active members, runs, verified km, workouts) and mine today |
+| `GET /v1/leaderboards/xp?window=daily\|weekly` | Top 10 by XP earned in the window (XP from the Run Module's `/v1/leaderboard/xp`), with names and hostels |
+| `GET /v1/leaderboards/hostels?window=` | Hostel vs hostel: the XP of each hostel's members |
+| `GET·POST /v1/crews`, `GET /v1/crews/{id}`, `POST …/join`, `DELETE …/membership`, `POST·DELETE …/members/{user}/vouch` | Crews, members since when, vouching between members |
+| `GET·POST /v1/events`, `GET·DELETE /v1/events/{id}`, `POST·DELETE …/rsvp`, `POST …/checkin`, `POST /v1/checkins` | Events (open or for a crew, capacity, cancel), RSVPs, reminders an hour before, check-ins that tell up to 5 followers or crewmates |
+| `GET·POST /v1/challenges`, `POST …/{id}/accept\|decline\|cancel` | Head-to-head: most verified km or most workouts in 1–30 days |
+| `GET /v1/notifications`, `/unread-count`, `POST /v1/notifications/read` | The in-app list |
+| `POST /v1/me/push-tokens`, `DELETE /v1/me/push-tokens/{token}` | Expo push tokens; pushes go through Expo's service after the request commits (`app/services/push.py`) |
+| `POST /internal/v1/notifications` | Service token: the Run Module's territory captured / lost / expired events |
+| `POST /internal/v1/tasks/event-reminders` | Service token: send due event reminders (a cron, while the free plan sleeps) |
+
+Profiles also carry `hostel`, `stats.month_km / month_runs / month_workouts` (verified this month) and
+`crews` (member since, vouches).
+
 ### Exercise/Run → Activity → optional Post
 
 1. The Run Module finalises a run (unchanged).
@@ -204,6 +224,14 @@ This matches how the app already uses it, but it must be confirmed against the R
 | `SOCIAL_MEDIA_BUCKET`, `SOCIAL_MEDIA_REGION`, `SOCIAL_MEDIA_ENDPOINT_URL`, `SOCIAL_MEDIA_PUBLIC_BASE_URL`, `SOCIAL_MEDIA_MAX_BYTES` + standard AWS credentials | for photos | – | S3-compatible storage. Unset bucket: uploads return 503 |
 | `SOCIAL_CORS_ORIGINS` | for Expo web | – | Comma-separated browser origins |
 | `SOCIAL_RATE_LIMITS` | no | `on` | `off` disables limits (tests/dev only) |
+| `SOCIAL_HOSTELS` | for hostel vs hostel | – | Comma-separated hostel names members pick from. Unset: the picker and the hostel board stay hidden |
+| `SOCIAL_APP_URL` | for invite links | – | The web app's address; invite links are `…/sign-in?mode=create&invite=CODE` |
+| `SOCIAL_FOUNDING_FIRST`, `SOCIAL_FOUNDING_TOTAL` | no | `15`, `500` | Founding Squirrel / Founding 500 places |
+| `SOCIAL_REFERRALS_TO_SKIP` | no | `3` | Verified friends needed to skip the line |
+| `SOCIAL_COMMUNITY_TIMEZONE` | no | `Asia/Kolkata` | Local day and month for daily stats and "km this month" |
+| `SOCIAL_PUSH` | no | `on` | `off` stores notifications without sending pushes |
+| `EXPO_ACCESS_TOKEN` | no | – | Only when the Expo project requires an access token for pushes |
+| `SOCIAL_EVENT_REMINDERS`, `SOCIAL_EVENT_REMINDER_MINUTES` | no | `on`, `60` | The in-process reminder loop and how long before the start it reminds |
 
 ## Run it
 

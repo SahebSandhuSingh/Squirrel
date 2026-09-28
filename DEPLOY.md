@@ -76,7 +76,7 @@ connect the two.
    If Render added a suffix to a name (because it was taken), use the addresses the dashboard shows,
    and correct `RUN_MODULE_URL` on squirrel-exercise to match.
 
-## 2b. Social service (profiles, follows, posts, feed)
+## 2b. Social service (profiles, follows, posts, feed, crews, events, notifications)
 
 `squirrel-social` (from `squirrel-social-profile-social-fixed/social-backend`) is the third service in
 `render.yaml`. It shares the database and the sign-in with the other two: it verifies the same tokens
@@ -101,6 +101,49 @@ they appear on the member's profile and can be shared as posts.
 Photo uploads need S3-compatible storage (`SOCIAL_MEDIA_*` in `social-backend/.env.example`, e.g.
 Cloudflare R2's free tier); without it everything else works and uploads answer 503. The app reaches
 the service through `EXPO_PUBLIC_SOCIAL_API_URL` (section 3).
+
+## 2c. Sign-up emails, community and push notifications
+
+**Sign-up is for IISER Kolkata only.** An account needs an `@iiserkol.ac.in` address (or a
+subdomain of it) and the 6-digit code emailed to it (`SQUIRREL_ALLOWED_EMAIL_DOMAINS`,
+`SQUIRREL_EMAIL_VERIFICATION` on squirrel-exercise). Existing accounts keep signing in as before.
+
+The code has to reach the inbox. On **squirrel-exercise → Environment**, set one of:
+
+- **Gmail:** `SMTP_USER` = the Gmail address, `SMTP_PASSWORD` = an *app password* (Google Account →
+  Security → 2-Step Verification → App passwords). Gmail sends about 500 a day.
+  **Render's free plan blocks outgoing email ports (25, 465, 587)**, so Gmail works only on a paid
+  instance or another host.
+- **Resend** (works on the free plan, over HTTPS): `RESEND_API_KEY`, and `EMAIL_FROM` on a domain
+  you verified with Resend, e.g. `Squirrel Social <no-reply@squirrelsocial.in>`.
+
+With neither, codes are only written to the service log (**Logs**, search "would send to"): fine
+for a test, not for real sign-ups. Check: sign up in the app; the code email arrives within a
+minute.
+
+**On squirrel-social → Environment:**
+
+- `SOCIAL_HOSTELS`: the hostel names, comma-separated (`Hostel A,Hostel B,...`). Until it is set
+  the hostel picker and the hostel vs hostel board stay hidden.
+- `SOCIAL_APP_URL`: the Vercel address, for invite links (`…/sign-in?mode=create&invite=CODE`).
+
+Everything else is automatic: the waitlist and invite codes, the Founding Squirrel (first 15
+verified members) and Founding 500 badges, crews, events, check-ins, challenges, the daily stats,
+the XP boards and the notification list. Event reminders go an hour before the start while the
+service is awake; on the free plan it sleeps, so for reliable reminders have a cron (e.g.
+cron-job.org, every 10 minutes) POST to `https://squirrel-social.onrender.com/internal/v1/tasks/event-reminders`
+with the header `Authorization: Bearer <SOCIAL_INTERNAL_TOKEN>` (the value from the
+`squirrel-shared` group).
+
+**Push notifications** (steals, challenges, events, check-ins) go to the phone app only, not the
+website:
+
+1. In `mobilessss/`: `npx eas-cli@latest init` once. It writes `extra.eas.projectId` into
+   `app.json`; commit that.
+2. Android: add the FCM (Firebase) key, iOS: the APNs key, with `npx eas-cli@latest credentials`.
+3. Build the app (section 4). It asks for permission after sign-in and registers the phone.
+
+Without these the in-app notification list still works.
 
 ## 3. Connect the web app
 
