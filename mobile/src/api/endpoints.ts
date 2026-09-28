@@ -106,8 +106,10 @@ export function toRunPoints(fixes: Fix[]): RunPoint[] {
 export const idempotencyKey = (runId: string, batch: RunPoint[]) => `${runId}:points:${batch[0].seq}-${batch[batch.length - 1].seq}`;
 
 export const runsApi = {
-  // ASSUMPTION: request body. The contract specifies the response ({ run_id }) only.
-  create: (startedAt: string) => withRetry(() => api<RunCreated>('/v1/runs', { body: { started_at: startedAt } })),
+  // ASSUMPTION: request body. The contract specifies the response ({ run_id }) only;
+  // `activity_type: 'walk'` is our addition, sent only for walks so run requests stay byte-identical.
+  create: (startedAt: string, activityType: 'run' | 'walk' = 'run') =>
+    withRetry(() => api<RunCreated>('/v1/runs', { body: activityType === 'walk' ? { started_at: startedAt, activity_type: 'walk' } : { started_at: startedAt } })),
   uploadPoints: (runId: string, batch: RunPoint[]) =>
     withRetry(() => api<unknown>(`/v1/runs/${runId}/points`, { body: { idempotency_key: idempotencyKey(runId, batch), points: batch } })),
   finish: (runId: string) => withRetry(() => api<{ status: RunStatus }>(`/v1/runs/${runId}/finish`, { method: 'POST' })),
@@ -157,10 +159,18 @@ export async function pollRun(
 export async function submitRun(
   startedAt: number,
   fixes: Fix[],
-  opts: { onStage?: (s: 'uploading' | 'finishing' | 'polling') => void; signal?: AbortSignal } = {},
+  opts: {
+    onStage?: (s: 'uploading' | 'finishing' | 'polling') => void;
+    signal?: AbortSignal;
+    /** Resume a run created by an earlier, failed attempt (point batches replay idempotently). */
+    runId?: string;
+    onCreated?: (runId: string) => void;
+    activityType?: 'run' | 'walk';
+  } = {},
 ): Promise<RunSummary> {
   const points = toRunPoints(fixes);
-  const { run_id } = await runsApi.create(new Date(startedAt).toISOString());
+  const run_id = opts.runId ?? (await runsApi.create(new Date(startedAt).toISOString(), opts.activityType)).run_id;
+  opts.onCreated?.(run_id);
   opts.onStage?.('uploading');
   for (let i = 0; i < points.length; i += POINTS_CHUNK) await runsApi.uploadPoints(run_id, points.slice(i, i + POINTS_CHUNK));
   opts.onStage?.('finishing');

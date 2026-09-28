@@ -1,72 +1,52 @@
-import { SoonBanner, useLocks } from '@/components/Locked';
+/** EVENTS — upcoming on campus and the ones you're going to, from the backend. */
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { FlatList, View } from 'react-native';
 import { router } from 'expo-router';
-import { Mascot } from '@/art/Mascot';
-import { EventCard } from '@/components/cards';
-import { CityChip } from '@/components/TopBar';
-import { EmptyState, FadeIn, Header, IconButton, Screen, Segmented } from '@/components/ui';
-import { useApp } from '@/state/AppState';
-import { colors, fonts } from '@/theme';
+import { campusApi } from '@/api/campus';
+import { EventRow } from '@/components/campus/EventRow';
+import { EmptyNote, ErrorState, LoadingRows, SourceBadge } from '@/components/campus/States';
+import { Header, IconButton, Screen, Segmented } from '@/components/ui';
+import { useCampus, useRealtime, useRefreshOnFocus } from '@/hooks/useCampus';
 
-const TABS = ['Nearby', 'Online', 'My Events'] as const;
-type Tab = (typeof TABS)[number];
+const TABS = ['Upcoming', 'Going'] as const;
 
-/** EVENTS — nearby, online and joined. */
 export default function Events() {
-  const { events, joinedEvents, toggleEvent, city, toast } = useApp();
-  const locks = useLocks();
-  const [tab, setTab] = useState<Tab>('Nearby');
-  const list = events
-    .filter((e) => (tab === 'My Events' ? joinedEvents.has(e.id) : tab === 'Online' ? e.online : !e.online))
-    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
-
+  const [tab, setTab] = useState<(typeof TABS)[number]>('Upcoming');
+  const scope = tab === 'Going' ? 'mine' : 'upcoming';
+  const list = useCampus(`events:${scope}`, () => campusApi.events({ scope }));
+  useRefreshOnFocus(list.reload);
+  // Participant counts move live; patch them in place rather than refetching the list.
+  useRealtime((m) => {
+    if (m.type !== 'event.updated' || !list.data) return;
+    const items = list.data.items.map((e) => (e.id === m.data.event_id ? { ...e, participants_count: m.data.participants_count } : e));
+    list.mutate({ ...list.data, items });
+  });
+  const items = list.data?.items ?? [];
   return (
-    <Screen tabBar={false}>
-      <Header
-        back
-        title="Events"
-        right={
-          <>
-            <CityChip />
-            <IconButton icon="plus" onPress={locks.guard('events', () => toast('Hosting opens at Level 15 · keep moving!', 'lock-clock', colors.violet))} label="Host event" />
-          </>
+    <Screen tabBar={false} scroll={false}>
+      <Header back title="Events" right={<><IconButton icon="calendar-check" onPress={() => router.push('/meetups')} label="Meetups and check-in" /><SourceBadge /></>} />
+      <Segmented items={TABS} value={tab} onChange={setTab} />
+      <FlatList
+        data={items}
+        keyExtractor={(e) => e.id}
+        contentContainerStyle={{ gap: 10, paddingBottom: 40 }}
+        renderItem={({ item }) => <EventRow event={item} />}
+        ListEmptyComponent={
+          <View>
+            {list.signedOut ? (
+              <EmptyNote icon="account-lock-outline" title="Sign in to see events" action="Sign in" onAction={() => router.push('/sign-in')} />
+            ) : list.error ? (
+              <ErrorState cause={list.cause} onRetry={list.reload} />
+            ) : list.loading ? (
+              <LoadingRows rows={4} height={82} />
+            ) : tab === 'Going' ? (
+              <EmptyNote icon="calendar-blank-outline" title="No plans yet" body="RSVP to an event and it shows up here." action="See upcoming" onAction={() => setTab('Upcoming')} />
+            ) : (
+              <EmptyNote icon="calendar-blank-outline" title="Nothing scheduled" body="No events on campus right now. Crews post them here." />
+            )}
+          </View>
         }
       />
-      {locks.locked('events') && <SoonBanner title="Events · coming soon" body="Meetups, workshops and crew runs are launching soon. Here's a preview; joining opens at launch." />}
-      <Segmented items={TABS} value={tab} onChange={setTab} />
-      {tab !== 'My Events' && (
-        <Text style={styles.count}>
-          {list.length} {tab === 'Online' ? 'online sessions' : `events in ${city.name}`} this week
-        </Text>
-      )}
-
-      <View style={{ gap: 10 }}>
-        {list.map((e, i) => (
-          <FadeIn key={e.id} index={i}>
-            <EventCard event={e} going={joinedEvents.has(e.id)} onToggle={() => toggleEvent(e.id)} />
-          </FadeIn>
-        ))}
-      </View>
-
-      {list.length === 0 && (
-        <EmptyState
-          art={<Mascot pose="sleep" size={150} />}
-          title="No plans yet"
-          body="Join an event and it will show up here, with a reminder before it starts."
-          action="Browse nearby"
-          onAction={() => setTab('Nearby')}
-        />
-      )}
-      {tab === 'My Events' && list.length > 0 && (
-        <Text style={[styles.count, { textAlign: 'center', marginTop: 14 }]} onPress={() => router.push('/explore')}>
-          Find more on the Explore map →
-        </Text>
-      )}
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  count: { color: colors.dim, fontFamily: fonts.medium, fontSize: 12, marginBottom: 10 },
-});

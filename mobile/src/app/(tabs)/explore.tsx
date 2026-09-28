@@ -1,201 +1,185 @@
-import { useLocks } from '@/components/Locked';
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+/**
+ * CAMPUS MAP (the Map tab). Fixed named zones, their owners and territory state, your own
+ * territories vs everyone else's, live ownership updates, and zone details on tap.
+ */
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { CityMap } from '@/art/CityMap';
-import { Avatar } from '@/components/Avatar';
-import { CityChip } from '@/components/TopBar';
-import { Chips, Display, Icon, IconButton, NATIVE, PressScale, Pulse, SearchBar, TAB_BAR_SPACE, Tagline, tap } from '@/components/ui';
-import type { Place, PlaceKind } from '@/data/community';
-import { users } from '@/data/users';
-import { useApp } from '@/state/AppState';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, fonts, radius } from '@/theme';
+import { realtimeMode } from '@/api/campus';
+import { CampusMap } from '@/components/campus/CampusMap';
+import { ErrorState, SourceBadge } from '@/components/campus/States';
+import { RELATION_COLOR, relationOf, UNDER_ATTACK } from '@/components/campus/territoryUi';
+import { ZonePanel } from '@/components/campus/ZonePanel';
+import { Display, Icon, IconButton, Kicker, Pulse, Segmented, TAB_BAR_SPACE, tap } from '@/components/ui';
+import { useMe, useTerritorySync, useZones } from '@/hooks/useCampus';
+import { useAllTerritories, useTerritory } from '@/state/territoryStore';
+import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
 
-const FILTERS = ['All', 'Runs', 'Cafes', 'Events'] as const;
-type Filter = (typeof FILTERS)[number];
-const FILTER_ICONS = { All: 'map-marker-multiple', Runs: 'run-fast', Cafes: 'coffee', Events: 'calendar-star' } as const;
+const VIEWS = ['Map', 'Zones'] as const;
+type View_ = (typeof VIEWS)[number];
 
-/** EXPLORE — stylised neon city map with live places, runs and events. */
-export default function Explore() {
+export default function CampusMapScreen() {
   const insets = useSafeAreaInsets();
-  const { places, city, joinedEvents, toggleEvent, events } = useApp();
-  const locks = useLocks();
-  /** Event places belong to the Events feature: inert while it's locked. */
-  const lockedPlace = (p: Place) => p.kind === 'Events' && locks.locked('events');
-  const [filter, setFilter] = useState<Filter>('All');
-  const [q, setQ] = useState('');
-  const [debouncedQ, setDebouncedQ] = useState('');
-  const [selected, setSelected] = useState<string | null>(null);
-  const [showRoute, setShowRoute] = useState(true);
-  const listRef = useRef<ScrollView>(null);
-  const route = useRef(new Animated.Value(0)).current;
-  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const zones = useZones();
+  const me = useMe();
+  const sync = useTerritorySync();
+  const territories = useAllTerritories();
+  const [sel, setSel] = useState<string | null>(null);
+  const [view, setView] = useState<View_>('Map');
+  const meId = me.data?.user_id ?? null;
+  // Bring the zone panel into view once per selection (it renders below the map).
+  const scrollRef = useRef<ScrollView>(null);
+  const scrolledFor = useRef<string | null>(null);
 
-  useEffect(() => {
-    route.setValue(0);
-    Animated.timing(route, { toValue: 1, duration: 2200, easing: Easing.inOut(Easing.cubic), useNativeDriver: false }).start();
-  }, [city.id, showRoute]);
-
-  const handleSearchChange = useCallback((text: string) => {
-    setQ(text);
-    if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    debounceTimer.current = setTimeout(() => setDebouncedQ(text.trim().toLowerCase()), 300);
-  }, []);
-
-  useEffect(() => {
-    return () => { if (debounceTimer.current) clearTimeout(debounceTimer.current); };
-  }, []);
-
-  const term = debouncedQ;
-  const visible = useMemo(
-    () => places.filter((p) => (filter === 'All' || p.kind === filter) && (!term || p.name.toLowerCase().includes(term) || p.kind.toLowerCase().includes(term))),
-    [places, filter, term],
-  );
-  const people = useMemo(() => (term.length > 1 ? users.filter((u) => u.name.toLowerCase().includes(term) || u.handle.includes(term)).slice(0, 4) : []), [term]);
-
-  const select = (p: Place) => {
-    tap();
-    setSelected(p.id);
-    const i = visible.findIndex((v) => v.id === p.id);
-    listRef.current?.scrollTo({ x: Math.max(0, i * 232 - 16), animated: true });
-  };
-
-  const act = (p: Place) => {
-    if (p.kind === 'Runs') router.push('/run');
-    else if (lockedPlace(p)) locks.notify('events');
-    else if (p.eventId) router.push({ pathname: '/event/[id]', params: { id: p.eventId } });
-    else router.push('/crews');
-  };
+  const counts = useMemo(() => {
+    let mine = 0;
+    let held = 0;
+    let attacked = 0;
+    for (const t of territories) {
+      const r = relationOf(t, meId);
+      if (r === 'mine') mine++;
+      if (t.owner) held++;
+      if (r === 'mine' && t.under_challenge) attacked++;
+    }
+    return { mine, held, attacked };
+  }, [territories, meId]);
+  const select = useCallback((id: string) => setSel((cur) => (cur === id ? null : id)), []);
+  const zoneList = zones.data ?? [];
+  const live = realtimeMode();
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      {/* Map fills the screen */}
-      <View style={StyleSheet.absoluteFill}>
-        <CityMap seed={city.id.length * 7} route={showRoute} routeProgress={route} style={StyleSheet.absoluteFill} />
-        {visible.map((p) => (
-          <Marker key={p.id} place={p} active={selected === p.id} locked={lockedPlace(p)} onPress={() => select(p)} />
-        ))}
-        <View style={styles.me}>
-          <Pulse size={44} color={colors.purple} />
-          <View style={styles.meDot} />
-        </View>
-        <Tagline size={22} color={colors.onImage} style={{ position: 'absolute', left: 16, bottom: TAB_BAR_SPACE + 150 + insets.bottom }}>
-          Same city.{'\n'}More movement.
-        </Tagline>
-      </View>
-
-      {/* Top overlay */}
-      <View style={[styles.top, { paddingTop: insets.top + 8 }]}>
+      <ScrollView ref={scrollRef} contentContainerStyle={[styles.col, { paddingTop: insets.top + 10, paddingBottom: TAB_BAR_SPACE + insets.bottom + 10 }]} showsVerticalScrollIndicator={false}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Display size={34}>Explore</Display>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <CityChip />
-            <IconButton icon="flag-variant" onPress={() => router.push('/territory')} label="Territory" color={colors.primary} />
-            <IconButton icon={showRoute ? 'map-marker-path' : 'map-outline'} onPress={() => setShowRoute((v) => !v)} label="Toggle route" color={showRoute ? colors.primary : colors.text} />
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Kicker>Campus map</Kicker>
+              <SourceBadge />
+            </View>
+            <Display size={34} style={{ marginTop: 2 }}>Own <Text style={{ color: colors.primary }}>your</Text> campus</Display>
+          </View>
+          <IconButton icon="trophy-outline" onPress={() => router.push('/leaderboard')} label="Leaderboards" />
+        </View>
+
+        <View style={styles.stats}>
+          <Stat v={String(counts.mine)} l="Yours" c={colors.primary} />
+          <Stat v={`${counts.held}/${zoneList.length || '—'}`} l="Zones held" />
+          <Stat v={String(counts.attacked)} l="Under attack" c={counts.attacked ? UNDER_ATTACK : undefined} />
+          <View style={styles.live} accessibilityLabel={live === 'focus' ? 'Refreshes when you open the map' : 'Live updates on'}>
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: live === 'focus' ? colors.dim : colors.green }}>{live !== 'focus' && <Pulse size={8} color={colors.green} />}</View>
+            <Text style={styles.liveText}>{live === 'focus' ? 'Auto-refresh' : 'Live'}</Text>
           </View>
         </View>
-        <View style={{ marginTop: 10 }}>
-          <SearchBar placeholder="Search runs, cafes, people..." value={q} onChangeText={handleSearchChange} />
-        </View>
-        <Chips items={FILTERS} value={filter} onChange={setFilter} icons={FILTER_ICONS} />
-        {people.length > 0 && (
-          <View style={styles.people}>
-            {people.map((u) => (
-              <Pressable key={u.id} style={styles.personRow} onPress={() => router.push({ pathname: '/user/[id]', params: { id: u.id } })}>
-                <Avatar user={u} size={34} link={false} />
-                <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={styles.pName}>{u.name}</Text>
-                  <Text style={styles.pMeta}>@{u.handle} · {u.area}</Text>
+
+        <Segmented items={VIEWS} value={view} onChange={setView} style={{ marginTop: 10 }} />
+
+        {zones.error && !zones.data ? (
+          <ErrorState cause={zones.cause} onRetry={zones.reload} />
+        ) : view === 'Map' ? (
+          <>
+            {zoneList.length ? (
+              <CampusMap zones={zoneList} meId={meId} selectedId={sel} onSelect={select} style={styles.map} />
+            ) : (
+              <View style={[styles.map, styles.mapLoading]}>
+                <Text style={styles.meta}>Loading campus zones…</Text>
+              </View>
+            )}
+            <View style={styles.legend}>
+              {[
+                ['Yours', RELATION_COLOR.mine, false],
+                ['Held by others', RELATION_COLOR.other, false],
+                ['Unclaimed', RELATION_COLOR.unclaimed, true],
+                ['Under attack', UNDER_ATTACK, true],
+              ].map(([l, c, dashed]) => (
+                <View key={String(l)} style={styles.legendItem}>
+                  <View style={[styles.swatch, { borderColor: String(c), borderStyle: dashed ? 'dashed' : 'solid' }]} />
+                  <Text style={styles.legendText}>{l}</Text>
                 </View>
-                <Icon name="chevron-right" size={20} color={colors.dim} />
-              </Pressable>
+              ))}
+            </View>
+            {!!sync.error && <ErrorState cause={sync.error} onRetry={sync.reload} compact title="Territories didn’t load" />}
+          </>
+        ) : (
+          <View style={{ gap: 8, marginTop: 4 }}>
+            {zoneList.map((z) => (
+              <ZoneRow key={z.id} id={z.id} name={z.name} meId={meId} selected={sel === z.id} onPress={() => select(z.id)} />
             ))}
           </View>
         )}
-      </View>
 
-      {/* Bottom carousel */}
-      <View style={[styles.bottom, { bottom: TAB_BAR_SPACE - 18 + insets.bottom }]}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 8 }}>
-          <Text style={styles.count}>{visible.length} spots nearby</Text>
-          <Pressable onPress={() => { tap(); setSelected(null); }} style={styles.locate} accessibilityLabel="Recenter">
-            <Icon name="crosshairs-gps" size={20} color={colors.text} />
+        {sel ? (
+          <View
+            style={styles.panel}
+            onLayout={(e) => {
+              if (scrolledFor.current === sel) return;
+              scrolledFor.current = sel;
+              scrollRef.current?.scrollTo({ y: Math.max(0, e.nativeEvent.layout.y - 12), animated: true });
+            }}>
+            <Pressable onPress={() => { tap(); setSel(null); }} style={styles.close} accessibilityRole="button" accessibilityLabel="Close zone">
+              <Icon name="close" size={18} color={colors.dim} />
+            </Pressable>
+            <ZonePanel key={sel} zoneId={sel} meId={meId} showOpen />
+          </View>
+        ) : (
+          <Pressable onPress={() => router.push('/run')} style={styles.hint} accessibilityRole="button" accessibilityLabel="Start a run">
+            <Icon name="gesture-tap" size={18} color={colors.primary} />
+            <Text style={styles.hintText}>Tap a zone to see who holds it. Run or walk through a zone to become eligible to claim it — crossing it alone never claims it.</Text>
+            <Icon name="run-fast" size={20} color={colors.primary} />
           </Pressable>
-        </View>
-        <ScrollView ref={listRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingHorizontal: 16 }} snapToInterval={232} decelerationRate="fast">
-          {visible.map((p) => {
-            const ev = p.eventId && !locks.locked('events') ? events.find((e) => e.id === p.eventId) : undefined;
-            const going = ev ? joinedEvents.has(ev.id) : false;
-            return (
-              <PressScale key={p.id} onPress={() => select(p)} style={[styles.placeCard, selected === p.id && { borderColor: p.color }]}>
-                <View style={[styles.placeIcon, { backgroundColor: `${p.color}22`, borderColor: `${p.color}66` }]}>
-                  <Icon name={p.icon} size={22} color={p.color} />
-                </View>
-                <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={styles.pName} numberOfLines={1}>{p.name}</Text>
-                  <Text style={styles.pMeta} numberOfLines={1}>{p.kind} · {lockedPlace(p) ? 'Coming soon' : p.meta}</Text>
-                </View>
-                <Pressable
-                  onPress={() => {
-                    tap();
-                    if (lockedPlace(p)) act(p);
-                    else if (ev) toggleEvent(ev.id);
-                    else act(p);
-                  }}
-                  style={[styles.go, { backgroundColor: going || (lockedPlace(p)) ? colors.cardHi : p.kind === 'Runs' ? colors.primary : colors.secondary }]}>
-                  <Text style={[styles.goText, (going || (lockedPlace(p))) && { color: colors.sub }]}>{lockedPlace(p) ? 'Soon' : ev ? (going ? 'Going' : 'Join') : p.kind === 'Runs' ? 'Run' : 'Go'}</Text>
-                </Pressable>
-              </PressScale>
-            );
-          })}
-        </ScrollView>
-      </View>
+        )}
+      </ScrollView>
     </View>
   );
 }
 
-function Marker({ place, active, locked, onPress }: { place: Place; active: boolean; locked: boolean; onPress: () => void }) {
-  const s = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.spring(s, { toValue: 1, useNativeDriver: NATIVE, speed: 10, bounciness: 10, delay: Math.round(place.x * 400) }).start();
-  }, [s, place.x]);
+function Stat({ v, l, c }: { v: string; l: string; c?: string }) {
   return (
-    <Animated.View style={[styles.pinWrap, { left: `${place.x * 100}%`, top: `${27 + place.y * 46}%`, transform: [{ scale: s }] }]}>
-      <Pressable onPress={onPress} style={[styles.pin, active && { borderColor: place.color, backgroundColor: colors.bg }]} accessibilityLabel={place.name}>
-        <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-          {(active || place.kind === 'Events') && <Pulse size={34} color={place.color} />}
-          <View style={[styles.pinDot, { backgroundColor: place.color }]}>
-            <Icon name={place.icon} size={15} color={colors.onSecondary} />
-          </View>
-        </View>
-        <View style={{ marginLeft: 6 }}>
-          <Text style={styles.pinName} numberOfLines={1}>{place.name}</Text>
-          <Text style={styles.pinMeta}>{locked ? 'Coming soon' : place.meta}</Text>
-        </View>
-      </Pressable>
-    </Animated.View>
+    <View style={{ flex: 1 }}>
+      <Text style={[styles.statV, c ? { color: c } : null]}>{v}</Text>
+      <Text style={styles.statL}>{l}</Text>
+    </View>
+  );
+}
+
+function ZoneRow({ id, name, meId, selected, onPress }: { id: string; name: string; meId: string | null; selected: boolean; onPress: () => void }) {
+  const t = useTerritory(id);
+  const rel = relationOf(t, meId);
+  const c = t?.under_challenge ? UNDER_ATTACK : RELATION_COLOR[rel];
+  return (
+    <Pressable onPress={() => { tap(); onPress(); }} style={[styles.zoneRow, selected && { borderColor: c }]} accessibilityRole="button" accessibilityLabel={`${name}: ${rel}`}>
+      <View style={[styles.zoneDot, { backgroundColor: c }]} />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.zoneName}>{name}</Text>
+        <Text style={styles.meta}>
+          {rel === 'mine' ? 'Your territory' : rel === 'other' ? `Held by ${t?.owner?.display_name}` : rel === 'unclaimed' ? 'Unclaimed' : '…'}
+          {t?.under_challenge ? ' · under attack' : ''}
+        </Text>
+      </View>
+      <Icon name="chevron-right" size={20} color={colors.dim} />
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  top: { paddingHorizontal: 16, backgroundColor: 'rgba(17,17,19,0.94)', borderBottomLeftRadius: radius.xl, borderBottomRightRadius: radius.xl },
-  people: { backgroundColor: colors.bg2, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, marginBottom: 10, overflow: 'hidden' },
-  personRow: { flexDirection: 'row', alignItems: 'center', padding: 10, borderBottomWidth: 1, borderBottomColor: colors.line },
-  pinWrap: { position: 'absolute' },
-  pin: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(17,17,19,0.96)', borderRadius: radius.pill, padding: 4, paddingRight: 11, borderWidth: 1.5, borderColor: colors.line, maxWidth: 170 },
-  pinDot: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' },
-  pinName: { color: colors.text, fontFamily: fonts.bold, fontSize: 12 },
-  pinMeta: { color: colors.sub, fontFamily: fonts.regular, fontSize: 10 },
-  me: { position: 'absolute', left: '46%', top: '52%', width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  meDot: { width: 18, height: 18, borderRadius: 9, backgroundColor: colors.purple, borderWidth: 3, borderColor: '#fff' },
-  bottom: { position: 'absolute', left: 0, right: 0 },
-  count: { color: colors.onImage, fontFamily: fonts.bold, fontSize: 13, textShadowColor: '#000', textShadowRadius: 6 },
-  locate: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.bg2, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.line },
-  placeCard: { width: 220, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.bg, borderRadius: radius.lg, padding: 10, borderWidth: 1.5, borderColor: colors.line },
-  placeIcon: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
-  pName: { color: colors.text, fontFamily: fonts.bold, fontSize: 14 },
-  pMeta: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12 },
-  go: { borderRadius: radius.sm, paddingHorizontal: 11, paddingVertical: 7, marginLeft: 6 },
-  goText: { color: colors.onSecondary, fontFamily: fonts.bold, fontSize: 12 },
+  col: { paddingHorizontal: 16, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' },
+  stats: { flexDirection: 'row', alignItems: 'center', marginTop: 12, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.line, paddingVertical: 10 },
+  statV: { color: colors.text, fontFamily: fonts.labelBold, fontSize: 22 },
+  statL: { color: colors.dim, fontFamily: fonts.mono, fontSize: 10, letterSpacing: 0.8, textTransform: 'uppercase' },
+  live: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: colors.line, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
+  liveText: { color: colors.sub, fontFamily: fonts.label, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' },
+  map: { height: 420, marginTop: 10 },
+  mapLoading: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line },
+  legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 10 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  swatch: { width: 16, height: 10, borderWidth: 2 },
+  legendText: { color: colors.sub, fontFamily: fonts.label, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },
+  panel: { marginTop: 14, backgroundColor: colors.bg2, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.line, padding: 16 },
+  close: { position: 'absolute', right: 10, top: 10, zIndex: 2, width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card },
+  hint: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, borderStyle: 'dashed', padding: 12 },
+  hintText: { flex: 1, color: colors.dim, fontFamily: fonts.regular, fontSize: 12, lineHeight: 17 },
+  meta: { color: colors.dim, fontFamily: fonts.mono, fontSize: 11 },
+  zoneRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, padding: 12 },
+  zoneDot: { width: 12, height: 12, borderRadius: 6 },
+  zoneName: { color: colors.text, fontFamily: fonts.label, fontSize: 15, letterSpacing: 0.6, textTransform: 'uppercase' },
 });

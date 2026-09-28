@@ -1,160 +1,161 @@
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { Avatar } from '@/components/Avatar';
-import { Button, Display, FadeIn, Header, Icon, Kicker, Screen, Segmented } from '@/components/ui';
-import { formatArea, isMyEntry, leaderboardApi, shortUserId, type LeaderboardEntry, type LeaderboardPage, type LeaderboardWindow } from '@/api/endpoints';
-import { useAuth } from '@/auth/AuthProvider';
-import { territoryBoard } from '@/data/territory';
-import { userById } from '@/data/users';
-import { useApp } from '@/state/AppState';
+/**
+ * LEADERBOARDS — Top 10 squirrels (XP, zones held, distance) and Hostel vs Hostel
+ * (score, territories, active members, distance). All from the campus backend.
+ */
+import { useRef, useState } from 'react';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
+import { campusApi, type HostelBoard, type LeaderboardPeriod, type SquirrelBoard, type SquirrelRow } from '@/api/campus';
+import { PersonAvatar } from '@/components/campus/PersonAvatar';
+import { EmptyNote, ErrorState, LoadingRows, SourceBadge } from '@/components/campus/States';
+import { km, shortTime } from '@/components/campus/territoryUi';
+import { Chips, Display, Header, Icon, Kicker, Screen, Segmented } from '@/components/ui';
+import { useCampus, useConfig, useRealtime, useRefreshOnFocus } from '@/hooks/useCampus';
 import { colors, fonts, radius } from '@/theme';
 
-const TABS = ['Daily', 'Weekly', 'All-time'] as const;
-const WINDOW: Record<(typeof TABS)[number], LeaderboardWindow> = { Daily: 'daily', Weekly: 'weekly', 'All-time': 'alltime' };
-const DEMO: Record<LeaderboardWindow, keyof typeof territoryBoard> = { daily: 'daily', weekly: 'weekly', alltime: 'all_time' };
+const BOARDS = ['Squirrels', 'Hostel vs Hostel'] as const;
+const PERIODS = ['Daily', 'Weekly', 'All-time'] as const;
+const PERIOD: Record<(typeof PERIODS)[number], LeaderboardPeriod> = { Daily: 'daily', Weekly: 'weekly', 'All-time': 'alltime' };
+const MEDAL = [colors.gold, '#C9CED6', '#D08A4E'];
 
-type Row = { key: string; rank: number; name: string; areaText: string; userId?: string; me?: boolean; live?: boolean };
-
-const demoRows = (w: LeaderboardWindow): Row[] =>
-  territoryBoard[DEMO[w]].map((r, i) => ({ key: r.userId, rank: i + 1, name: r.name, areaText: `${r.km2.toFixed(1)} km²`, userId: r.userId, me: r.me }));
-
-type Me = LeaderboardPage['me'];
-
-const liveRow = (e: LeaderboardEntry, mine: boolean): Row => ({
-  key: e.user_id,
-  rank: e.rank,
-  name: mine ? 'You' : shortUserId(e.user_id),
-  areaText: formatArea(e.score),
-  me: mine,
-  live: true,
-});
-
-const pinnedMeRow = (me: NonNullable<Me>): Row => ({ key: 'me', rank: me.rank, name: 'You', areaText: formatArea(me.score), me: true, live: true });
-
-/**
- * CAMPUS leaderboard: students on your campus, ranked by territory area
- * (GET /v1/leaderboard?metric=area&window=…). The Run Module only offers scope=global today,
- * so live rows are all runners until a campus scope exists; the sample data is campus-only.
- */
 export default function Leaderboard() {
-  const { city, me } = useApp();
-  const { mode, userId } = useAuth();
-  const [tab, setTab] = useState<(typeof TABS)[number]>('Weekly');
-  const [rows, setRows] = useState<Row[]>(demoRows('weekly'));
-  const [meRow, setMeRow] = useState<Row | null>(null);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [pageMe, setPageMe] = useState<Me>(null);
-  const [source, setSource] = useState<'demo' | 'live' | 'error'>('demo');
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    const w = WINDOW[tab];
-    setRows(demoRows(w));
-    setMeRow(null);
-    setCursor(null);
-    if (mode !== 'live') return setSource('demo');
-    let cancelled = false;
-    setLoading(true);
-    leaderboardApi
-      .get(w)
-      .then((page) => {
-        if (cancelled) return;
-        const mine = page.entries.map((e) => isMyEntry(e, userId, page.me));
-        setPageMe(page.me);
-        setRows(page.entries.map((e, i) => liveRow(e, mine[i])));
-        setMeRow(page.me && !mine.some(Boolean) ? pinnedMeRow(page.me) : null);
-        setCursor(page.next_cursor);
-        setSource('live');
-      })
-      .catch(() => !cancelled && setSource('error'))
-      .finally(() => !cancelled && setLoading(false));
-    return () => {
-      cancelled = true;
-    };
-  }, [tab, mode, userId]);
-
-  const loadMore = async () => {
-    if (!cursor) return;
-    setLoading(true);
-    try {
-      const page = await leaderboardApi.get(WINDOW[tab], cursor);
-      const mine = page.entries.map((e) => isMyEntry(e, userId, pageMe));
-      setRows((r) => [...r, ...page.entries.map((e, i) => liveRow(e, mine[i]))]);
-      if (mine.some(Boolean)) setMeRow(null);
-      setCursor(page.next_cursor);
-    } catch {
-      setSource('error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const renderRow = (r: Row, i: number) => {
-    const u = r.me ? me : !r.live && r.userId ? userById(r.userId) : undefined;
-    const top = r.rank === 1;
-    return (
-      <FadeIn key={`${tab}-${r.key}`} index={i}>
-        <View style={[styles.row, r.me && styles.me, top && { borderColor: colors.primary }]}>
-          <Text style={[styles.rank, top && { color: colors.primary }]}>{String(r.rank).padStart(2, '0')}</Text>
-          {u ? (
-            <Avatar user={u} size={38} ring={top ? colors.primary : colors.lineHi} />
-          ) : (
-            <View style={styles.anon}>
-              <Icon name="run-fast" size={18} color={colors.dim} />
-            </View>
-          )}
-          <Text style={styles.name} numberOfLines={1}>{r.me ? 'You' : r.name}</Text>
-          <Text style={styles.area}>{r.areaText}</Text>
-        </View>
-      </FadeIn>
-    );
-  };
+  const config = useConfig();
+  const [board, setBoard] = useState<(typeof BOARDS)[number]>('Squirrels');
+  const [period, setPeriod] = useState<(typeof PERIODS)[number]>('Daily');
+  const p = PERIOD[period];
+  const squirrels = useCampus<SquirrelBoard>(`board:squirrels:${p}`, () => campusApi.squirrelBoard(p, 10), { enabled: board === 'Squirrels' });
+  const hostels = useCampus<HostelBoard>(`board:hostels:${p}`, () => campusApi.hostelBoard(p), { enabled: board !== 'Squirrels' });
+  const active = board === 'Squirrels' ? squirrels : hostels;
+  useRefreshOnFocus(active.reload);
+  // Ownership changes move territory counts: refresh on pushes, at most every 20 s.
+  const lastPush = useRef(0);
+  useRealtime((m) => {
+    if (m.type !== 'territory.updated' || Date.now() - lastPush.current < 20_000) return;
+    lastPush.current = Date.now();
+    active.reload();
+  });
 
   return (
     <Screen tabBar={false}>
-      <Header back title="" />
-      <Kicker>Campus Leaderboard · {city.campus}</Kicker>
-      <Display size={46} style={{ marginTop: 6 }}>Who owns <Text style={{ color: colors.primary }}>the campus</Text></Display>
-      <Segmented items={TABS} value={tab} onChange={setTab} />
-      <Text style={styles.source}>
-        {source === 'live' ? 'Live · all runners until campus rankings go live' : source === 'error' ? 'Server unreachable · showing sample campus data' : 'Sample campus data · sign in for live rankings'}
-      </Text>
+      <Header back title="" right={<SourceBadge />} />
+      <Kicker>Leaderboards · {config.data?.campus.short_name ?? 'Campus'}</Kicker>
+      <Display size={40} style={{ marginTop: 4 }}>Who runs <Text style={{ color: colors.primary }}>campus</Text></Display>
+      <Segmented items={BOARDS} value={board} onChange={setBoard} style={{ marginTop: 10 }} />
+      <Chips items={PERIODS} value={period} onChange={setPeriod} />
 
-      {loading && rows.length === 0 ? <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} /> : null}
-      <View style={{ gap: 8 }}>{rows.map(renderRow)}</View>
-
-      {meRow && (
-        <>
-          <Text style={styles.gap}>···</Text>
-          {renderRow(meRow, rows.length)}
-        </>
-      )}
-
-      {source === 'live' && cursor && (
-        <Button label={loading ? 'Loading…' : 'Load more'} variant="secondary" size="md" disabled={loading} onPress={loadMore} style={{ marginTop: 14 }} />
-      )}
-
-      {source === 'live' && (
-        <View style={styles.note}>
-          <Icon name="information-outline" size={16} color={colors.dim} />
-          <Text style={styles.noteText}>
-            Names aren't shown yet: the run service stores no profiles. They'll appear once a profile service is connected.
-          </Text>
-        </View>
-      )}
+      {active.signedOut ? (
+        <EmptyNote icon="account-lock-outline" title="Sign in to see leaderboards" action="Sign in" onAction={() => router.push('/sign-in')} />
+      ) : active.error && !active.data ? (
+        <ErrorState cause={active.cause} onRetry={active.reload} />
+      ) : !active.data ? (
+        <LoadingRows rows={6} height={58} />
+      ) : board === 'Squirrels' && squirrels.data ? (
+        <Squirrels data={squirrels.data} />
+      ) : hostels.data ? (
+        <Hostels data={hostels.data} />
+      ) : null}
     </Screen>
   );
 }
 
+function Squirrels({ data }: { data: SquirrelBoard }) {
+  if (!data.entries.length) return <EmptyNote icon="trophy-outline" title="No one on the board yet" body="Move today to take the top spot." />;
+  const meIn = data.me && data.entries.some((e) => e.user_id === data.me!.user_id);
+  return (
+    <View>
+      <View style={styles.headRow}>
+        <Text style={[styles.head, { flex: 1 }]}>Top 10</Text>
+        <Text style={[styles.head, styles.colN]}>XP</Text>
+        <Text style={[styles.head, styles.colN]}>Zones</Text>
+        <Text style={[styles.head, styles.colN]}>Dist.</Text>
+      </View>
+      <FlatList scrollEnabled={false} data={data.entries} keyExtractor={(e) => e.user_id} contentContainerStyle={{ gap: 6 }} renderItem={({ item }) => <SquirrelLine r={item} me={item.user_id === data.me?.user_id} />} />
+      {data.me && !meIn && (
+        <>
+          <Text style={styles.gap}>···</Text>
+          <SquirrelLine r={data.me} me />
+        </>
+      )}
+      <Text style={styles.fine}>Updated {shortTime(data.updated_at)}</Text>
+    </View>
+  );
+}
+
+function SquirrelLine({ r, me }: { r: SquirrelRow; me: boolean }) {
+  return (
+    <View style={[styles.row, me && styles.meRow]} accessibilityLabel={`Rank ${r.rank}, ${me ? 'you' : r.display_name}, ${r.xp} XP`}>
+      <Text style={[styles.rank, r.rank <= 3 && { color: MEDAL[r.rank - 1] }]}>{String(r.rank).padStart(2, '0')}</Text>
+      <PersonAvatar person={r} size={34} ring={r.rank === 1 ? colors.gold : undefined} />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.name} numberOfLines={1}>{me ? 'You' : r.display_name}</Text>
+        {!!r.hostel && <Text style={styles.meta}>{r.hostel}</Text>}
+      </View>
+      <Text style={[styles.num, styles.colN, { color: colors.gold }]}>{r.xp.toLocaleString('en-IN')}</Text>
+      <Text style={[styles.num, styles.colN]}>{r.zones_claimed}</Text>
+      <Text style={[styles.num, styles.colN, { color: colors.dim }]}>{r.distance_m == null ? '—' : km(r.distance_m)}</Text>
+    </View>
+  );
+}
+
+function Hostels({ data }: { data: HostelBoard }) {
+  if (!data.entries.length) return <EmptyNote icon="home-city-outline" title="No hostel scores yet" />;
+  const top = Math.max(1, ...data.entries.map((e) => e.score));
+  return (
+    <View style={{ gap: 10 }}>
+      {data.entries.map((h) => {
+        const mine = h.hostel_id === data.my_hostel_id;
+        return (
+          <View key={h.hostel_id} style={[styles.hostel, mine && styles.meRow, h.rank === 1 && { borderColor: colors.gold }]} accessibilityLabel={`${h.name}, rank ${h.rank}, ${h.score} points`}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Text style={[styles.rank, h.rank <= 3 && { color: MEDAL[h.rank - 1] }]}>{String(h.rank).padStart(2, '0')}</Text>
+              <Icon name="home-city" size={22} color={h.rank === 1 ? colors.gold : colors.text} />
+              <Text style={styles.hostelName}>{h.name}</Text>
+              {mine && <Text style={styles.yours}>Your hostel</Text>}
+              <View style={{ flex: 1 }} />
+              <Text style={styles.score}>{h.score.toLocaleString('en-IN')}</Text>
+            </View>
+            <View style={styles.bar}>
+              <View style={{ width: `${(h.score / top) * 100}%`, height: '100%', backgroundColor: h.rank === 1 ? colors.gold : mine ? colors.primary : colors.lineHi, borderRadius: 4 }} />
+            </View>
+            <View style={{ flexDirection: 'row', gap: 16 }}>
+              <Stat icon="flag-variant" v={`${h.territories}`} l="territories" />
+              <Stat icon="run-fast" v={`${h.active_members}`} l="active" />
+              <Stat icon="map-marker-distance" v={h.distance_m == null ? '—' : km(h.distance_m, 0)} l="moved" />
+            </View>
+          </View>
+        );
+      })}
+      <Text style={styles.fine}>Score = the backend’s hostel formula (territory, activity, distance) · updated {shortTime(data.updated_at)}</Text>
+    </View>
+  );
+}
+
+function Stat({ icon, v, l }: { icon: React.ComponentProps<typeof Icon>['name']; v: string; l: string }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+      <Icon name={icon} size={13} color={colors.dim} />
+      <Text style={styles.statV}>{v}</Text>
+      <Text style={styles.meta}>{l}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  source: { color: colors.dim, fontFamily: fonts.mono, fontSize: 10, marginBottom: 10, letterSpacing: 0.6, textTransform: 'uppercase' },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, padding: 10 },
-  me: { backgroundColor: 'rgba(215,255,31,0.08)', borderColor: 'rgba(215,255,31,0.4)' },
-  rank: { color: colors.dim, fontFamily: fonts.monoBold, fontSize: 14, width: 26 },
-  anon: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.cardHi, alignItems: 'center', justifyContent: 'center' },
-  name: { flex: 1, color: colors.text, fontFamily: fonts.label, fontSize: 15, letterSpacing: 0.6, textTransform: 'uppercase' },
-  area: { color: colors.primary, fontFamily: fonts.labelBold, fontSize: 16 },
-  gap: { color: colors.mute, textAlign: 'center', marginVertical: 6, fontFamily: fonts.bold, letterSpacing: 4 },
-  note: { flexDirection: 'row', gap: 8, marginTop: 18, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, borderStyle: 'dashed', padding: 12 },
-  noteText: { flex: 1, color: colors.dim, fontFamily: fonts.regular, fontSize: 12, lineHeight: 17 },
+  headRow: { flexDirection: 'row', paddingHorizontal: 10, marginBottom: 6 },
+  head: { color: colors.dim, fontFamily: fonts.label, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' },
+  colN: { width: 56, textAlign: 'right' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, paddingVertical: 8, paddingHorizontal: 10 },
+  meRow: { borderColor: colors.primary, backgroundColor: 'rgba(215,255,31,0.06)' },
+  rank: { color: colors.dim, fontFamily: fonts.display, fontSize: 18, width: 28 },
+  name: { color: colors.text, fontFamily: fonts.bold, fontSize: 14 },
+  meta: { color: colors.dim, fontFamily: fonts.mono, fontSize: 10 },
+  num: { color: colors.text, fontFamily: fonts.labelBold, fontSize: 15 },
+  gap: { color: colors.dim, textAlign: 'center', marginVertical: 4 },
+  fine: { color: colors.mute, fontFamily: fonts.mono, fontSize: 10, textAlign: 'center', marginTop: 12 },
+  hostel: { backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1.5, borderColor: colors.line, padding: 14, gap: 10 },
+  hostelName: { color: colors.text, fontFamily: fonts.labelBold, fontSize: 20, letterSpacing: 0.8, textTransform: 'uppercase' },
+  yours: { color: colors.primary, fontFamily: fonts.label, fontSize: 10, letterSpacing: 1, textTransform: 'uppercase' },
+  score: { color: colors.text, fontFamily: fonts.display, fontSize: 24 },
+  bar: { height: 8, backgroundColor: colors.bg2, borderRadius: 4, overflow: 'hidden' },
+  statV: { color: colors.text, fontFamily: fonts.labelBold, fontSize: 14 },
 });

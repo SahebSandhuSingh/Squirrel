@@ -4,6 +4,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { CAMPUS_SOURCE } from '@/api/campus';
 import { Mascot } from '@/art/Mascot';
 import { Avatar } from '@/components/Avatar';
 import { SceneImage, SocialPost, UserChip } from '@/components/cards';
@@ -115,6 +116,26 @@ export default function Social() {
           <Icon name="chevron-right" size={22} color={colors.dim} />
         </FeatureGate>
       </PressScale>
+
+      {/* Friend Mode + Active Now: activity-based discovery from the campus backend */}
+      {CAMPUS_SOURCE !== 'off' && (
+        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+          <PressScale onPress={() => router.push('/friends')} style={[styles.hunt, { flex: 1, marginBottom: 0 }]} scaleTo={0.98} accessibilityLabel="Friend Mode">
+            <Icon name="account-heart" size={22} color={colors.primary} />
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <RowTitle>Friend Mode</RowTitle>
+              <RowSub>Same routes, new people</RowSub>
+            </View>
+          </PressScale>
+          <PressScale onPress={() => router.push('/active')} style={[styles.hunt, { flex: 1, marginBottom: 0 }]} scaleTo={0.98} accessibilityLabel="Active now">
+            <Icon name="radar" size={22} color={colors.green} />
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <RowTitle>Active now</RowTitle>
+              <RowSub>Near you</RowSub>
+            </View>
+          </PressScale>
+        </View>
+      )}
 
       {feed === 'Nearby' && (
         <Text style={styles.nearbyNote}>

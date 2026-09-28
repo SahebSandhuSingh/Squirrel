@@ -187,6 +187,40 @@ type BadgeDef = {
 };
 
 const BADGES: Record<BadgeKind, BadgeDef> = {
+  'night-owl': {
+    shape: 'shield',
+    color: art.purple,
+    emblem: ({ main, detail }, cy) => (
+      <G transform={`translate(0 ${cy - 56})`}>
+        <Path d="M66 34 a22 22 0 1 0 14 36 a18 18 0 1 1 -14 -36 Z" fill={main} />
+        <Path d={`${star(44, 42, 4.5, 1.8, 4, 0)} ${star(50, 58, 3, 1.2, 4, 0)} ${star(38, 66, 3.5, 1.4, 4, 0)}`} fill={detail} />
+      </G>
+    ),
+  },
+  'park-regular': {
+    shape: 'circle',
+    color: art.green,
+    emblem: ({ main, detail }, cy) => (
+      <G transform={`translate(0 ${cy - 56})`}>
+        <Path d={`${circ(60, 44, 13)} ${circ(49, 54, 10)} ${circ(71, 54, 10)}`} fill={main} />
+        <Path d="M58 58 H62 V76 H58 Z" fill={main} />
+        <Path d="M34 76 Q60 70 86 76" stroke={detail} strokeWidth={3} strokeLinecap="round" fill="none" />
+        <Path d="M36 80 Q60 75 84 80" stroke={main} strokeWidth={2} strokeDasharray="3 4" strokeLinecap="round" fill="none" opacity={0.7} />
+      </G>
+    ),
+  },
+  'founding-squirrel': {
+    shape: 'rosette',
+    color: art.lime,
+    emblem: ({ main, detail }, cy) => (
+      <G transform={`translate(0 ${cy - 56})`}>
+        <Path d="M44 46 C44 38 52 34 60 34 C68 34 76 38 76 46 Z" fill={main} />
+        <Path d="M60 34 C60 30 62 28 65 27" stroke={main} strokeWidth={3} strokeLinecap="round" fill="none" />
+        <Path d="M46 48 H74 C74 64 68 76 60 78 C52 76 46 64 46 48 Z" fill={detail} />
+        <Path d={star(60, 60, 8, 3.4)} fill={main} />
+      </G>
+    ),
+  },
   city: {
     shape: 'hex',
     color: art.pink,

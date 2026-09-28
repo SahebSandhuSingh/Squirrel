@@ -1,138 +1,141 @@
-import { FeatureGate, SoonScreen } from '@/components/Locked';
+/** EVENT DETAILS — date/time, location, participants, type, territory challenge, RSVP / cancel. */
 import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Scene } from '@/art/Scene';
-import { CityMap } from '@/art/CityMap';
-import { Avatar, AvatarStack } from '@/components/Avatar';
-import { Button, Card, Display, EmptyState, Icon, IconButton, Scrim, SectionHeader } from '@/components/ui';
-import { eventsForCity, formatEventDate } from '@/data/community';
-import { userById } from '@/data/users';
+import { campusApi, errorText, type EventDetail } from '@/api/campus';
+import { eventType } from '@/components/campus/EventRow';
+import { PersonAvatar } from '@/components/campus/PersonAvatar';
+import { ErrorState, LoadingRows, SourceBadge } from '@/components/campus/States';
+import { Button, Card, Display, Icon, IconButton, Kicker, Scrim, SectionHeader, tap } from '@/components/ui';
+import { formatEventDate } from '@/data/community';
+import { invalidateCampus, useAction, useCampus } from '@/hooks/useCampus';
 import { useApp } from '@/state/AppState';
-import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
+import { colors, fonts, MAX_WIDTH } from '@/theme';
 
-function EventDetail() {
+export default function EventScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { events, joinedEvents, toggleEvent, city, toast } = useApp();
-  // Online events are shared across cities; fall back to looking them up by id.
-  const event = events.find((e) => e.id === id) ?? eventsForCity(city.id).find((e) => e.id === id);
-  if (!event) {
+  const { toast } = useApp();
+  const r = useCampus<EventDetail>(`event:${id}`, () => campusApi.event(id));
+  const rsvp = useAction((going: boolean) => campusApi.rsvp(id, going));
+  const e = r.data;
+  const back = () => (router.canGoBack() ? router.back() : router.replace('/events'));
+
+  if (!e) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top + 40 }}>
-        <EmptyState title="Event not found" body="It may be in another city. Switch city and try again." action="Back" onAction={() => router.back()} />
+      <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top + 10, paddingHorizontal: 16 }}>
+        <IconButton icon="chevron-left" size={26} onPress={back} label="Back" />
+        <View style={{ marginTop: 16 }}>{r.error ? <ErrorState cause={r.cause} onRetry={r.reload} /> : <LoadingRows rows={4} height={80} />}</View>
       </View>
     );
   }
-  const going = joinedEvents.has(event.id);
-  const attendees = event.attendeeIds.map(userById);
+  const t = eventType(e.type);
+  const going = e.my_rsvp === 'going';
+  const full = e.capacity != null && e.participants_count >= e.capacity && !going;
+  const toggle = async () => {
+    tap();
+    const next = await rsvp.run(!going);
+    if (next) {
+      r.mutate(next); // the server's answer, not a guess
+      invalidateCampus('events');
+      invalidateCampus('meetups');
+      toast(next.my_rsvp ? `You’re going to ${next.title}` : 'RSVP cancelled', next.my_rsvp ? 'calendar-check' : 'calendar-remove', next.my_rsvp ? colors.primary : colors.dim);
+    }
+  };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 110 }}>
-        <View style={{ height: 300 + insets.top }}>
-          <Scene kind={event.scene} seed={event.title.length} aspect={Math.min(width, MAX_WIDTH) / (300 + insets.top)} style={StyleSheet.absoluteFill} />
-          <Scrim strong />
-          <View style={[styles.topBar, { top: insets.top + 8 }]}>
-            <IconButton icon="chevron-left" size={26} onPress={() => router.back()} label="Back" />
-            <IconButton icon="share-variant-outline" onPress={() => toast('Event link copied', 'link-variant', colors.secondary)} label="Share" />
-          </View>
-          <View style={styles.heroText}>
-            <View style={styles.xp}>
-              <Icon name="star-four-points" size={13} color={colors.gold} />
-              <Text style={styles.xpText}>+{event.xp} XP on check-in</Text>
-            </View>
-            <Display size={40} color={colors.onImage}>{event.title}</Display>
-            <Text style={styles.host}>Hosted by {event.host}</Text>
-          </View>
+    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ paddingBottom: insets.bottom + 30 }}>
+      <View style={{ height: 220 + insets.top }}>
+        <Scene kind={e.type === 'walk' ? 'lake' : e.type === 'social' ? 'crew' : 'stadium'} seed={e.title.length} aspect={Math.min(width, MAX_WIDTH) / (220 + insets.top)} style={StyleSheet.absoluteFill} />
+        <Scrim strong />
+        <View style={[styles.top, { top: insets.top + 8 }]}>
+          <IconButton icon="chevron-left" size={26} onPress={back} label="Back" />
+          <SourceBadge />
         </View>
-
-        <View style={styles.col}>
-          <Card>
-            <Row icon="calendar-clock" title={formatEventDate(event.startsAt)} sub="Add to calendar" />
-            <View style={styles.divider} />
-            <Row icon={event.online ? 'video-outline' : 'map-marker-outline'} title={event.venue} sub={event.online ? 'Link unlocks 15 min before' : `${city.name} · 2.4 km away`} />
-          </Card>
-
-          <SectionHeader title="About" />
-          <Text style={styles.body}>{event.description}</Text>
-
-          <SectionHeader title={`Going · ${event.going + (going ? 1 : 0)}`} />
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              {attendees.map((u) => (
-                <Avatar key={u.id} user={u} size={48} />
-              ))}
-            </View>
-            <AvatarStack users={attendees.slice(0, 2)} extra={event.going - attendees.length + (going ? 1 : 0)} size={24} />
-          </View>
-
-          {!event.online && (
-            <>
-              <SectionHeader title="Meeting point" />
-              <View style={styles.map}>
-                <CityMap seed={event.title.length} route style={StyleSheet.absoluteFill} />
-                <View style={styles.pin}>
-                  <Icon name={event.icon} size={18} color={colors.onPrimary} />
-                </View>
-              </View>
-            </>
-          )}
+        <View style={styles.heroText}>
+          <Kicker color={t.color}>{t.label}</Kicker>
+          <Display size={34} color={colors.onImage} style={{ marginTop: 4 }}>{e.title}</Display>
+          <Text style={styles.host}>by {e.host.name}</Text>
         </View>
-      </ScrollView>
-
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
-        <Button label={going ? "You're going ✓" : 'Join event'} variant={going ? 'secondary' : 'primary'} onPress={() => toggleEvent(event.id)} style={{ width: '100%', maxWidth: MAX_WIDTH - 32, alignSelf: 'center' }} />
       </View>
-    </View>
+
+      <View style={styles.col}>
+        <Card style={{ gap: 10 }}>
+          <Line icon="calendar-clock" text={formatEventDate(e.starts_at) + (e.ends_at ? ` → ${new Date(e.ends_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : '')} />
+          <Line
+            icon="map-marker"
+            text={e.location.name}
+            onPress={e.location.zone_id ? () => router.push({ pathname: '/zone/[id]', params: { id: e.location.zone_id! } }) : undefined}
+          />
+          <Line icon="account-group" text={`${e.participants_count} going${e.capacity != null ? ` · ${Math.max(0, e.capacity - e.participants_count)} spots left` : ''}`} />
+        </Card>
+
+        {e.territory_challenge && (
+          <Card style={{ marginTop: 12, borderColor: 'rgba(255,45,155,0.5)', gap: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Icon name="sword-cross" size={18} color={colors.secondary} />
+              <Text style={styles.chTitle}>Territory challenge</Text>
+            </View>
+            <Text style={styles.body}>{e.territory_challenge.summary}</Text>
+            <Text style={styles.meta}>
+              {e.territory_challenge.zone_ids.length} zones in play{e.territory_challenge.reward_xp ? ` · +${e.territory_challenge.reward_xp} XP for the winners` : ''}
+            </Text>
+            <Button label="See zones on the map" variant="secondary" size="sm" iconLeft="map-marker-radius" onPress={() => router.push('/explore')} />
+          </Card>
+        )}
+
+        {!!e.description && <Text style={[styles.body, { marginTop: 14 }]}>{e.description}</Text>}
+
+        <View style={{ marginTop: 16, gap: 8 }}>
+          <Button
+            label={rsvp.status === 'loading' ? (going ? 'Cancelling…' : 'Saving…') : going ? 'Going · Cancel RSVP' : full ? 'Event full' : e.rsvp_open ? 'RSVP · I’m going' : 'RSVPs closed'}
+            iconLeft={going ? 'check' : 'calendar-plus'}
+            variant={going ? 'secondary' : 'primary'}
+            disabled={rsvp.status === 'loading' || (!going && (full || !e.rsvp_open))}
+            onPress={toggle}
+          />
+          {rsvp.status === 'error' && <Text style={styles.err}>{errorText(rsvp.error)}</Text>}
+          {going && e.meetup_id && <Button label="Meetup check-in" variant="ghost" size="sm" iconLeft="map-marker-check" onPress={() => router.push({ pathname: '/meetup/[id]', params: { id: e.meetup_id! } })} />}
+        </View>
+
+        <SectionHeader title={`Participants · ${e.participants_count}`} />
+        {e.participants.length ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
+            {e.participants.map((p) => (
+              <View key={p.user_id} style={{ alignItems: 'center', width: 60 }}>
+                <PersonAvatar person={p} size={50} />
+                <Text style={styles.member} numberOfLines={1}>{p.display_name.split(' ')[0]}</Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <Text style={styles.meta}>Be the first to RSVP.</Text>
+        )}
+      </View>
+    </ScrollView>
   );
 }
 
-function Row({ icon, title, sub }: { icon: React.ComponentProps<typeof Icon>['name']; title: string; sub: string }) {
+function Line({ icon, text, onPress }: { icon: React.ComponentProps<typeof Icon>['name']; text: string; onPress?: () => void }) {
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-      <View style={styles.rowIcon}>
-        <Icon name={icon} size={20} color={colors.primary} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.rowTitle}>{title}</Text>
-        <Text style={styles.rowSub}>{sub}</Text>
-      </View>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      <Icon name={icon} size={18} color={colors.primary} />
+      <Text style={[styles.line, onPress && { textDecorationLine: 'underline' }]} onPress={onPress}>{text}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  topBar: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between' },
-  heroText: { position: 'absolute', left: 16, right: 16, bottom: 16 },
-  xp: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', backgroundColor: 'rgba(10,10,10,0.7)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill, marginBottom: 6 },
-  xpText: { color: colors.gold, fontFamily: fonts.bold, fontSize: 12 },
-  host: { color: colors.onImageSub, fontFamily: fonts.medium, fontSize: 14 },
-  col: { paddingHorizontal: 16, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center', marginTop: 16 },
-  divider: { height: 1, backgroundColor: colors.line, marginVertical: 12 },
-  rowIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(215,255,31,0.12)', alignItems: 'center', justifyContent: 'center' },
-  rowTitle: { color: colors.text, fontFamily: fonts.bold, fontSize: 15 },
-  rowSub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, marginTop: 1 },
-  body: { color: colors.sub, fontFamily: fonts.regular, fontSize: 15, lineHeight: 22 },
-  map: { height: 180, borderRadius: radius.lg, overflow: 'hidden', borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
-  pin: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#fff' },
-  footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 12, backgroundColor: 'rgba(17,17,19,0.97)', borderTopWidth: 1, borderTopColor: colors.line },
+  top: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  heroText: { position: 'absolute', left: 16, right: 16, bottom: 14 },
+  host: { color: colors.onImageSub, fontFamily: fonts.medium, fontSize: 13, marginTop: 2 },
+  col: { paddingHorizontal: 16, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center', marginTop: 14 },
+  line: { flex: 1, color: colors.text, fontFamily: fonts.medium, fontSize: 14 },
+  chTitle: { color: colors.secondary, fontFamily: fonts.label, fontSize: 14, letterSpacing: 1, textTransform: 'uppercase' },
+  body: { color: colors.sub, fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
+  meta: { color: colors.dim, fontFamily: fonts.mono, fontSize: 11 },
+  err: { color: colors.coral, fontFamily: fonts.medium, fontSize: 13, textAlign: 'center' },
+  member: { color: colors.sub, fontFamily: fonts.medium, fontSize: 12, marginTop: 6 },
 });
-
-/** Events aren't launched yet: the route shows a locked state instead of the detail page. */
-export default function EventRoute() {
-  return (
-    <FeatureGate
-      feature="events"
-      fallback={
-        <SoonScreen
-          title="Events are coming soon"
-          body="Meetups, workshops and crew runs will open here at launch. Until then, keep moving: runs and missions still earn XP."
-          onBack={() => (router.canGoBack() ? router.back() : router.replace('/home'))}
-        />
-      }>
-      <EventDetail />
-    </FeatureGate>
-  );
-}

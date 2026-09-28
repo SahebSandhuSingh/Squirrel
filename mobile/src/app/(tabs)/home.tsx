@@ -4,16 +4,17 @@ import { LOCKED_MISSIONS } from '@/data/features';
 import { useLocks } from '@/components/Locked';
 import { activityLine, selectFeed, timeAgo } from '@/data/posts';
 import { useEffect, useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Mascot } from '@/art/Mascot';
 import { Avatar } from '@/components/Avatar';
-import { EventCard, MissionCard, SceneImage } from '@/components/cards';
+import { MissionCard, SceneImage } from '@/components/cards';
+import { CAMPUS_SOURCE } from '@/api/campus';
+import { ActiveNowStrip, CampusNotLive, CampusTerritoryCard, HomeEvents, HomeLeaderboard, SocialShortcuts } from '@/components/campus/HomeSections';
 import { CityChip, TopBar } from '@/components/TopBar';
 import { Button, Card, Display, FadeIn, Icon, OverlayKicker, OverlaySub, PressScale, Ring, RowSub, RowTitle, Screen, SectionHeader, Tagline } from '@/components/ui';
 import { today } from '@/data/stats';
-import { userById, users } from '@/data/users';
-import { territoryBoard } from '@/data/territory';
+import { userById } from '@/data/users';
 import { useAuth } from '@/auth/AuthProvider';
 import { Tape } from '@/components/Brand';
 import { PROGRESS_API_CONFIGURED } from '@/api/config';
@@ -27,7 +28,7 @@ const greeting = () => {
 };
 
 export default function Home() {
-  const { me, missions, logMission, claimed, claimable, claimRewards, events, joinedEvents, toggleEvent, city, districts } = useApp();
+  const { me, missions, logMission, claimed, claimable, claimRewards, city } = useApp();
   const { mode } = useAuth();
   const { syncServerXp, exerciseToday, posts, following } = useApp();
   const locks = useLocks();
@@ -44,14 +45,10 @@ export default function Home() {
     xpApi.me().then((r) => syncServerXp(r.xp)).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
-  const held = districts.filter((d) => d.status === 'yours');
-  const home = held[0] ?? districts[0];
   // Locked (not-yet-launched) missions stay visible at the end but don't count.
   const daily = missions.filter((m) => m.tab === 'Daily').sort((a, b) => Number(LOCKED_MISSIONS.has(a.id)) - Number(LOCKED_MISSIONS.has(b.id)));
   const activeDaily = daily.filter((m) => !LOCKED_MISSIONS.has(m.id));
   const doneCount = activeDaily.filter((m) => m.current >= m.goal).length;
-  const upcoming = events.filter((e) => !e.online).slice(0, 5);
-  const leaders = territoryBoard.weekly.slice(0, 4);
 
   const onClaim = () => {
     const r = claimRewards();
@@ -99,7 +96,7 @@ export default function Home() {
               <View style={{ flex: 1 }}>
                 <OverlayKicker>{city.venues?.runs?.[0] ?? 'City Loop'} · 2.4 km loop</OverlayKicker>
                 <Display size={30} color={colors.onImage}>Start a run</Display>
-                <OverlaySub>Earn up to +150 XP · 3 friends running now</OverlaySub>
+                <OverlaySub>Run or walk · your route unlocks zones to claim</OverlaySub>
               </View>
               <View style={styles.playBtn}>
                 <Icon name="play" size={30} color={colors.onPrimary} />
@@ -129,24 +126,11 @@ export default function Home() {
 
       <Tape items={['Touch grass (literally)', 'Every run leaves a mark', 'Claim your block', 'No pressure, all vibes']} color={colors.secondary} rotate={2} style={{ marginTop: 26, marginBottom: -6 }} />
 
-      {/* Territory */}
-      <SectionHeader kicker="02 — Territory" title="Own your block" action="Map" onAction={() => router.push('/territory')} />
-      <PressScale onPress={() => router.push('/territory')} scaleTo={0.98}>
-        <View style={styles.zone}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.zoneKicker}>YOUR CREW</Text>
-            <Display size={28} numberOfLines={1}>{home?.name}</Display>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
-              <View style={{ flex: 1, height: 8, backgroundColor: colors.line }}>
-                <View style={{ width: `${Math.round((home?.control ?? 0) * 100)}%`, height: '100%', backgroundColor: colors.primary }} />
-              </View>
-              <Text style={styles.zonePct}>{Math.round((home?.control ?? 0) * 100)}%</Text>
-            </View>
-            <Text style={styles.zoneInfo}>{held.length} zones held · {districts.filter((d) => d.status === 'contested').length} contested · decays in {home?.decayDays}d</Text>
-          </View>
-          <Icon name="chevron-right" size={24} color={colors.primary} />
-        </View>
-      </PressScale>
+      {/* Territory — the campus map's zones (backend truth) */}
+      <SectionHeader kicker="02 — Territory" title="Own your campus" action="Map" onAction={() => router.push('/explore')} />
+      {CAMPUS_SOURCE === 'off' ? <CampusNotLive /> : <CampusTerritoryCard />}
+      {CAMPUS_SOURCE !== 'off' && <ActiveNowStrip />}
+      {CAMPUS_SOURCE !== 'off' && <SocialShortcuts />}
 
       {/* Challenges */}
       <PressScale onPress={() => router.push('/challenges')} scaleTo={0.98} style={{ marginTop: 12 }}>
@@ -154,7 +138,7 @@ export default function Home() {
           <Icon name="sword-cross" size={26} color={colors.secondary} />
           <View style={{ flex: 1 }}>
             <RowTitle>Choose your battle</RowTitle>
-            <Text style={styles.zoneInfo}>You vs Rhea · 18.4 vs 21.1 km this week</Text>
+            <Text style={styles.zoneInfo}>Daily, head-to-head, group & special challenges</Text>
           </View>
           <Icon name="chevron-right" size={24} color={colors.secondary} />
         </View>
@@ -171,38 +155,11 @@ export default function Home() {
         </SceneImage>
       </FadeIn>
 
-      {/* Campus leaderboard — students on your campus, ranked by territory area */}
-      <SectionHeader kicker={`03 — ${city.campus}`} title="Campus Leaderboard" action="By area" onAction={() => router.push('/leaderboard')} />
-      <Card style={{ paddingVertical: 6 }}>
-        {leaders.map((r, i) => {
-          const u = r.me ? me : users.find((x) => x.id === r.userId)!;
-          return (
-            <View key={r.userId} style={[styles.leader, r.me && styles.leaderMe, i > 0 && !r.me && { borderTopWidth: 1, borderTopColor: colors.line }]}>
-              <Text style={[styles.rank, i === 0 && { color: colors.primary }]}>{String(i + 1).padStart(2, '0')}</Text>
-              <Avatar user={u} size={36} ring={i === 0 ? colors.primary : colors.lineHi} />
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={styles.leaderName}>{r.me ? 'You' : r.name}</Text>
-                <Text style={styles.leaderSub}>LV {u.level} · {u.area}</Text>
-              </View>
-              <Text style={styles.leaderXp}>{r.km2.toFixed(1)} km²</Text>
-            </View>
-          );
-        })}
-      </Card>
+      {/* Leaderboard — top squirrels today, from the campus backend */}
+      {CAMPUS_SOURCE !== 'off' && <HomeLeaderboard campusName={city.campus} />}
 
-      {/* Events */}
-      <SectionHeader
-        kicker={eventsLocked ? '04 — Meetups · coming soon' : '04 — Meetups'}
-        title={`Happening in ${city.name}`}
-        action={eventsLocked ? 'Coming soon' : 'All events'}
-        onAction={locks.guard('events', () => router.push('/events'))}
-      />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingRight: 16 }} style={{ marginHorizontal: -16 }}>
-        <View style={{ width: 16 }} />
-        {upcoming.map((e) => (
-          <EventCard key={e.id} event={e} variant="hero" going={joinedEvents.has(e.id)} onToggle={() => toggleEvent(e.id)} />
-        ))}
-      </ScrollView>
+      {/* Events — campus events (RSVP state lives on the server) */}
+      {CAMPUS_SOURCE !== 'off' && !eventsLocked && <HomeEvents />}
 
       {/* Friends activity */}
       <SectionHeader kicker="05 — Right now" title="Crew Activity" action="Feed" onAction={() => router.push('/social')} />

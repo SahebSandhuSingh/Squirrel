@@ -106,7 +106,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [look, setLook] = useState<AvatarLook>(me.look);
   const [pet, setPet] = useState('pet-nutty');
   const [gear, setGear] = useState('none');
-  const [cityId, setCityId] = useState(me.cityId ?? DEFAULT_CITY_ID);
+  const [cityId, setCityId] = useState(DEFAULT_CITY_ID);
   // Level 13 with 750 / 2000 into it, matching the design.
   const [xp, setXp] = useState(12 * XP_PER_LEVEL + 750);
   const [coins, setCoins] = useState(2350);

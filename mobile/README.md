@@ -25,33 +25,42 @@ Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-h
 
 | Route | Screen |
 |---|---|
-| `/sign-in` | Sign in (account service), demo mode, or developer token |
-| `/territory` | Own your block: district map, zone control, decay |
+| `/sign-in` | **Join / sign in with a .ac.in email** (one-time code), demo mode; password and developer token under “Other options”. New accounts go to onboarding |
+| `/onboarding` | Wingman intro → **What are you looking for? Date / Friends / Crew** → hostel → Open to Meet → saved to the profile (`PATCH /v1/me`) |
+| `/territory` | Redirects to the campus map |
+| `/zone/[id]` | One zone: map, owner, territory status, stats, history, and **Claim / Steal / Defend** only where the backend allows |
 | `/challenges` | Daily, head-to-head and group challenges (auto-resolve) |
 | `/exercise/select` | **Start Exercise** picker (opened from Home). Lists the Exercise backend's catalog (`GET /api/exercises`) with plan, time and estimated calories; Start creates a real session (`POST /api/users/{id}/sessions`) |
 | `/exercise/train/[key]` | Active exercise: the backend plan (sets × reps/seconds, rest). Tap each rep, or a real countdown for timed sets; camera mirror; pause/finish. Completion updates missions, XP and Home's Active/kcal rings |
 | `/exercise`, `/exercise/profile`, `/exercise/plan/[key]`, `/exercise/session/[id]` | Form Coach hub, coach profile, custom plan, session report (Exercise backend) |
 | `/partner-hunt/*` | **Partner Hunt** (locked · Coming soon): "Find your workout buddy". Card on the Social tab; every route (index, preferences, matching, buddy/[id], connect/[id]) shows the locked preview while `LOCKED.partnerHunt` is on |
-| `/leaderboard` | **Campus Leaderboard**: students on your campus ranked by territory area (daily, weekly, all-time) |
-| `/welcome` | Landing: cinematic sunset city, avatar + squirrel mascot, Get Started |
+| `/leaderboard` | **Leaderboards**: Top 10 squirrels (XP, zones held, distance) and **Hostel vs Hostel** (score, territories, activity), daily / weekly / all-time |
+| `/welcome` | **Live at IISER Kolkata**: IISER-only messaging, `.ac.in` CTA, live user / zone / crew counters (from the backend), campus map visual, Founding Squirrel |
 | `/avatar` | **Make It You**: body, hair, outfit, shoes, accessories, gear, emotes and pet mascot |
-| `/home` *(tab)* | Top bar (avatar, level, XP, coins), greeting, activity rings, Start Run, missions, campus leaderboard, events carousel (coming soon), crew activity |
-| `/explore` *(tab)* | Stylised neon city map: pulsing markers, animated route, filters, search (places + people), place carousel |
+| `/home` *(tab)* | Top bar, greeting, activity rings, Start Exercise, Start Run, missions, **your territory** (under-attack alerts), **Active now**, Friend Mode / Challenges shortcuts, today's top squirrels, campus events, crew activity |
+| `/explore` *(Map tab)* | **Campus map**: fixed zones from their polygons, coloured by territory (yours / held / unclaimed / under attack), pinch/zoom, live updates, list view, zone panel with actions |
 | **＋** *(tab)* | Create menu: start run, post, log workout; log water, log a meal and find an event are locked (coming soon) |
 | `/social` *(tab)* | Stories, For You / Following / Nearby feed, suggested people, crews teaser |
-| `/profile` *(tab)* | Cover, level card, highlights, badges, equipped cosmetics, posts/activity/saved grid |
-| `/run` | Live run: 3-2-1 countdown, route animation, live stats, music/camera, hold-to-finish, summary |
+| `/profile` *(tab)* | **Campus profile**: photo, name, bio, connection mode, Founding Squirrel, Open to Meet toggle, activity stats (distance, month, zones, defended, stolen, crews, events, streak), territory, crews, badges, activity history, verification. (The offline demo profile when the campus backend is off.) |
+| `/edit-profile` | Name, bio, connection mode, hostel |
+| `/run` | **Run / Walk**: pick activity, permission handling, live GPS route on the campus map, distance/duration/pace, pause, finish or discard; summary with route, **zones interacted with / eligible**, and the backend-allowed claim action. Upload retry on network failure |
 | `/missions` | Daily / Weekly / Special missions with completion and claim states |
 | `/progress` | **Your Progress**, in four sections:<br>• **Today:** goal ring, today's XP, activities done, XP left, run XP, streak and a level bar.<br>• **Progress:** Day/Week/Month/Year with Steps/Active/Calories/Workouts, a tap-to-read bar chart and the streak calendar with active days.<br>• **Your performance:** change vs the previous period, campus rank and milestones in reach.<br>• **Next:** the best next action (claim, run, or log a mission). |
-| `/crews`, `/crew/[id]` | Find Your Crew (Nearby/Online/Campus/Interests), crew detail with members, events and posts |
-| `/events`, `/event/[id]` | Events preview behind a "Coming soon" banner; the detail route shows a locked screen |
+| `/crews`, `/crew/[id]`, `/crew/new` | Discover / my crews with search, crew profile (members, crew territory, upcoming events), join / leave, create (when the backend allows) |
+| `/events`, `/event/[id]` | Upcoming / going; details with date, place, participants, type, territory-challenge info, RSVP / cancel RSVP |
+| `/friends` | **Friend Mode**: activity-based suggestions, shared zones/crews, backend icebreakers, challenge invite |
+| `/date` | **Date Mode** behind the backend safety gate; when open: toggle, activity-first profiles, suggested plans, icebreakers |
+| `/active` | **Active now** + **Squirrels near you** (coarse proximity only) with the Open to Meet toggle |
+| `/invites`, `/invite/new` | **Challenge invites**: incoming / sent, accept · decline · cancel; create (type, person or crew, zone, time, message) |
+| `/meetups`, `/meetup/[id]` | Upcoming meetups; **check in**, attendees, optional safety-contact notification (shown as sent only when the API confirms) |
+| `/badges` | Badges: unlocked, locked, progress |
 | `/level-up` | RPG level-up reveal: rays, mascot, XP bar, staggered reward cards, next unlock |
 | `/rewards` | Level road, achievement badges, sticker collection |
 | `/shop`, `/item/[id]` | Shop (20+ items, rarities, level locks) and item sheet (buy / equip) |
 | `/compose` | Post composer: backdrop, sticker and activity (pre-filled after a run) |
 | `/post/[id]` | Post with comments |
 | `/highlight/[id]` | Full-screen story viewer for profile highlights |
-| `/user/[id]` | Any user's profile, with Follow |
+| `/user/[id]` | Anyone's campus profile: shared context, icebreakers, Challenge |
 | `/city` | City picker |
 | `/notifications` | Activity notifications |
 
@@ -61,11 +70,51 @@ Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-h
 - `LOCKED.mealWater`: Log water / Log a meal (Create sheet), the water and meal daily missions, and the Hydro Homie badge.
 - `LOCKED.stories`: story bubbles on Social show a "Coming soon" toast and open the profile. Posting your own story via the composer still works.
 - `LOCKED.partnerHunt`: the Social tab card and every `/partner-hunt` route (the layout renders the locked preview). The future flow and model (preferences by campus, interests, activities, availability and goals; buddy profile; connection status) are in `data/partnerHunt.ts`. There is no matching logic and no buddy data yet.
-- `LOCKED.events`: `/events` (preview + banner), `/event/[id]` (locked screen), event cards and Join pills, Explore event markers, the Home meetups carousel, joining, and the "Join a crew event" weekly mission.
+- `LOCKED.events` is now **off**: events launched with the campus backend (RSVPs are server-side).
 
 Locked missions are listed last and left out of the done/XP counters and claimable rewards. Set a flag to `false` at launch.
 
 **Campus, not city.** Each city in `data/cities.ts` has a `campus`, and the leaderboard ranks students on that campus. The Run Module's leaderboard API only offers `scope=global` today, so signed-in rows are labelled as all runners until a campus scope exists.
+
+## Campus social (IISER Kolkata launch)
+
+The IISER-first social layer: **Move → Discover people → Claim territory → Join crews → Meet IRL**.
+
+**Where the data comes from** (`src/api/campus/`):
+
+| Source | When | What the screens show |
+|---|---|---|
+| `live` — `http.ts` | `EXPO_PUBLIC_CAMPUS_API_URL` (or `EXPO_PUBLIC_API_URL`) is set | The backend's data, with the shared bearer token |
+| `mock` — `mock/server.ts` | Development builds with no campus URL (or `EXPO_PUBLIC_DEV_MOCKS=1`) | An in-memory dev backend (IISER zones, people, crews…). Every screen shows a **Dev data** pill |
+| `off` | Production build with no campus URL | “Not live yet” states — never invented numbers |
+
+Screens only import `campusApi` (typed contract in `types.ts`); no component calls `fetch`. Swapping the mock for the real backend is the one line in `api/campus/index.ts`; if the backend's shapes differ, adapt `http.ts`. Routes the app calls:
+
+```
+GET  /v1/config                      GET  /v1/campus/stats
+GET  /v1/me   PATCH /v1/me           PUT  /v1/me/open-to-meet     GET /v1/me/badges
+GET  /v1/users/{id}                  GET  /v1/users/{id}/context   (shared zones/crews + icebreakers)
+GET  /v1/zones                       GET  /v1/territories          GET /v1/zones/{id}
+POST /v1/zones/{id}/claim | steal | defend   { idempotency_key }
+GET  /v1/runs/{run_id}/zones         (zones a verified run interacted with + current eligibility)
+GET  /v1/crews  POST /v1/crews       GET  /v1/crews/{id}           POST /v1/crews/{id}/join | leave
+GET  /v1/events                      GET  /v1/events/{id}          PUT | DELETE /v1/events/{id}/rsvp
+GET  /v1/people/suggested?mode=friends|date                        GET /v1/people/active
+GET  /v1/challenge-invites/types     GET | POST /v1/challenge-invites   POST /v1/challenge-invites/{id}/accept | decline | cancel
+GET  /v1/leaderboards/squirrels?period=&limit=                     GET /v1/leaderboards/hostels?period=
+GET  /v1/meetups                     GET  /v1/meetups/{id}         POST /v1/meetups/{id}/check-in { notify_safety_contact }
+WS   realtime_url  →  territory.updated · stats.updated · invite.updated · event.updated · active.updated
+```
+
+**Territory model.** RUN (a GPS route, owned by the Run Module) ≠ ZONE (a fixed named area) ≠ TERRITORY (who owns a zone). A run *interacts* with zones; the backend decides eligibility; the user claims, steals or defends. Nothing in the app claims a zone because a route crossed it. Claim/steal/defend buttons appear only when the zone's `actions.*.allowed` says so (otherwise the backend's `reason` is shown), every attempt sends an idempotency key, has loading / success / failure states, and the returned territory replaces local state.
+
+**Live updates and performance.** `state/territoryStore.ts` keeps one territory per zone (highest `version` wins). Each map polygon subscribes to its own zone, so one ownership change repaints one polygon. Pan/zoom is an `Animated` transform (no SVG re-render). Updates arrive over the WebSocket when configured; otherwise screens refresh on focus (at most once a minute) — no tight polling.
+
+**Privacy.** The app never shows another person's location or route: Active Now uses coarse proximity buckets from the backend, and only your own route is drawn. Nearby people are shown only while you're Open to Meet. No secrets in `EXPO_PUBLIC_*`.
+
+**Sign-in.** `.ac.in` emails get a one-time code (`POST {AUTH_URL}/email/start`, `/email/verify` → `{ access_token }` — an assumption until the account service exists). In the dev mock the code is `246810`.
+
+**Date Mode** unlocks only when `GET /v1/config` reports `features.date_mode.available`; the requirements list comes from the backend.
 
 ## Look & feel: website palette + GTA-style type
 

@@ -11,7 +11,7 @@ type BottomTabBarProps = Parameters<NonNullable<React.ComponentProps<typeof Tabs
 
 const ICONS: Record<string, [IconName, IconName]> = {
   home: ['home-variant', 'home-variant-outline'],
-  explore: ['compass', 'compass-outline'],
+  explore: ['map-marker-radius', 'map-marker-radius-outline'],
   social: ['account-group', 'account-group-outline'],
   profile: ['account-circle', 'account-circle-outline'],
 };

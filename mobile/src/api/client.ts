@@ -18,6 +18,8 @@ export const setApiToken = (t: string | null) => {
 };
 /** True once a bearer token is set (signed in, live mode). */
 export const hasApiToken = () => token != null;
+/** For transports that can't go through api() (the realtime socket's auth frame). */
+export const getApiToken = () => token;
 
 /** Retry-After is either delta-seconds or an HTTP date. */
 function parseRetryAfter(v: string | null): number | undefined {

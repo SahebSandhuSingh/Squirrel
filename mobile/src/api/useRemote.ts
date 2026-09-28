@@ -11,7 +11,7 @@ export function invalidateRemote(prefix: string) {
   for (const k of cache.keys()) if (k.startsWith(prefix)) cache.delete(k);
 }
 
-type Settled<T> = { id: string; data?: T; error: string | null };
+type Settled<T> = { id: string; data?: T; error: string | null; cause?: unknown };
 
 export function useRemote<T>(key: string | null, fetcher: () => Promise<T>) {
   const [tick, setTick] = useState(0);
@@ -32,7 +32,7 @@ export function useRemote<T>(key: string | null, fetcher: () => Promise<T>) {
         cache.set(key, d);
         setSettled({ id, data: d, error: null });
       },
-      (e) => !cancelled && setSettled({ id, error: e instanceof Error ? e.message : 'Something went wrong' }),
+      (e) => !cancelled && setSettled({ id, error: e instanceof Error ? e.message : 'Something went wrong', cause: e }),
     );
     return () => {
       cancelled = true;
@@ -42,7 +42,18 @@ export function useRemote<T>(key: string | null, fetcher: () => Promise<T>) {
   const current = settled != null && settled.id === id;
   const data = (current && settled.data !== undefined ? settled.data : key ? (cache.get(key) as T | undefined) : undefined) ?? undefined;
   const error = current ? settled.error : null;
+  /** The thrown value behind `error` (e.g. an ApiError with its status), for choosing the right state. */
+  const cause = current ? settled.cause : undefined;
   const loading = !!key && !current;
   const reload = useCallback(() => setTick((t) => t + 1), []);
-  return { data, error, loading, reload };
+  /** Replace the cached value without a request (after a mutation returned the new state). */
+  const mutate = useCallback(
+    (next: T) => {
+      if (!key || !id) return;
+      cache.set(key, next);
+      setSettled({ id, data: next, error: null });
+    },
+    [key, id],
+  );
+  return { data, error, cause, loading, reload, mutate };
 }

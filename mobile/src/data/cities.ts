@@ -21,6 +21,19 @@ export type City = {
 
 export const cities: City[] = [
   {
+    id: 'kolkata',
+    name: 'Kolkata',
+    country: 'India',
+    campus: 'IISER Kolkata',
+    areas: ['Mohanpur', 'Kalyani', 'Salt Lake', 'Park Street', 'New Town', 'Ballygunge'],
+    venues: {
+      runs: ['Sports Ground Loop', 'Lake Walk', 'Rabindra Sarobar', 'Eco Park Loop'],
+      parks: ['Admin Lawn', 'Central Park, Salt Lake', 'Maidan'],
+      cafes: ['Campus Canteen', 'Kalyani Chai Point', 'Park Street Café'],
+      studios: ['Squirrel Studio, Salt Lake', 'Pulse HIIT, New Town'],
+    },
+  },
+  {
     id: 'pune',
     name: 'Pune',
     country: 'India',
@@ -113,6 +126,7 @@ export const cities: City[] = [
   },
 ];
 
-export const DEFAULT_CITY_ID = 'pune';
+/** IISER Kolkata launch: the default city/campus. */
+export const DEFAULT_CITY_ID = 'kolkata';
 
 export const cityById = (id: string) => cities.find((c) => c.id === id) ?? cities[0];
