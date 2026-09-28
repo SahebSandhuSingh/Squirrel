@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Animated, Easing, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,8 +16,9 @@ import { StatusBar } from 'expo-status-bar';
 import { statusColor } from '@/data/territory';
 import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
 
-// Demo mode (no GPS permission, or web): distance is simulated at a fixed pace and the
-// screen says so. With GPS, distance comes from filtered location fixes.
+// Demo mode (location denied or unavailable): distance is simulated at a fixed pace and the
+// screen says so. With GPS, distance comes from filtered location fixes: the device's on iOS and
+// Android, the browser's (navigator.geolocation, HTTPS only) on the web.
 const DEMO_PACE = 378; // sec per km (6'18")
 const DEMO_START = 32 * 60 + 16; // matches the design: 5.12 km in 32:16
 const two = (n: number) => String(Math.floor(n)).padStart(2, '0');
@@ -65,7 +66,7 @@ export default function Run() {
     phaseRef.current = phase;
   }, [phase]);
 
-  // Distance source: real GPS if we can get permission on a device, otherwise a labelled demo.
+  // Distance source: real GPS if we get permission (phone or browser), otherwise a labelled demo.
   useEffect(() => {
     let sub: Location.LocationSubscription | null = null;
     let cancelled = false;
@@ -75,7 +76,6 @@ export default function Run() {
       lastKmMarker.current = Math.floor(DEMO_START / DEMO_PACE);
     };
     (async () => {
-      if (Platform.OS === 'web') return fallBackToDemo();
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (cancelled) return;
@@ -242,7 +242,7 @@ export default function Run() {
           ? { text: `GPS · ±${Math.round(accuracy)} m`, color: colors.primary }
           : { text: `Weak GPS · ±${Math.round(accuracy)} m`, color: colors.orange }
       : source === 'demo'
-        ? { text: Platform.OS === 'web' ? 'Demo · no GPS on web' : 'Demo · location off', color: colors.dim }
+        ? { text: 'Demo · location off', color: colors.dim }
         : { text: 'Locating…', color: colors.dim };
 
   return (
