@@ -9,6 +9,8 @@ import { accountApi, type NewAccount, type TokenPair } from '@/auth/account';
 import { jwtSubject } from '@/auth/jwt';
 import { resetSocialState } from '@/state/socialStore';
 import { profileApi } from '@/api/social';
+import { communityApi } from '@/api/community';
+import { unregisterPush, usePushNotifications } from '@/notifications/push';
 
 /**
  * Authentication. One Squirrel Social account (Exercise backend, /api/auth) signs in to both
@@ -27,7 +29,8 @@ type AuthState = {
   apiConfigured: boolean;
   authConfigured: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (account: NewAccount) => Promise<void>;
+  /** `invite`: a friend's invite code, claimed on the new account (best effort). */
+  signUp: (account: NewAccount, invite?: string) => Promise<void>;
   signInWithToken: (token: string) => Promise<void>;
   continueDemo: () => void;
   signOut: () => Promise<void>;
@@ -175,7 +178,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const signUp = useCallback(
-    async (account: NewAccount) => {
+    async (account: NewAccount, invite?: string) => {
       if (!AUTH_CONFIGURED) throw new Error('No account server is configured. Set EXPO_PUBLIC_EXERCISE_API_URL, or continue in demo mode.');
       const pair = await accountApi.register(account);
       await savePair(pair);
@@ -187,7 +190,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // The Social profile starts as "New Squirrel": give it the name just entered (best effort).
       if (SOCIAL_API_CONFIGURED) {
         const displayName = `${account.first_name} ${account.last_name}`.trim().slice(0, 40);
-        if (displayName) profileApi.update({ display_name: displayName }).catch(() => undefined);
+        const named = displayName ? profileApi.update({ display_name: displayName }).catch(() => undefined) : Promise.resolve();
+        // A friend's invite code counts for them once this account exists, after the name is set
+        // so their "joined with your invite" names this person. Awaited, so leaving the page
+        // straight away cannot drop it; a failure is ignored (the Invite screen takes it later).
+        if (invite) await named.then(() => communityApi.claimReferral(invite)).catch(() => undefined);
       }
       setMode('live');
     },
@@ -205,6 +212,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
+    await unregisterPush(); // while the token still signs the request
     await clear();
     setMode('signed-out');
   }, [clear]);
@@ -213,6 +221,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => (mode === 'live' && userId ? { user_id: userId, first_name: name?.first_name ?? '', last_name: name?.last_name ?? '' } : null),
     [mode, userId, name],
   );
+
+  usePushNotifications(mode === 'live');
 
   return (
     <Ctx.Provider

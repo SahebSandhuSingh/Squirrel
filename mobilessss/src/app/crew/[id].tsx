@@ -7,9 +7,16 @@ import { EventCard } from '@/components/cards';
 import { Button, Display, EmptyState, Icon, IconButton, Scrim, SectionHeader, Tag } from '@/components/ui';
 import { userById } from '@/data/users';
 import { useApp } from '@/state/AppState';
+import { LiveCrewDetail } from '@/community/CrewsLive';
+import { useSocialEnabled } from '@/hooks/useSocial';
 import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
 
-export default function CrewDetail() {
+export default function CrewRoute() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  return useSocialEnabled() ? <LiveCrewDetail id={id} /> : <CrewDetail />;
+}
+
+function CrewDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();

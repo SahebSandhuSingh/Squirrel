@@ -84,7 +84,8 @@ export type BadgeKind =
   | 'lifter'
   | 'explorer'
   | 'social'
-  | 'half-marathon';
+  | 'half-marathon'
+  | 'founding';
 
 export type StickerKind = 'no-days-off' | 'squirrel-flex' | 'neon-heart' | 'crown' | 'fire' | 'good-vibes' | 'one-more-km' | 'hydrate';
 

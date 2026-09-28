@@ -5,14 +5,20 @@ import { CrewCard, SceneImage } from '@/components/cards';
 import { CityChip } from '@/components/TopBar';
 import { Chips, EmptyState, FadeIn, Header, Screen, SearchBar, Tagline } from '@/components/ui';
 import { useApp } from '@/state/AppState';
+import { LiveCrews } from '@/community/CrewsLive';
+import { useSocialEnabled } from '@/hooks/useSocial';
 import { colors, fonts } from '@/theme';
 
 const SCOPES = ['Nearby', 'Online', 'Campus', 'Interests'] as const;
 type Scope = (typeof SCOPES)[number];
 const SCOPE_ICONS = { Nearby: 'map-marker-radius', Online: 'web', Campus: 'school', Interests: 'heart-multiple' } as const;
 
-/** FIND YOUR CREW. */
-export default function Crews() {
+/** FIND YOUR CREW: the Social service's crews when signed in, else the demo crews. */
+export default function CrewsRoute() {
+  return useSocialEnabled() ? <LiveCrews /> : <Crews />;
+}
+
+function Crews() {
   const { crews, joinedCrews, toggleCrew, city } = useApp();
   const [scope, setScope] = useState<Scope>('Nearby');
   const [q, setQ] = useState('');

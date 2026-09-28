@@ -7,13 +7,19 @@ import { EventCard } from '@/components/cards';
 import { CityChip } from '@/components/TopBar';
 import { EmptyState, FadeIn, Header, IconButton, Screen, Segmented } from '@/components/ui';
 import { useApp } from '@/state/AppState';
+import { LiveEvents } from '@/community/EventsLive';
+import { useSocialEnabled } from '@/hooks/useSocial';
 import { colors, fonts } from '@/theme';
 
 const TABS = ['Nearby', 'Online', 'My Events'] as const;
 type Tab = (typeof TABS)[number];
 
-/** EVENTS — nearby, online and joined. */
-export default function Events() {
+/** EVENTS: the Social service's when signed in, else the demo events. */
+export default function EventsRoute() {
+  return useSocialEnabled() ? <LiveEvents /> : <Events />;
+}
+
+function Events() {
   const { events, joinedEvents, toggleEvent, city, toast } = useApp();
   const locks = useLocks();
   const [tab, setTab] = useState<Tab>('Nearby');

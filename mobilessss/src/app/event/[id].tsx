@@ -9,6 +9,8 @@ import { Button, Card, Display, EmptyState, Icon, IconButton, Scrim, SectionHead
 import { eventsForCity, formatEventDate } from '@/data/community';
 import { userById } from '@/data/users';
 import { useApp } from '@/state/AppState';
+import { LiveEventDetail } from '@/community/EventsLive';
+import { useSocialEnabled } from '@/hooks/useSocial';
 import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
 
 function EventDetail() {
@@ -122,6 +124,9 @@ const styles = StyleSheet.create({
 
 /** Events aren't launched yet: the route shows a locked state instead of the detail page. */
 export default function EventRoute() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const live = useSocialEnabled();
+  if (live) return <LiveEventDetail id={id} />;
   return (
     <FeatureGate
       feature="events"

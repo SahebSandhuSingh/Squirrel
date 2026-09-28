@@ -5,6 +5,7 @@ import { FadeIn, Header, Icon, PressScale, Screen } from '@/components/ui';
 import type { IconName } from '@/data/icons';
 import { userById } from '@/data/users';
 import { useFollowList, useSocialEnabled } from '@/hooks/useSocial';
+import { LiveNotifications } from '@/community/ChallengesLive';
 import { colors, fonts, radius } from '@/theme';
 
 type Note = { id: string; user?: string; icon: IconName; color: string; text: string; time: string; go: Href; unread?: boolean };
@@ -19,7 +20,12 @@ const NOTES: Note[] = [
   { id: 'n7', icon: 'shopping', color: colors.gold, text: 'New drop in the Shop: Sunset Collection', time: '2d', go: '/shop' },
 ];
 
-export default function Notifications() {
+/** The Social service's notifications when signed in, else the demo list. */
+export default function NotificationsRoute() {
+  return useSocialEnabled() ? <LiveNotifications /> : <Notifications />;
+}
+
+function Notifications() {
   return (
     <Screen tabBar={false}>
       <Header back title="Notifications" />

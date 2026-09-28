@@ -334,6 +334,19 @@ const BADGES: Record<BadgeKind, BadgeDef> = {
       </G>
     ),
   },
+  // Founding members (first 15 / first 500): a gold star8 with an acorn.
+  founding: {
+    shape: 'star8',
+    color: '#FFC83D',
+    emblem: ({ main, detail }, cy) => (
+      <G transform={`translate(0 ${cy - 56})`}>
+        <Path d="M46 50 C46 42 52 38 60 38 C68 38 74 42 74 50 Z" fill={main} />
+        <Path d="M59 38 C59 34 61 32 63 31" stroke={main} strokeWidth={2.6} strokeLinecap="round" fill="none" />
+        <Path d="M48 50 H72 C72 64 66 74 60 78 C54 74 48 64 48 50 Z" fill={main} opacity={0.85} />
+        <Path d="M52 55 H68 M54 61 H66" stroke={detail} strokeWidth={2} strokeLinecap="round" />
+      </G>
+    ),
+  },
 };
 
 /* ------------------------------------------------------------------ */

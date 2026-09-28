@@ -21,6 +21,7 @@ import { Tape } from '@/components/Brand';
 import { xpApi } from '@/api/endpoints';
 import { API_CONFIGURED } from '@/api/config';
 import { useApp } from '@/state/AppState';
+import { CampusToday, liveLine, useLiveCounts } from '@/community/CampusToday';
 import { colors, fonts, radius } from '@/theme';
 
 const greeting = () => {
@@ -38,6 +39,7 @@ export default function Home() {
   const socialOn = useSocialEnabled();
   const crewFeed = useFeed('following', null, { limit: 4 });
   const crewActivity = crewFeed.items.slice(0, 4);
+  const liveNow = liveLine(useLiveCounts(socialOn));
   // Today's rings add what you logged with the form coach.
   const activeMin = today.active.value + exerciseToday.minutes;
   const kcalToday = today.kcal.value + exerciseToday.kcal;
@@ -94,6 +96,12 @@ export default function Home() {
         </Card>
       </FadeIn>
 
+      {socialOn && (
+        <FadeIn index={2}>
+          <CampusToday live={liveNow} />
+        </FadeIn>
+      )}
+
       {/* Start run CTA */}
       <FadeIn index={2}>
         <PressScale onPress={() => router.push('/run')} style={{ marginTop: 14 }} scaleTo={0.98}>
@@ -102,7 +110,7 @@ export default function Home() {
               <View style={{ flex: 1 }}>
                 <OverlayKicker>{city.venues?.runs?.[0] ?? 'City Loop'} · 2.4 km loop</OverlayKicker>
                 <Display size={30} color={colors.onImage}>Start a run</Display>
-                <OverlaySub>Earn up to +150 XP · 3 friends running now</OverlaySub>
+                <OverlaySub>Earn up to +150 XP{socialOn ? (liveNow ? ` · ${liveNow}` : '') : ' · 3 friends running now'}</OverlaySub>
               </View>
               <View style={styles.playBtn}>
                 <Icon name="play" size={30} color={colors.onPrimary} />

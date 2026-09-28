@@ -3,7 +3,8 @@
  * access token is a JWT signed with the secret the Run Module also verifies with, and its `sub`
  * is the account's UUID, which is also the Exercise user id.
  *
- *   POST /api/auth/register { email, password (≥ 8), first_name, last_name } → 201 TokenPair · 409 email taken
+ *   POST /api/auth/email-code { email }                                         → 202 · 403 not an allowed college address
+ *   POST /api/auth/register { email, code, password (≥ 8), first_name, last_name } → 201 TokenPair · 409 email taken · 400 bad code
  *   POST /api/auth/login    { email, password }                              → TokenPair · 401
  *   POST /api/auth/refresh  { refresh_token }                                → TokenPair · 401 (single-use, rotates)
  */
@@ -19,7 +20,8 @@ export type TokenPair = {
   refresh_token_expires_at: number;
 };
 
-export type NewAccount = { email: string; password: string; first_name: string; last_name: string };
+/** `code`: the 6-digit code emailed by `emailCode` (sign-up is open to IISER Kolkata addresses). */
+export type NewAccount = { email: string; password: string; first_name: string; last_name: string; code: string };
 
 const auth = (path: string, body: unknown) => api<TokenPair>(`/api/auth${path}`, { body, base: AUTH_URL, anonymous: true });
 
@@ -28,6 +30,7 @@ function explain(e: unknown, fallback: string): never {
   if (e instanceof ApiError) {
     if (e.status === 401) throw new Error('Wrong email or password.');
     if (e.status === 409) throw new Error('An account with this email already exists. Sign in instead.');
+    if (e.status === 403) throw new Error(e.message || 'Use your @iiserkol.ac.in college email.');
     if (e.status === 0) throw new Error("Can't reach the server. Check your connection and try again.");
     throw new Error(e.message || fallback);
   }
@@ -37,6 +40,11 @@ function explain(e: unknown, fallback: string): never {
 export const accountApi = {
   login: (email: string, password: string) => auth('/login', { email, password }).catch((e) => explain(e, 'Sign-in failed.')),
   register: (account: NewAccount) => auth('/register', account).catch((e) => explain(e, 'Could not create the account.')),
+  /** Emails a 6-digit sign-up code; resolves to how long it works (seconds). */
+  emailCode: (email: string) =>
+    api<{ sent: boolean; expires_in_s: number }>('/api/auth/email-code', { body: { email }, base: AUTH_URL, anonymous: true })
+      .then((r) => r.expires_in_s)
+      .catch((e) => explain(e, 'Could not send the code.')),
   /** No friendly wording: a failed refresh just means "sign in again". */
   refresh: (refreshToken: string) => auth('/refresh', { refresh_token: refreshToken }),
 };

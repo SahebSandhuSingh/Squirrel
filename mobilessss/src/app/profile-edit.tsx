@@ -7,7 +7,8 @@ import { Button, Header, Icon, Label, Screen, tap } from '@/components/ui';
 import { ApiError } from '@/api/client';
 import { profileApi, socialErrorText, type Profile, type UpdateProfileRequest, type Visibility } from '@/api/social';
 import { BIO_MAX, COLLEGE_MAX, DISPLAY_NAME_MAX, INTEREST_MAX_LEN, INTERESTS_MAX, normalizeUsername, usernameProblem } from '@/api/socialRules';
-import { invalidateRemote } from '@/api/useRemote';
+import { invalidateRemote, useRemote } from '@/api/useRemote';
+import { communityApi } from '@/api/community';
 import { cities, cityById } from '@/data/cities';
 import { useMyProfile } from '@/hooks/useSocial';
 import { useApp } from '@/state/AppState';
@@ -48,6 +49,9 @@ function EditForm({ profile }: { profile: Profile }) {
   const [cityId, setCityId] = useState<string | null>(u.city_id);
   const [area, setArea] = useState<string | null>(u.area);
   const [college, setCollege] = useState(u.college ?? '');
+  const [hostel, setHostel] = useState<string | null>(u.hostel ?? null);
+  // Hostels to pick from (SOCIAL_HOSTELS on the server); none yet: the picker stays hidden.
+  const hostels = useRemote('community:config', () => communityApi.config()).data?.hostels ?? [];
   const [interests, setInterests] = useState<string[]>(u.interests);
   const [custom, setCustom] = useState('');
   const [visibility, setVisibility] = useState<Visibility>(u.visibility);
@@ -95,6 +99,7 @@ function EditForm({ profile }: { profile: Profile }) {
     if (cityId !== u.city_id) body.city_id = cityId;
     if (area !== u.area) body.area = area;
     if (college.trim() !== (u.college ?? '')) body.college = college.trim() || null;
+    if (hostel !== (u.hostel ?? null)) body.hostel = hostel;
     if (JSON.stringify(interests) !== JSON.stringify(u.interests)) body.interests = interests;
     if (visibility !== u.visibility) body.visibility = visibility;
     // First save also stores the look you designed locally, so others see your avatar.
@@ -167,6 +172,17 @@ function EditForm({ profile }: { profile: Profile }) {
 
         <Label style={styles.label}>College</Label>
         <TextInput value={college} onChangeText={setCollege} maxLength={COLLEGE_MAX} style={styles.input} placeholderTextColor={colors.mute} placeholder="Optional" />
+
+        {hostels.length > 0 && (
+          <>
+            <Label style={styles.label}>Hostel · for hostel vs hostel</Label>
+            <View style={styles.wrap}>
+              {hostels.map((h) => (
+                <Chip key={h} label={h} on={hostel === h} onPress={() => setHostel(hostel === h ? null : h)} />
+              ))}
+            </View>
+          </>
+        )}
 
         <Label style={styles.label}>Interests · {interests.length}/{INTERESTS_MAX}</Label>
         <View style={styles.wrap}>

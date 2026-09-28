@@ -112,6 +112,7 @@ export type ProfileUser = {
   city_id: string | null;
   area: string | null;
   college: string | null;
+  hostel: string | null;
   interests: string[];
   visibility: Visibility;
   verified: boolean;
@@ -130,7 +131,15 @@ export type ProfileStats = {
   following: number;
   posts: number;
   activities: number;
+  /** This local month's verified totals ("47 km this month"): runs the Run Module accepted, measured workouts. */
+  month: string | null;
+  month_km: number;
+  month_runs: number;
+  month_workouts: number;
 };
+
+/** A crew the user is in: since when, and how many members vouch for them there. */
+export type ProfileCrew = { id: string; name: string; interest: string; role: 'owner' | 'member'; member_since: string; vouches: number };
 
 export type Badge = { id: string; kind: string; title: string; description: string; awarded_at: string };
 
@@ -138,6 +147,7 @@ export type PublicProfile = {
   user: ProfileUser;
   stats: ProfileStats;
   badges: Badge[];
+  crews: ProfileCrew[];
   recent_posts: Post[];
   recent_activities: Activity[];
   is_me: boolean;
@@ -157,6 +167,7 @@ export type UpdateProfileRequest = Partial<{
   city_id: string | null;
   area: string | null;
   college: string | null;
+  hostel: string | null;
   interests: string[];
   avatar_look: AvatarLook | null;
   avatar_media_id: string | null;

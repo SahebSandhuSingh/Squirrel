@@ -47,8 +47,8 @@ Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-h
 | `/run` | Live run: 3-2-1 countdown, route animation, live stats, music/camera, hold-to-finish, summary |
 | `/missions` | Daily / Weekly / Special missions with completion and claim states |
 | `/progress` | **Your Progress**, in four sections:<br>• **Today:** goal ring, today's XP, activities done, XP left, run XP, streak and a level bar.<br>• **Progress:** Day/Week/Month/Year with Steps/Active/Calories/Workouts, a tap-to-read bar chart and the streak calendar with active days.<br>• **Your performance:** change vs the previous period, campus rank and milestones in reach.<br>• **Next:** the best next action (claim, run, or log a mission). |
-| `/crews`, `/crew/[id]` | Find Your Crew (Nearby/Online/Campus/Interests), crew detail with members, events and posts |
-| `/events`, `/event/[id]` | Events preview behind a "Coming soon" banner; the detail route shows a locked screen |
+| `/crews`, `/crew/[id]`, `/crew/new` | Signed in: the Social service's crews (search, mine, join/leave, start one), a crew's members with member-since and vouches, its upcoming events. Demo mode: sample crews |
+| `/events`, `/event/[id]`, `/event/new`, `/checkin` | Signed in: upcoming and my events, RSVP (with capacity), plan one (open or for a crew), cancel when hosting, check in from an hour before and tell up to 5 followers or crewmates; `/checkin` does the same at any meetup spot |
 | `/level-up` | RPG level-up reveal: rays, mascot, XP bar, staggered reward cards, next unlock |
 | `/rewards` | Level road, achievement badges, sticker collection |
 | `/shop`, `/item/[id]` | Shop (20+ items, rarities, level locks) and item sheet (buy / equip) |
@@ -57,7 +57,10 @@ Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-h
 | `/highlight/[id]` | Full-screen story viewer for profile highlights |
 | `/user/[id]` | Any user's profile, with Follow / Requested / Following |
 | `/city` | City picker |
-| `/notifications` | Activity notifications |
+| `/notifications` | Signed in: the Social service's list (steals, challenges, crew and event news, check-ins, referrals, badges); tapping opens the screen. Push to the phone via `src/notifications/push.ts` |
+| `/invite` | Waitlist place, your invite code (share), progress to "invite 3 to skip the line", founding badge, entering a friend's code |
+| `/leaderboard` | Signed in: XP top 10 (today / this week), hostel vs hostel, and the territory board |
+| `/challenges` | Signed in: head-to-head challenges (most km or most workouts in 1–30 days): send, accept, live scores, results |
 
 ## Not launched yet (locked)
 
@@ -65,7 +68,7 @@ Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-h
 - `LOCKED.mealWater`: Log water / Log a meal (Create sheet), the water and meal daily missions, and the Hydro Homie badge.
 - `LOCKED.stories`: story bubbles on Social show a "Coming soon" toast and open the profile. Posting your own story via the composer still works.
 - `LOCKED.partnerHunt`: the Social tab card and every `/partner-hunt` route (the layout renders the locked preview). The future flow and model (preferences by campus, interests, activities, availability and goals; buddy profile; connection status) are in `data/partnerHunt.ts`. There is no matching logic and no buddy data yet.
-- `LOCKED.events`: `/events` (preview + banner), `/event/[id]` (locked screen), event cards and Join pills, Explore event markers, the Home meetups carousel, joining, and the "Join a crew event" weekly mission.
+- `LOCKED.events`: off since events went live on the Social service. Turned back on, it locks `/events`, `/event/[id]`, event cards and Join pills, Explore event markers, the Home meetups carousel, joining, and the "Join a crew event" weekly mission.
 
 Locked missions are listed last and left out of the done/XP counters and claimable rewards. Set a flag to `false` at launch.
 
@@ -105,7 +108,8 @@ This follows the *Frontend ↔ Backend Compatibility Assessment*.
 | **Exercise** | `src/api/exercise.ts` on the same `api()` client and `withRetry` policy as the Run Module, pointed at `EXPO_PUBLIC_EXERCISE_API_URL`. Endpoints (from `Exercise_Mechanics--main/backend`): `GET·PUT /api/users/{id}[/profile]`, `GET·POST /api/users/{id}/skill`, `GET /api/exercises`, `POST /api/users/{id}/sessions`, `GET /api/users/{id}/{progress,activity/{year},sessions}`, `GET …/sessions/{sid}/{overview,report}`, `GET …/sessions/{sid}/exercises/{ex}/report`. Screens under `/exercise`; Home's Form Coach card and Progress (workouts, streak, recent sessions) read live data. The coach profile belongs to the signed-in account (its id is the token's `sub`): every `/api/users/{id}/...` call carries that account's token and the backend refuses anyone else's. `PUT /api/users/{id}/profile` saves the coach details |
 | **Live workouts** | Signed in, the workout screen (`src/app/exercise/train/[key].tsx`) coaches for real. The body is tracked **on the phone** by the browser coach's own tracking: MediaPipe PoseLandmarker (lite, GPU with a CPU fallback) and the same One Euro smoothing, running in a WebView (`src/workout/tracker`). The app streams the 33 landmarks to the Exercise backend's `/ws/setup` and `/ws/train` exactly as the browser coach does (`src/workout/coach.ts`, with the browser coach's own message validation in `src/workout/protocol`). Each set opens with a 10-second get-ready countdown (step back, stand straight; the screen says when the whole body is in view), then the server's stillness check and standing baseline start on their own. The server counts reps, scores form and sends cues; every set is saved, so reports, history and workout XP follow. No video leaves the phone, only body points. MediaPipe loads from jsDelivr and Google's model storage the first time (internet needed); `EXPO_PUBLIC_POSE_ASSETS_URL` can point at a self-hosted copy. Not signed in: the guided demo, labelled as such |
 | **Profile + Social** | `src/api/social.ts` (typed endpoints on the same `api()` client), `src/hooks/useSocial.ts` (profile, feeds, lists, comments), `src/state/socialStore.ts` (optimistic like/save/follow with rollback, shared across screens). Needs a live session: demo mode shows a sign-in prompt instead of made-up people. Backend: `../social-backend` |
-| **Still frontend-only** | Coins, cosmetics, crews/events, missions, challenges, highlights, the notifications list (except follow requests), leaderboard names. They need backend models (§5) |
+| **Community** | `src/api/community.ts` + `src/community/`: sign-up with an emailed code (IISER Kolkata addresses), waitlist and invite codes, crews, events and check-ins, challenges, notifications and push, XP and hostel boards, Home's "Campus today" (daily stats, people running / working out now), "verified this month" and crews on profiles. Each screen falls back to its demo version without a Social session |
+| **Still frontend-only** | Coins, cosmetics, missions, the daily and group challenges, highlights. They need backend models (§5) |
 
 To point the app at a backend, copy `.env.example` to `.env`, then set `EXPO_PUBLIC_API_URL` (and `EXPO_PUBLIC_AUTH_URL` when the account service exists). For the form coach, set `EXPO_PUBLIC_EXERCISE_API_URL` to the Exercise Mechanics server (e.g. `http://<lan-ip>:8000` for `uvicorn backend.main:app --host 0.0.0.0`). For the **web** build on another domain (e.g. Vercel), both backends must list its address in `CORS_ALLOWED_ORIGINS`; iOS/Android are unaffected. Deploying the web build: [`../DEPLOY.md`](../DEPLOY.md). For profiles, follows and posts, set `EXPO_PUBLIC_SOCIAL_API_URL` to the Social service (`squirrel-social-profile-social-fixed/social-backend`, e.g. `http://localhost:8100`); unset, the social screens show sample data.
 

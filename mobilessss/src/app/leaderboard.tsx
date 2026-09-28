@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Avatar } from '@/components/Avatar';
 import { Button, Display, FadeIn, Header, Icon, Kicker, Screen, Segmented } from '@/components/ui';
@@ -8,6 +8,8 @@ import { useAuth } from '@/auth/AuthProvider';
 import { territoryBoard } from '@/data/territory';
 import { userById } from '@/data/users';
 import { useApp } from '@/state/AppState';
+import { BoardSwitcher, CommunityBoards, type BoardKind } from '@/community/Boards';
+import { useSocialEnabled } from '@/hooks/useSocial';
 import { colors, fonts, radius } from '@/theme';
 
 const TABS = ['Daily', 'Weekly', 'All-time'] as const;
@@ -37,7 +39,15 @@ const pinnedMeRow = (me: NonNullable<Me>): Row => ({ key: 'me', rank: me.rank, n
  * (GET /v1/leaderboard?metric=area&window=…). The Run Module only offers scope=global today,
  * so live rows are all runners until a campus scope exists; the sample data is campus-only.
  */
-export default function Leaderboard() {
+export default function LeaderboardRoute() {
+  const live = useSocialEnabled();
+  const [board, setBoard] = useState<BoardKind>('XP');
+  if (!live) return <Leaderboard />;
+  const switcher = <BoardSwitcher value={board} onChange={setBoard} />;
+  return board === 'Territory' ? <Leaderboard switcher={switcher} /> : <CommunityBoards board={board} switcher={switcher} />;
+}
+
+function Leaderboard({ switcher }: { switcher?: ReactNode }) {
   const { city, me } = useApp();
   const { mode, userId } = useAuth();
   const [tab, setTab] = useState<(typeof TABS)[number]>('Weekly');
@@ -121,6 +131,7 @@ export default function Leaderboard() {
       <Header back title="" />
       <Kicker>Campus Leaderboard · {city.campus}</Kicker>
       <Display size={46} style={{ marginTop: 6 }}>Who owns <Text style={{ color: colors.primary }}>the campus</Text></Display>
+      {switcher}
       <Segmented items={TABS} value={tab} onChange={changeTab} />
       <Text style={styles.source}>
         {source === 'live' ? 'Live · all runners until campus rankings go live' : source === 'error' ? 'Server unreachable · showing sample campus data' : 'Sample campus data · sign in for live rankings'}

@@ -6,6 +6,8 @@ import { Card, Display, FadeIn, Header, Icon, Kicker, ProgressBar, Screen, Segme
 import { challenges, fmtEnds, fmtMetric, type Challenge, type ChallengeKind } from '@/data/challenges';
 import { userById } from '@/data/users';
 import { useApp } from '@/state/AppState';
+import { LiveChallenges } from '@/community/ChallengesLive';
+import { useSocialEnabled } from '@/hooks/useSocial';
 import { colors, fonts, radius } from '@/theme';
 
 const TABS = ['Daily', 'Head-to-head', 'Group'] as const;
@@ -15,7 +17,12 @@ const KIND: Record<(typeof TABS)[number], ChallengeKind> = { Daily: 'daily', 'He
  * CHOOSE YOUR BATTLE — backend-style Challenges. Progress comes from your logged activity
  * and results resolve automatically (every few minutes server-side); nothing to claim.
  */
-export default function Challenges() {
+/** Challenges: head-to-head on the Social service when signed in, else the demo ones. */
+export default function ChallengesRoute() {
+  return useSocialEnabled() ? <LiveChallenges /> : <Challenges />;
+}
+
+function Challenges() {
   const [tab, setTab] = useState<(typeof TABS)[number]>('Daily');
   const list = challenges.filter((c) => c.kind === KIND[tab]);
   return (

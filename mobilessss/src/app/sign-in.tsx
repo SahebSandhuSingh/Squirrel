@@ -1,24 +1,29 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Wordmark } from '@/components/Brand';
 import { Button, Display, Icon, IconButton, Kicker, Tagline, tap } from '@/components/ui';
 import { useAuth } from '@/auth/AuthProvider';
+import { accountApi } from '@/auth/account';
 import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const MIN_PASSWORD = 8;
+const CODE_RE = /^\d{6}$/;
+const RESEND_AFTER_S = 30;
 
 /**
  * Sign in or create a Squirrel Social account (Exercise backend, /api/auth). The same account
  * signs in to the Run Module. Without a configured server: demo mode, or a developer token.
- * `/sign-in?mode=create` opens on "create account" (Welcome → Get started).
+ * `/sign-in?mode=create` opens on "create account" (Welcome → Get started). A new account needs a
+ * college email (IISER Kolkata): "Send code" emails a 6-digit code, which creates the account.
+ * `?invite=<code>` pre-fills the friend's invite code (claimed once the account exists).
  */
 export default function SignIn() {
   const insets = useSafeAreaInsets();
   const auth = useAuth();
-  const params = useLocalSearchParams<{ mode?: string }>();
+  const params = useLocalSearchParams<{ mode?: string; invite?: string }>();
   const [creating, setCreating] = useState(params.mode === 'create');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -29,6 +34,10 @@ export default function SignIn() {
   const [showToken, setShowToken] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [codeSentTo, setCodeSentTo] = useState<string | null>(null);
+  const [code, setCode] = useState('');
+  const [invite, setInvite] = useState(params.invite ?? '');
+  const [resendIn, setResendIn] = useState(0);
   const lastNameRef = useRef<TextInput>(null);
   const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
@@ -46,12 +55,37 @@ export default function SignIn() {
     }
   };
 
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const t = setTimeout(() => setResendIn((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendIn]);
+
+  // A code is for one address: editing the email asks for a new one.
+  const codeStep = creating && codeSentTo !== null && codeSentTo === email.trim().toLowerCase();
+
+  const sendCode = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await accountApi.emailCode(email.trim());
+      setCodeSentTo(email.trim().toLowerCase());
+      setCode('');
+      setResendIn(RESEND_AFTER_S);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not send the code.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   /** Checks done here, in plain words, before anything is sent. */
   const problem = (): string | null => {
     if (creating && (!firstName.trim() || !lastName.trim())) return 'Enter your first and last name.';
     if (!EMAIL_RE.test(email.trim())) return 'Enter a valid email address.';
     if (creating && password.length < MIN_PASSWORD) return `Your password needs at least ${MIN_PASSWORD} characters.`;
     if (!password) return 'Enter your password.';
+    if (codeStep && !CODE_RE.test(code.trim())) return 'Enter the 6-digit code from your email.';
     return null;
   };
 
@@ -63,9 +97,14 @@ export default function SignIn() {
       return;
     }
     auth.clearNotice();
-    if (creating) {
+    if (creating && !codeStep) {
+      sendCode();
+    } else if (creating) {
       // A new account picks its look next, then lands on Home.
-      run(() => auth.signUp({ first_name: firstName.trim(), last_name: lastName.trim(), email: email.trim(), password }), '/avatar');
+      run(() => auth.signUp(
+        { first_name: firstName.trim(), last_name: lastName.trim(), email: email.trim(), password, code: code.trim() },
+        invite.trim() || undefined,
+      ), '/avatar');
     } else {
       run(() => auth.signIn(email.trim(), password));
     }
@@ -101,7 +140,7 @@ export default function SignIn() {
               </View>
             </View>
           )}
-          <TextInput ref={emailRef} style={styles.input} value={email} onChangeText={setEmail} placeholder="Email" placeholderTextColor={colors.mute}
+          <TextInput ref={emailRef} style={styles.input} value={email} onChangeText={setEmail} placeholder={creating ? 'College email (@iiserkol.ac.in)' : 'Email'} placeholderTextColor={colors.mute}
             autoCapitalize="none" autoCorrect={false} keyboardType="email-address" autoComplete="email" textContentType={creating ? 'emailAddress' : 'username'}
             returnKeyType="next" onSubmitEditing={() => passwordRef.current?.focus()} submitBehavior="submit" />
           <View>
@@ -117,8 +156,27 @@ export default function SignIn() {
           {creating && password.length > 0 && password.length < MIN_PASSWORD && (
             <Text style={styles.hint}>{MIN_PASSWORD - password.length} more character{MIN_PASSWORD - password.length === 1 ? '' : 's'}</Text>
           )}
+          {creating && (
+            <TextInput style={styles.input} value={invite} onChangeText={setInvite} placeholder="Friend's invite code (optional)"
+              placeholderTextColor={colors.mute} autoCapitalize="characters" autoCorrect={false} maxLength={16} />
+          )}
+          {codeStep && (
+            <>
+              <Text style={styles.hint}>We emailed a 6-digit code to {codeSentTo}.</Text>
+              <TextInput style={[styles.input, styles.code]} value={code} onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))}
+                placeholder="000000" placeholderTextColor={colors.mute} keyboardType="number-pad" autoComplete="one-time-code"
+                textContentType="oneTimeCode" maxLength={6} returnKeyType="go" onSubmitEditing={submit} accessibilityLabel="Verification code" />
+              <Pressable onPress={() => resendIn <= 0 && !busy && sendCode()} disabled={resendIn > 0 || busy} accessibilityLabel="Send a new code">
+                <Text style={[styles.switch, resendIn > 0 && { color: colors.dim }]}>
+                  {resendIn > 0 ? `Send a new code in ${resendIn}s` : 'Send a new code'}
+                </Text>
+              </Pressable>
+            </>
+          )}
           <Button
-            label={busy ? (creating ? 'Creating account…' : 'Signing in…') : creating ? 'Create account' : 'Sign in'}
+            label={busy
+              ? (creating ? (codeStep ? 'Creating account…' : 'Sending code…') : 'Signing in…')
+              : creating ? (codeStep ? 'Create account' : 'Send code') : 'Sign in'}
             icon="arrow-right"
             disabled={busy}
             onPress={submit}
@@ -176,5 +234,6 @@ const styles = StyleSheet.create({
   switch: { color: colors.primary, fontFamily: fonts.semibold, fontSize: 13, textAlign: 'center', marginTop: 4 },
   eye: { position: 'absolute', right: 12, top: 0, bottom: 0, justifyContent: 'center' },
   hint: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, marginTop: -4 },
+  code: { fontFamily: fonts.mono, fontSize: 22, letterSpacing: 8, textAlign: 'center' },
   notice: { color: colors.text, fontFamily: fonts.semibold, fontSize: 13, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, padding: 12 },
 });

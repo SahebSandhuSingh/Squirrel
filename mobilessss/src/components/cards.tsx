@@ -10,7 +10,7 @@ import { ProductArt } from '@/art/Product';
 import { StickerArt } from '@/art/Sticker';
 import { RewardArt } from '@/art/Reward';
 import { Mascot } from '@/art/Mascot';
-import { Avatar, AvatarStack } from '@/components/Avatar';
+import { Avatar, AvatarStack, type AvatarUser } from '@/components/Avatar';
 import { Card, CoinIcon, Icon, IconBadge, NATIVE, PressScale, ProgressBar, Scrim, TogglePill, tap, textStyles } from '@/components/ui';
 import type { Crew, EventItem } from '@/data/community';
 import { formatEventDate } from '@/data/community';
@@ -107,7 +107,8 @@ export function MissionCard({ mission: m, onLog, claimed, compact }: { mission: 
 // Crews & events
 // ---------------------------------------------------------------------------
 
-export function CrewCard({ crew, joined, onToggle }: { crew: Crew; joined: boolean; onToggle: () => void }) {
+/** `members`: the avatars to show (a live crew's; demo crews look theirs up). */
+export function CrewCard({ crew, joined, onToggle, members }: { crew: Crew; joined: boolean; onToggle: () => void; members?: AvatarUser[] }) {
   return (
     <PressScale onPress={() => router.push({ pathname: '/crew/[id]', params: { id: crew.id } })} style={styles.row} scaleTo={0.985}>
       <View style={[styles.crewIcon, { backgroundColor: crew.color }]}>
@@ -119,7 +120,7 @@ export function CrewCard({ crew, joined, onToggle }: { crew: Crew; joined: boole
           {crew.members.toLocaleString('en-IN')} members · {crew.scope}
         </Text>
         <View style={{ marginTop: 6 }}>
-          <AvatarStack users={crew.memberIds.map(userById)} size={20} />
+          <AvatarStack users={members ?? crew.memberIds.map(userById)} size={20} />
         </View>
       </View>
       <TogglePill on={joined} onPress={onToggle} labelOff="Join" labelOn="Joined" />
@@ -127,11 +128,12 @@ export function CrewCard({ crew, joined, onToggle }: { crew: Crew; joined: boole
   );
 }
 
-export function EventCard({ event, going, onToggle, variant = 'row' }: { event: EventItem; going: boolean; onToggle: () => void; variant?: 'row' | 'hero' }) {
+/** `attendees`: the avatars to show (a live event's; demo events look theirs up). */
+export function EventCard({ event, going, onToggle, variant = 'row', attendees: shown }: { event: EventItem; going: boolean; onToggle: () => void; variant?: 'row' | 'hero'; attendees?: AvatarUser[] }) {
   // Lock-aware: while Events are locked every usage renders the same inert "Coming soon" card.
   const locks = useLocks();
   const locked = locks.locked('events');
-  const attendees = event.attendeeIds.map(userById);
+  const attendees = shown ?? event.attendeeIds.map(userById);
   const open = locks.guard('events', () => router.push({ pathname: '/event/[id]', params: { id: event.id } }));
   const a11y = locked ? `${event.title}, coming soon` : event.title;
   if (variant === 'hero') {
@@ -139,10 +141,12 @@ export function EventCard({ event, going, onToggle, variant = 'row' }: { event: 
       <PressScale onPress={open} style={[{ width: 250 }, locked && styles.lockedCard]} scaleTo={0.98} accessibilityLabel={a11y}>
         <SceneImage kind={event.scene} seed={event.title.length} height={150} scrim="strong">
           <FeatureGate feature="events" fallback={<SoonPill onImage style={styles.heroLock} />}>
-            <View style={styles.heroBadge}>
-              <Icon name={event.icon} size={13} color={colors.onImage} />
-              <Text style={styles.heroBadgeText}>+{event.xp} XP</Text>
-            </View>
+            {event.xp > 0 && (
+              <View style={styles.heroBadge}>
+                <Icon name={event.icon} size={13} color={colors.onImage} />
+                <Text style={styles.heroBadgeText}>+{event.xp} XP</Text>
+              </View>
+            )}
           </FeatureGate>
           <View style={{ position: 'absolute', left: 12, right: 12, bottom: 10 }}>
             <Text style={styles.heroTitle} numberOfLines={1}>{event.title}</Text>
@@ -178,7 +182,7 @@ export function EventCard({ event, going, onToggle, variant = 'row' }: { event: 
           </View>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text style={styles.xpSmall}>+{event.xp} XP</Text>
+          <Text style={styles.xpSmall}>{event.xp > 0 ? `+${event.xp} XP` : event.host}</Text>
           <FeatureGate feature="events">
             <TogglePill on={going} onPress={onToggle} labelOff="Join" labelOn="Going" color={colors.primary} style={{ paddingVertical: 7 }} />
           </FeatureGate>

@@ -9,7 +9,7 @@ import { Avatar, type AvatarUser } from '@/components/Avatar';
 import { ItemArt, SceneImage, StoryCircle } from '@/components/cards';
 import { SignInToSocial, SocialError, toAvatarUser, useFollowToggle } from '@/components/socialParts';
 import { Button, Card, Display, EmptyState, FadeIn, Icon, IconButton, LevelBadge, Scrim, Tag, TAB_BAR_SPACE, XPBar, tap } from '@/components/ui';
-import type { Activity, FollowStatus, Post, PublicProfile } from '@/api/social';
+import type { Activity, FollowStatus, Post, ProfileCrew, PublicProfile } from '@/api/social';
 import { cityById } from '@/data/cities';
 import { highlights } from '@/data/highlights';
 import type { IconName } from '@/data/icons';
@@ -39,7 +39,7 @@ const TAG_ICONS: Record<string, IconName> = {
   Coach: 'whistle',
 };
 
-const BADGE_KINDS: BadgeKind[] = ['city', 'streak', 'early-bird', 'steps-10k', 'crew', 'first-run', 'hydration', 'yoga', 'lifter', 'explorer', 'social', 'half-marathon'];
+const BADGE_KINDS: BadgeKind[] = ['city', 'streak', 'early-bird', 'steps-10k', 'crew', 'first-run', 'hydration', 'yoga', 'lifter', 'explorer', 'social', 'half-marathon', 'founding'];
 const ACTIVITY_SCENE: Record<Activity['type'], SceneKind> = { run: 'run', ride: 'cycling', workout: 'hiit', yoga: 'yoga', meal: 'brunch' };
 
 /**
@@ -56,6 +56,7 @@ export type ProfileVM = {
   bio: string | null;
   area: string | null;
   college: string | null;
+  hostel: string | null;
   interests: string[];
   level: number;
   levelXp: number;
@@ -63,6 +64,9 @@ export type ProfileVM = {
   streak: number | null;
   counts: { posts: number; followers: number; following: number } | null;
   badges: { id: string; kind: BadgeKind; title: string }[];
+  /** This month's verified totals ("47 km this month"); null when not known. */
+  month: { km: number; runs: number; workouts: number } | null;
+  crews: ProfileCrew[];
   recentPosts: Post[];
   recentActivities: Activity[];
   restricted: boolean;
@@ -82,6 +86,7 @@ export function fromServerProfile(p: PublicProfile): ProfileVM {
     bio: u.bio,
     area: u.area ?? (u.city_id ? cityById(u.city_id).name : null),
     college: u.college,
+    hostel: u.hostel ?? null,
     interests: u.interests,
     level: p.stats.level,
     levelXp: p.stats.level_xp,
@@ -89,6 +94,8 @@ export function fromServerProfile(p: PublicProfile): ProfileVM {
     streak: p.restricted ? null : p.stats.streak_days,
     counts: { posts: p.stats.posts, followers: p.stats.followers, following: p.stats.following },
     badges: p.badges.map((b) => ({ id: b.id, kind: BADGE_KINDS.includes(b.kind as BadgeKind) ? (b.kind as BadgeKind) : 'social', title: b.title })),
+    month: p.restricted || !p.stats.month ? null : { km: p.stats.month_km, runs: p.stats.month_runs, workouts: p.stats.month_workouts },
+    crews: p.crews ?? [],
     recentPosts: p.recent_posts,
     recentActivities: p.recent_activities,
     restricted: p.restricted,
@@ -193,6 +200,11 @@ export function ProfileView({ vm, isMe, onRefresh, refreshing = false, onChanged
             <Icon name="school-outline" size={13} color={colors.dim} /> {vm.college}
           </Text>
         )}
+        {!!vm.hostel && (
+          <Text style={styles.meta}>
+            <Icon name="home-city-outline" size={13} color={colors.dim} /> {vm.hostel}
+          </Text>
+        )}
         {vm.interests.length > 0 && (
           <View style={styles.tags}>
             {vm.interests.map((t) => (
@@ -266,6 +278,41 @@ export function ProfileView({ vm, isMe, onRefresh, refreshing = false, onChanged
 
         {/* Account (backend connection) */}
         {isMe && <AccountRow />}
+
+        {/* Verified activity this month */}
+        {vm.month && (vm.month.runs > 0 || vm.month.workouts > 0) && (
+          <View style={[styles.badgeRow, { marginBottom: 10 }]}>
+            <Icon name="check-decagram" size={26} color={colors.primary} />
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={styles.sectionLabel}>Verified this month</Text>
+              <Text style={styles.monthText}>
+                {vm.month.km.toFixed(1)} km run
+                {vm.month.workouts ? ` · ${vm.month.workouts} workout${vm.month.workouts === 1 ? '' : 's'}` : ''}
+              </Text>
+              <Text style={styles.nextText}>Measured by the app, not typed in · {vm.month.runs} run{vm.month.runs === 1 ? '' : 's'}</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Crews: member since, vouches */}
+        {vm.crews.length > 0 && (
+          <View style={[styles.badgeRow, { marginBottom: 10, flexDirection: 'column', alignItems: 'stretch' }]}>
+            <Text style={styles.sectionLabel}>Crews · {vm.crews.length}</Text>
+            {vm.crews.map((c) => (
+              <Pressable key={c.id} onPress={() => router.push({ pathname: '/crew/[id]', params: { id: c.id } })} style={styles.crewLine}>
+                <Icon name="account-group" size={18} color={colors.secondary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.crewName} numberOfLines={1}>{c.name}{c.role === 'owner' ? ' · runs it' : ''}</Text>
+                  <Text style={styles.nextText}>
+                    Member since {new Date(c.member_since).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}
+                    {c.vouches ? ` · vouched by ${c.vouches}` : ''}
+                  </Text>
+                </View>
+                <Icon name="chevron-right" size={18} color={colors.dim} />
+              </Pressable>
+            ))}
+          </View>
+        )}
 
         {/* Badges */}
         {!vm.restricted && (
@@ -448,6 +495,9 @@ function AccountRow() {
 }
 
 const styles = StyleSheet.create({
+  monthText: { color: colors.text, fontFamily: fonts.labelBold, fontSize: 20, marginTop: 2 },
+  crewLine: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
+  crewName: { color: colors.text, fontFamily: fonts.bold, fontSize: 14 },
   col: { paddingHorizontal: 16, width: '100%', maxWidth: MAXW, alignSelf: 'center' },
   topBar: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cityPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(10,10,10,0.6)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.pill },
