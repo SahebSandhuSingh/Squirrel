@@ -65,6 +65,26 @@ class Settings:
     media_public_base_url: str | None = None
     media_max_bytes: int = 10 * 1024 * 1024
 
+    # --- community ---------------------------------------------------------------------------
+    # Hostels members pick from, for hostel vs hostel (SOCIAL_HOSTELS, comma-separated). Empty:
+    # the hostel picker and the hostel board stay hidden.
+    hostels: tuple[str, ...] = field(default_factory=tuple)
+    # The app's public address, for invite links (SOCIAL_APP_URL), e.g. https://squirrel-social.vercel.app
+    app_url: str | None = None
+    # The first N email-verified members get "Founding Squirrel", the first M "Founding 500".
+    founding_first: int = 15
+    founding_total: int = 500
+    # Verified friends who must join with your code to "skip the line".
+    referrals_to_skip: int = 3
+    # Local day and month for daily stats, boards and "km this month" (the campus's time zone).
+    community_timezone: str = "Asia/Kolkata"
+
+    # --- notifications ------------------------------------------------------------------
+    push_enabled: bool = True                # send Expo pushes (SOCIAL_PUSH=off to only store them)
+    expo_access_token: str | None = None     # EXPO_ACCESS_TOKEN, when the Expo project requires one
+    reminders_enabled: bool = True           # the in-process event-reminder loop
+    event_reminder_minutes: int = 60
+
     # --- misc ----------------------------------------------------------------------------
     cors_origins: tuple[str, ...] = field(default_factory=tuple)
     rate_limits_enabled: bool = True
@@ -105,4 +125,14 @@ def get_settings() -> Settings:
             if o.strip()
         ),
         rate_limits_enabled=os.environ.get("SOCIAL_RATE_LIMITS", "on").lower() not in ("off", "0", "false"),
+        hostels=tuple(h.strip() for h in os.environ.get("SOCIAL_HOSTELS", "").split(",") if h.strip()),
+        app_url=(_opt("SOCIAL_APP_URL") or "").rstrip("/") or None,
+        founding_first=_int("SOCIAL_FOUNDING_FIRST", 15),
+        founding_total=_int("SOCIAL_FOUNDING_TOTAL", 500),
+        referrals_to_skip=_int("SOCIAL_REFERRALS_TO_SKIP", 3),
+        community_timezone=os.environ.get("SOCIAL_COMMUNITY_TIMEZONE", "Asia/Kolkata"),
+        push_enabled=os.environ.get("SOCIAL_PUSH", "on").lower() not in ("off", "0", "false"),
+        expo_access_token=_opt("EXPO_ACCESS_TOKEN"),
+        reminders_enabled=os.environ.get("SOCIAL_EVENT_REMINDERS", "on").lower() not in ("off", "0", "false"),
+        event_reminder_minutes=_int("SOCIAL_EVENT_REMINDER_MINUTES", 60),
     )

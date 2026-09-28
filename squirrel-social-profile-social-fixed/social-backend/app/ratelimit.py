@@ -26,6 +26,15 @@ LIMITS: dict[str, tuple[int, int]] = {
     "profile:update": (20, 60),
     "username:check": (60, 60),
     "media:create": (20, 60),
+    "referral:claim": (10, 3600),
+    "crew:create": (5, 3600),
+    "crew:join": (30, 60),
+    "vouch": (60, 60),
+    "event:create": (10, 3600),
+    "rsvp": (60, 60),
+    "checkin": (20, 3600),
+    "challenge:create": (20, 86_400),
+    "push:register": (20, 60),
 }
 
 

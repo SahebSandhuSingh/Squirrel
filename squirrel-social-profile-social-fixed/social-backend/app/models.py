@@ -15,6 +15,7 @@ from sqlalchemy import (
     JSON,
     Boolean,
     CheckConstraint,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -48,6 +49,7 @@ class User(Base):
     city_id: Mapped[str | None] = mapped_column(String(32))
     area: Mapped[str | None] = mapped_column(String(60))
     college: Mapped[str | None] = mapped_column(String(80))
+    hostel: Mapped[str | None] = mapped_column(String(40))  # one of Settings.hostels
     interests: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     avatar_look: Mapped[dict | None] = mapped_column(JSON)
     avatar_media_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("media.id", ondelete="SET NULL", use_alter=True, name="fk_users_avatar_media"))
@@ -248,3 +250,222 @@ BADGE_CATALOGUE: list[dict[str, str]] = [
     {"id": "streak-7", "kind": "streak", "title": "7-Day Streak", "description": "Logged activity seven days in a row."},
     {"id": "crowd-favourite", "kind": "social", "title": "Crowd Favourite", "description": "A post of yours reached 50 likes."},
 ]
+
+# Added by migration 0002 (community): the founding members, by the order they verified their email.
+FOUNDING_BADGES: list[dict[str, str]] = [
+    {"id": "founding-squirrel", "kind": "founding", "title": "Founding Squirrel", "description": "One of the first 15 members."},
+    {"id": "founding-500", "kind": "founding", "title": "Founding 500", "description": "One of the first 500 members."},
+]
+
+
+# --------------------------------------------------------------------------- community (0002)
+
+
+class Member(Base):
+    """The waitlist entry every account gets on first sight. Everyone is admitted at once; the
+    queue position and "invite 3 to skip the line" are shown, not enforced. `verified_rank` orders
+    the members whose email was verified at sign-up (the token's `ev` claim) and decides the
+    founding badges."""
+
+    __tablename__ = "members"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    position: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
+    referral_code: Mapped[str] = mapped_column(String(12), unique=True, nullable=False)
+    referred_by_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("users.id", ondelete="SET NULL"))
+    referrals_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    verified_rank: Mapped[int | None] = mapped_column(Integer, unique=True)
+    joined_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+
+    __table_args__ = (
+        CheckConstraint("referrals_count >= 0", name="ck_members_referrals_nonneg"),
+        CheckConstraint("referred_by_id IS NULL OR referred_by_id <> user_id", name="ck_members_not_self"),
+        Index("ix_members_referred_by", "referred_by_id"),
+    )
+
+
+class Crew(Base):
+    __tablename__ = "crews"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    name: Mapped[str] = mapped_column(String(40), nullable=False)
+    name_key: Mapped[str] = mapped_column(String(40), unique=True, nullable=False)  # lowercased name
+    tagline: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    interest: Mapped[str] = mapped_column(String(16), nullable=False)
+    meets: Mapped[str] = mapped_column(String(60), nullable=False, default="")
+    scope: Mapped[str] = mapped_column(String(8), nullable=False, default="campus")
+    hostel: Mapped[str | None] = mapped_column(String(40))
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("users.id", ondelete="SET NULL"))
+    members_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+
+    __table_args__ = (
+        CheckConstraint("scope IN ('campus', 'online')", name="ck_crews_scope"),
+        CheckConstraint("members_count >= 0", name="ck_crews_members_nonneg"),
+        Index("ix_crews_members", "members_count", "created_at"),
+    )
+
+
+class CrewMember(Base):
+    __tablename__ = "crew_members"
+
+    crew_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("crews.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    role: Mapped[str] = mapped_column(String(8), nullable=False, default="member")
+    joined_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+
+    __table_args__ = (
+        PrimaryKeyConstraint("crew_id", "user_id", name="pk_crew_members"),
+        CheckConstraint("role IN ('owner', 'member')", name="ck_crew_members_role"),
+        Index("ix_crew_members_user", "user_id", "joined_at"),
+    )
+
+
+class CrewVouch(Base):
+    """A crew member vouching for another member of the same crew ("I've trained with them")."""
+
+    __tablename__ = "crew_vouches"
+
+    crew_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("crews.id", ondelete="CASCADE"), nullable=False)
+    voucher_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    vouchee_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+
+    __table_args__ = (
+        PrimaryKeyConstraint("crew_id", "voucher_id", "vouchee_id", name="pk_crew_vouches"),
+        CheckConstraint("voucher_id <> vouchee_id", name="ck_crew_vouches_not_self"),
+        Index("ix_crew_vouches_vouchee", "crew_id", "vouchee_id"),
+    )
+
+
+class Event(Base):
+    __tablename__ = "events"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    crew_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("crews.id", ondelete="CASCADE"))
+    created_by_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    title: Mapped[str] = mapped_column(String(80), nullable=False)
+    description: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    venue: Mapped[str] = mapped_column(String(80), nullable=False, default="")
+    online: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    starts_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
+    ends_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    capacity: Mapped[int | None] = mapped_column(Integer)
+    going_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    reminder_sent_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    cancelled_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+
+    __table_args__ = (
+        CheckConstraint("going_count >= 0", name="ck_events_going_nonneg"),
+        CheckConstraint("capacity IS NULL OR capacity > 0", name="ck_events_capacity"),
+        Index("ix_events_starts", "starts_at", "id"),
+        Index("ix_events_crew_starts", "crew_id", "starts_at"),
+    )
+
+
+class EventRsvp(Base):
+    __tablename__ = "event_rsvps"
+
+    event_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("events.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    status: Mapped[str] = mapped_column(String(12), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+
+    __table_args__ = (
+        PrimaryKeyConstraint("event_id", "user_id", name="pk_event_rsvps"),
+        CheckConstraint("status IN ('going', 'interested')", name="ck_event_rsvps_status"),
+        Index("ix_event_rsvps_user", "user_id", "created_at"),
+    )
+
+
+class CheckIn(Base):
+    """"I'm here": at an event or any meetup spot, optionally telling chosen friends. No GPS."""
+
+    __tablename__ = "checkins"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    event_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("events.id", ondelete="SET NULL"))
+    place: Mapped[str] = mapped_column(String(80), nullable=False)
+    note: Mapped[str] = mapped_column(String(140), nullable=False, default="")
+    notified_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+
+    __table_args__ = (
+        Index("ix_checkins_user_created", "user_id", "created_at"),
+        Index("ix_checkins_event", "event_id", "user_id"),
+    )
+
+
+class Challenge(Base):
+    """Head-to-head: who runs more verified km, or finishes more workouts, in `days` days from
+    when the opponent accepts. Scores come from `activities`, never from the app."""
+
+    __tablename__ = "challenges"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    challenger_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    opponent_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    metric: Mapped[str] = mapped_column(String(12), nullable=False)
+    days: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    status: Mapped[str] = mapped_column(String(12), nullable=False, default="pending")
+    starts_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    ends_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    challenger_score: Mapped[float | None] = mapped_column(Float)
+    opponent_score: Mapped[float | None] = mapped_column(Float)
+    winner_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+    __table_args__ = (
+        CheckConstraint("challenger_id <> opponent_id", name="ck_challenges_not_self"),
+        CheckConstraint("metric IN ('km', 'workouts')", name="ck_challenges_metric"),
+        CheckConstraint("days BETWEEN 1 AND 30", name="ck_challenges_days"),
+        CheckConstraint("status IN ('pending', 'accepted', 'declined', 'finished', 'cancelled')", name="ck_challenges_status"),
+        Index("ix_challenges_challenger", "challenger_id", "created_at"),
+        Index("ix_challenges_opponent", "opponent_id", "created_at"),
+    )
+
+
+class Notification(Base):
+    """The in-app notification list; a push is sent alongside when the user has a device token.
+    `dedupe_key` (unique per user) makes re-delivered events (the Run Module retries) land once."""
+
+    __tablename__ = "notifications"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    title: Mapped[str] = mapped_column(String(120), nullable=False)
+    body: Mapped[str] = mapped_column(String(240), nullable=False, default="")
+    data: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("users.id", ondelete="SET NULL"))
+    dedupe_key: Mapped[str | None] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+    read_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "dedupe_key", name="uq_notifications_dedupe"),
+        Index("ix_notifications_user_created", "user_id", "created_at", "id"),
+    )
+
+
+class PushToken(Base):
+    """An Expo push token of one of the user's devices."""
+
+    __tablename__ = "push_tokens"
+
+    token: Mapped[str] = mapped_column(String(255), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    platform: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+    last_seen_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+    disabled_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+    __table_args__ = (
+        CheckConstraint("platform IN ('ios', 'android', 'web')", name="ck_push_tokens_platform"),
+        Index("ix_push_tokens_user", "user_id"),
+    )

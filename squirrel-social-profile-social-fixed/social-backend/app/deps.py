@@ -12,12 +12,19 @@ from sqlalchemy.orm import Session
 from app.auth import Viewer, bearer_token, get_or_create_user
 from app.config import Settings
 from app.ratelimit import RateLimiter
+from app.services import push
 from app.services.media import MediaStorage
+from app.services.membership import ensure_member
 from app.services.run_module import RunModule
 
 
 def get_db(request: Request) -> Iterator[Session]:
-    yield from request.app.state.db.session()
+    # Pushes queued while handling the request go out once it commits (services/push.py).
+    db = push.attach(request.app.state.db.SessionLocal(), request.app.state.push)
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 def get_settings_dep(request: Request) -> Settings:
@@ -43,7 +50,11 @@ def get_viewer(
 ) -> Viewer:
     token = bearer_token(authorization)
     claims = request.app.state.verifier.verify(token)
-    return Viewer(user=get_or_create_user(db, str(claims["sub"])), token=token)
+    user = get_or_create_user(db, str(claims["sub"]))
+    # Everyone joins the waitlist on first sight; `ev` (email verified at sign-up) sets the
+    # founding order (services/membership.py).
+    ensure_member(db, user, claims.get("ev") is True, request.app.state.settings)
+    return Viewer(user=user, token=token)
 
 
 DB = Annotated[Session, Depends(get_db)]

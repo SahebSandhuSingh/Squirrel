@@ -29,6 +29,7 @@ from app.db import Database
 from app.main import create_app
 from app.ratelimit import LIMITS, RateLimiter
 from app.services.media import StoredObject
+from app.services.push import RecordingPush
 from app.services.run_module import RunModuleError
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -62,6 +63,9 @@ class FakeRunModule:
         self.runs: dict[tuple[str, str], dict] = {}
         self.calls: list[tuple[str, str]] = []
         self.fail_with: int | None = None
+        # XP earned in the current board window, by subject (GET /v1/leaderboard/xp).
+        self.board_xp: dict[str, int] = {}
+        self.board_available = True
 
     @staticmethod
     def _sub(token: str) -> str:
@@ -82,6 +86,15 @@ class FakeRunModule:
         sub = self._sub(token)
         self.calls.append(("xp", sub))
         return self.xp.get(sub)
+
+    def get_xp_board(self, token: str, window: str, limit: int) -> dict | None:
+        self.calls.append(("xp_board", window))
+        if not self.board_available:
+            return None
+        ranked = sorted(((sub, xp) for sub, xp in self.board_xp.items() if xp > 0), key=lambda r: (-r[1], r[0]))
+        entries = [{"rank": i + 1, "user_id": sub, "xp": xp} for i, (sub, xp) in enumerate(ranked)]
+        me = next((e for e in entries if e["user_id"] == self._sub(token)), None)
+        return {"window": window, "day": "2026-09-29", "entries": entries[:limit], "me": me}
 
     def get_run(self, token: str, run_id: str) -> dict:
         sub = self._sub(token)
@@ -114,7 +127,8 @@ class FakeStorage:
 
 # --------------------------------------------------------------------------- database
 
-TABLES = ["user_badges", "comments", "post_saves", "post_likes", "posts", "media", "activities", "follows", "user_stats", "users"]
+TABLES = ["push_tokens", "notifications", "challenges", "checkins", "event_rsvps", "events", "crew_vouches",
+          "crew_members", "crews", "members", "user_badges", "comments", "post_saves", "post_likes", "posts", "media", "activities", "follows", "user_stats", "users"]
 
 
 @pytest.fixture(scope="session")
@@ -143,7 +157,8 @@ def clean(database):
 
 @pytest.fixture
 def settings(database) -> Settings:
-    return Settings(database_url=str(database.engine.url), jwt_public_key=PUBLIC_PEM, run_module_url="http://run-module.test", internal_token="svc-secret")
+    return Settings(database_url=str(database.engine.url), jwt_public_key=PUBLIC_PEM, run_module_url="http://run-module.test",
+                    internal_token="svc-secret", reminders_enabled=False, app_url="https://app.test")
 
 
 @pytest.fixture
@@ -164,8 +179,13 @@ def limiter() -> RateLimiter:
 
 
 @pytest.fixture
-def client(settings, database, run_module, storage, limiter) -> TestClient:
-    app = create_app(settings, database=database, run_module=run_module, storage=storage, limiter=limiter)
+def pushes() -> RecordingPush:
+    return RecordingPush()
+
+
+@pytest.fixture
+def client(settings, database, run_module, storage, limiter, pushes) -> TestClient:
+    app = create_app(settings, database=database, run_module=run_module, storage=storage, limiter=limiter, push=pushes)
     return TestClient(app)
 
 

@@ -65,6 +65,7 @@ def test_first_request_creates_profile(api):
     assert me["stats"] == {
         "xp": 0, "level": 1, "level_xp": 0, "xp_per_level": 2000, "xp_synced_at": None,
         "streak_days": 0, "followers": 0, "following": 0, "posts": 0, "activities": 0,
+        "month": me["stats"]["month"], "month_km": 0.0, "month_runs": 0, "month_workouts": 0,
     }
     # same account → same profile
     assert api.me(sub)["user"]["id"] == me["user"]["id"]

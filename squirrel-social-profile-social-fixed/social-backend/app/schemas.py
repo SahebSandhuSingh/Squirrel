@@ -91,6 +91,7 @@ class ProfileUser(_Out):
     city_id: str | None
     area: str | None
     college: str | None
+    hostel: str | None
     interests: list[str]
     visibility: Visibility
     verified: bool
@@ -108,6 +109,22 @@ class ProfileStats(BaseModel):
     following: int
     posts: int
     activities: int
+    # "47 km this month": verified runs (and measured workouts) of the current local month.
+    month: str | None = None
+    month_km: float = 0.0
+    month_runs: int = 0
+    month_workouts: int = 0
+
+
+class ProfileCrew(BaseModel):
+    """A crew the user is in, with how long and how many members vouch for them there."""
+
+    id: uuid.UUID
+    name: str
+    interest: str
+    role: str
+    member_since: datetime
+    vouches: int
 
 
 class BadgeOut(_Out):
@@ -133,6 +150,7 @@ class ProfileResponse(BaseModel):
     user: ProfileUser
     stats: ProfileStats
     badges: list[BadgeOut]
+    crews: list[ProfileCrew] = []
     recent_posts: list[PostOut]
     recent_activities: list[ActivityOut]
     is_me: bool
@@ -150,6 +168,7 @@ class UpdateProfileRequest(_In):
     city_id: str | None = None
     area: Annotated[str, Field(max_length=rules.AREA_MAX)] | None = None
     college: Annotated[str, Field(max_length=rules.COLLEGE_MAX)] | None = None
+    hostel: Annotated[str, Field(max_length=40)] | None = None  # one of GET /v1/community/config's hostels
     interests: list[str] | None = None
     avatar_look: AvatarLook | None = None
     avatar_media_id: uuid.UUID | None = None

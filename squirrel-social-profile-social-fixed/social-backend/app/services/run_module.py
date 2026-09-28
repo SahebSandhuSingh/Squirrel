@@ -5,6 +5,9 @@ from the app; it reads them here:
 
   GET /v1/users/me/xp  → { xp, updated_at, breakdown }
   GET /v1/runs/:id     → { run_id, status, started_at, stats{distance_m, moving_time_s, elapsed_time_s}, ... }
+  GET /v1/leaderboard/xp?window=daily|weekly&limit=N
+                       → { window, day, entries[{rank, user_id, xp}], me{rank, user_id, xp} | null }
+                         (XP earned in the window, by the account's JWT subject; for the boards)
 
 ASSUMPTION (matches mobile/src/api/endpoints.ts): GET /v1/runs/:id only returns runs owned by
 the token's user (404 otherwise), which is what makes "this run is yours" provable here.
@@ -29,6 +32,8 @@ class RunModule(Protocol):
     def get_xp(self, token: str) -> int | None: ...
 
     def get_run(self, token: str, run_id: str) -> dict: ...
+
+    def get_xp_board(self, token: str, window: str, limit: int) -> dict | None: ...
 
 
 class HttpRunModule:
@@ -67,3 +72,13 @@ class HttpRunModule:
     def get_run(self, token: str, run_id: str) -> dict:
         # run_id is validated against RUN_ID_RE (URL-safe characters only) before it gets here.
         return self._get(token, f"/v1/runs/{run_id}")
+
+    def get_xp_board(self, token: str, window: str, limit: int) -> dict | None:
+        """Best effort: None when unavailable (the board says so)."""
+        if not self.configured:
+            return None
+        try:
+            body = self._get(token, f"/v1/leaderboard/xp?window={window}&limit={int(limit)}")
+        except RunModuleError:
+            return None
+        return body if isinstance(body.get("entries"), list) else None

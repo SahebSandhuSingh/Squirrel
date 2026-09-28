@@ -1,6 +1,8 @@
-"""Service-to-service activity ingestion — how exercise modules publish into Social.
+"""Service-to-service routes — how the other modules publish into Social.
 
-  POST /internal/v1/activities   Authorization: Bearer $SOCIAL_INTERNAL_TOKEN
+  POST /internal/v1/activities              Authorization: Bearer $SOCIAL_INTERNAL_TOKEN
+  POST /internal/v1/notifications           a territory steal (Run Module) → the in-app list + push
+  POST /internal/v1/tasks/event-reminders   send due event reminders now (for an external cron)
 
 The Run Module's finish worker (or the Exercise backend) calls this once an activity is final.
 It is idempotent on (source, source_ref): re-sending the same run returns the same activity, with
@@ -23,9 +25,11 @@ from app.auth import bearer_token, get_or_create_user
 from app.db import utcnow
 from app.deps import DB, AppSettings
 from app.errors import ApiError, conflict
-from app.models import Activity
+from app.models import Activity, User
 from app.schemas import InternalActivityOut, InternalActivityIn
-from app.services import social
+from app.schemas_community import InternalNotificationIn, InternalNotificationOut
+from app.services import notify as notifications
+from app.services import reminders, social
 
 router = APIRouter(prefix="/internal/v1", tags=["internal"], include_in_schema=False)
 
@@ -93,3 +97,52 @@ def _update_summary(activity: Activity, body: InternalActivityIn) -> None:
     activity.duration_s = body.duration_s
     activity.calories = body.calories
     activity.metrics = body.metrics
+
+
+def _area(data: dict) -> str:
+    value = data.get("area_delta_m2")
+    if not isinstance(value, (int, float)) or value <= 0:
+        return ""
+    return f"{value / 1_000_000:.2f} km²" if value >= 100_000 else f"{round(value):,} m²"
+
+
+def _territory_text(kind: str, actor: User | None, data: dict) -> tuple[str, str]:
+    area = _area(data)
+    if kind == "territory_lost":
+        who = actor.display_name if actor else "Someone"
+        return f"{who} stole your territory", (f"{area} taken. " if area else "") + "Run it back!"
+    if kind == "territory_captured":
+        n = data.get("territories_taken")
+        n = n if isinstance(n, int) and n > 1 else 1
+        return (f"You captured {n} territories" if n > 1 else "You captured territory"), (f"{area} is yours now." if area else "")
+    return "Your territory faded", "Run there again to claim it back."
+
+
+@router.post("/notifications", response_model=InternalNotificationOut)
+def ingest_notification(
+    body: InternalNotificationIn,
+    db: DB,
+    settings: AppSettings,
+    authorization: Annotated[str | None, Header()] = None,
+):
+    _check_service_token(settings, authorization)
+    user = get_or_create_user(db, body.user_subject)
+    actor = None
+    if body.actor_subject and body.actor_subject != body.user_subject:
+        actor = db.scalar(select(User).where(User.auth_subject == body.actor_subject))
+    title, text = _territory_text(body.kind, actor, body.data)
+    data = {k: v for k, v in body.data.items() if isinstance(v, (str, int, float, bool)) and len(str(v)) <= 100}
+    created = notifications.notify(db, user.id, body.kind, title, text, data={"route": "/territory", **data},
+                                   actor_id=actor.id if actor else None, dedupe_key=body.dedupe_key)
+    db.commit()
+    return InternalNotificationOut(created=created > 0)
+
+
+@router.post("/tasks/event-reminders")
+def run_event_reminders(
+    db: DB,
+    settings: AppSettings,
+    authorization: Annotated[str | None, Header()] = None,
+):
+    _check_service_token(settings, authorization)
+    return {"reminded_events": reminders.send_due(db, settings)}

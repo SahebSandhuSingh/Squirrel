@@ -9,6 +9,7 @@ app can use a single base URL. See README.md for the contract.
 from __future__ import annotations
 
 import re
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,8 +19,10 @@ from app.config import Settings, get_settings
 from app.db import Database
 from app.errors import ApiError, api_error_handler
 from app.ratelimit import RateLimiter
-from app.routers import feed, follows, internal, media, posts, profiles
+from app.routers import challenges, community, crews, events, feed, follows, internal, media, notifications, posts, profiles
 from app.services.media import MediaStorage, make_storage
+from app.services.push import ExpoPush, PushSender
+from app.services.reminders import ReminderLoop
 from app.services.run_module import HttpRunModule, RunModule
 
 
@@ -30,12 +33,24 @@ def create_app(
     run_module: RunModule | None = None,
     storage: MediaStorage | None = None,
     limiter: RateLimiter | None = None,
+    push: PushSender | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
-    app = FastAPI(title="Squirrel Social — Profile & Social API", version="1.0.0")
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        loop = ReminderLoop(app.state.db, settings, app.state.push) if settings.reminders_enabled else None
+        if loop:
+            loop.start()
+        yield
+        if loop:
+            loop.stop()
+
+    app = FastAPI(title="Squirrel Social — Profile & Social API", version="1.0.0", lifespan=lifespan)
     app.state.settings = settings
     app.state.verifier = TokenVerifier(settings)
     app.state.db = database or Database(settings.database_url)
+    app.state.push = push or ExpoPush(app.state.db, enabled=settings.push_enabled, access_token=settings.expo_access_token)
     app.state.run_module = run_module or HttpRunModule(settings.run_module_url, settings.run_module_timeout_s)
     app.state.storage = storage or make_storage(settings)
     app.state.limiter = limiter or RateLimiter(enabled=settings.rate_limits_enabled)
@@ -53,7 +68,8 @@ def create_app(
         )
 
     # profiles first: its literal /users/me/… and /users/search routes must win over /users/{id}/….
-    for r in (profiles.router, follows.router, feed.router, posts.router, media.router, internal.router):
+    for r in (profiles.router, follows.router, feed.router, posts.router, media.router, internal.router,
+              community.router, crews.router, events.router, challenges.router, notifications.router):
         app.include_router(r)
 
     @app.get("/healthz", include_in_schema=False)

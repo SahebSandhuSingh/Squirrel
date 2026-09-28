@@ -15,20 +15,21 @@ from sqlalchemy.exc import IntegrityError
 from app.db import utcnow
 from app.deps import DB, AppSettings, CurrentViewer, Limiter, RunModuleDep, Storage
 from app.errors import conflict, forbidden, invalid
-from app.models import Activity, Follow, Media, Post, PostSave, User, UserStats
+from app.models import Activity, Crew, CrewMember, CrewVouch, Follow, Media, Post, PostSave, User, UserStats
 from app.pagination import before, clamp_limit, decode_uuid_cursor, encode_cursor
 from app.rules import normalize_username, username_problem
 from app.schemas import (
     BadgeOut,
     FeedResponse,
     ProfileResponse,
+    ProfileCrew,
     ProfileStats,
     ProfileUser,
     UpdateProfileRequest,
     UsernameAvailability,
     UserPage,
 )
-from app.services import social
+from app.services import community, social
 from app.services.social import bump
 
 router = APIRouter(prefix="/v1", tags=["profiles"])
@@ -42,8 +43,21 @@ def build_profile(db, viewer, user: User, settings, storage, *, is_me: bool) -> 
     visible = is_me or social.can_see_content(db, viewer.id, user)
     relationship = None if is_me else social.follow_status(db, viewer.id, user.id)
 
-    recent_posts, recent_activities, badges = [], [], []
+    recent_posts, recent_activities, badges, crews = [], [], [], []
+    month = {"month": None, "km": 0.0, "runs": 0, "workouts": 0}
     if visible:
+        month = community.month_verification(db, user.id, settings)
+        vouches = (select(CrewVouch.crew_id, func.count().label("n")).where(CrewVouch.vouchee_id == user.id)
+                   .group_by(CrewVouch.crew_id).subquery())
+        crews = [
+            ProfileCrew(id=c.id, name=c.name, interest=c.interest, role=m.role, member_since=m.joined_at, vouches=int(n or 0))
+            for c, m, n in db.execute(
+                select(Crew, CrewMember, vouches.c.n)
+                .join(CrewMember, (CrewMember.crew_id == Crew.id) & (CrewMember.user_id == user.id))
+                .outerjoin(vouches, vouches.c.crew_id == Crew.id)
+                .order_by(CrewMember.joined_at)
+            ).all()
+        ]
         rows = db.execute(
             social.posts_query().where(Post.author_id == user.id).order_by(Post.created_at.desc(), Post.id.desc()).limit(RECENT_POSTS)
         ).all()
@@ -71,6 +85,7 @@ def build_profile(db, viewer, user: User, settings, storage, *, is_me: bool) -> 
             city_id=user.city_id if visible else None,
             area=user.area if visible else None,
             college=user.college if visible else None,
+            hostel=user.hostel if visible else None,
             interests=list(user.interests or []) if visible else [],
             visibility=user.visibility,
             verified=user.verified,
@@ -87,8 +102,13 @@ def build_profile(db, viewer, user: User, settings, storage, *, is_me: bool) -> 
             following=stats.following_count,
             posts=stats.posts_count,
             activities=activities_total,
+            month=month["month"],
+            month_km=month["km"],
+            month_runs=month["runs"],
+            month_workouts=month["workouts"],
         ),
         badges=badges,
+        crews=crews,
         recent_posts=recent_posts,
         recent_activities=recent_activities,
         is_me=is_me,
@@ -144,6 +164,10 @@ def update_my_profile(body: UpdateProfileRequest, db: DB, viewer: CurrentViewer,
     for field in ("city_id", "area", "college"):
         if field in sent:
             setattr(user, field, getattr(body, field) or None)
+    if "hostel" in sent:
+        if body.hostel and body.hostel not in settings.hostels:
+            raise invalid("Pick one of the listed hostels." if settings.hostels else "Hostels aren't set up yet.", "invalid_hostel")
+        user.hostel = body.hostel or None
     if "interests" in sent:
         user.interests = body.interests or []
     if "avatar_look" in sent:
