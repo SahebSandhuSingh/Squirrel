@@ -7,13 +7,18 @@ from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from app.api.routes import internal, router
+from app.config import settings
 from app.db import engine
 
 app = FastAPI(title="Squirrel Social · Progress & Challenges", version="1.0.0")
+if settings.cors_origins:
+    app.add_middleware(CORSMiddleware, allow_origins=list(settings.cors_origins), allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"],
+                       allow_headers=["Authorization", "Content-Type"], max_age=600)
 app.include_router(router)
 app.include_router(internal)
 

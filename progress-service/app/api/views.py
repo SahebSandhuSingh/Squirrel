@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Challenge, ChallengeParticipant, User
-from app.services.challenges import is_open_for, status_for
+from app.services.challenges import eligibility_error, is_open_for, status_for
 from app.timeutil import as_utc, day_bounds_utc
 
 
@@ -50,9 +50,15 @@ def challenge_views(session: Session, user: User, challenges: list[Challenge], n
         else:
             starts, ends = as_utc(c.starts_at), as_utc(c.ends_at)
         open_, why = is_open_for(c, user, now)
-        can_join = open_ and (p is None and c.kind != "head_to_head" or (p is not None and p.status in ("invited", "left") and c.kind != "head_to_head") or (p is not None and c.kind == "head_to_head" and p.status == "invited"))
-        if c.kind == "group" and c.status == "completed":
-            can_join = False
+        ineligible = None
+        if c.kind == "head_to_head":
+            can_join = open_ and p is not None and p.status == "invited"
+        else:
+            can_join = open_ and (p is None or p.status == "left") and not (c.kind == "group" and c.status == "completed")
+            if can_join:
+                err = eligibility_error(session, c, user)
+                if err:
+                    can_join, ineligible = False, {"code": err.code, "detail": err.detail}
         v = {
             "id": c.id,
             "kind": c.kind,
@@ -73,6 +79,7 @@ def challenge_views(session: Session, user: User, challenges: list[Challenge], n
             "joined": bool(p and p.status not in ("left", "invited", "cancelled")),
             "canJoin": bool(can_join),
             "closedReason": None if open_ else why,
+            "ineligible": ineligible,
             "me": progress_block(c, p),
         }
         if c.kind == "group":

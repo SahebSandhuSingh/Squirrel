@@ -161,3 +161,21 @@ def test_group_distance_from_verified_runs(client):
     run(4.5, "u_a", client)
     out = run(6.0, "u_b", client)
     assert out["results"][0]["challengesCompleted"] == [cid]
+
+
+def test_can_join_reflects_rules(client):
+    gated = make_challenge(client, rules={"minLevel": 5})
+    full = make_challenge(client, maxParticipants=1)
+    client.post(f"/v1/challenges/{full}/join", headers=auth("u_b"))
+    views = {c["id"]: c for c in client.get("/v1/challenges", headers=auth("u_a"), params={"kind": "special"}).json()["challenges"]}
+    assert views[gated]["canJoin"] is False and views[gated]["ineligible"]["code"] == "not_eligible"
+    assert views[full]["canJoin"] is False and views[full]["ineligible"]["code"] == "challenge_full"
+
+
+def test_rejoin_respects_capacity(client):
+    cid = make_challenge(client, maxParticipants=1)
+    client.post(f"/v1/challenges/{cid}/join", headers=auth("u_a"))
+    client.post(f"/v1/challenges/{cid}/leave", headers=auth("u_a"))
+    assert client.post(f"/v1/challenges/{cid}/join", headers=auth("u_b")).status_code == 200
+    r = client.post(f"/v1/challenges/{cid}/join", headers=auth("u_a"))
+    assert r.status_code == 409 and r.json()["code"] == "challenge_full"

@@ -25,6 +25,8 @@ class Settings:
     level_curve: str = field(default_factory=lambda: _env("LEVEL_CURVE", "linear:2000"))
     default_timezone: str = field(default_factory=lambda: _env("DEFAULT_TIMEZONE", "Asia/Kolkata"))
     offline_sync_window_days: int = field(default_factory=lambda: int(_env("OFFLINE_SYNC_WINDOW_DAYS", "7")))
+    #: Browser origins allowed to call the API (the Expo web build). Native apps don't need CORS.
+    cors_origins: tuple[str, ...] = field(default_factory=lambda: tuple(o.strip() for o in (_env("CORS_ORIGINS", "") or "").split(",") if o.strip()))
     challenge_resolve_grace_minutes: int = field(default_factory=lambda: int(_env("CHALLENGE_RESOLVE_GRACE_MINUTES", "120")))
 
     @property

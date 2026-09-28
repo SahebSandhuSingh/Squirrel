@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.levels import calculate_level
-from app.models import ActivityEvent, Challenge, ChallengeParticipant, User
+from app.models import ActivityEvent, Challenge, ChallengeParticipant, User, UserStats
 from app.rules import (
     CHALLENGE_COMPLETED,
     DAILY_TEMPLATES,
@@ -211,6 +211,21 @@ def is_open_for(c: Challenge, user: User, now: datetime) -> tuple[bool, str | No
     return True, None
 
 
+def eligibility_error(session: Session, c: Challenge, user: User, lock: bool = False) -> ChallengeError | None:
+    """Rules for joining a daily/group/special challenge: level, campus, capacity."""
+    rules = c.rules or {}
+    if rules.get("minLevel"):
+        stats = aggregates.lock_stats(session, user.id) if lock else session.get(UserStats, user.id)
+        total = stats.total_xp if stats else 0
+        if calculate_level(total) < int(rules["minLevel"]):
+            return ChallengeError(403, "not_eligible", f"reach level {rules['minLevel']} to join")
+    if rules.get("campus") and rules["campus"] != user.campus:
+        return ChallengeError(403, "not_eligible", f"open to {rules['campus']} only")
+    if c.max_participants is not None and participants_count(session, c) >= c.max_participants:
+        return ChallengeError(409, "challenge_full", "this challenge is full")
+    return None
+
+
 def join(session: Session, user: User, challenge_id: str, now: datetime | None = None) -> ChallengeParticipant:
     now = now or utcnow()
     c = session.scalar(select(Challenge).where(Challenge.id == challenge_id).with_for_update())
@@ -233,23 +248,19 @@ def join(session: Session, user: User, challenge_id: str, now: datetime | None =
         _refresh(session, c, p, now)
         return p
 
+    if p is not None and p.status == "completed":
+        raise ChallengeError(409, "already_completed", "you've already completed this challenge")
+    if p is not None and p.status != "left":
+        raise ChallengeError(409, "already_joined", "you're already in this challenge")
+    # Rules apply to first joins and re-joins alike (a re-join takes a place again).
+    err = eligibility_error(session, c, user, lock=True)
+    if err:
+        raise err
     if p is not None:
-        if p.status == "left":
-            p.status = "active"
-            p.left_at = None
-            p.joined_at = now
-        elif p.status == "completed":
-            raise ChallengeError(409, "already_completed", "you've already completed this challenge")
-        else:
-            raise ChallengeError(409, "already_joined", "you're already in this challenge")
+        p.status = "active"
+        p.left_at = None
+        p.joined_at = now
     else:
-        rules = c.rules or {}
-        if rules.get("minLevel") and calculate_level(aggregates.lock_stats(session, user.id).total_xp) < int(rules["minLevel"]):
-            raise ChallengeError(403, "not_eligible", f"reach level {rules['minLevel']} to join")
-        if rules.get("campus") and rules["campus"] != user.campus:
-            raise ChallengeError(403, "not_eligible", f"open to {rules['campus']} only")
-        if c.max_participants is not None and participants_count(session, c) >= c.max_participants:
-            raise ChallengeError(409, "challenge_full", "this challenge is full")
         p = ChallengeParticipant(id=str(uuid.uuid4()), challenge_id=c.id, user_id=user.id, status="active", progress=0, contribution=0, joined_at=now)
         session.add(p)
         try:
