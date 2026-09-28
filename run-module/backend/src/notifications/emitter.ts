@@ -135,7 +135,14 @@ export async function emitPending(limit: number = 500): Promise<{ enqueued: numb
     };
 
     // Push to delivery queue
-    await notificationDeliveryQueue.add('deliver', notifEvent, { jobId: 'deliver-' + row.id });
+    // Retried with backoff until the Social service takes it (notifications/deliver.ts).
+    await notificationDeliveryQueue.add('deliver', notifEvent, {
+      jobId: 'deliver-' + row.id,
+      attempts: 8,
+      backoff: { type: 'exponential', delay: 30_000 },
+      removeOnComplete: 1000,
+      removeOnFail: 1000,
+    });
     
     await pool.query(
       "UPDATE notification_outbox SET enqueued_at = now() WHERE id = $1",

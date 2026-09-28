@@ -34,6 +34,7 @@ import { territoriesRoutes } from './routes/territories.js';
 import tilesRoutes from './routes/tiles.js';
 import { leaderboardRoutes } from './routes/leaderboard.js';
 import { xpRoutes } from './routes/xp.js';
+import { liveRoutes } from './routes/live.js';
 import { registerCors } from './cors.js';
 export { requireAuth } from "../auth/verify-jwt.js";
 
@@ -57,6 +58,7 @@ await fastify.register(territoriesRoutes, { prefix: '/v1/territories' });
 await fastify.register(tilesRoutes);
 await fastify.register(leaderboardRoutes, { prefix: '/v1/leaderboard' });
 await fastify.register(xpRoutes);
+await fastify.register(liveRoutes);
 
 const start = async (): Promise<void> => {
   try {

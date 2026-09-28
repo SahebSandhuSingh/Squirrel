@@ -75,6 +75,8 @@ export interface XpSummary {
   updated_at: Date | null;
   /** Totals per reason, in a fixed order; they add up to `xp`. Caps appear as negative lines. */
   breakdown: XpLine[];
+  /** XP awarded per calendar day (YYYY-MM-DD, in each row's own time zone), after the caps. */
+  byDay: Record<string, number>;
 }
 
 const REASON_ORDER: XpReason[] = [
@@ -163,6 +165,7 @@ export function computeXp(rows: ActivityRow[], timeZone: string = DEFAULT_XP_TIM
   );
   const totals = new Map<XpReason, number>();
   const usedToday = new Map<string, number>(); // "<kind>|<day>" -> XP already awarded
+  const byDay: Record<string, number> = {};
   let updatedAt: Date | null = null;
 
   for (const row of ordered) {
@@ -174,10 +177,12 @@ export function computeXp(rows: ActivityRow[], timeZone: string = DEFAULT_XP_TIM
     if (raw <= 0) continue;
 
     const zone = validTimeZone(row.metrics?.["timezone"]) ?? timeZone;
-    const bucket = `${key}|${xpDay(row.started_at, zone)}`;
+    const day = xpDay(row.started_at, zone);
+    const bucket = `${key}|${day}`;
     const used = usedToday.get(bucket) ?? 0;
     const awarded = Math.min(raw, Math.max(0, kind.cap - used));
     usedToday.set(bucket, used + awarded);
+    if (awarded > 0) byDay[day] = (byDay[day] ?? 0) + awarded;
 
     for (const line of lines) totals.set(line.reason, (totals.get(line.reason) ?? 0) + line.xp);
     if (awarded < raw) totals.set(kind.capReason, (totals.get(kind.capReason) ?? 0) - (raw - awarded));
@@ -185,5 +190,5 @@ export function computeXp(rows: ActivityRow[], timeZone: string = DEFAULT_XP_TIM
   }
 
   const breakdown = REASON_ORDER.filter((reason) => totals.has(reason)).map((reason) => ({ reason, xp: totals.get(reason)! }));
-  return { xp: breakdown.reduce((sum, line) => sum + line.xp, 0), updated_at: updatedAt, breakdown };
+  return { xp: breakdown.reduce((sum, line) => sum + line.xp, 0), updated_at: updatedAt, breakdown, byDay };
 }

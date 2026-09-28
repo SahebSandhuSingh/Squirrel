@@ -28,6 +28,7 @@ describe("run XP", () => {
         { reason: "run_distance", xp: 50 },
         { reason: "territory_captured", xp: 25 },
       ],
+      byDay: { "2026-09-26": 125 },
     });
   });
 
@@ -43,7 +44,7 @@ describe("run XP", () => {
       started_at: at("2026-09-26T01:00:00Z"),
       metrics: { distance_m: 5000, territory_claimed: false, rejection_reason: "anticheat_rejected" },
     });
-    expect(computeXp([rejected], IST)).toEqual({ xp: 0, updated_at: null, breakdown: [] });
+    expect(computeXp([rejected], IST)).toEqual({ xp: 0, updated_at: null, breakdown: [], byDay: {} });
   });
 
   it("caps runs at 150 XP a day, cutting the latest runs, and shows the cap as a line", () => {
@@ -121,7 +122,7 @@ describe("exercise XP", () => {
   });
 
   it("a session with no counted reps earns nothing and does not move updated_at", () => {
-    expect(computeXp([workout("2026-09-26T02:00:00Z", 0)], IST)).toEqual({ xp: 0, updated_at: null, breakdown: [] });
+    expect(computeXp([workout("2026-09-26T02:00:00Z", 0)], IST)).toEqual({ xp: 0, updated_at: null, breakdown: [], byDay: {} });
   });
 
   it("counts a row only when the module that owns its type wrote it", () => {
@@ -134,7 +135,7 @@ describe("exercise XP", () => {
   });
 
   it("a new user has 0 XP, never null", () => {
-    expect(computeXp([], IST)).toEqual({ xp: 0, updated_at: null, breakdown: [] });
+    expect(computeXp([], IST)).toEqual({ xp: 0, updated_at: null, breakdown: [], byDay: {} });
   });
 });
 
@@ -154,5 +155,17 @@ describe("each row's own day", () => {
     expect(computeXp(ny, IST).xp).toBe(150);
     const unknown = [workout("2026-09-25T15:00:00Z", "Mars/Olympus"), workout("2026-09-25T16:00:00Z"), workout("2026-09-25T23:30:00Z")];
     expect(computeXp(unknown, IST).xp).toBe(140 + 70);
+  });
+});
+
+describe("XP per day (for the boards)", () => {
+  it("counts each day's XP after the caps, on the day of each row's own time zone", () => {
+    const rows = [
+      row({ id: "a", started_at: at("2026-09-26T01:00:00Z"), metrics: { distance_m: 20_000, territory_claimed: false, rejection_reason: null } }),
+      row({ id: "b", started_at: at("2026-09-26T03:00:00Z"), metrics: { distance_m: 5000, territory_claimed: false, rejection_reason: null } }),
+      // 19:00 UTC is 00:30 the next day in India
+      row({ id: "c", started_at: at("2026-09-26T19:00:00Z"), metrics: { distance_m: 1000, territory_claimed: false, rejection_reason: null } }),
+    ];
+    expect(computeXp(rows, IST).byDay).toEqual({ "2026-09-26": 150, "2026-09-27": 60 });
   });
 });

@@ -127,4 +127,36 @@ describe("XP routes", () => {
       expect((await fastify.inject({ method: "GET", url: bad, headers: service })).statusCode).toBe(400);
     }
   });
+
+  type Board = { window: string; day: string; entries: { rank: number; user_id: string; xp: number }[]; me: { rank: number; xp: number } | null; total_ranked: number };
+
+  it("GET /v1/leaderboard/xp ranks XP earned today and this week, after the caps", async () => {
+    const now = Date.now();
+    const [ana, ben, cai] = [newUser(), newUser(), newUser()];
+    // today: ana 20 km (capped at 150), ben 5 km (100), cai nothing today but 3 days ago
+    await addRun(ana, new Date(now - 60_000), { distance_m: 20_000, territory_claimed: false, rejection_reason: null });
+    await addRun(ben, new Date(now - 60_000), { distance_m: 5000, territory_claimed: false, rejection_reason: null });
+    await addRun(cai, new Date(now - 3 * 86_400_000), { distance_m: 30_000, territory_claimed: false, rejection_reason: null });
+
+    const daily = await fastify.inject({ method: "GET", url: "/v1/leaderboard/xp?window=daily&limit=1000", headers: bearer(await userToken(ben)) });
+    expect(daily.statusCode).toBe(200);
+    const d = daily.json<Board>();
+    const mine = d.entries.filter((e) => [ana, ben, cai].includes(e.user_id));
+    expect(mine.map((e) => [e.user_id, e.xp])).toEqual([[ana, 150], [ben, 100]]);
+    expect(d.me).toMatchObject({ user_id: ben, xp: 100 });
+    expect(mine[0]!.rank).toBeLessThan(mine[1]!.rank);
+
+    const weekly = (await fastify.inject({ method: "GET", url: "/v1/leaderboard/xp?window=weekly&limit=1000", headers: bearer(await userToken(cai)) })).json<Board>();
+    expect(weekly.entries.find((e) => e.user_id === cai)?.xp).toBe(150);
+    expect(weekly.me).toMatchObject({ user_id: cai, xp: 150 });
+  });
+
+  it("GET /v1/leaderboard/xp checks its input and needs a user", async () => {
+    const token = await userToken(newUser());
+    expect((await fastify.inject({ method: "GET", url: "/v1/leaderboard/xp?window=monthly", headers: bearer(token) })).statusCode).toBe(400);
+    expect((await fastify.inject({ method: "GET", url: "/v1/leaderboard/xp?limit=0", headers: bearer(token) })).statusCode).toBe(400);
+    expect((await fastify.inject({ method: "GET", url: "/v1/leaderboard/xp" })).statusCode).toBe(401);
+    const empty = (await fastify.inject({ method: "GET", url: "/v1/leaderboard/xp", headers: bearer(token) })).json<Board>();
+    expect(empty.me).toBeNull();
+  });
 });

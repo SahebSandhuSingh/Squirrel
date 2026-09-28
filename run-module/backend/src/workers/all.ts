@@ -11,6 +11,7 @@ import { startFinalizeRunWorker } from './finalize_run/queue.js';
 import { startLeaderboardSyncWorker, scheduleSnapshotJob } from './leaderboard_sync/queue.js';
 import { startDecayWorker, scheduleDecayJob } from './decay/queue.js';
 import { startNotificationWorker } from '../notifications/emitter.js';
+import { startNotificationDeliveryWorker } from '../notifications/deliver.js';
 
 export async function startAllWorkers(): Promise<Worker[]> {
   const workers = [
@@ -18,6 +19,7 @@ export async function startAllWorkers(): Promise<Worker[]> {
     startLeaderboardSyncWorker(),
     startDecayWorker(),
     startNotificationWorker(),
+    startNotificationDeliveryWorker(),
   ];
 
   await scheduleSnapshotJob();
