@@ -77,7 +77,7 @@ export default function SignIn() {
           <View style={{ gap: 8, marginTop: 8 }}>
             <TextInput style={[styles.input, { fontFamily: fonts.mono, fontSize: 12 }]} value={token} onChangeText={setToken} placeholder="eyJhbGciOiJSUzI1NiIs…" placeholderTextColor={colors.mute} autoCapitalize="none" multiline />
             <Button label="Use token" size="sm" variant="secondary" disabled={!token.trim() || !auth.apiConfigured} onPress={() => run(() => auth.signInWithToken(token.trim()))} />
-            {!auth.apiConfigured && <Text style={styles.warn}>Set EXPO_PUBLIC_API_URL to talk to the Run Module backend.</Text>}
+            {!auth.apiConfigured && <Text style={styles.warn}>Set EXPO_PUBLIC_API_URL (Run Module) or EXPO_PUBLIC_PROGRESS_API_URL (progress) to use a token.</Text>}
           </View>
         )}
 

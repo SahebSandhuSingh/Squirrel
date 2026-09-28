@@ -16,6 +16,8 @@ let token: string | null = null;
 export const setApiToken = (t: string | null) => {
   token = t;
 };
+/** True once a bearer token is set (signed in, live mode). */
+export const hasApiToken = () => token != null;
 
 /** Retry-After is either delta-seconds or an HTTP date. */
 function parseRetryAfter(v: string | null): number | undefined {

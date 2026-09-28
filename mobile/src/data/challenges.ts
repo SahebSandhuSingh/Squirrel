@@ -6,22 +6,41 @@ import type { IconName } from '@/data/icons';
  * resolution job runs — there is no manual claim. Missions (tap-to-log, claim) remain a
  * separate, frontend-only feature until the company decides whether to merge them.
  */
-export type ChallengeKind = 'daily' | 'head-to-head' | 'group';
+export type ChallengeKind = 'daily' | 'head-to-head' | 'group' | 'special';
 
 export type Challenge = {
   id: string;
   kind: ChallengeKind;
   title: string;
-  metric: 'km' | 'steps' | 'minutes' | 'km2';
+  metric: 'km' | 'steps' | 'minutes' | 'km2' | 'workouts';
   icon: IconName;
   mine: number;
   goal?: number;
   /** For head-to-head: the opponent's figure. */
-  opponent?: { userId: string; value: number };
+  opponent?: { userId: string; value: number; name?: string | null };
   /** For group: the group's combined total. */
   group?: { name: string; value: number; members: number };
   xp: number;
   endsInMin: number;
+  /** Set when the challenge came from the progress-service (live); absent for the demo seed. */
+  live?: {
+    description: string;
+    joined: boolean;
+    canJoin: boolean;
+    invited: boolean;
+    /** upcoming | active | completed | ended | cancelled — as this user sees it. */
+    status: string;
+    /** This user's participant state: invited | active | completed | left | won | lost | tied | failed | cancelled. */
+    mine: string | null;
+    completed: boolean;
+    closedReason: string | null;
+    ineligible: { code: string; detail: string } | null;
+    winnerUserId: string | null;
+    xpTie?: number;
+    participants: number;
+    maxParticipants: number | null;
+    minLevel?: number;
+  };
 };
 
 export const challenges: Challenge[] = [
@@ -34,6 +53,14 @@ export const challenges: Challenge[] = [
 ];
 
 export const fmtMetric = (v: number, m: Challenge['metric']) =>
-  m === 'km' ? `${v.toFixed(1)} km` : m === 'km2' ? `${v.toFixed(1)} km²` : m === 'steps' ? v.toLocaleString('en-IN') : `${v} min`;
+  m === 'km'
+    ? `${v.toFixed(1)} km`
+    : m === 'km2'
+      ? `${v.toFixed(1)} km²`
+      : m === 'steps'
+        ? Math.round(v).toLocaleString('en-IN')
+        : m === 'workouts'
+          ? `${Math.round(v)} workout${Math.round(v) === 1 ? '' : 's'}`
+          : `${Math.round(v)} min`;
 
 export const fmtEnds = (min: number) => (min < 60 ? `${min}m left` : min < 1440 ? `${Math.floor(min / 60)}h ${min % 60}m left` : `${Math.floor(min / 1440)}d left`);

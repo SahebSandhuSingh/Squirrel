@@ -1,21 +1,37 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import { progressApi, progressLive, type LifetimeProgress, type ProgressHistory, type WeeklyProgress, type XpBoard } from '@/api/progress';
+import { useRemote } from '@/api/useRemote';
 import { BadgeArt } from '@/art/Badge';
-import { AnimatedNumber, Button, Card, Display, FadeIn, Header, Icon, IconButton, Kicker, PressScale, ProgressBar, Ring, Screen, Segmented, tap } from '@/components/ui';
+import { useAuth } from '@/auth/AuthProvider';
+import { AnimatedNumber, Button, Card, Display, EmptyState, FadeIn, Header, Icon, IconButton, Kicker, PressScale, ProgressBar, Ring, Screen, Segmented, tap } from '@/components/ui';
 import { LOCKED_MISSIONS } from '@/data/features';
 import { achievements, levelRewards } from '@/data/rewards';
 import { heatmap, stats, today, type Period, type Stat } from '@/data/stats';
 import { territoryBoard } from '@/data/territory';
+import { liveHeatmap, liveStats } from '@/logic/progressStats';
 import { DAILY_RUN_XP_CAP, XP_PER_LEVEL } from '@/logic/xp';
 import { useApp } from '@/state/AppState';
 import { colors, fonts, radius } from '@/theme';
 
 /**
  * YOUR PROGRESS: today → progress over time → performance → what to do next.
- * Everything reads existing app state (XP, level, missions, run XP, streak, campus board)
- * and the existing activity series in data/stats; nothing here is invented.
+ * Signed in with the progress-service configured, every figure comes from it (daily goals,
+ * streak, XP, level, week-over-week, history, campus rank). Otherwise (demo mode) it reads the
+ * app's local state and the seed series in data/stats. Nothing here is invented.
  */
+
+type LiveData = { lifetime: LifetimeProgress; weekly: WeeklyProgress; history: ProgressHistory; campus: XpBoard | null };
+const loadLive = async (): Promise<LiveData> => {
+  const [lifetime, weekly, history, campus] = await Promise.all([
+    progressApi.lifetime(),
+    progressApi.weekly(),
+    progressApi.history(366),
+    progressApi.leaderboard('campus', 'weekly', 1).catch(() => null), // 409 until a campus is set
+  ]);
+  return { lifetime, weekly, history, campus };
+};
 
 const PERIODS: Period[] = ['Day', 'Week', 'Month', 'Year'];
 const METRICS = ['steps', 'active', 'kcal', 'workouts'] as const;
@@ -28,41 +44,80 @@ const PREV: Record<Period, string> = { Day: 'yesterday', Week: 'last week', Mont
 const HEAT = ['rgba(255,255,255,0.06)', 'rgba(215,255,31,0.25)', 'rgba(215,255,31,0.45)', 'rgba(215,255,31,0.7)', colors.primary];
 
 export default function Progress() {
-  const { missions, xpToday, runXpToday, level, levelXp, claimable, claimRewards, logMission } = useApp();
+  const app = useApp();
+  const { missions, runXpToday, claimable, claimRewards, logMission } = app;
+  const { mode } = useAuth();
+  const live = progressLive(mode);
+  const remote = useRemote(live ? 'progress:screen' : null, loadLive);
+  const L = live ? remote.data : undefined;
   const [period, setPeriod] = useState<Period>('Week');
   const [metric, setMetric] = useState<Metric>('steps');
 
-  // ---- TODAY: daily missions (launched ones) + today's run-XP room
-  const daily = missions.filter((m) => m.tab === 'Daily' && !LOCKED_MISSIONS.has(m.id));
+  // ---- TODAY: daily goals (server) or launched daily missions (demo) + today's run-XP room
+  const daily = L
+    ? L.lifetime.today.goals.map((g) => ({ id: g.id, title: g.label, current: g.current, goal: g.target, xp: g.xp, icon: (g.id === 'steps' ? 'shoe-print' : g.id === 'active' ? 'timer-outline' : 'arm-flex') as React.ComponentProps<typeof Icon>['name'] }))
+    : missions.filter((m) => m.tab === 'Daily' && !LOCKED_MISSIONS.has(m.id));
   const done = daily.filter((m) => m.current >= m.goal);
   const goalPct = daily.length ? daily.reduce((s, m) => s + Math.min(1, m.current / m.goal), 0) / daily.length : 0;
   const runRoom = Math.max(0, DAILY_RUN_XP_CAP - runXpToday);
   const missionXpLeft = daily.filter((m) => m.current < m.goal).reduce((s, m) => s + m.xp, 0);
-  const xpLeft = missionXpLeft + runRoom + claimable.xp;
+  const xpLeft = missionXpLeft + runRoom + (L ? 0 : claimable.xp);
+  const xpToday = L ? L.lifetime.today.xp : app.xpToday;
+  const streakDays = L ? L.lifetime.streak.current : today.streak;
+  // Level: the server's level curve when live, else the app's 2,000-XP levels.
+  const lvl = L
+    ? { level: L.lifetime.level.level, into: L.lifetime.level.currentXP - L.lifetime.level.xpForCurrentLevel, span: L.lifetime.level.xpForNextLevel - L.lifetime.level.xpForCurrentLevel }
+    : { level: app.level, into: app.levelXp, span: XP_PER_LEVEL };
+  const level = lvl.level;
 
-  // ---- PROGRESS: selected period + metric from the existing activity series
-  const periodStats = stats[period];
+  // ---- PROGRESS: selected period + metric
+  const allStats = useMemo(() => (L ? liveStats(L.weekly, L.history, L.lifetime.today.goals, L.lifetime.streak) : stats), [L]);
+  const heat = useMemo(() => (L ? liveHeatmap(L.history) : heatmap), [L]);
+  const periodStats = allStats[period];
   const stat = periodStats.find((s) => s.id === metric)!;
   const streak = periodStats.find((s) => s.id === 'streak')!;
-  const thisWeek = heatmap[heatmap.length - 1];
-  const activeDays = thisWeek.filter((v) => v > 0).length;
+  const thisWeek = heat[heat.length - 1];
+  const activeDays = L ? L.weekly.activeDays : thisWeek.filter((v) => v > 0).length;
 
   // ---- PERFORMANCE
-  const campusRank = territoryBoard.weekly.findIndex((r) => r.me) + 1;
+  const campusRank = L ? L.campus?.rank ?? null : territoryBoard.weekly.findIndex((r) => r.me) + 1;
   const milestones = achievements.filter((a) => a.progress > 0 && a.progress < 1).sort((a, b) => b.progress - a.progress).slice(0, 2);
   const nextReward = levelRewards.find((r) => r.level > level);
 
-  // ---- NEXT: the single best thing to do right now
-  const nextMission = [...daily].filter((m) => m.current < m.goal).sort((a, b) => b.xp - a.xp)[0];
+  // ---- NEXT: the single best thing to do right now (steps have no in-app source, so they're never the CTA)
+  const nextMission = [...daily].filter((m) => m.current < m.goal && !(L && m.id === 'steps')).sort((a, b) => b.xp - a.xp)[0];
   const claim = () => {
     tap('success');
     const r = claimRewards();
     router.push({ pathname: '/level-up', params: { gained: String(r.xp), coins: String(r.coins), leveledUp: r.leveledUp ? '1' : '0' } });
   };
 
+  const header = <Header back title="Your Progress" right={<IconButton icon="share-variant-outline" color={colors.primary} onPress={() => router.push('/compose')} label="Share progress" />} />;
+  if (live && !L) {
+    const unauthorized = remote.error != null && /token|sign in/i.test(remote.error);
+    return (
+      <Screen tabBar={false}>
+        {header}
+        {remote.error ? (
+          <EmptyState
+            title={unauthorized ? 'Sign in again' : "Couldn't load your progress"}
+            body={unauthorized ? 'Your session expired. Sign in to see your progress.' : remote.error}
+            action={unauthorized ? 'Sign in' : 'Try again'}
+            onAction={unauthorized ? () => router.push('/sign-in') : remote.reload}
+          />
+        ) : (
+          <Card style={{ marginTop: 8, opacity: 0.6 }}>
+            <Text style={styles.label}>Syncing your progress…</Text>
+            <ProgressBar progress={0} height={8} style={{ marginTop: 10 }} />
+          </Card>
+        )}
+      </Screen>
+    );
+  }
+
   return (
     <Screen tabBar={false}>
-      <Header back title="Your Progress" right={<IconButton icon="share-variant-outline" color={colors.primary} onPress={() => router.push('/compose')} label="Share progress" />} />
+      {header}
 
       {/* ================= TODAY ================= */}
       <Kicker style={{ marginTop: 2 }}>Today</Kicker>
@@ -78,7 +133,7 @@ export default function Progress() {
                 <Text style={styles.heroUnit}> XP</Text>
               </View>
               <Text style={styles.sub}>
-                {done.length}/{daily.length} missions done · <Text style={{ color: colors.primary }}>{xpLeft} XP</Text> still up for grabs
+                {done.length}/{daily.length} {L ? 'goals' : 'missions'} done · <Text style={{ color: colors.primary }}>{xpLeft} XP</Text> still up for grabs
               </Text>
             </View>
           </View>
@@ -86,17 +141,17 @@ export default function Progress() {
             <Mini value={`${done.length}/${daily.length}`} label="Activities" />
             <Mini value={`${xpLeft}`} label="XP left" />
             <Mini value={`${runXpToday}/${DAILY_RUN_XP_CAP}`} label="Run XP" />
-            <Mini value={`${today.streak}d`} label="Streak" accent />
+            <Mini value={`${streakDays}d`} label="Streak" accent />
           </View>
           {/* XP progression */}
           <View style={{ marginTop: 14 }}>
             <View style={styles.lvlRow}>
               <Text style={styles.lvl}>LV {level}</Text>
               <Text style={styles.sub}>
-                {levelXp.toLocaleString('en-IN')} / {XP_PER_LEVEL.toLocaleString('en-IN')} XP · {(XP_PER_LEVEL - levelXp).toLocaleString('en-IN')} to LV {level + 1}
+                {lvl.into.toLocaleString('en-IN')} / {lvl.span.toLocaleString('en-IN')} XP · {(lvl.span - lvl.into).toLocaleString('en-IN')} to LV {level + 1}
               </Text>
             </View>
-            <ProgressBar progress={levelXp / XP_PER_LEVEL} color={colors.primary} color2={colors.gold} height={8} style={{ marginTop: 6 }} />
+            <ProgressBar progress={lvl.into / lvl.span} color={colors.primary} color2={colors.gold} height={8} style={{ marginTop: 6 }} />
           </View>
         </Card>
       </FadeIn>
@@ -140,15 +195,15 @@ export default function Progress() {
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Icon name="fire" size={22} color={colors.orange} />
-            <Text style={styles.streak}>{today.streak}-day streak</Text>
+            <Text style={styles.streak}>{streakDays}-day streak</Text>
           </View>
           <Text style={styles.sub}>Active {activeDays}/7 days this week</Text>
         </View>
         <View style={{ gap: 5, marginTop: 12 }}>
-          {heatmap.map((row, r) => (
+          {heat.map((row, r) => (
             <View key={r} style={{ flexDirection: 'row', gap: 5 }}>
               {row.map((v, c) => (
-                <View key={c} style={[styles.cell, { backgroundColor: HEAT[v] }, r === heatmap.length - 1 && { borderWidth: 1, borderColor: 'rgba(215,255,31,0.35)' }]} />
+                <View key={c} style={[styles.cell, { backgroundColor: HEAT[v] }, r === heat.length - 1 && { borderWidth: 1, borderColor: 'rgba(215,255,31,0.35)' }]} />
               ))}
             </View>
           ))}
@@ -176,8 +231,8 @@ export default function Progress() {
           ))}
         <PressScale onPress={() => router.push('/leaderboard')} style={[styles.perfRow, styles.divider]} scaleTo={0.99} accessibilityLabel="Campus leaderboard">
           <Icon name="trophy-outline" size={18} color={colors.gold} />
-          <Text style={styles.perfLabel}>Campus rank</Text>
-          <Text style={styles.perfValue}>#{campusRank} this week</Text>
+          <Text style={styles.perfLabel}>{L ? 'Campus XP rank' : 'Campus rank'}</Text>
+          <Text style={styles.perfValue}>{campusRank ? `#${campusRank} this week` : L?.campus === null ? 'Set campus' : 'Unranked'}</Text>
           <Icon name="chevron-right" size={18} color={colors.dim} style={{ width: 86, textAlign: 'right' }} />
         </PressScale>
       </Card>
@@ -205,10 +260,10 @@ export default function Progress() {
             <View style={{ flex: 1, marginLeft: 12 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Text style={styles.msTitle}>LV {nextReward.level} · {nextReward.title}</Text>
-                <Text style={styles.msPct}>{(XP_PER_LEVEL - levelXp).toLocaleString('en-IN')} XP</Text>
+                <Text style={styles.msPct}>{(lvl.span - lvl.into).toLocaleString('en-IN')} XP</Text>
               </View>
               <Text style={styles.sub} numberOfLines={1}>{nextReward.subtitle}</Text>
-              <ProgressBar progress={levelXp / XP_PER_LEVEL} color={colors.gold} height={5} style={{ marginTop: 6 }} />
+              <ProgressBar progress={lvl.into / lvl.span} color={colors.gold} height={5} style={{ marginTop: 6 }} />
             </View>
           </PressScale>
         )}
@@ -217,16 +272,18 @@ export default function Progress() {
       {/* ================= NEXT ================= */}
       <Kicker style={{ marginTop: 26 }}>Next</Kicker>
       <Card glow={colors.primary} style={{ marginTop: 8 }}>
-        {claimable.count > 0 ? (
+        {!L && claimable.count > 0 ? (
           <NextAction icon="gift" title={`Claim ${claimable.count} reward${claimable.count > 1 ? 's' : ''}`} sub={`+${claimable.xp} XP · +${claimable.coins} coins waiting`} cta="Claim now" onPress={claim} />
         ) : runRoom > 0 ? (
           <NextAction icon="run-fast" title="Go for a run" sub={`Up to +${runRoom} XP left today · 50 + 10/km + 25 for new ground`} cta="Start a run" onPress={() => router.push('/run')} />
+        ) : nextMission && L ? (
+          <NextAction icon={nextMission.icon} title={nextMission.title} sub={`+${nextMission.xp} XP when you finish · counted by the server`} cta="Start exercise" onPress={() => router.push('/exercise/select')} />
         ) : nextMission ? (
           <NextAction icon={nextMission.icon} title={nextMission.title} sub={`+${nextMission.xp} XP when you finish`} cta="Log progress" onPress={() => { tap('success'); logMission(nextMission.id); }} />
         ) : (
           <NextAction icon="check-decagram" title="Today's goals are done" sub="Rest up. Tomorrow's missions unlock at midnight." cta="See missions" onPress={() => router.push('/missions')} />
         )}
-        {nextMission && (claimable.count > 0 || runRoom > 0) && (
+        {nextMission && ((!L && claimable.count > 0) || runRoom > 0) && (
           <Pressable onPress={() => router.push('/missions')} style={styles.alsoRow} accessibilityLabel="Open missions">
             <Icon name={nextMission.icon} size={16} color={colors.dim} />
             <Text style={[styles.sub, { flex: 1 }]} numberOfLines={1}>

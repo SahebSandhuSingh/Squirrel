@@ -97,10 +97,24 @@ This follows the *Frontend ↔ Backend Compatibility Assessment*.
 | **XP** | Local estimate uses the backend's rules (50 + 10/km + 25 territory, 150/day run cap). Signed in, the server total replaces it. Levels are derived client-side (2,000 XP each) |
 | **Anti-cheat** | Run summary shows *accepted / flagged / rejected* (server verdict when live, local plausibility check otherwise) |
 | **Territory** | New `/territory` screen (zones, control %, rivals, contested, 14-day decay) and area-based leaderboard (`/leaderboard`). Demo data until the territory endpoints are wired |
-| **Challenges** | New `/challenges` screen (daily, head-to-head, group), auto-resolving with no claim. Missions stay as a separate frontend feature (company decision, §4.3) |
+| **Challenges** | `/challenges` screen (daily, head-to-head, group, special), auto-resolving with no claim. Backed by the progress-service (below); demo data otherwise. Missions stay a separate frontend feature (company decision, §4.3) |
 | **Still frontend-only** | Coins, cosmetics, social feed, crews/events, badges. They need backend models (§5) |
 
 To point the app at a backend, copy `.env.example` to `.env`, then set `EXPO_PUBLIC_API_URL` (and `EXPO_PUBLIC_AUTH_URL` when the account service exists).
+
+## Backend integration (progress-service)
+
+`../progress-service` owns XP, levels, daily goals, streaks, challenges and XP leaderboards. Set `EXPO_PUBLIC_PROGRESS_API_URL` and sign in; it authenticates the same bearer token, and a token alone is enough to go live when only this service is configured. With it unset, or in demo mode, the screens show the demo data exactly as before.
+
+| Area | Live behaviour |
+|---|---|
+| **API layer** | `src/api/progress.ts` holds the typed contract (exact response shapes) and calls go through the shared `api()` client with `base: PROGRESS_API_URL` |
+| **Your Progress** (`/progress`) | Today's XP, the goal ring, goals done, streak and level come from `/v1/progress`. Week-over-week comes from `/v1/progress/weekly`, and the Day/Month/Year charts and heatmap from `/v1/progress/history?days=366` (`src/logic/progressStats.ts`). Campus rank comes from `/v1/leaderboards/campus`. It has loading, error (retry) and expired-session (sign in) states. The layout is unchanged |
+| **Challenges** (`/challenges`) | `/v1/challenges` maps onto the existing cards. A **Special** tab appears when there are special challenges. **Join**, **Leave**/**Forfeit**, and **Accept duel**/**Decline** buttons call the server. Results show as Completed, Won, Tie, Lost, Ended, Cancelled or Not eligible. Server error codes become toasts. There are loading, empty-per-tab, error and unauthorized states |
+| **Workouts** | Finishing a form-coach exercise queues a `WORKOUT_COMPLETED` event (key `exercise:<startedAt>:<item>`), flushes it, then re-reads XP from `/v1/xp`. The server decides the XP; the local figure is only the completion-screen estimate |
+| **Offline** | Queued events are stored one per key (SecureStore, or localStorage on web). The queue flushes on sign-in, on app foreground and after each workout. Replays are recognised as duplicates, rejected events are dropped, and network errors, 5xx and 401 keep the queue |
+| **XP source** | When configured, AppState syncs XP from `/v1/xp` instead of the Run Module's `/v1/users/me/xp` |
+| **Not yet sourced** | Steps: the app has no pedometer yet, so `STEP_COUNT` is never sent yet and step goals, step challenges and step duels stay at 0 until a step source (e.g. expo-sensors Pedometer or Health Connect/HealthKit) posts it. The Campus leaderboard screen is still the Run Module's territory board |
 
 ## Architecture
 

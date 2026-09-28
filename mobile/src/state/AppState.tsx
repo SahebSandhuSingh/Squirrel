@@ -1,5 +1,8 @@
 import { COMING_SOON, isLocked, LOCKED_MISSIONS } from '@/data/features';
-import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState as RNAppState } from 'react-native';
+import { enqueueActivity, flushActivities, progressApi, progressLive } from '@/api/progress';
+import { useAuth } from '@/auth/AuthProvider';
 import { DEFAULT_CITY_ID, cityById, type City } from '@/data/cities';
 import { crewsForCity, eventsForCity, placesForCity, type Crew, type EventItem, type Place } from '@/data/community';
 import { seedMissions, type Mission } from '@/data/missions';
@@ -137,6 +140,31 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setToasts((t) => [...t.slice(-2), { id, text, icon, color }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2600);
   }, []);
+
+  // ---- progress-service: the XP authority when configured and signed in.
+  // Queued activity is flushed (idempotently) on sign-in, on foreground and after each workout,
+  // then XP / today's XP are re-read from the server so nothing here is client-decided.
+  const { mode } = useAuth();
+  const live = progressLive(mode);
+  const syncProgress = useCallback(async () => {
+    try {
+      await flushActivities();
+      const x = await progressApi.xp();
+      setXp(x.totalXp);
+      setXpToday(x.today);
+    } catch {
+      // offline or signed out: the queue keeps the events; try again on the next trigger
+    }
+  }, []);
+  useEffect(() => {
+    if (!live) return;
+    const first = setTimeout(syncProgress, 0);
+    const sub = RNAppState.addEventListener('change', (st) => st === 'active' && void syncProgress());
+    return () => {
+      clearTimeout(first);
+      sub.remove();
+    };
+  }, [live, syncProgress]);
 
   const addXp = useCallback(
     (gain: number, coinGain = 0) => {
@@ -370,9 +398,21 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         setExerciseToday((t) => ({ sessions: t.sessions + 1, minutes: t.minutes + minutes, kcal: t.kcal + c.kcal }));
         const x = exerciseXp(c.reps, c.timedSeconds);
         const { leveledUp } = addXp(x.total, Math.round(x.total / 4));
+        if (live) {
+          // Report the workout; the server decides the XP. The key is fixed per session, so a
+          // retried or replayed report is recognised as a duplicate.
+          const startedAt = activeExerciseRef.current?.startedAt ?? Date.now();
+          void enqueueActivity({
+            idempotencyKey: `exercise:${startedAt}:${c.key}`,
+            type: 'WORKOUT_COMPLETED',
+            value: Math.min(300, Math.max(0.1, +(c.activeSeconds / 60).toFixed(2))),
+            occurredAt: new Date().toISOString(),
+            metadata: { exercise: c.slug, ...(c.reps > 0 ? { reps: c.reps } : {}), ...(c.kcal > 0 ? { calories: Math.round(c.kcal) } : {}), sessionId: String(startedAt) },
+          }).then(syncProgress);
+        }
         return { xp: x.total, lines: x.lines, leveledUp };
       },
-      [addXp],
+      [addXp, live, syncProgress],
     ),
     exerciseToday,
     xpToday,

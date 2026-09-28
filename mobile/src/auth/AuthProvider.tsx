@@ -4,7 +4,10 @@ import * as SecureStore from 'expo-secure-store';
 import { setApiToken } from '@/api/client';
 import type { ExerciseUser } from '@/api/exercise';
 import { jwtSubject } from '@/auth/jwt';
-import { API_CONFIGURED, AUTH_CONFIGURED, AUTH_URL } from '@/api/config';
+import { API_CONFIGURED, AUTH_CONFIGURED, AUTH_URL, PROGRESS_API_CONFIGURED } from '@/api/config';
+
+/** Some backend that authenticates the bearer token is configured (Run Module and/or progress-service). */
+const BEARER_BACKEND = API_CONFIGURED || PROGRESS_API_CONFIGURED;
 
 /**
  * Authentication. Every Run Module endpoint needs `Authorization: Bearer <token>` (RS256).
@@ -63,7 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch {
           // corrupt cache: treat as no exercise profile
         }
-        if (t && API_CONFIGURED) {
+        if (t && BEARER_BACKEND) {
           setApiToken(t);
           setUserId(jwtSubject(t));
           setEmail(e);
@@ -112,7 +115,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <Ctx.Provider value={{ mode, email, userId, apiConfigured: API_CONFIGURED, authConfigured: AUTH_CONFIGURED, signIn, signInWithToken, continueDemo: () => setMode('demo'), signOut, exerciseUser, setExerciseUser }}>
+    <Ctx.Provider value={{ mode, email, userId, apiConfigured: BEARER_BACKEND, authConfigured: AUTH_CONFIGURED, signIn, signInWithToken, continueDemo: () => setMode('demo'), signOut, exerciseUser, setExerciseUser }}>
       {children}
     </Ctx.Provider>
   );
