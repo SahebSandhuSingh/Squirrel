@@ -72,7 +72,7 @@ _CAPTURE_KEYS = (
     "min_valid_coverage",
     "invalid_pause_ms",
     "invalid_reset_ms",
-    "max_joint_stddev_px",
+    "max_joint_stddev_torso",
 )
 
 
@@ -983,7 +983,9 @@ def _validate_setup(raw: dict, slug: str) -> dict:
     reset = _number(capture["invalid_reset_ms"], "capture.invalid_reset_ms", minimum=0)
     if reset < pause:
         raise ConfigurationError("capture.invalid_reset_ms must be >= invalid_pause_ms")
-    _number(capture["max_joint_stddev_px"], "capture.max_joint_stddev_px", minimum=0, strict=True)
+    stillness = _number(capture["max_joint_stddev_torso"], "capture.max_joint_stddev_torso", minimum=0, strict=True)
+    if stillness >= 1:
+        raise ConfigurationError("capture.max_joint_stddev_torso is a fraction of a torso length and must be < 1")
     return raw
 
 

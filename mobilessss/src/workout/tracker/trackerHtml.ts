@@ -8,10 +8,20 @@
  * to fill the screen): a landscape camera on a portrait phone would otherwise lose most of its
  * width, so the view looks zoomed in and the person cannot see what the tracker sees.
  * Each tracked frame goes to the app as
- *   { type: 'frame', t, w, h, lm: [x, y, z, v] × 33 (normalized, UN-mirrored) }   or   lm: null (no body)
+ *   { type: 'frame', t, ms, w, h, lm: [x, y, z, v] × 33 (normalized, UN-mirrored) }   or   lm: null (no body)
  * where t is the page's capture time (ms): the app times frames by when they were taken, not by
- * when a message crossed into it (WebView messages can arrive late or in bursts).
- * and the app turns it into the server's pixel keypoints (workout/coach.ts).
+ * when a message crossed into it (WebView messages can arrive late or in bursts); ms is how long
+ * the model took on this frame. The app turns it into the server's pixel keypoints (workout/coach.ts).
+ *
+ * Measured on real footage (see the report in the commit that added this): the model finds a
+ * person at every size from ~12 % of the frame height up to a body cut off at the edges, in bright,
+ * dim and backlit scenes, and camera resolution (360p-1080p) makes no difference to it (it resizes
+ * every frame to its own input). So the camera stays at 1280x720 and the model at lite.
+ *
+ * Temporary loss: a frame without a body is reported honestly (lm: null), but the smoothing is only
+ * dropped after LOST_AFTER consecutive misses, so one bad frame does not restart the filters.
+ * Visibility is smoothed too (VIS_ALPHA), so a joint hovering at the server's 0.5 floor does not
+ * flicker in and out.
  *
  * App → page:  { type: 'skeleton', color: 'green' | 'red' | 'white' }, { type: 'active', value: bool }
  * Page → app:  { type: 'status', status: 'loading' | 'ready' | 'denied' | 'error', detail? }, frames.
@@ -80,7 +90,13 @@ class OneEuro {
 }
 const bank = () => Array.from({length:33}, () => new OneEuro());
 let fx = bank(), fy = bank(), fz = bank();
-const resetFilter = () => { fx.forEach(f=>f.reset()); fy.forEach(f=>f.reset()); fz.forEach(f=>f.reset()); };
+// Visibility: exponential smoothing both ways (never raised above what the model reports over time).
+const VIS_ALPHA = 0.4;
+let vis = null;
+const resetFilter = () => { fx.forEach(f=>f.reset()); fy.forEach(f=>f.reset()); fz.forEach(f=>f.reset()); vis = null; };
+// Consecutive frames without a body before the smoothing is dropped (~0.25 s at 30 fps).
+const LOST_AFTER = 8;
+let missed = 0;
 
 const EDGES = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28],[27,29],[29,31],[27,31],[28,30],[30,32],[28,32],[15,17],[15,19],[15,21],[16,18],[16,20],[16,22],[0,11],[0,12]];
 const COLORS = { green: '#3DDC84', red: '#FF3B5C', white: 'rgba(255,255,255,0.85)' };
@@ -109,14 +125,14 @@ function draw(lm) {
 
 async function start() {
   post({ type: 'status', status: 'loading' });
-  let landmarker;
+  let landmarker, delegate = '';
   try {
     const { FilesetResolver, PoseLandmarker } = await import(CFG.bundleUrl);
     const vision = await FilesetResolver.forVisionTasks(CFG.wasmUrl);
     const build = (delegate) => PoseLandmarker.createFromOptions(vision, {
       baseOptions: { modelAssetPath: CFG.modelUrl, delegate }, runningMode: 'VIDEO', numPoses: 1,
     });
-    try { landmarker = await build('GPU'); } catch (_) { landmarker = await build('CPU'); }
+    try { landmarker = await build('GPU'); delegate = 'GPU'; } catch (_) { landmarker = await build('CPU'); delegate = 'CPU'; }
   } catch (e) {
     post({ type: 'status', status: 'error', detail: 'Could not load body tracking: ' + (e && e.message || e) });
     return;
@@ -132,26 +148,40 @@ async function start() {
     post({ type: 'status', status: denied ? 'denied' : 'error', detail: 'Camera unavailable: ' + (e && e.message || e) });
     return;
   }
-  post({ type: 'status', status: 'ready' });
+  post({ type: 'status', status: 'ready', detail: 'lite · ' + delegate + ' · ' + video.videoWidth + 'x' + video.videoHeight });
   let lastTime = -1;
+  // A detection that throws (no WebGL at all: MediaPipe needs it for its image input even on the
+  // CPU) must not look like an empty room: after a second of failures, report the error.
+  let failures = 0;
   const loop = () => {
-    if (active && video.readyState >= 2 && video.currentTime !== lastTime) {
-      lastTime = video.currentTime;
-      const now = performance.now();
-      const res = landmarker.detectForVideo(video, now);
-      if (!res.landmarks || res.landmarks.length === 0) {
-        resetFilter(); draw(null);
-        post({ type: 'frame', t: +now.toFixed(1), w: video.videoWidth, h: video.videoHeight, lm: null });
-      } else {
-        const t = now / 1000;
-        const lm = res.landmarks[0].map((p, i) => ({ x: fx[i].f(p.x, t), y: fy[i].f(p.y, t), z: fz[i].f(p.z ?? 0, t), visibility: p.visibility }));
-        draw(lm);
-        const flat = [];
-        for (const p of lm) flat.push(+p.x.toFixed(5), +p.y.toFixed(5), +(p.z ?? 0).toFixed(5), +(p.visibility ?? 1).toFixed(3));
-        post({ type: 'frame', t: +now.toFixed(1), w: video.videoWidth, h: video.videoHeight, lm: flat });
-      }
-    }
     requestAnimationFrame(loop);
+    if (!active || video.readyState < 2 || video.currentTime === lastTime) return;
+    lastTime = video.currentTime;
+    const now = performance.now();
+    let res;
+    try {
+      res = landmarker.detectForVideo(video, now);
+      failures = 0;
+    } catch (e) {
+      if (++failures === 30) post({ type: 'status', status: 'error', detail: 'Body tracking stopped: ' + (e && e.message || e) });
+      return;
+    }
+    const ms = +(performance.now() - now).toFixed(1);
+    if (!res.landmarks || res.landmarks.length === 0) {
+      if (++missed > LOST_AFTER) resetFilter();
+      draw(null);
+      post({ type: 'frame', t: +now.toFixed(1), ms, w: video.videoWidth, h: video.videoHeight, lm: null });
+    } else {
+      missed = 0;
+      const t = now / 1000;
+      const raw = res.landmarks[0];
+      vis = vis ? raw.map((p, i) => vis[i] + VIS_ALPHA * ((p.visibility ?? 1) - vis[i])) : raw.map((p) => p.visibility ?? 1);
+      const lm = raw.map((p, i) => ({ x: fx[i].f(p.x, t), y: fy[i].f(p.y, t), z: fz[i].f(p.z ?? 0, t), visibility: vis[i] }));
+      draw(lm);
+      const flat = [];
+      for (const p of lm) flat.push(+p.x.toFixed(5), +p.y.toFixed(5), +(p.z ?? 0).toFixed(5), +(p.visibility ?? 1).toFixed(3));
+      post({ type: 'frame', t: +now.toFixed(1), ms, w: video.videoWidth, h: video.videoHeight, lm: flat });
+    }
   };
   requestAnimationFrame(loop);
 }
@@ -163,7 +193,7 @@ start();
 /** A page message as the app receives it. */
 export type TrackerMessage =
   | { type: 'status'; status: 'loading' | 'ready' | 'denied' | 'error'; detail?: string }
-  | { type: 'frame'; t?: number; w: number; h: number; lm: number[] | null };
+  | { type: 'frame'; t?: number; ms?: number; w: number; h: number; lm: number[] | null };
 
 export function parseTrackerMessage(raw: unknown): TrackerMessage | null {
   let value: unknown = raw;
@@ -178,9 +208,10 @@ export function parseTrackerMessage(raw: unknown): TrackerMessage | null {
   if (!m || typeof m !== 'object') return null;
   if (m.type === 'status' && typeof (m as { status?: unknown }).status === 'string') return m as TrackerMessage;
   if (m.type === 'frame') {
-    const f = m as { t?: unknown; w?: unknown; h?: unknown; lm?: unknown };
+    const f = m as { t?: unknown; ms?: unknown; w?: unknown; h?: unknown; lm?: unknown };
     if (typeof f.w !== 'number' || typeof f.h !== 'number' || f.w <= 0 || f.h <= 0) return null;
     if (f.t !== undefined && (typeof f.t !== 'number' || !Number.isFinite(f.t))) return null;
+    if (f.ms !== undefined && (typeof f.ms !== 'number' || !Number.isFinite(f.ms) || f.ms < 0)) return null;
     if (f.lm !== null && !(Array.isArray(f.lm) && f.lm.length === 33 * 4 && f.lm.every((n) => typeof n === 'number'))) return null;
     return m as TrackerMessage;
   }

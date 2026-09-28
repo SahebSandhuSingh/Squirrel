@@ -19,12 +19,24 @@ _QUALITY_SCHEMA_VERSION = 1
 
 @dataclass(frozen=True)
 class BaselineQuality:
+    """How steady the captured reference was.
+
+    `max_joint_stddev_px` is the worst joint's standard deviation in camera pixels (reported for
+    diagnostics). Pixels depend on how big the person is in the picture, so the stillness decision
+    uses `max_joint_stddev_rel`: the same figure divided by the person's own torso length
+    (`body_scale_px`). Measured on real footage, a person holding still sways ~0.07 of a torso
+    length at every distance from far (15 % of the frame) to close (55 %), while a fixed 8 px limit
+    passed only at 15 % and never from 40 % — which forced people to stand far away.
+    """
+
     valid_samples: int
     observed_frames: int
     valid_coverage: float
     valid_duration_ms: float
     max_joint_stddev_px: float
     joint_stddev_px: dict[str, dict[str, float]]
+    body_scale_px: float | None = None
+    max_joint_stddev_rel: float | None = None
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -105,14 +117,43 @@ class BaselineCollector:
             deviations[name] = axes
             maxima.extend(axes.values())
         coverage = self.frame_count / observed_frames if observed_frames else 0.0
+        worst = max(maxima, default=0.0)
+        scale = self._body_scale_px()
         return BaselineQuality(
             valid_samples=self.frame_count,
             observed_frames=observed_frames,
             valid_coverage=round(coverage, 6),
             valid_duration_ms=round(float(valid_duration_ms), 6),
-            max_joint_stddev_px=max(maxima, default=0.0),
+            max_joint_stddev_px=worst,
             joint_stddev_px=deviations,
+            body_scale_px=None if scale is None else round(scale, 3),
+            max_joint_stddev_rel=None if scale is None else round(worst / scale, 6),
         )
+
+    def _body_scale_px(self) -> float | None:
+        """The person's size in the picture: the median torso length (shoulder midpoint to hip
+        midpoint) when both shoulders and hips are captured, else a third of the median height of
+        the captured joints (a torso is about a third of the shoulder-to-ankle extent). None when
+        nothing measurable was captured."""
+        if not self._frames:
+            return None
+        torso = ("left_shoulder", "right_shoulder", "left_hip", "right_hip")
+        if all(name in self._required for name in torso):
+            lengths = []
+            for frame in self._frames:
+                sx = (frame["left_shoulder"]["x"] + frame["right_shoulder"]["x"]) / 2
+                sy = (frame["left_shoulder"]["y"] + frame["right_shoulder"]["y"]) / 2
+                hx = (frame["left_hip"]["x"] + frame["right_hip"]["x"]) / 2
+                hy = (frame["left_hip"]["y"] + frame["right_hip"]["y"]) / 2
+                lengths.append(((sx - hx) ** 2 + (sy - hy) ** 2) ** 0.5)
+            scale = statistics.median(lengths)
+        else:
+            heights = [
+                max(p["y"] for p in frame.values()) - min(p["y"] for p in frame.values())
+                for frame in self._frames
+            ]
+            scale = statistics.median(heights) / 3.0
+        return scale if isfinite(scale) and scale > 0 else None
 
     def reset(self) -> None:
         self._frames.clear()

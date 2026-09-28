@@ -49,6 +49,8 @@ def _quality(**changes: object) -> BaselineQuality:
         "valid_coverage": 1.0,
         "valid_duration_ms": 3000.0,
         "max_joint_stddev_px": 0.0,
+        "body_scale_px": 150.0,
+        "max_joint_stddev_rel": 0.0,
         "joint_stddev_px": {
             name: {"x": 0.0, "y": 0.0} for name in _frame()
         },
@@ -187,7 +189,7 @@ def test_baseline_validation_rejects_bad_quality_and_accepts_stable_reference():
     good = _adapter().validate_baseline(_reference(), _quality(), _TEMPLATES)
     unstable = _adapter().validate_baseline(
         _reference(),
-        _quality(max_joint_stddev_px=9.0),
+        _quality(max_joint_stddev_px=30.0, max_joint_stddev_rel=0.2),
         _TEMPLATES,
     )
     incomplete = _adapter().validate_baseline(

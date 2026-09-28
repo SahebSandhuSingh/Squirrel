@@ -15,8 +15,8 @@ export type PoseCameraProps = {
 
 /** A page frame (flat x, y, z, v × 33) as the coach's PoseFrame. */
 export function toPoseFrame(m: Extract<TrackerMessage, { type: 'frame' }>): PoseFrame {
-  if (!m.lm) return { width: m.w, height: m.h, landmarks: null, capturedAt: m.t };
+  if (!m.lm) return { width: m.w, height: m.h, landmarks: null, capturedAt: m.t, inferenceMs: m.ms };
   const landmarks: [number, number, number, number][] = [];
   for (let i = 0; i < m.lm.length; i += 4) landmarks.push([m.lm[i]!, m.lm[i + 1]!, m.lm[i + 2]!, m.lm[i + 3]!]);
-  return { width: m.w, height: m.h, landmarks, capturedAt: m.t };
+  return { width: m.w, height: m.h, landmarks, capturedAt: m.t, inferenceMs: m.ms };
 }

@@ -23,3 +23,7 @@ export const POSE_ASSETS_URL = trim(process.env.EXPO_PUBLIC_POSE_ASSETS_URL);
 
 export const SOCIAL_API_URL = trim(process.env.EXPO_PUBLIC_SOCIAL_API_URL);
 export const SOCIAL_API_CONFIGURED = SOCIAL_API_URL.length > 0;
+
+/** Development only: the live-workout debug overlay and [FRAME]/[POSE]/[EXERCISE] logs
+ *  (EXPO_PUBLIC_POSE_DEBUG=1 at build time). Never set it for a production build. */
+export const POSE_DEBUG = process.env.EXPO_PUBLIC_POSE_DEBUG === '1';

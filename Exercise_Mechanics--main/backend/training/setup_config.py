@@ -22,7 +22,7 @@ class SetupConfig:
     min_valid_coverage: float
     invalid_pause_ms: float
     invalid_reset_ms: float
-    max_joint_stddev_px: float
+    max_joint_stddev_torso: float
 
 
 @lru_cache(maxsize=None)
@@ -58,5 +58,5 @@ def build_setup_config(bundle: ExerciseConfiguration) -> SetupConfig:
         min_valid_coverage=float(capture["min_valid_coverage"]),
         invalid_pause_ms=float(capture["invalid_pause_ms"]),
         invalid_reset_ms=float(capture["invalid_reset_ms"]),
-        max_joint_stddev_px=float(capture["max_joint_stddev_px"]),
+        max_joint_stddev_torso=float(capture["max_joint_stddev_torso"]),
     )

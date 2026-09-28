@@ -112,7 +112,9 @@ the service through `EXPO_PUBLIC_SOCIAL_API_URL` (section 3).
    | `EXPO_PUBLIC_API_URL` | `https://squirrel-run-api.onrender.com` |
    | `EXPO_PUBLIC_SOCIAL_API_URL` | `https://squirrel-social.onrender.com` (profiles, follows, posts, feed; unset: sample data) |
 
-   `https://`, no trailing slash. They are built into the app, so:
+   `https://`, no trailing slash. Never set `EXPO_PUBLIC_POSE_DEBUG` here: it is a development
+   switch for the pose debug overlay and logs (see `mobilessss/.env.example`). Locally, rebuild with
+   `--clear` after changing it, or Metro reuses the old value. They are built into the app, so:
 2. **Deployments → latest → ⋯ → Redeploy.**
 3. Open the site, create an account, check that the profile and XP load. The first request after a
    quiet spell can take a minute while Render wakes the backend.

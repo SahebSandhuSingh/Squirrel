@@ -17,6 +17,9 @@
  * No React Native imports: the workout screen subscribes to it, and it can run in Node too.
  */
 
+import { POSE_DEBUG } from '@/api/config';
+import { exerciseProfile, type ExerciseProfile } from './exerciseProfiles';
+import { assessFraming, FramingStabilizer, type Framing } from './framing';
 import { parseServerMessage } from './protocol/parse';
 import type { WSError, WSSetup, WSTrain } from './protocol/types';
 import type { WSTimedTrainContract } from './protocol/timedContract';
@@ -40,10 +43,6 @@ export const WS_BACKPRESSURE_CAP = 1 << 16;
  *  runs so the person sees themselves, but nothing is sent: when it runs out, the server's
  *  stillness check and standing-baseline capture start on their own. */
 export const GET_READY_SECONDS = 10;
-/** "Whole body in view": a shoulder, hip, knee and ankle, each from either side (side-on
- *  exercises such as the push-up hide the far limbs), tracked and inside the picture. */
-const IN_VIEW_PAIRS = [[11, 12], [23, 24], [25, 26], [27, 28]] as const;
-const IN_VIEW_MIN_VISIBILITY = 0.5;
 
 /** One tracked camera frame: smoothed, normalized landmarks (x, y, z, visibility), or none. */
 export type PoseFrame = {
@@ -52,6 +51,22 @@ export type PoseFrame = {
   landmarks: [number, number, number, number][] | null;
   /** When the tracker captured the frame, on the tracker page's own clock (ms), if it says. */
   capturedAt?: number;
+  /** How long the pose model took on this frame (ms), if the tracker says. */
+  inferenceMs?: number;
+};
+
+/** Live pipeline figures for the debug overlay (POSE_DEBUG). */
+export type CoachDebug = {
+  fps: number;
+  inferenceMs: number | null;
+  width: number;
+  height: number;
+  /** This frame's framing, before stabilizing. */
+  framing: Framing;
+  phase: CoachPhase;
+  /** The server's movement phase (e.g. descent, bottom) during a set. */
+  movement: string | null;
+  reps: number | null;
 };
 
 export type Keypoint = { x: number; y: number; z: number; v: number };
@@ -96,8 +111,10 @@ export type CoachState = {
   restLeft: number | null;
   /** Seconds left to get into position, while getting ready. */
   getReadyLeft: number | null;
-  /** While getting ready: whether the whole body is in the picture (null before the first frame). */
+  /** While getting ready: whether the body is framed well enough to start (null before the first frame). */
   inView: boolean | null;
+  /** While getting ready and during setup: framing quality and the one thing to fix, if any. */
+  framing: Framing | null;
   results: SetResult[];
   /** The last error the server reported, or a connection that cannot recover. */
   error: WSError | null;
@@ -147,6 +164,12 @@ export class CoachSession {
   // they were captured even when messages from the tracker arrive late or in bursts.
   private captureOffset: number | null = null;
   private lastFrameT = -Infinity;
+  // Framing (framing.ts) for this exercise's camera profile, and debug figures.
+  private readonly profile: ExerciseProfile;
+  private readonly framingStab = new FramingStabilizer();
+  private stats: { fps: number; lastAt: number | null; inferenceMs: number | null; width: number; height: number; framing: Framing | null } =
+    { fps: 0, lastAt: null, inferenceMs: null, width: 0, height: 0, framing: null };
+  private lastLog = -Infinity;
   private readonly now: () => number;
   private readonly WS: typeof WebSocket;
 
@@ -154,9 +177,10 @@ export class CoachSession {
     this.now = opts.now ?? (() => (globalThis.performance ? globalThis.performance.now() : Date.now()));
     this.WS = opts.WebSocketImpl ?? globalThis.WebSocket;
     this.session = opts.sessionId ? { id: opts.sessionId, exercise: opts.exercise, variant: opts.variant } : null;
+    this.profile = exerciseProfile(opts.exercise);
     this.state = {
       phase: 'getready', set: 1, totalSets: opts.sets, measure: opts.measure, paused: false, connected: false,
-      getReadyLeft: null, inView: null,
+      getReadyLeft: null, inView: null, framing: null,
       setup: null, train: null, restLeft: null, results: [], error: null, fatal: false,
     };
   }
@@ -185,17 +209,35 @@ export class CoachSession {
 
   /** Feed one tracked camera frame. Sent only when the server should be seeing it. */
   frame(frame: PoseFrame): void {
-    if (this.state.phase === 'getready') {
-      const inView = wholeBodyInView(frame);
-      if (inView !== this.state.inView) this.update({ inView });
-      return;
+    const at = this.now();
+    this.measure(frame, at);
+    if (this.state.phase === 'getready' || this.state.phase === 'setup') {
+      // Only a CHANGE of verdict re-renders the screen; the figures are for the debug overlay.
+      const framing = this.framingStab.update(this.stats.framing!, at);
+      if (framing.kind !== this.state.framing?.kind) this.update({ framing, inView: framing.ok });
     }
+    if (this.state.phase === 'getready') return;
     const { phase, paused } = this.state;
     const sending = phase === 'setup' || phase === 'starting' || (phase === 'training' && !paused);
     const ws = this.ws;
     if (!sending || !ws || ws.readyState !== 1 /* OPEN */) return;
     if ((ws.bufferedAmount ?? 0) > WS_BACKPRESSURE_CAP) return;
     ws.send(JSON.stringify(toFrameMessage(frame, this.frameTime(frame))));
+  }
+
+  /** Live figures for the debug overlay. */
+  debug(): CoachDebug {
+    const t = this.state.train as (WSTrain & { phase?: string }) | null;
+    return {
+      fps: this.stats.fps,
+      inferenceMs: this.stats.inferenceMs,
+      width: this.stats.width,
+      height: this.stats.height,
+      framing: this.stats.framing ?? assessFraming(null, this.profile),
+      phase: this.state.phase,
+      movement: t?.phase ?? null,
+      reps: t ? (isTimed(t) ? t.movement.counted_lifts : t.set.completed_reps) : null,
+    };
   }
 
   pause(): void {
@@ -366,7 +408,8 @@ export class CoachSession {
   }
 
   private getReady(): void {
-    this.update({ phase: 'getready', getReadyLeft: GET_READY_SECONDS, inView: null });
+    this.framingStab.reset();
+    this.update({ phase: 'getready', getReadyLeft: GET_READY_SECONDS, inView: null, framing: null });
     this.countdownTimer = setInterval(() => {
       const left = (this.state.getReadyLeft ?? 0) - 1;
       if (left <= 0) this.beginSetup();
@@ -398,6 +441,28 @@ export class CoachSession {
     return t;
   }
 
+  /** Frame rate, model time, resolution and framing of the latest frame (and a log line every
+   *  2 s when POSE_DEBUG is on: never in production builds). */
+  private measure(frame: PoseFrame, at: number): void {
+    const s = this.stats;
+    if (s.lastAt !== null) {
+      const dt = at - s.lastAt;
+      if (dt > 0) s.fps = s.fps ? s.fps + 0.15 * (1000 / dt - s.fps) : 1000 / dt;
+    }
+    s.lastAt = at;
+    s.inferenceMs = frame.inferenceMs ?? s.inferenceMs;
+    s.width = frame.width;
+    s.height = frame.height;
+    s.framing = assessFraming(frame.landmarks, this.profile);
+    if (POSE_DEBUG && at - this.lastLog >= 2000) {
+      this.lastLog = at;
+      const f = s.framing, d = this.debug();
+      console.log(`[FRAME] width=${s.width} height=${s.height} fps=${s.fps.toFixed(1)} inferenceMs=${s.inferenceMs ?? '-'}`);
+      console.log(`[POSE] personDetected=${!!frame.landmarks} confidence=${f.confidence.toFixed(2)} visibleJoints=${f.visibleLandmarks}/33 essential=${f.visibleEssential}/${f.totalEssential} framing=${f.kind} body=${(f.bodyHeight * 100).toFixed(0)}%`);
+      console.log(`[EXERCISE] phase=${d.phase} state=${d.movement ?? '-'}${d.reps !== null ? ` [REP] count=${d.reps}` : ''}`);
+    }
+  }
+
   private logicalNow(): number {
     const live = this.pausedAt !== null ? this.now() - this.pausedAt : 0;
     return this.now() - this.pausedTotal - live;
@@ -427,13 +492,3 @@ export class CoachSession {
   }
 }
 
-/** Whether a shoulder, hip, knee and ankle are each tracked and inside the picture. */
-export function wholeBodyInView(frame: PoseFrame): boolean {
-  const lm = frame.landmarks;
-  if (!lm) return false;
-  const seen = (i: number) => {
-    const p = lm[i];
-    return !!p && p[3] >= IN_VIEW_MIN_VISIBILITY && p[0] >= 0 && p[0] <= 1 && p[1] >= 0 && p[1] <= 1;
-  };
-  return IN_VIEW_PAIRS.every(([left, right]) => seen(left) || seen(right));
-}

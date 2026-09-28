@@ -260,7 +260,12 @@ class SetupOrchestrator:
             observed_frames=self._observed_frames,
             valid_duration_ms=self._capture_valid_ms,
         )
-        if quality.max_joint_stddev_px > self._config.max_joint_stddev_px:
+        # Stillness relative to the person's size (baseline.BaselineQuality): pixels would demand
+        # an ever steadier stance the closer the person stands.
+        if (
+            quality.max_joint_stddev_rel is None
+            or quality.max_joint_stddev_rel > self._config.max_joint_stddev_torso
+        ):
             failure = ConditionResult(
                 "baseline_quality",
                 "failed",
@@ -268,7 +273,9 @@ class SetupOrchestrator:
                 "Hold still and keep the full body visible.",
                 {
                     "max_joint_stddev_px": quality.max_joint_stddev_px,
-                    "allowed_px": self._config.max_joint_stddev_px,
+                    "body_scale_px": quality.body_scale_px,
+                    "max_joint_stddev_torso": quality.max_joint_stddev_rel,
+                    "allowed_torso": self._config.max_joint_stddev_torso,
                 },
             )
             self._reset_to_precheck((failure,))

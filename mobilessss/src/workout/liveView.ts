@@ -41,11 +41,16 @@ export function liveView(s: CoachState | null, tracker: TrackerStatus, targetRep
   if (tracker === 'loading') return { ...base, status: 'Starting body tracking…' };
   if (!s) return { ...base, status: 'Getting your workout ready…' };
 
+  // Framing (framing.ts) says the one thing to change about where the person stands; it follows
+  // the person instead of asking everyone to step far back.
+  const framing = s.framing;
+  const framingProblem = framing && !framing.ok ? framing.message : null;
+
   if (s.phase === 'getready') {
     return {
       ...base,
       getReady: s.getReadyLeft,
-      status: s.inView ? 'Stand straight and hold still' : 'Step back: your whole body needs to be in view',
+      status: framingProblem ?? (framing ? framing.message : 'Step into view'),
       skeleton: s.inView ? 'green' : 'red',
     };
   }
@@ -54,13 +59,15 @@ export function liveView(s: CoachState | null, tracker: TrackerStatus, targetRep
     const d = s.setup;
     if (!s.connected || !d) return { ...base, status: 'Connecting to your coach…' };
     const failure = d.failures[0] ?? null;
-    const bad = d.missing.length > 0 || !!failure;
-    const status = d.missing.length > 0
-      ? 'Step back: your whole body needs to be in view'
+    const bad = d.missing.length > 0 || !!failure || !!framingProblem;
+    // Where to stand comes first: the server can still see joints the model placed outside the
+    // picture, or a sideways body, and would only say the position is wrong.
+    const status = framingProblem ?? (d.missing.length > 0
+      ? 'Show your full body'
       : d.phase === 'collecting' ? 'Hold still…'
         : d.phase === 'validating' ? 'Checking your position…'
           : d.phase === 'ready' ? 'Ready!'
-            : 'Get into your starting position';
+            : 'Get into your starting position');
     return {
       ...base,
       status,

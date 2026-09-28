@@ -12,7 +12,7 @@ import { Button, Display, Icon, Ring, tap } from '@/components/ui';
 import { estimateKcal, exerciseByKey, PLAN_BOUNDS } from '@/data/exercises';
 import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
 import { useKeepAwake } from 'expo-keep-awake';
-import { EXERCISE_API_URL } from '@/api/config';
+import { EXERCISE_API_URL, POSE_DEBUG } from '@/api/config';
 import { ApiError, getApiToken, refreshApiToken } from '@/api/client';
 import { exerciseApi } from '@/api/exercise';
 import { invalidateExercise, useExerciseUser } from '@/hooks/useExercise';
@@ -20,6 +20,7 @@ import { useApp } from '@/state/AppState';
 import { CoachSession, type CoachState, type PoseFrame } from '@/workout/coach';
 import { liveView } from '@/workout/liveView';
 import { PoseCamera } from '@/workout/tracker/PoseCamera';
+import { PoseDebugOverlay } from '@/workout/PoseDebugOverlay';
 import type { TrackerStatus } from '@/workout/tracker/types';
 
 /**
@@ -383,7 +384,7 @@ function LiveWorkout({ userId }: { userId: string }) {
     };
     const unsubscribe = c.subscribe((s) => {
       const structural = !shown || s.phase !== shown.phase || s.set !== shown.set || s.restLeft !== shown.restLeft
-        || s.getReadyLeft !== shown.getReadyLeft || s.inView !== shown.inView
+        || s.getReadyLeft !== shown.getReadyLeft || s.inView !== shown.inView || s.framing?.kind !== shown.framing?.kind
         || s.error !== shown.error || s.paused !== shown.paused || s.results.length !== shown.results.length;
       if (structural) {
         if (timer) clearTimeout(timer);
@@ -421,6 +422,7 @@ function LiveWorkout({ userId }: { userId: string }) {
 
   const onFrame = useCallback((f: PoseFrame) => coach.current?.frame(f), []);
   const onStatus = useCallback((status: TrackerStatus, detail?: string) => setTracker({ status, detail }), []);
+  const readDebug = useCallback(() => coach.current?.debug() ?? null, []);
   const view = useMemo(() => liveView(state, tracker.status, target, target), [state, tracker.status, target]);
 
   // Say it when a rep lands.
@@ -517,6 +519,8 @@ function LiveWorkout({ userId }: { userId: string }) {
           </Pressable>
         </View>
       </View>
+
+      {POSE_DEBUG && <PoseDebugOverlay read={readDebug} delegate={tracker.detail} top={insets.top + 150} />}
 
       {/* Camera permission, or tracking that could not start */}
       {!blocking && perm && !perm.granted && Platform.OS !== 'web' && (
