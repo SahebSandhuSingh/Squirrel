@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from math import pi, sin
 from copy import deepcopy
 from pathlib import Path
 
@@ -581,3 +582,21 @@ def test_high_knees_count_away_from_the_setup_spot_or_with_shoulders_hidden(scal
         points = _scaled(_keypoints(left, right), scale, drop_shoulders=drop_shoulders)
         status = adapter.process(TrainingFrame(t, points))
     assert status["movement"]["counted_lifts"] == 14
+
+
+def test_a_slow_march_is_coached_and_not_counted():
+    """Field test: a slow left-right march counted as high knees."""
+    adapter = build_high_knee_adapter(baseline=_baseline(), target_duration_ms=30_000)
+    statuses, t = [], 0
+    for side in ("left", "right", "left"):
+        for step in range(0, 1600, 50):   # a 1.6 s lift: a march
+            p = 0.8 * sin(pi * step / 1600)
+            statuses.append(adapter.process(_frame(p, t, 0.0) if side == "left" else _frame(0.0, t, p)))
+            t += 50
+        for _ in range(6):
+            statuses.append(adapter.process(_frame(0.0, t, 0.0)))
+            t += 50
+    final = statuses[-1]
+    assert final["movement"]["counted_lifts"] == 0
+    assert final["movement"]["invalid_lifts"] >= 3
+    assert any(s["cue"] and s["cue"]["rule_id"] == "tempo" for s in statuses)

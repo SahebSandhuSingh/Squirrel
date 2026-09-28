@@ -28,6 +28,8 @@ class DetectedLiftCycle:
     started_t_ms: float
     completed_t_ms: float
     tracking_invalid: bool
+    # Why an invalid lift did not count: "too_slow" (slower than max_lift_ms), else None.
+    reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -62,6 +64,7 @@ class HighKneeLiftDetector:
         stale_phase_ms: float,
         max_frame_delta_ms: float,
         max_tracking_gap_ms: float | None = None,
+        max_lift_ms: float | None = None,
     ) -> None:
         if side not in {"left", "right"}:
             raise ValueError("lift detector side must be 'left' or 'right'")
@@ -81,6 +84,9 @@ class HighKneeLiftDetector:
             max_tracking_gap_ms=max_tracking_gap_ms,
         )
         self._reached_gate = reached_gate
+        # A high knee is a running movement: a lift slower than this (leaving the standing band to
+        # returning to it) is a march, and does not count.
+        self._max_lift_ms = max_lift_ms
         self._attempt_started_t_ms: float | None = None
         self._attempt_peak = 0.0
         self._full_rom_crossed = False
@@ -147,13 +153,20 @@ class HighKneeLiftDetector:
         if started is None:
             return None
         if state.completed_attempt is not None:
+            classification = state.completed_attempt.classification
+            too_slow = (
+                self._max_lift_ms is not None
+                and classification != "invalid"
+                and now_ms - started > self._max_lift_ms
+            )
             return DetectedLiftCycle(
                 self._side,
-                state.completed_attempt.classification,
+                "invalid" if too_slow else classification,
                 state.completed_attempt.peak,
                 started,
                 float(now_ms),
                 False,
+                "too_slow" if too_slow else None,
             )
         if state.attempt_discarded:
             return DetectedLiftCycle(
@@ -197,4 +210,5 @@ def high_knee_lift_detector(
         stale_phase_ms=fsm["stale_phase_ms"],
         max_frame_delta_ms=max_frame_delta_ms,
         max_tracking_gap_ms=fsm.get("max_tracking_gap_ms"),
+        max_lift_ms=fsm.get("max_lift_ms"),
     )

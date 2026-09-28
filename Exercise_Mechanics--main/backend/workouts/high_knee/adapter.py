@@ -193,6 +193,11 @@ class HighKneeAdapter:
             )
             for issue in issues
         ]
+        if any(detection.reason == "too_slow" for detection in detections):
+            # A march, not a run: said at once, while the person can speed up.
+            candidates.append(
+                CueCandidate("tempo", self._config.fsm["too_slow_cue"], 1, display_ms=2500.0)
+            )
         if any(event.classification == "shallow" for event in events):
             template = self._config.templates["knee_drive_rom"]
             candidates.append(

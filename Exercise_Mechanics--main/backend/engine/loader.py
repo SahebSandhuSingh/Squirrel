@@ -41,6 +41,9 @@ _FSM_OPTIONAL_KEYS = ("max_tracking_gap_ms",)
 # the shortest believable rep (ms, leaving the resting band to returning to it) and the cue shown
 # when a rep was faster than that.
 _REP_FSM_OPTIONAL_KEYS = ("count_shallow", "min_rep_ms", "too_fast_cue")
+# Optional, timed lifts: the slowest lift that still counts (ms, leaving the standing band to
+# returning to it) and the cue shown when a lift was slower.
+_TIMED_FSM_OPTIONAL_KEYS = ("max_lift_ms", "too_slow_cue")
 _TIMED_FSM_KEYS = (
     "phases",
     "initial_phase",
@@ -800,7 +803,10 @@ def _validate_fsm(raw: dict) -> dict:
     if movement_type not in {"reps", "time"}:
         raise ConfigurationError("fsm.movement_type must be 'reps' or 'time'")
     keys = _FSM_ALL_KEYS if movement_type == "reps" else _TIMED_FSM_KEYS
-    optional = (*_FSM_OPTIONAL_KEYS, *(_REP_FSM_OPTIONAL_KEYS if movement_type == "reps" else ()))
+    optional = (
+        *_FSM_OPTIONAL_KEYS,
+        *(_REP_FSM_OPTIONAL_KEYS if movement_type == "reps" else _TIMED_FSM_OPTIONAL_KEYS),
+    )
     allowed = {"schema_version", "movement_type", *keys, *optional}
     unknown = sorted(set(raw) - allowed)
     if unknown:
@@ -828,6 +834,12 @@ def _validate_fsm(raw: dict) -> dict:
             raise ConfigurationError("fsm.min_rep_ms needs a non-empty fsm.too_fast_cue")
     elif "too_fast_cue" in raw:
         raise ConfigurationError("fsm.too_fast_cue is only used with fsm.min_rep_ms")
+    if "max_lift_ms" in raw:
+        _number(raw["max_lift_ms"], "fsm.max_lift_ms", minimum=0, strict=True)
+        if not isinstance(raw.get("too_slow_cue"), str) or not raw["too_slow_cue"].strip():
+            raise ConfigurationError("fsm.max_lift_ms needs a non-empty fsm.too_slow_cue")
+    elif "too_slow_cue" in raw:
+        raise ConfigurationError("fsm.too_slow_cue is only used with fsm.max_lift_ms")
     if movement_type == "reps":
         reset = float(raw["top_return"])
         start = float(raw["descent_trigger"])

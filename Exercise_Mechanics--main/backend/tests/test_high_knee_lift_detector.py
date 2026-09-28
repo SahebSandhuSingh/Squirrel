@@ -86,8 +86,8 @@ def test_threshold_vibration_does_not_duplicate_cycles():
     states = [
         detector.update(progress, timestamp)
         for progress, timestamp in [
-            (0.0, 0), (0.31, 100), (0.29, 150), (0.33, 200), (0.5, 300),
-            (0.45, 400), (0.3, 500), (0.24, 600), (0.27, 650), (0.23, 700),
+            (0.0, 0), (0.31, 100), (0.29, 150), (0.33, 200), (0.65, 300),
+            (0.55, 400), (0.3, 500), (0.24, 600), (0.27, 650), (0.23, 700),
         ]
     ]
     cycles = [state.cycle for state in states if state.cycle is not None]
@@ -154,3 +154,15 @@ def test_two_detectors_preserve_overlapping_independent_cycles():
 def test_invalid_side_is_rejected_at_construction():
     with pytest.raises(ValueError, match="side"):
         _detector("middle")
+
+
+def test_a_slow_march_does_not_count_and_a_running_lift_does():
+    """Field test: a slow left-right march counted as high knees."""
+    running = _drive(_detector(), [(0.0, 0), (0.35, 100), (0.7, 250), (0.5, 400), (0.2, 550)])
+    assert running.cycle is not None and running.cycle.classification == "shallow"
+    assert running.cycle.reason is None
+    march = _drive(_detector(), [(0.0, 0), (0.35, 200), (0.55, 500), (0.7, 800), (0.5, 1100), (0.2, 1400)])
+    assert march.cycle is not None and march.cycle.classification == "invalid"
+    assert march.cycle.reason == "too_slow"
+    low = _drive(_detector(), [(0.0, 0), (0.35, 100), (0.5, 250), (0.4, 400), (0.2, 550)])
+    assert low.cycle is not None and low.cycle.classification == "invalid" and low.cycle.reason is None
