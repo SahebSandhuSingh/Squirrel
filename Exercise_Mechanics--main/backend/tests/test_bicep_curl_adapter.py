@@ -164,7 +164,7 @@ def test_shallow_rep_is_rom_only_score_and_counts():
     assert status["last_rep"]["classification"] == "shallow"
     assert status["last_rep"]["rom_factor"] == pytest.approx(0.7 / _GATE)
     assert status["last_rep"]["score"] == 93.3  # ROM-only: no live penalty rules
-    assert status["cue"] is None
+    assert status["cue"]["text"] == "Shallow rep: Curl all the way up with control."  # warned at once
 
 
 def test_shallow_rep_emits_reminder_cue_at_start_of_next_rep():
@@ -172,22 +172,22 @@ def test_shallow_rep_emits_reminder_cue_at_start_of_next_rep():
     _drive(adapter, _SHALLOW)
     # Hold extended through the reset dwell into setup.
     setup = None
-    for timestamp in (700, 800, 900, 1000, 1100):
+    for timestamp in range(700, 3301, 100):
         setup = adapter.process(_frame(0.0, timestamp))
     assert setup["phase"] == "setup"
     assert setup["cue"] is None
     # Begin the next curl -> the deferred shallow reminder fires on setup -> ascent.
-    ascent = adapter.process(_frame(0.3, 1200))
+    ascent = adapter.process(_frame(0.3, 3400))
     assert ascent["phase"] == "ascent"
     assert ascent["cue"]["rule_id"] == "curl_rom"
 
 
 def test_final_shallow_rep_does_not_queue_a_next_rep_cue():
     adapter = _adapter(target_reps=1)
-    assert _drive(adapter, _SHALLOW)["cue"] is None
-    for timestamp in (700, 800, 900, 1000, 1100):
+    assert _drive(adapter, _SHALLOW)["cue"]["text"].startswith("Shallow rep:")
+    for timestamp in range(3300, 3700, 100):
         assert adapter.process(_frame(0.0, timestamp))["cue"] is None
-    assert adapter.process(_frame(0.3, 1200))["cue"] is None
+    assert adapter.process(_frame(0.3, 3700))["cue"] is None
 
 
 def test_invalid_micro_attempt_has_no_score_or_set_progress():

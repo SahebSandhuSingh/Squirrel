@@ -41,8 +41,11 @@ def test_double_arm_plan_counts_only_reps_where_both_arms_curl():
 def test_double_arm_plan_with_one_arm_short_is_a_shallow_rep():
     adapter = build_bicep_curl_adapter(baseline=_BASELINE, target_reps=5, variant="double")
     statuses = _curls(adapter, [(0.95, 0.55)])
-    assert statuses[-1]["set"]["completed_reps"] == 0
-    assert statuses[-1]["counters"]["not_counted"]["shallow"] == 1
+    assert statuses[-1]["set"]["completed_reps"] == 1
+    assert statuses[-1]["counters"]["shallow"] == 1
+    assert statuses[-1]["counters"]["full_rom"] == 0
+    # The arm-specific cue says more than the generic shallow warning, so it wins.
+    assert "Curl with both arms together." in _cues(statuses)
 
 
 def test_single_arm_plan_counts_each_arm_and_says_so_when_both_curl():

@@ -45,10 +45,10 @@ stale_phase_ms: 10000
 # away; only a longer dropout does.
 max_tracking_gap_ms: 1000
 
-# What a rep must be to count toward the set (engine/rep_fsm.py). Only full-range reps count: one
-# short of the full-ROM gate is shown as "not counted" and coached, never paid for. And none faster
-# than min_rep_ms, from leaving the resting band to returning to it: quicker than that is bouncing,
-# not a controlled rep.
-count_shallow: false
+# What a rep must be to count toward the set (engine/rep_fsm.py). A rep short of the full-ROM gate
+# still counts, with a warning said at once, and earns no XP (only full reps are good_reps). None
+# faster than min_rep_ms counts, from leaving the resting band to returning to it: quicker than that
+# is bouncing, not a controlled rep.
+count_shallow: true
 min_rep_ms: 1000
 too_fast_cue: "Slower: that push-up was too fast to count."

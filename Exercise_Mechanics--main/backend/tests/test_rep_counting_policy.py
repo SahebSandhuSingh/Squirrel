@@ -1,8 +1,9 @@
-"""Only controlled, full-range reps count (fsm.yaml count_shallow / min_rep_ms).
+"""Only controlled reps count, and shallow ones are warned about (fsm.yaml count_shallow / min_rep_ms).
 
 Field test: 36 squats in 38 s of active time, every one shallow, all counted and paid for. Here the
-real squat configuration decides: a rep short of full depth, or quicker than the minimum rep time,
-is an invalid attempt with its reason, coached at once, and never advances the set.
+real squat configuration decides: a rep quicker than the minimum rep time is an invalid attempt with
+its reason, coached at once, and never advances the set. A rep short of full depth counts, with a
+warning said at once, and is no good rep (no XP).
 """
 
 from __future__ import annotations
@@ -33,9 +34,9 @@ def _drive(adapter, frames):
 
 
 @pytest.mark.parametrize("exercise", ["squat", "pushup", "bicep_curl"])
-def test_rep_exercises_count_only_controlled_full_reps(exercise):
+def test_rep_exercises_count_controlled_reps_and_warn_on_shallow_ones(exercise):
     fsm = load_exercise_config(exercise).fsm
-    assert fsm["count_shallow"] is False
+    assert fsm["count_shallow"] is True
     assert fsm["min_rep_ms"] >= 1000
     assert fsm["too_fast_cue"]
 
@@ -62,20 +63,23 @@ def test_a_bounced_squat_is_not_counted_and_says_slow_down():
     assert any(c["rule_id"] == "tempo" and "too fast" in c["text"] for c in cues)
 
 
-def test_a_shallow_squat_is_shown_and_coached_but_not_counted():
+def test_a_shallow_squat_counts_with_a_warning_at_once():
     adapter = build_squat_adapter(baseline=_baseline(), target_reps=3)
     statuses = _drive(adapter, _rep(0.6, 2400, 0))
     status = statuses[-1]
-    assert status["counters"]["qualified"] == 0
-    assert status["counters"]["shallow"] == 0          # "shallow" counts counted shallow reps
-    assert status["counters"]["not_counted"] == {"shallow": 1, "too_fast": 0}
-    assert status["last_attempt"]["reason"] == "shallow"
-    cues = [s["cue"] for s in statuses if s["cue"]]
-    assert any(c["text"].startswith("Not counted:") for c in cues)
+    assert status["counters"]["qualified"] == 1
+    assert status["counters"]["shallow"] == 1
+    assert status["counters"]["full_rom"] == 0
+    assert status["counters"]["not_counted"] == {"shallow": 0, "too_fast": 0}
+    assert status["last_attempt"]["classification"] == "shallow"
+    assert status["last_attempt"]["reason"] is None
+    assert status["set"]["completed_reps"] == 1
+    completed = next(i for i, s in enumerate(statuses) if s["counters"]["attempts"] == 1)
+    assert statuses[completed]["cue"]["text"].startswith("Shallow rep:")
 
 
-def test_the_set_finishes_on_good_reps_only():
-    adapter = build_squat_adapter(baseline=_baseline(), target_reps=2)
+def test_the_set_finishes_on_counted_reps_and_never_on_too_fast_ones():
+    adapter = build_squat_adapter(baseline=_baseline(), target_reps=3)
     frames, t = [], 0
     for peak, duration in [(0.6, 2400), (0.95, 900), (0.95, 2400), (0.6, 2400), (0.95, 2400)]:
         frames += _rep(peak, duration, t)
@@ -83,12 +87,14 @@ def test_the_set_finishes_on_good_reps_only():
     statuses = _drive(adapter, frames)
     final = statuses[-1]
     assert final["counters"]["attempts"] == 5
-    assert final["set"]["completed_reps"] == 2
+    assert final["set"]["completed_reps"] == 4
+    assert final["counters"]["full_rom"] == 2
+    assert final["counters"]["shallow"] == 2
     assert final["set"]["complete"] is True
-    assert final["counters"]["not_counted"] == {"shallow": 2, "too_fast": 1}
-    # the set completed only on the last (fifth) rep's cycle
+    assert final["counters"]["not_counted"] == {"shallow": 0, "too_fast": 1}
+    # the too-fast second rep did not count: the third counted rep was the fourth attempt
     first_complete = next(i for i, s in enumerate(statuses) if s["set"]["complete"])
-    assert statuses[first_complete]["counters"]["attempts"] == 5
+    assert statuses[first_complete]["counters"]["attempts"] == 4
 
 
 def _machine(**policy) -> RepFSM:
