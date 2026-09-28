@@ -12,14 +12,15 @@
  *                                  at most 150 XP from runs per day
  *
  *   Exercise (source exercise_module), by the work that counted
- *                                  2 per counted rep (rep exercises)
+ *                                  2 per full-range rep (rep exercises)
  *                                  1 per 2 counted lifts (timed: high knees)
  *                                  at most 70 XP per session
  *                                  at most 150 XP from exercise per day
  *
- * The Exercise Module counts only controlled, full-range reps (and high-knee lifts at running
- * pace); shallow and too-fast attempts are reported but never counted, and idle time earns
- * nothing. So doing it badly on purpose is not faster XP. Rows written before good reps were
+ * The Exercise Module counts only controlled reps (and high-knee lifts at running pace): too-fast
+ * attempts are reported but never counted. A shallow rep counts toward the set, with a warning,
+ * but only full-range reps (`good_reps`) earn XP, and idle time earns nothing. So doing it badly
+ * on purpose is not faster XP. Rows written before good reps were
  * reported carry `reps` including shallow ones: their good share is `reps × correct_pct`.
  *
  * "Per day" is the person's own calendar day: the time zone their phone recorded the activity in

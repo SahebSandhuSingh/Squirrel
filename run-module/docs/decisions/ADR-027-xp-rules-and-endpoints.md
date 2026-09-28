@@ -30,7 +30,7 @@ write-only rule still holds for everything else.
 |-------------------------------------|-------------------------------------------------------------|
 | `run` / `run_module`                | 50 completed + 1 per whole 100 m + 25 if territory claimed |
 | rejected run (`rejection_reason` set) | 0                                                         |
-| `exercise` / `exercise_module`      | 2 per counted rep (`metrics.good_reps`) · timed: 1 per 2 counted lifts (`metrics.lifts`) · at most 70 a session. Amended after field testing: the first rule paid by `duration_s` (<10 min 0 · 10–20 min 30 · 20–45 min 50 · 45 min+ 70), which paid shallow and idle time the same as good work |
+| `exercise` / `exercise_module`      | 2 per full-range rep (`metrics.good_reps`; shallow reps count toward the set but earn none) · timed: 1 per 2 counted lifts (`metrics.lifts`) · at most 70 a session. Amended after field testing: the first rule paid by `duration_s` (<10 min 0 · 10–20 min 30 · 20–45 min 50 · 45 min+ 70), which paid shallow and idle time the same as good work |
 | anything else                       | 0                                                           |
 
 - **Daily caps:** 150 XP from runs and, separately, 150 XP from exercise, per day. The company gave

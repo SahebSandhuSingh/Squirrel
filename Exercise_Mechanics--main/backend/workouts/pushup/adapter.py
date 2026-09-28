@@ -211,7 +211,8 @@ class PushUpAdapter:
         ):
             candidates.append(self._depth_cue(display_ms=float(self._shallow_next_rep_cue_ms)))
             self._pending_shallow_depth_cue = False
-        # A rep that did not count (too fast, or short of full range) is said at once.
+        # A rep that did not count (too fast, or short of full range), or a shallow rep that did,
+        # is said at once.
         not_counted = rep_outcome.not_counted_cue(
             state.completed_attempt,
             fsm=self._config.fsm,
@@ -220,6 +221,13 @@ class PushUpAdapter:
         )
         if not_counted is not None:
             candidates.append(not_counted)
+        shallow_warning = rep_outcome.shallow_warning_cue(
+            state.completed_attempt,
+            rom_rule_id=ROM_RULE_ID,
+            rom_template=self._config.templates[ROM_RULE_ID],
+        )
+        if shallow_warning is not None:
+            candidates.append(shallow_warning)
         cue = self._cue_selector.select(candidates, frame.t_ms)
         self._previous_phase = state.phase
         return self._status(state, readings, issues, cue)

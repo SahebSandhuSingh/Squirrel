@@ -430,7 +430,8 @@ exercise time is in `metrics.active_time_s`, next to reps (counted only), good r
 counted, correct %, depth, Workout Score and sets. The Run Module turns these rows into XP
 ([ADR-027](../run-module/docs/decisions/ADR-027-xp-rules-and-endpoints.md)): 2 XP per counted rep
 (high knees: 1 per 2 counted lifts), at most 70 a session and 150 from exercise a day. Only
-controlled, full-range reps count (`configs/fsm.yaml` `count_shallow`, `min_rep_ms`).
+controlled reps count (`configs/fsm.yaml` `min_rep_ms`); a shallow rep counts toward the set with a
+warning said at once, but only full-range reps (`good_reps`) earn XP (`count_shallow: true`).
 
 Days and times are the person's own: the app sends the phone's IANA time zone when it creates a
 session, and history, reports, the activity calendar, the streak (the current one), "this week"

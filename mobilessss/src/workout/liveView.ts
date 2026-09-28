@@ -99,12 +99,17 @@ export function liveView(s: CoachState | null, tracker: TrackerStatus, targetRep
   }
   const r = t as WSRepTrain;
   const redIssue = r.issues.some((i) => i.skeleton_color === 'red');
-  // Only controlled, full-range reps count; the rest are tallied so the number never looks stuck.
+  // Only controlled reps count; the rest are tallied so the number never looks stuck. Shallow reps
+  // count with a warning, and are tallied too.
   const notCounted = r.counters.not_counted.shallow + r.counters.not_counted.too_fast;
+  const tallies = [
+    r.counters.shallow > 0 ? `${r.counters.shallow} shallow` : null,
+    notCounted > 0 ? `${notCounted} not counted` : null,
+  ].filter(Boolean);
   const status = r.tracking.invalidated_by.length > 0
     ? 'Turn side-on to the camera'
     : !r.tracking.available ? 'Hold still for tracking'
-      : notCounted > 0 ? `Live coaching · ${notCounted} not counted` : 'Live coaching';
+      : ['Live coaching', ...tallies].join(' · ');
   const score = r.last_rep?.score ?? r.set.average_score;
   return {
     ...base,

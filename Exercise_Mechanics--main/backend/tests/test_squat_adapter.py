@@ -153,29 +153,30 @@ def test_shallow_rep_emits_500ms_depth_cue_at_start_of_next_rep():
     assert status["last_rep"]["classification"] == "shallow"
     assert status["last_rep"]["rom_factor"] == pytest.approx(0.7 / 0.85)
     assert status["last_rep"]["score"] == 82.4
-    assert status["cue"] is None
+    # The shallow rep counts, and is warned about at once.
+    assert status["cue"]["text"] == "Shallow rep: Go to the target depth with control."
     assert status["set"]["completed_reps"] == 1
 
     setup = None
-    for timestamp in (700, 800, 900, 1000, 1100):
+    for timestamp in range(700, 3301, 100):
         setup = adapter.process(_frame(0.0, timestamp))
     assert setup is not None
     assert setup["phase"] == "setup"
     assert setup["cue"] is None
 
-    descent = adapter.process(_frame(0.3, 1200))
+    descent = adapter.process(_frame(0.3, 3400))
     assert descent["phase"] == "descent"
     assert descent["cue"]["rule_id"] == "depth"
-    assert adapter.process(_frame(0.4, 1699))["cue"]["rule_id"] == "depth"
-    assert adapter.process(_frame(0.5, 1700))["cue"] is None
+    assert adapter.process(_frame(0.4, 3899))["cue"]["rule_id"] == "depth"
+    assert adapter.process(_frame(0.5, 3900))["cue"] is None
 
 
 def test_final_shallow_rep_does_not_queue_a_next_rep_depth_cue():
     adapter = build_squat_adapter(baseline=_baseline(), target_reps=1)
-    assert _drive(adapter, _SHALLOW)["cue"] is None
-    for timestamp in (700, 800, 900, 1000, 1100):
+    assert _drive(adapter, _SHALLOW)["cue"]["text"].startswith("Shallow rep:")
+    for timestamp in range(3300, 3700, 100):
         assert adapter.process(_frame(0.0, timestamp))["cue"] is None
-    assert adapter.process(_frame(0.3, 1200))["cue"] is None
+    assert adapter.process(_frame(0.3, 3700))["cue"] is None
 
 
 def test_invalid_micro_attempt_has_no_score_or_set_progress():
