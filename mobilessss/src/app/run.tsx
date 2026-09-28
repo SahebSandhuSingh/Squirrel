@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Animated, Easing, Linking, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,11 +16,10 @@ import { StatusBar } from 'expo-status-bar';
 import { statusColor } from '@/data/territory';
 import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
 
-// Demo mode (location denied or unavailable): distance is simulated at a fixed pace and the
+// Demo mode is an explicit, labelled fallback: distance is simulated at a fixed pace and the
 // screen says so. With GPS, distance comes from filtered location fixes: the device's on iOS and
 // Android, the browser's (navigator.geolocation, HTTPS only) on the web.
 const DEMO_PACE = 378; // sec per km (6'18")
-const DEMO_START = 32 * 60 + 16; // matches the design: 5.12 km in 32:16
 const two = (n: number) => String(Math.floor(n)).padStart(2, '0');
 const fmtPace = (secPerKm: number) => (Number.isFinite(secPerKm) && secPerKm > 0 ? `${Math.floor(secPerKm / 60)}'${two(secPerKm % 60)}"` : `--'--"`);
 
@@ -29,6 +28,7 @@ type Phase = 'countdown' | 'running' | 'paused' | 'uploading' | 'done';
 type Outcome = Verdict | 'processing';
 const STAGE_TEXT = { uploading: 'Uploading your route…', finishing: 'Closing the loop…', polling: 'Verifying your run…' } as const;
 type Source = 'pending' | 'gps' | 'demo';
+type PermissionIssue = 'denied-can-ask' | 'denied-settings' | 'approximate' | 'web-unavailable' | 'location-error';
 
 const VERDICT_UI: Record<Outcome, { label: string; icon: React.ComponentProps<typeof Icon>['name']; color: string }> = {
   accepted: { label: 'Run accepted', icon: 'check-decagram', color: colors.primary },
@@ -47,6 +47,9 @@ export default function Run() {
   const [phase, setPhase] = useState<Phase>('countdown');
   const [count, setCount] = useState(3);
   const [source, setSource] = useState<Source>('pending');
+  const [permissionIssue, setPermissionIssue] = useState<PermissionIssue | null>(null);
+  const [demoReason, setDemoReason] = useState('');
+  const [permissionAttempt, setPermissionAttempt] = useState(0);
   const [sec, setSec] = useState(0);
   const [track, setTrack] = useState<TrackState>(emptyTrack);
   const [accuracy, setAccuracy] = useState<number | null>(null);
@@ -66,20 +69,28 @@ export default function Run() {
     phaseRef.current = phase;
   }, [phase]);
 
-  // Distance source: real GPS if we get permission (phone or browser), otherwise a labelled demo.
+  // Ask for browser/device location. Native failures stay on this screen; web failures offer an
+  // explicit, explained demo fallback instead of silently simulating a run.
   useEffect(() => {
     let sub: Location.LocationSubscription | null = null;
     let cancelled = false;
-    const fallBackToDemo = () => {
-      setSource('demo');
-      setSec(DEMO_START);
-      lastKmMarker.current = Math.floor(DEMO_START / DEMO_PACE);
-    };
     (async () => {
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
+        const permission = await Location.requestForegroundPermissionsAsync();
         if (cancelled) return;
-        if (status !== 'granted') return fallBackToDemo();
+        if (permission.status !== 'granted') {
+          setPermissionIssue(Platform.OS === 'web' ? 'web-unavailable' : permission.canAskAgain ? 'denied-can-ask' : 'denied-settings');
+          return;
+        }
+        const approximate = Platform.OS === 'android'
+          ? permission.android?.accuracy !== 'fine'
+          : Platform.OS === 'ios' && permission.ios?.accuracy === 'reduced';
+        if (approximate) {
+          setPermissionIssue('approximate');
+          return;
+        }
+        setPermissionIssue(null);
+        setDemoReason('');
         setSource('gps');
         sub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 }, (loc) => {
           setAccuracy(loc.coords.accuracy ?? null);
@@ -87,18 +98,18 @@ export default function Run() {
           setTrack((t) => addFix(t, { lat: loc.coords.latitude, lon: loc.coords.longitude, t: loc.timestamp, accuracy: loc.coords.accuracy }));
         });
       } catch {
-        if (!cancelled) fallBackToDemo();
+        if (!cancelled) setPermissionIssue(Platform.OS === 'web' ? 'web-unavailable' : 'location-error');
       }
     })();
     return () => {
       cancelled = true;
       sub?.remove();
     };
-  }, []);
+  }, [permissionAttempt]);
 
   // 3-2-1 countdown
   useEffect(() => {
-    if (phase !== 'countdown') return;
+    if (phase !== 'countdown' || source === 'pending' || permissionIssue) return;
     pop.setValue(0);
     Animated.timing(pop, { toValue: 1, duration: 800, easing: Easing.out(Easing.back(2)), useNativeDriver: NATIVE }).start();
     const t = setTimeout(() => {
@@ -112,7 +123,7 @@ export default function Run() {
       }
     }, 850);
     return () => clearTimeout(t);
-  }, [phase, count, pop]);
+  }, [phase, count, pop, source, permissionIssue]);
 
   // Clock
   useEffect(() => {
@@ -144,6 +155,27 @@ export default function Run() {
   }, [km, progress]);
 
   const homeDistrict = districts.find((d) => d.status === 'yours') ?? districts[0];
+  const startDemo = (reason: string) => {
+    setDemoReason(reason);
+    setSec(0);
+    lastKmMarker.current = 0;
+    setPermissionIssue(null);
+    setSource('demo');
+  };
+  const permissionCopy: Record<PermissionIssue, { title: string; body: string }> = {
+    'denied-can-ask': { title: 'Location permission needed', body: 'Allow location to record your route, distance, and territory. You can request access again below.' },
+    'denied-settings': { title: 'Location is blocked', body: 'Your device will not show another permission prompt. Open app settings, allow precise location, then check again.' },
+    approximate: { title: 'Precise location needed', body: 'Approximate location cannot record a reliable run or claim territory. Change location access to Precise in Settings, then check again.' },
+    'web-unavailable': { title: 'Browser location unavailable', body: 'The browser could not provide geolocation. Check browser site permissions and use HTTPS; or continue with a clearly labelled demo run.' },
+    'location-error': { title: 'Could not start GPS', body: 'Location access was granted, but the GPS watcher could not start. Check device location settings and try again.' },
+  };
+  const openLocationSettings = () => {
+    if (Platform.OS === 'web') {
+      setPermissionIssue('web-unavailable');
+      return;
+    }
+    void Linking.openSettings();
+  };
 
   const finish = useCallback(async () => {
     tap('success');
@@ -242,7 +274,7 @@ export default function Run() {
           ? { text: `GPS · ±${Math.round(accuracy)} m`, color: colors.primary }
           : { text: `Weak GPS · ±${Math.round(accuracy)} m`, color: colors.orange }
       : source === 'demo'
-        ? { text: 'Demo · location off', color: colors.dim }
+        ? { text: `Demo · ${demoReason}`, color: colors.dim }
         : { text: 'Locating…', color: colors.dim };
 
   return (
@@ -423,6 +455,25 @@ export default function Run() {
           </View>
         </View>
       )}
+
+      {permissionIssue && (
+        <View style={styles.overlayFull}>
+          <View style={styles.permissionCard}>
+            <Display size={28}>{permissionCopy[permissionIssue].title}</Display>
+            <Text style={styles.reason}>{permissionCopy[permissionIssue].body}</Text>
+            {permissionIssue === 'denied-can-ask' ? (
+              <Button label="Request location again" onPress={() => setPermissionAttempt((n) => n + 1)} style={{ alignSelf: 'stretch', marginTop: 16 }} />
+            ) : permissionIssue === 'denied-settings' || permissionIssue === 'approximate' || permissionIssue === 'location-error' ? (
+              <>
+                <Button label="Open Settings" onPress={openLocationSettings} style={{ alignSelf: 'stretch', marginTop: 16 }} />
+                <Button label="Check permission again" variant="secondary" onPress={() => setPermissionAttempt((n) => n + 1)} style={{ alignSelf: 'stretch', marginTop: 8 }} />
+              </>
+            ) : (
+              <Button label="Continue with demo" onPress={() => startDemo('GPS unavailable')} style={{ alignSelf: 'stretch', marginTop: 16 }} />
+            )}
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -459,6 +510,7 @@ const styles = StyleSheet.create({
   countText: { color: colors.primary, fontFamily: fonts.display, fontSize: 150 },
   countSub: { color: colors.onImageSub, fontFamily: fonts.mono, fontSize: 14, letterSpacing: 2, textTransform: 'uppercase' },
   summary: { width: '100%', maxWidth: 420, alignItems: 'center', backgroundColor: colors.bg2, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.line, padding: 18 },
+  permissionCard: { width: '100%', maxWidth: 420, alignItems: 'center', backgroundColor: colors.bg2, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.line, padding: 22 },
   verdict: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1.5, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 5, marginTop: 4 },
   verdictText: { fontFamily: fonts.label, fontSize: 13, letterSpacing: 1, textTransform: 'uppercase' },
   reason: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, marginTop: 6, textAlign: 'center' },
