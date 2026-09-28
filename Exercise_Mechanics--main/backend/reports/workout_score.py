@@ -303,5 +303,7 @@ def activity_metrics(report: dict) -> dict:
         return {"lifts": summary.get("counted_lifts", 0), "correct_pct": ws.get("correct_pct"),
                 "avg_depth": ws.get("avg_depth"), "workout_score": ws.get("score")}
     summary = report.get("summary") or {}
-    return {"reps": summary.get("total_reps", 0), "correct_pct": ws.get("correct_pct"),
+    not_counted = summary.get("not_counted") or {}
+    return {"reps": summary.get("total_reps", 0), "good_reps": summary.get("good_reps", 0),
+            "reps_not_counted": sum(not_counted.values()), "correct_pct": ws.get("correct_pct"),
             "avg_depth": ws.get("avg_depth"), "workout_score": ws.get("score")}

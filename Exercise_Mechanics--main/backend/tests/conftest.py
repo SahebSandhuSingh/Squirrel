@@ -49,3 +49,14 @@ def _isolated_auth_storage(tmp_path_factory, monkeypatch, _accounts_database):
         with psycopg.connect(_accounts_database, autocommit=True) as conn:
             conn.execute(f"TRUNCATE {_ACCOUNT_TABLES}")
         monkeypatch.setenv("DATABASE_URL", _accounts_database)
+
+
+@pytest.fixture
+def legacy_rep_counting(monkeypatch):
+    """Count every rep past min_rep_peak, however fast or shallow (the policy before fsm.yaml's
+    count_shallow / min_rep_ms). For tests of scoring, coaching and capture mechanics that drive
+    synthetic reps at 100 ms a frame: far quicker than a person, and deliberately shallow ones.
+    The counting policy itself is tested against the real configs in test_rep_counting_policy.py."""
+    from backend.engine import rep_outcome
+
+    monkeypatch.setattr(rep_outcome, "fsm_policy_inputs", lambda fsm: {})

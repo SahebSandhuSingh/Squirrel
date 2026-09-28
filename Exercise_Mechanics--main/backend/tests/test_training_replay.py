@@ -25,6 +25,9 @@ from backend.workouts.bicep_curl.replay_analysis import (
 from backend.workouts.squat.adapter import build_squat_adapter
 from backend.workouts.squat.replay_analysis import analyze_squat_signals, load_rep_labels
 
+# Synthetic reps here are faster and shallower than the live counting policy accepts (conftest).
+pytestmark = pytest.mark.usefixtures("legacy_rep_counting")
+
 
 _FULL_REP = (
     (0.0, 0),

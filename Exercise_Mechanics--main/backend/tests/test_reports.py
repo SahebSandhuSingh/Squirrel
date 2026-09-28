@@ -243,3 +243,26 @@ def test_timed_report_uses_configured_duration_for_completed_sets(tmp_path):
     assert report["summary"]["asymmetry_sets"] == 1
     assert report["per_set"][0]["left_right_asymmetry"]["lower_side"] == "right"
     assert any("Uneven left/right knee travel" in item for item in report["insights"])
+
+
+def test_attempts_that_did_not_count_are_shown_but_are_not_reps(user_id, tmp_path):
+    """Field test: every shallow squat counted and paid. An attempt the counting policy rejected
+    writes its form_score.json too; the report must tally it by reason, not as a rep."""
+    set_dir = tmp_path / _UID / "sessions" / _SID / "workouts" / "squat" / "set_1"
+    for rep, reason in ((4, "shallow"), (5, "too_fast"), (6, "shallow")):
+        rep_dir = set_dir / f"rep_{rep}"
+        rep_dir.mkdir()
+        document = _form_score(rep, 0.0, "invalid", 0.6, 0.6, 0.0)
+        document["final_score"] = None
+        document["last_attempt"] = {"attempt": rep, "rep": None, "qualified": False,
+                                    "classification": "invalid", "reason": reason, "peak": 0.6}
+        document["last_rep"] = {"rep": 3, "qualified": True, "classification": "full_rom", "peak": 1.1}
+        (rep_dir / "form_score.json").write_text(json.dumps(document))
+    report = builder.build_session_report(user_id, _SID)
+    assert report["actual"]["reps_completed"] == 3
+    s = report["summary"]
+    assert s["total_reps"] == 3 and s["good_reps"] == 2
+    assert s["not_counted"] == {"shallow": 2, "too_fast": 1, "other": 0}
+    assert s["shallow_reps"] == 1 + 2
+    assert len(report["per_rep"]) == 3
+    assert report["activity_metrics"]["reps_not_counted"] == 3

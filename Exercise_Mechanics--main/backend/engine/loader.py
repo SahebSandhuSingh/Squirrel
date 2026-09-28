@@ -37,6 +37,10 @@ _FSM_ALL_KEYS = _FSM_RUNTIME_KEYS
 # Optional: how long tracking may drop out (slow camera frames, a joint briefly hidden) before an
 # attempt in progress is discarded. Without it the scoring frame gap (max_frame_delta_ms) applies.
 _FSM_OPTIONAL_KEYS = ("max_tracking_gap_ms",)
+# Optional, rep exercises: whether a rep short of the full-ROM gate still counts (default true),
+# the shortest believable rep (ms, leaving the resting band to returning to it) and the cue shown
+# when a rep was faster than that.
+_REP_FSM_OPTIONAL_KEYS = ("count_shallow", "min_rep_ms", "too_fast_cue")
 _TIMED_FSM_KEYS = (
     "phases",
     "initial_phase",
@@ -796,7 +800,8 @@ def _validate_fsm(raw: dict) -> dict:
     if movement_type not in {"reps", "time"}:
         raise ConfigurationError("fsm.movement_type must be 'reps' or 'time'")
     keys = _FSM_ALL_KEYS if movement_type == "reps" else _TIMED_FSM_KEYS
-    allowed = {"schema_version", "movement_type", *keys, *_FSM_OPTIONAL_KEYS}
+    optional = (*_FSM_OPTIONAL_KEYS, *(_REP_FSM_OPTIONAL_KEYS if movement_type == "reps" else ()))
+    allowed = {"schema_version", "movement_type", *keys, *optional}
     unknown = sorted(set(raw) - allowed)
     if unknown:
         raise ConfigurationError(f"fsm contains unknown fields: {unknown}")
@@ -815,6 +820,14 @@ def _validate_fsm(raw: dict) -> dict:
     for key in _FSM_OPTIONAL_KEYS:
         if key in raw:
             _number(raw[key], f"fsm.{key}", minimum=0, strict=True)
+    if "count_shallow" in raw and not isinstance(raw["count_shallow"], bool):
+        raise ConfigurationError("fsm.count_shallow must be boolean")
+    if "min_rep_ms" in raw:
+        _number(raw["min_rep_ms"], "fsm.min_rep_ms", minimum=0, strict=True)
+        if not isinstance(raw.get("too_fast_cue"), str) or not raw["too_fast_cue"].strip():
+            raise ConfigurationError("fsm.min_rep_ms needs a non-empty fsm.too_fast_cue")
+    elif "too_fast_cue" in raw:
+        raise ConfigurationError("fsm.too_fast_cue is only used with fsm.min_rep_ms")
     if movement_type == "reps":
         reset = float(raw["top_return"])
         start = float(raw["descent_trigger"])

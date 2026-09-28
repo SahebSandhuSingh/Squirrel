@@ -146,6 +146,12 @@ function train(value: unknown): WSTrain | null {
     || attempts !== qualified + invalid
     || qualified !== fullRom + shallow
   ) return null
+  const notCountedRaw = record(counters.not_counted)
+  const notCounted = {
+    shallow: count(notCountedRaw?.shallow) ?? 0,
+    too_fast: count(notCountedRaw?.too_fast) ?? 0,
+  }
+  if (notCounted.shallow + notCounted.too_fast > invalid) return null
 
   // Unified "current frame reached the ROM gate" flag: curl emits full_rom, squat emits full_depth.
   const atFullRom = rom.full_rom ?? rom.full_depth ?? null
@@ -217,7 +223,7 @@ function train(value: unknown): WSTrain | null {
   return {
     tracking: { available: tracking.available, unavailable_rule_ids: unavailableRules, invalidated_by: invalidatedBy },
     phase: data.phase as WSRepTrain['phase'],
-    counters: { attempts, qualified, full_rom: fullRom, shallow, invalid },
+    counters: { attempts, qualified, full_rom: fullRom, shallow, invalid, not_counted: notCounted },
     rom: {
       available: rom.available,
       ratio: rom.ratio as number | null,
@@ -332,6 +338,7 @@ function repResult(value: unknown): WSRepResult | null {
     rep: item.rep as number | null,
     qualified: item.qualified,
     classification: item.classification as WSRepResult['classification'],
+    reason: item.reason === 'below_min_peak' || item.reason === 'too_fast' || item.reason === 'shallow' ? item.reason : null,
     peak: item.peak as number,
     score: item.score as number | null,
     time_score: item.time_score as number | null,

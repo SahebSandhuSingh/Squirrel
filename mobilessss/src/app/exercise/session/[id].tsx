@@ -71,8 +71,14 @@ function ExerciseCard({ e, uid, sid, open, onToggle }: { e: OverviewExercise; ui
           <Text style={styles.title}>{e.name}</Text>
           <Text style={styles.muted}>
             Planned {planned}
-            {e.has_data && e.actual ? ` · did ${e.actual.reps_completed} in ${e.actual.sets_completed} set${e.actual.sets_completed === 1 ? '' : 's'}` : ''}
+            {e.has_data && e.actual ? ` · ${e.actual.reps_completed} counted in ${e.actual.sets_completed} set${e.actual.sets_completed === 1 ? '' : 's'}` : ''}
           </Text>
+          {e.has_data && e.measure === 'reps' && e.plan_met !== undefined && (
+            <Text style={[styles.muted, { color: e.plan_met ? colors.green : colors.coral }]}>
+              {e.plan_met ? 'Plan met' : 'Plan not met'}
+              {e.reps_not_counted ? ` · ${e.reps_not_counted} not counted` : ''}
+            </Text>
+          )}
         </View>
         {e.has_data && <Icon name={open ? 'chevron-up' : 'chevron-down'} size={22} color={colors.dim} />}
       </PressScale>
@@ -105,11 +111,20 @@ function Report({ r }: { r: ExerciseReport }) {
   return (
     <View style={{ gap: 12 }}>
       {r.measure === 'reps' ? (
-        <View style={styles.tiles}>
-          <StatTile value={r.summary.best == null ? '—' : String(Math.round(r.summary.best))} label="Best rep" color={colors.green} />
-          <StatTile value={r.summary.worst == null ? '—' : String(Math.round(r.summary.worst))} label="Worst rep" color={colors.coral} />
-          <StatTile value={r.summary.avg_rep_time_s == null ? '—' : `${r.summary.avg_rep_time_s.toFixed(1)}s`} label="Avg rep" />
-        </View>
+        <>
+          <View style={styles.tiles}>
+            <StatTile value={r.summary.best == null ? '—' : String(Math.round(r.summary.best))} label="Best rep" color={colors.green} />
+            <StatTile value={r.summary.worst == null ? '—' : String(Math.round(r.summary.worst))} label="Worst rep" color={colors.coral} />
+            <StatTile value={r.summary.avg_rep_time_s == null ? '—' : `${r.summary.avg_rep_time_s.toFixed(1)}s`} label="Avg rep" />
+          </View>
+          {r.summary.not_counted && (
+            <View style={styles.tiles}>
+              <StatTile value={String(r.summary.total_reps)} label="Counted" color={colors.green} />
+              <StatTile value={String(r.summary.not_counted.shallow)} label="Too shallow" color={colors.gold} />
+              <StatTile value={String(r.summary.not_counted.too_fast)} label="Too fast" color={colors.coral} />
+            </View>
+          )}
+        </>
       ) : (
         <View style={styles.tiles}>
           <StatTile value={String(r.summary.counted_lifts)} label="Counted" color={colors.green} />

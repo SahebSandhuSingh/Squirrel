@@ -87,7 +87,11 @@ export type OverviewExercise = {
   avg_form_score: number | null;
   planned: { sets: number; reps_per_set?: number; total?: number; duration_seconds?: number };
   actual?: { reps_completed: number; sets_completed: number };
+  /* Counted (full-range, controlled) reps reached the plan. */
+  plan_met?: boolean;
   shallow_reps?: number;
+  /* Attempts that did not count: short of full range or too fast. */
+  reps_not_counted?: number;
   quality?: { good: number; borderline: number; poor: number };
 };
 export type SessionOverview = {
@@ -112,7 +116,7 @@ export type RepExerciseReport = {
   planned: { sets: number; reps_per_set: number; total: number };
   actual: { reps_completed: number; sets_completed: number };
   depth_target?: number;
-  summary: { avg_form_score: number | null; total_reps: number; shallow_reps: number; best: number | null; worst: number | null; avg_rep_time_s: number | null; total_time_s: number | null };
+  summary: { avg_form_score: number | null; total_reps: number; good_reps?: number; not_counted?: { shallow: number; too_fast: number; other: number }; shallow_reps: number; best: number | null; worst: number | null; avg_rep_time_s: number | null; total_time_s: number | null };
   per_rep: { rep: number; set: number; score: number; shallow: boolean; rom: number | null; time_s: number | null }[];
   per_set: { set: number; avg_score: number; reps: number; time_s: number | null }[];
   by_rule: ReportByRule[];

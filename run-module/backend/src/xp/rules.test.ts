@@ -78,18 +78,29 @@ describe("run XP", () => {
 });
 
 describe("exercise XP", () => {
-  it("scores a session by its length", () => {
-    expect(exerciseSessionXp(9 * 60 + 59)).toBe(0);
-    expect(exerciseSessionXp(10 * 60)).toBe(30);
-    expect(exerciseSessionXp(19 * 60 + 59)).toBe(30);
-    expect(exerciseSessionXp(20 * 60)).toBe(50);
-    expect(exerciseSessionXp(44 * 60 + 59)).toBe(50);
-    expect(exerciseSessionXp(45 * 60)).toBe(70);
-    expect(exerciseSessionXp(3 * 3600)).toBe(70);
+  it("pays for counted reps and lifts, never for time", () => {
+    expect(exerciseSessionXp({ reps: 12, good_reps: 12, correct_pct: 100 })).toBe(24);
+    // the field test: 36 squats, every one shallow → none counted
+    expect(exerciseSessionXp({ reps: 0, good_reps: 0, reps_not_counted: 36, correct_pct: 0 })).toBe(0);
+    expect(exerciseSessionXp({ reps: 50, good_reps: 50 })).toBe(70); // per-session cap
+    expect(exerciseSessionXp({ lifts: 61, correct_pct: 80 })).toBe(30); // timed: 1 per 2 lifts
+    expect(exerciseSessionXp({})).toBe(0);
+    expect(exerciseSessionXp(null)).toBe(0);
   });
 
-  const workout = (iso: string, minutes: number): ActivityRow =>
-    row({ started_at: at(iso), type: "exercise", source_module: "exercise_module", duration_s: minutes * 60, metrics: { reps: 30 } });
+  it("scores rows from before good reps were reported by their correct share", () => {
+    // reps then included shallow ones; correct_pct excludes them
+    expect(exerciseSessionXp({ reps: 36, correct_pct: 0 })).toBe(0);
+    expect(exerciseSessionXp({ reps: 20, correct_pct: 50 })).toBe(20);
+  });
+
+  it("ignores how long the session took: idle time earns nothing", () => {
+    const long = row({ started_at: at("2026-09-26T02:00:00Z"), type: "exercise", source_module: "exercise_module", duration_s: 3 * 3600, metrics: { good_reps: 0 } });
+    expect(computeXp([long], IST).xp).toBe(0);
+  });
+
+  const workout = (iso: string, goodReps: number): ActivityRow =>
+    row({ started_at: at(iso), type: "exercise", source_module: "exercise_module", duration_s: 600, metrics: { reps: goodReps, good_reps: goodReps } });
 
   it("caps exercise at 150 XP a day, separately from runs", () => {
     const rows = [
@@ -109,8 +120,8 @@ describe("exercise XP", () => {
     ]);
   });
 
-  it("a short session earns nothing and does not move updated_at", () => {
-    expect(computeXp([workout("2026-09-26T02:00:00Z", 5)], IST)).toEqual({ xp: 0, updated_at: null, breakdown: [] });
+  it("a session with no counted reps earns nothing and does not move updated_at", () => {
+    expect(computeXp([workout("2026-09-26T02:00:00Z", 0)], IST)).toEqual({ xp: 0, updated_at: null, breakdown: [] });
   });
 
   it("counts a row only when the module that owns its type wrote it", () => {

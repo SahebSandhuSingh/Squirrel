@@ -215,7 +215,8 @@ def test_reports_carry_the_score_the_trend_and_the_contract_metrics(two_sessions
     ws = second["workout_score"]
     assert ws["score"] == 100 and ws["trend"]["previous"] == first["workout_score"]["score"]
     assert ws["trend"]["delta"] == 100 - first["workout_score"]["score"]
-    assert second["activity_metrics"] == {"reps": 4, "correct_pct": 100, "avg_depth": 1.0, "workout_score": 100}
+    assert second["activity_metrics"] == {"reps": 4, "good_reps": 4, "reps_not_counted": 0, "correct_pct": 100,
+                                          "avg_depth": 1.0, "workout_score": 100}
 
 
 def test_overview_and_progress_show_the_workout_score(two_sessions):

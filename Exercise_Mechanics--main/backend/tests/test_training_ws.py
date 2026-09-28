@@ -15,6 +15,9 @@ from backend.training.debug_capture import TrainingDebugCapture
 from backend.training.router import train_ws
 from backend.users.store import create_user_record
 
+# Synthetic reps here are faster and shallower than the live counting policy accepts (conftest).
+pytestmark = pytest.mark.usefixtures("legacy_rep_counting")
+
 _PROFILE = {
     "first_name": "Training",
     "last_name": "Socket",
@@ -170,6 +173,7 @@ def test_persisted_training_socket_streams_versioned_scored_full_rep(persisted_s
         "full_rom": 1,
         "shallow": 0,
         "invalid": 0,
+        "not_counted": {"shallow": 0, "too_fast": 0},
     }
     assert final["last_rep"]["score"] == 100.0
     assert final["score_coverage"]["reliable"] is True

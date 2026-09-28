@@ -10,6 +10,9 @@ from backend.core.frame import TrainingFrame
 from backend.training.builders import EXERCISE_BUILDERS, validate_training_builders
 from backend.workouts.squat.adapter import build_squat_adapter
 
+# Synthetic reps here are faster and shallower than the live counting policy accepts (conftest).
+pytestmark = pytest.mark.usefixtures("legacy_rep_counting")
+
 
 def _baseline() -> dict:
     return {
@@ -102,6 +105,7 @@ def test_clean_full_rep_streams_reliable_score_and_completes_one_rep_set():
         "full_rom": 1,
         "shallow": 0,
         "invalid": 0,
+        "not_counted": {"shallow": 0, "too_fast": 0},
     }
     assert status["last_rep"]["classification"] == "full_rom"
     assert status["last_rep"]["score"] == 100.0

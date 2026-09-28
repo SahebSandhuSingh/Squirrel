@@ -11,12 +11,16 @@
  *                                  rejected runs earn nothing
  *                                  at most 150 XP from runs per day
  *
- *   Exercise (source exercise_module), by session length
- *                                  under 10 min   0
- *                                  10–20 min      30
- *                                  20–45 min      50
- *                                  45 min +       70
+ *   Exercise (source exercise_module), by the work that counted
+ *                                  2 per counted rep (rep exercises)
+ *                                  1 per 2 counted lifts (timed: high knees)
+ *                                  at most 70 XP per session
  *                                  at most 150 XP from exercise per day
+ *
+ * The Exercise Module counts only controlled, full-range reps (and high-knee lifts at running
+ * pace); shallow and too-fast attempts are reported but never counted, and idle time earns
+ * nothing. So doing it badly on purpose is not faster XP. Rows written before good reps were
+ * reported carry `reps` including shallow ones: their good share is `reps × correct_pct`.
  *
  * "Per day" is the calendar day in XP_TIMEZONE (default Asia/Kolkata), not UTC: a UTC day would
  * reset at 5:30 am for Indian users. Within a day, sessions are counted in the order they started,
@@ -31,12 +35,9 @@ export const RUN_METRES_PER_XP = 100;
 export const TERRITORY_XP = 25;
 export const DAILY_RUN_XP_CAP = 150;
 
-/** [minimum session length in seconds, XP] — highest tier first. */
-export const EXERCISE_TIERS: ReadonlyArray<readonly [number, number]> = [
-  [45 * 60, 70],
-  [20 * 60, 50],
-  [10 * 60, 30],
-];
+export const EXERCISE_XP_PER_REP = 2;
+export const EXERCISE_LIFTS_PER_XP = 2;
+export const EXERCISE_SESSION_XP_CAP = 70;
 export const DAILY_EXERCISE_XP_CAP = 150;
 
 export const DEFAULT_XP_TIMEZONE = "Asia/Kolkata";
@@ -82,12 +83,26 @@ const REASON_ORDER: XpReason[] = [
   "exercise_daily_cap",
 ];
 
-/** XP a single exercise session earns before the daily cap. */
-export function exerciseSessionXp(durationS: number): number {
-  for (const [minimum, xp] of EXERCISE_TIERS) {
-    if (durationS >= minimum) return xp;
+const count = (value: unknown): number | null =>
+  typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.floor(value) : null;
+
+/** XP a single exercise session earns before the daily cap, from its activity metrics. */
+export function exerciseSessionXp(metrics: Record<string, unknown> | null): number {
+  const m = metrics ?? {};
+  let xp: number;
+  const lifts = count(m["lifts"]);
+  if (lifts !== null) {
+    xp = Math.floor(lifts / EXERCISE_LIFTS_PER_XP);
+  } else {
+    let good = count(m["good_reps"]);
+    if (good === null) {
+      const reps = count(m["reps"]) ?? 0;
+      const correct = typeof m["correct_pct"] === "number" && Number.isFinite(m["correct_pct"]) ? m["correct_pct"] : 0;
+      good = Math.floor((reps * Math.min(100, Math.max(0, correct))) / 100);
+    }
+    xp = good * EXERCISE_XP_PER_REP;
   }
-  return 0;
+  return Math.min(EXERCISE_SESSION_XP_CAP, xp);
 }
 
 /** The lines a single run earns before the daily cap (empty for a rejected run). */
@@ -117,7 +132,7 @@ const KINDS: Record<string, Kind> = {
   "run/run_module": { lines: (row) => runLines(row.metrics), cap: DAILY_RUN_XP_CAP, capReason: "run_daily_cap" },
   "exercise/exercise_module": {
     lines: (row) => {
-      const xp = exerciseSessionXp(row.duration_s);
+      const xp = exerciseSessionXp(row.metrics);
       return xp > 0 ? [{ reason: "exercise_session", xp }] : [];
     },
     cap: DAILY_EXERCISE_XP_CAP,

@@ -12,7 +12,8 @@ import { Button, Display, Icon, Ring, tap } from '@/components/ui';
 import { estimateKcal, exerciseByKey, PLAN_BOUNDS } from '@/data/exercises';
 import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
 import { useKeepAwake } from 'expo-keep-awake';
-import { EXERCISE_API_URL, POSE_DEBUG } from '@/api/config';
+import { API_CONFIGURED, EXERCISE_API_URL, POSE_DEBUG } from '@/api/config';
+import { xpApi } from '@/api/endpoints';
 import { ApiError, getApiToken, refreshApiToken } from '@/api/client';
 import { exerciseApi } from '@/api/exercise';
 import { invalidateExercise, useExerciseUser } from '@/hooks/useExercise';
@@ -32,8 +33,8 @@ import type { TrackerStatus } from '@/workout/tracker/types';
  * Not signed in, or no coach server configured: the guided demo (clearly labelled, nothing saved).
  *
  * The live workout is the app's active exercise while it is open (home's Resume, the exercise
- * picker's one-at-a-time guard), and on finishing it feeds missions, XP and today's activity
- * (AppState.completeExercise) once.
+ * picker's one-at-a-time guard), and on finishing it feeds missions and today's activity
+ * (AppState.completeExercise) once; its XP is the server's, for the reps the coach counted.
  */
 export default function Train() {
   const user = useExerciseUser();
@@ -319,7 +320,13 @@ function LiveWorkout({ userId }: { userId: string }) {
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const coach = useRef<CoachSession | null>(null);
-  const { beginExercise, endExercise, completeExercise } = useApp();
+  const { beginExercise, endExercise, completeExercise, syncServerXp } = useApp();
+  // XP is the server's (2 per counted rep): the total before the workout, to show what it earned.
+  const xpBefore = useRef<number | null>(null);
+  const [xpGained, setXpGained] = useState<number | null>(null);
+  useEffect(() => {
+    if (API_CONFIGURED) xpApi.me().then((r) => { xpBefore.current = r.xp; }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (perm && !perm.granted && perm.canAskAgain) requestPerm();
@@ -439,7 +446,7 @@ function LiveWorkout({ userId }: { userId: string }) {
   const avgScore = scored.length ? Math.round(scored.reduce((a, r) => a + (r.score ?? 0), 0) / scored.length) : null;
   const trackingOn = !done && phase !== 'rest';
 
-  // Finished: missions, XP and today's activity, once. An empty workout records nothing.
+  // Finished: missions and today's activity, once. An empty workout records nothing.
   const recorded = useRef(false);
   useEffect(() => {
     if (!done || recorded.current) return;
@@ -451,6 +458,27 @@ function LiveWorkout({ userId }: { userId: string }) {
     });
     endExercise();
   }, [done, totalCount, timed, elapsed, ex, completeExercise, endExercise]);
+
+  // XP earned: the server's total after the workout, minus before. The coach writes the session's
+  // activity row just after the last set, so give it a few seconds.
+  useEffect(() => {
+    if (!done || !API_CONFIGURED) return;
+    let cancelled = false;
+    void (async () => {
+      for (let attempt = 0; attempt < 5 && !cancelled; attempt++) {
+        await new Promise((r) => setTimeout(r, 1500));
+        const now = await xpApi.me().catch(() => null);
+        if (!now || cancelled) continue;
+        const gained = xpBefore.current == null ? null : Math.max(0, now.xp - xpBefore.current);
+        if (gained || attempt === 4) {
+          syncServerXp(now.xp, gained ?? undefined);
+          setXpGained(gained);
+          return;
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [done, syncServerXp]);
   const cameraReady = !!perm?.granted || Platform.OS === 'web';
   const blocking = setupError ?? (state?.fatal ? state.error?.detail ?? 'The coach stopped this workout.' : null);
 
@@ -593,7 +621,10 @@ function LiveWorkout({ userId }: { userId: string }) {
             <View style={styles.div} />
             <Stat value={avgScore == null ? '—' : String(avgScore)} label="Form" />
           </View>
-          <Text style={[styles.overlaySub, { fontSize: 12, marginTop: 12 }]}>Scored by your coach and saved to your history.</Text>
+          <Text style={[styles.overlaySub, { fontSize: 12, marginTop: 12 }]}>
+            Scored by your coach and saved to your history.
+            {xpGained != null ? ` +${xpGained} XP for the reps that counted.` : ''}
+          </Text>
           {session ? (
             <Button label="View report" icon="arrow-right" onPress={() => router.replace({ pathname: '/exercise/session/[id]', params: { id: session.id } })} style={{ marginTop: 18, alignSelf: 'stretch' }} />
           ) : null}

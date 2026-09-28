@@ -7,7 +7,7 @@ import { STARTER_OWNED, shopItemById } from '@/data/shop';
 import { CURRENT_USER_ID, userById, type User } from '@/data/users';
 import type { AvatarLook } from '@/types';
 import { districtsForCity, type District } from '@/data/territory';
-import { exerciseXp, runXp, type XpLine } from '@/logic/xp';
+import { runXp, type XpLine } from '@/logic/xp';
 import type { Verdict } from '@/logic/track';
 
 export const XP_PER_LEVEL = 2000;
@@ -61,14 +61,16 @@ type AppState = {
   runXpToday: number;
   districts: District[];
   /** Replace the local XP total with the server's (GET /v1/users/me/xp). */
-  syncServerXp: (total: number) => void;
+  /** The server's XP total; `gained` (when known) also counts toward today. */
+  syncServerXp: (total: number, gained?: number) => void;
   // exercise
   /** The exercise session in progress (one at a time), or null. */
   activeExercise: ActiveExercise | null;
   beginExercise: (a: Omit<ActiveExercise, 'startedAt'>) => boolean;
   endExercise: () => void;
   /** Record a finished exercise: missions, XP and today's activity. */
-  completeExercise: (c: CompletedExercise) => { xp: number; lines: XpLine[]; leveledUp: boolean };
+  /** Missions and today's activity for a finished workout. XP comes from the server (syncServerXp). */
+  completeExercise: (c: CompletedExercise) => void;
   exerciseToday: { sessions: number; minutes: number; kcal: number };
   // feedback
   toasts: ToastMsg[];
@@ -308,7 +310,10 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     finishRun,
     runXpToday,
     districts,
-    syncServerXp: (total) => setXp(total),
+    syncServerXp: useCallback((total: number, gained?: number) => {
+      setXp(total);
+      if (gained && gained > 0) setXpToday((t) => t + gained);
+    }, []),
     activeExercise,
     beginExercise: useCallback((a: Omit<ActiveExercise, 'startedAt'>) => {
       // Guard against duplicate sessions (double taps, two screens): first one wins.
@@ -331,11 +336,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         bump('m-active', minutes);
         bump('w-workouts', 1);
         setExerciseToday((t) => ({ sessions: t.sessions + 1, minutes: t.minutes + minutes, kcal: t.kcal + c.kcal }));
-        const x = exerciseXp(c.reps, c.timedSeconds);
-        const { leveledUp } = addXp(x.total, Math.round(x.total / 4));
-        return { xp: x.total, lines: x.lines, leveledUp };
       },
-      [addXp],
+      [],
     ),
     exerciseToday,
     xpToday,

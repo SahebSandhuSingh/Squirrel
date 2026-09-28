@@ -16,6 +16,7 @@ from types import ModuleType
 
 from backend.core.frame import TrainingFrame
 from backend.engine.cues import CueCandidate, CueSelector
+from backend.engine import rep_outcome
 from backend.engine.loader import ExerciseConfiguration, load_exercise_config
 from backend.engine.rep_fsm import (
     AttemptResult,
@@ -249,6 +250,15 @@ class BicepCurlAdapter:
                 )
             )
             self._pending_shallow_cue = False
+        # A rep that did not count (too fast, or short of full range) is said at once.
+        not_counted = rep_outcome.not_counted_cue(
+            state.completed_attempt,
+            fsm=self._config.fsm,
+            rom_rule_id="curl_rom",
+            rom_template=self._config.templates["curl_rom"],
+        )
+        if not_counted is not None:
+            candidates.append(not_counted)
         cue = self._cue_selector.select(candidates, frame.t_ms)
         self._previous_phase = state.phase
         return self._status(state, readings, issues, cue)
@@ -314,6 +324,7 @@ class BicepCurlAdapter:
             "rep": state.qualified_count if attempt.qualified else None,
             "qualified": attempt.qualified,
             "classification": attempt.classification,
+            **rep_outcome.attempt_fields(attempt),
             "peak": attempt.peak,
             "score": score.score,
             "time_score": score.time_score,
@@ -364,13 +375,7 @@ class BicepCurlAdapter:
                 "unavailable_rule_ids": unavailable,
             },
             "phase": state.phase,
-            "counters": {
-                "attempts": state.attempt_count,
-                "qualified": state.qualified_count,
-                "full_rom": state.full_rom_count,
-                "shallow": state.shallow_count,
-                "invalid": state.invalid_attempt_count,
-            },
+            "counters": rep_outcome.counters(state),
             "rom": {
                 "available": rom is not None,
                 "ratio": (round(rom.progress, 3) if rom is not None else None),
@@ -520,6 +525,7 @@ def _fsm_inputs(config: ExerciseConfiguration) -> dict:
     }
     values["max_frame_delta_ms"] = config.scoring["max_frame_delta_ms"]
     values["max_tracking_gap_ms"] = config.fsm.get("max_tracking_gap_ms")
+    values.update(rep_outcome.fsm_policy_inputs(config.fsm))
     return values
 
 

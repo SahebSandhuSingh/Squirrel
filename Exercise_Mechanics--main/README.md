@@ -425,11 +425,12 @@ Running measures (distance, steps, pace, speed) are left out on purpose.
 ### `activity_sessions` rows (XP)
 
 One row per session of an account (`type = 'exercise'`, `subtype` = the exercise), per the Integration
-Contract. `duration_s` is the session's length, from its start to the end of its last set, because
-the XP tiers are by session length; the active exercise time is in `metrics.active_time_s`, next to
-reps, correct %, depth, Workout Score and sets. The Run Module turns these rows into XP
-([ADR-027](../run-module/docs/decisions/ADR-027-xp-rules-and-endpoints.md)): under 10 min 0 XP,
-10–20 min 30, 20–45 min 50, 45 min or more 70, at most 150 XP from exercise a day. If the Run
+Contract. `duration_s` is the session's length, from its start to the end of its last set; the active
+exercise time is in `metrics.active_time_s`, next to reps (counted only), good reps, reps not
+counted, correct %, depth, Workout Score and sets. The Run Module turns these rows into XP
+([ADR-027](../run-module/docs/decisions/ADR-027-xp-rules-and-endpoints.md)): 2 XP per counted rep
+(high knees: 1 per 2 counted lifts), at most 70 a session and 150 from exercise a day. Only
+controlled, full-range reps count (`configs/fsm.yaml` `count_shallow`, `min_rep_ms`). If the Run
 Module's migrations have not run yet, the table is missing: the session's own row is still written
 and a warning is logged; a backfill adds the row later.
 

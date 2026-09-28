@@ -144,10 +144,14 @@ def _rep_rule_phase(form_score: dict) -> dict[str, dict[str, float]]:
     return out
 
 
-def _collect_reps(workout_dir: Path) -> tuple[list[dict], dict[str, dict]]:
-    """Return (per-rep records, template config keyed by rule_id) for one exercise."""
+def _collect_reps(workout_dir: Path) -> tuple[list[dict], dict[str, dict], dict[str, int]]:
+    """Return (per-rep records, template config keyed by rule_id, attempts that did not count by
+    reason) for one exercise. Only reps that counted toward the set are reps: an attempt the
+    counting policy rejected (short of full range, too fast, under the minimum) is tallied by its
+    reason instead, so the report shows it without paying for it."""
     reps: list[dict] = []
     templates: dict[str, dict] = {}
+    not_counted = {"shallow": 0, "too_fast": 0, "other": 0}
     for set_no, set_dir in _numbered_dirs(workout_dir, _SET_RE):
         for rep_no, rep_dir in _numbered_dirs(set_dir, _REP_RE):
             fs = _read_json(rep_dir / "form_score.json")
@@ -156,9 +160,13 @@ def _collect_reps(workout_dir: Path) -> tuple[list[dict], dict[str, dict]]:
             if not templates:
                 meta = _read_json(rep_dir / "metadata.json") or {}
                 templates = meta.get("templates") or {}
-            last = fs.get("last_rep") or fs.get("last_attempt") or {}
             # This attempt's own analysis (last_rep can belong to an earlier rep).
             attempt = fs.get("last_attempt") or fs.get("last_rep") or {}
+            if attempt.get("qualified") is False:
+                reason = attempt.get("reason")
+                not_counted[reason if reason in ("shallow", "too_fast") else "other"] += 1
+                continue
+            last = attempt
             score = fs.get("final_score")
             peak = last.get("peak")
             rom = round(min(100.0, max(0.0, float(peak) * 100))) if isinstance(peak, (int, float)) else None
@@ -177,7 +185,7 @@ def _collect_reps(workout_dir: Path) -> tuple[list[dict], dict[str, dict]]:
                 "rom_factor": _number(attempt.get("rom_factor")),
                 "quality": attempt.get("quality"),
             })
-    return reps, templates
+    return reps, templates, not_counted
 
 
 # ------------------------------------------------------------------- aggregation
@@ -269,7 +277,7 @@ def _exercise_report(record: dict, uid: str, sid: str, exercise_id: str) -> dict
     target = plan.get("target") or {}
     if target.get("type") == "time":
         return _timed_exercise_report(record, sid, exercise_id, workout_dir)
-    reps, templates = _collect_reps(workout_dir)
+    reps, templates, not_counted = _collect_reps(workout_dir)
 
     date, day, start_time = _parse_created(record.get("created_at"))
     meta = plan.get("metadata") or {}
@@ -322,7 +330,11 @@ def _exercise_report(record: dict, uid: str, sid: str, exercise_id: str) -> dict
         "summary": {
             "avg_form_score": round(sum(scores) / len(scores), 1) if scores else None,
             "total_reps": len(reps),
-            "shallow_reps": sum(1 for r in reps if r["shallow"]),
+            # Full-range reps; shallow ones that counted (exercises that allow them) are in
+            # shallow_reps together with those that did not.
+            "good_reps": sum(1 for r in reps if not r["shallow"]),
+            "shallow_reps": sum(1 for r in reps if r["shallow"]) + not_counted["shallow"],
+            "not_counted": not_counted,
             "best": round(max(scores)) if scores else None,
             "worst": round(min(scores)) if scores else None,
             "avg_rep_time_s": _round(sum(times) / len(times), 1) if times else None,
@@ -568,18 +580,22 @@ def build_overview(uid: str, sid: str) -> dict | None:
             session_scores.append(avg)
         total_reps += report["summary"]["total_reps"]
         total_time += report["summary"]["total_time_s"] or 0.0
+        not_counted_total = sum((report["summary"].get("not_counted") or {}).values())
         exercises.append({
             "exercise_id": report["exercise_id"],
             "name": report["exercise"],
             "body_part": report["body_part"],
             "training_tag": report["training_tag"],
             "measure": report["measure"],
-            "has_data": report["summary"]["total_reps"] > 0,
+            # Trained, even if no rep counted: a set of only rejected attempts is still shown.
+            "has_data": report["summary"]["total_reps"] + not_counted_total > 0,
             "avg_form_score": avg,
             "planned": {"sets": report["planned"]["sets"], "reps_per_set": report["planned"]["reps_per_set"],
                         "total": report["planned"]["total"]},
             "actual": report["actual"],
+            "plan_met": report["actual"]["reps_completed"] >= report["planned"]["total"],
             "shallow_reps": report["summary"]["shallow_reps"],
+            "reps_not_counted": not_counted_total,
             "quality": quality,
             "workout_score": report["workout_score"]["score"],
             "workout_grade": report["workout_score"]["grade"],

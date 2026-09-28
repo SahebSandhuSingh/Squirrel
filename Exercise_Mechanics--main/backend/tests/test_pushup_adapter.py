@@ -22,6 +22,9 @@ from backend.workouts.pushup.adapter import (
     build_pushup_adapter,
 )
 
+# Synthetic reps here are faster and shallower than the live counting policy accepts (conftest).
+pytestmark = pytest.mark.usefixtures("legacy_rep_counting")
+
 _CONFIG = validate_exercise_config(
     "pushup", Path(__file__).resolve().parents[1] / "workouts" / "pushup"
 )
@@ -70,6 +73,7 @@ class TestRepCounting:
             "full_rom": 1,
             "shallow": 0,
             "invalid": 0,
+            "not_counted": {"shallow": 0, "too_fast": 0},
         }
         assert status["last_rep"]["classification"] == "full_rom"
         assert status["last_rep"]["score"] == 100.0

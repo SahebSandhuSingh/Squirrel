@@ -21,6 +21,9 @@ from backend.workouts.bicep_curl.adapter import (
     build_bicep_curl_adapter,
 )
 
+# Synthetic reps here are faster and shallower than the live counting policy accepts (conftest).
+pytestmark = pytest.mark.usefixtures("legacy_rep_counting")
+
 _SHOULDER_Y = 100.0
 _UPPER_ARM = 100.0
 _REST_OFFSET = 2.0  # baseline wrist hangs two upper-arm lengths below the shoulder
@@ -145,6 +148,7 @@ def test_full_rep_scores_100_and_completes_one_rep():
     status = _drive(_adapter(), _FULL)
     assert status["counters"] == {
         "attempts": 1, "qualified": 1, "full_rom": 1, "shallow": 0, "invalid": 0,
+        "not_counted": {"shallow": 0, "too_fast": 0},
     }
     assert status["last_rep"]["classification"] == "full_rom"
     assert status["last_rep"]["score"] == 100.0

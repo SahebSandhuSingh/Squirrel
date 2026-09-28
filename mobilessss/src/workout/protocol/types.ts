@@ -31,6 +31,8 @@ export interface WSRepResult {
   rep: number | null
   qualified: boolean
   classification: 'full_rom' | 'shallow' | 'invalid'
+  /* Why an invalid attempt did not count; null when it counted (or from an older server). */
+  reason: 'below_min_peak' | 'too_fast' | 'shallow' | null
   peak: number
   score: number | null
   time_score: number | null
@@ -91,6 +93,9 @@ export interface WSRepTrain {
     full_rom: number
     shallow: number
     invalid: number
+    /* Rep-shaped attempts the counting policy rejected (within `invalid`): short of full range,
+       or too fast. Zero from an older server. */
+    not_counted: { shallow: number; too_fast: number }
   }
   /* Exercise-agnostic range-of-motion. The common core (ratio/percent/gate/peak/rule_id/coaching)
      is identical across exercises; `full_rom` is the unified "current frame reached the ROM gate"
