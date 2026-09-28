@@ -3,7 +3,7 @@
 | Part | Where | Config |
 |---|---|---|
 | Web version of the app (`mobilessss/`) | **Vercel** (Hobby) | [`vercel.json`](vercel.json) |
-| Exercise backend, Run Module API (with its workers), Redis | **Render** (free) | [`render.yaml`](render.yaml) |
+| Exercise backend, Run Module API (with its workers), Social API, Redis | **Render** (free) | [`render.yaml`](render.yaml) |
 | Database | **Supabase** (free) | already set up |
 | Phone app | **EAS Build**, then the App Store / Play Store | |
 
@@ -75,6 +75,32 @@ connect the two.
 
    If Render added a suffix to a name (because it was taken), use the addresses the dashboard shows,
    and correct `RUN_MODULE_URL` on squirrel-exercise to match.
+
+## 2b. Social service (profiles, follows, posts, feed)
+
+`squirrel-social` (from `squirrel-social-profile-social-fixed/social-backend`) is the third service in
+`render.yaml`. It shares the database and the sign-in with the other two: it verifies the same tokens
+with the shared `JWT_SECRET`, and `scripts/check_shared_database.py` shows its tables never collide
+with theirs. The Exercise backend and the Run Module publish every finished workout and run to it, so
+they appear on the member's profile and can be shared as posts.
+
+1. **Blueprints → your Blueprint → Manual Sync** (or it syncs itself on the next push). Render
+   creates `squirrel-social` and adds `SOCIAL_INTERNAL_TOKEN` (generated) to `squirrel-shared`.
+2. On **squirrel-social → Environment**, fill in:
+   - `DATABASE_URL`: the same Supabase URL as the other two.
+   - `CORS_ALLOWED_ORIGINS`: the same value as the other two.
+   - `SOCIAL_RUN_MODULE_URL`: `https://squirrel-run-api.onrender.com`
+3. On **squirrel-exercise** and **squirrel-run-api → Environment**, set `SOCIAL_API_URL` to
+   `https://squirrel-social.onrender.com` (the address the dashboard shows). Without it they simply
+   do not publish.
+4. **Manual Deploy → Deploy latest commit** on all three. The Social service creates its tables as
+   it starts.
+5. Check `https://squirrel-social.onrender.com/healthz` → `{"ok":true}`. After a workout, the
+   profile (`GET /v1/users/me/profile` with your sign-in token) lists it under `recent_activities`.
+
+Photo uploads need S3-compatible storage (`SOCIAL_MEDIA_*` in `social-backend/.env.example`, e.g.
+Cloudflare R2's free tier); without it everything else works and uploads answer 503. The app reaches
+the service through `EXPO_PUBLIC_SOCIAL_API_URL`, once its social screens are in `mobilessss`.
 
 ## 3. Connect the web app
 

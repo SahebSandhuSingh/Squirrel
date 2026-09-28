@@ -127,6 +127,18 @@ def test_ingest_then_share(api, client):
     assert post["activity"]["verified"] is True and post["activity"]["calories"] == 110
 
 
+def test_resending_an_activity_updates_its_summary(api, client):
+    # The Exercise backend re-sends a workout after each set: the profile shows the latest numbers.
+    sub = new_sub()
+    first = _ingest(client, user_subject=sub, name="Squat · 1 set", duration_s=300, calories=40)
+    again = _ingest(client, user_subject=sub, name="Squat · 3 sets", duration_s=900, calories=110)
+    assert again.status_code == 200 and again.json()["activity_id"] == first.json()["activity_id"]
+    me = api.me(sub)
+    assert me["stats"]["activities"] == 1
+    latest = me["recent_activities"][0]
+    assert (latest["name"], latest["duration_minutes"], latest["calories"]) == ("Squat · 3 sets", 15, 110)
+
+
 def test_ingested_activity_cannot_be_shared_by_others(api, client):
     owner, other = new_sub(), new_sub()
     aid = _ingest(client, user_subject=owner).json()["activity_id"]

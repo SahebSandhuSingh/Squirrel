@@ -55,7 +55,9 @@ def make_engine(url: str) -> Engine:
             cur.close()
 
         return engine
-    return create_engine(url, pool_pre_ping=True, pool_size=10, max_overflow=20)
+    # Small pool: the database is shared with the Exercise backend and the Run Module (Supabase's
+    # session pooler caps connections), and one worker serves this service.
+    return create_engine(url, pool_pre_ping=True, pool_size=3, max_overflow=4)
 
 
 class Database:

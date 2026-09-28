@@ -2,6 +2,10 @@
 
 The service fails closed: without a JWT verification key (public key or JWKS URL) it refuses
 to start, so a misconfigured deploy can never accept unauthenticated traffic.
+
+Deployed next to the Exercise backend and the Run Module, it reads their shared settings when its
+own SOCIAL_* ones are unset: JWT_SECRET / JWT_ALGORITHM (the HS256 tokens the Exercise backend
+issues and the Run Module accepts), DATABASE_URL and CORS_ALLOWED_ORIGINS.
 """
 
 from __future__ import annotations
@@ -19,6 +23,17 @@ def _int(name: str, default: int) -> int:
 def _opt(name: str) -> str | None:
     raw = os.environ.get(name, "").strip()
     return raw or None
+
+
+def database_url_from_env() -> str:
+    """SOCIAL_DATABASE_URL, else the shared DATABASE_URL, for SQLAlchemy's psycopg (v3) driver: a
+    plain postgres:// or postgresql:// URL (as Supabase and the other services use) gets the
+    driver added; query parameters such as sslmode/sslrootcert pass through to libpq."""
+    url = _opt("SOCIAL_DATABASE_URL") or _opt("DATABASE_URL") or "sqlite:///./social.db"
+    for plain in ("postgres://", "postgresql://"):
+        if url.startswith(plain):
+            return "postgresql+psycopg://" + url[len(plain):]
+    return url
 
 
 @dataclass(frozen=True)
@@ -62,11 +77,16 @@ def get_settings() -> Settings:
     if not key and key_file:
         with open(key_file) as f:
             key = f.read()
+    algorithms = os.environ.get("SOCIAL_JWT_ALGORITHMS", "RS256")
+    if not key and not _opt("SOCIAL_JWKS_URL") and _opt("JWT_SECRET"):
+        # The shared HS256 secret the Exercise backend signs with (never an RS256 public key).
+        key = _opt("JWT_SECRET")
+        algorithms = _opt("SOCIAL_JWT_ALGORITHMS") or _opt("JWT_ALGORITHM") or "HS256"
     return Settings(
-        database_url=os.environ.get("SOCIAL_DATABASE_URL", "sqlite:///./social.db"),
+        database_url=database_url_from_env(),
         jwt_public_key=key.replace("\\n", "\n") if key else None,
         jwks_url=_opt("SOCIAL_JWKS_URL"),
-        jwt_algorithms=tuple(a.strip() for a in os.environ.get("SOCIAL_JWT_ALGORITHMS", "RS256").split(",") if a.strip()),
+        jwt_algorithms=tuple(a.strip() for a in algorithms.split(",") if a.strip()),
         jwt_issuer=_opt("SOCIAL_JWT_ISSUER"),
         jwt_audience=_opt("SOCIAL_JWT_AUDIENCE"),
         run_module_url=(_opt("SOCIAL_RUN_MODULE_URL") or "").rstrip("/") or None,
@@ -79,6 +99,10 @@ def get_settings() -> Settings:
         media_endpoint_url=_opt("SOCIAL_MEDIA_ENDPOINT_URL"),
         media_public_base_url=(_opt("SOCIAL_MEDIA_PUBLIC_BASE_URL") or "").rstrip("/") or None,
         media_max_bytes=_int("SOCIAL_MEDIA_MAX_BYTES", 10 * 1024 * 1024),
-        cors_origins=tuple(o.strip() for o in os.environ.get("SOCIAL_CORS_ORIGINS", "").split(",") if o.strip()),
+        cors_origins=tuple(
+            o.strip()
+            for o in (_opt("SOCIAL_CORS_ORIGINS") or _opt("CORS_ALLOWED_ORIGINS") or "").split(",")
+            if o.strip()
+        ),
         rate_limits_enabled=os.environ.get("SOCIAL_RATE_LIMITS", "on").lower() not in ("off", "0", "false"),
     )

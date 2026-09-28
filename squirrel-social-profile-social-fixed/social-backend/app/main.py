@@ -8,6 +8,8 @@ app can use a single base URL. See README.md for the contract.
 
 from __future__ import annotations
 
+import re
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -40,9 +42,11 @@ def create_app(
 
     app.add_exception_handler(ApiError, api_error_handler)
     if settings.cors_origins:
+        exact, pattern = split_cors_origins(settings.cors_origins)
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=list(settings.cors_origins),
+            allow_origins=exact,
+            allow_origin_regex=pattern,
             allow_methods=["GET", "POST", "PATCH", "DELETE"],
             allow_headers=["Authorization", "Content-Type", "Accept"],
             expose_headers=["Retry-After"],
@@ -57,6 +61,19 @@ def create_app(
         return {"ok": True}
 
     return app
+
+
+def split_cors_origins(origins: tuple[str, ...]) -> tuple[list[str], str | None]:
+    """Exact origins, plus one regex for entries with a `*` (preview deploys, e.g.
+    https://squirrel-*.vercel.app). A `*` matches letters, digits and hyphens only, never a dot,
+    so it cannot reach another domain. Same rules as the Exercise backend's cors.py."""
+    exact = [o.rstrip("/") for o in origins if "*" not in o]
+    wild = [
+        "".join("[a-z0-9-]+" if part == "*" else re.escape(part) for part in re.split(r"(\*)", o.rstrip("/")))
+        for o in origins
+        if "*" in o
+    ]
+    return exact, ("^(?:" + "|".join(wild) + ")$" if wild else None)
 
 
 def __getattr__(name: str):

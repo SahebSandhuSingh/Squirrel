@@ -1,6 +1,7 @@
 import { captureTerritory } from './capture.js';
 import { enqueueLeaderboardSync } from '../leaderboard_sync/queue.js';
 import { enqueueNotificationSync } from '../../notifications/emitter.js';
+import { publishRun } from '../../social/publish.js';
 import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -332,6 +333,19 @@ export async function finalizeRun(runId: string): Promise<FinalizeResult> {
       await enqueueNotificationSync(runId, captureRes.emittedEventIds);
     } catch (err) {
       console.error('Failed to enqueue leaderboard sync:', err);
+    }
+
+    // To the runner's Social profile: background, never throws. Flagged runs wait for review.
+    if (finalStatus === 'finalized') {
+      void publishRun({
+        runId,
+        userId: run.user_id,
+        startedAt: run.started_at,
+        distanceM: trackDistanceM,
+        movingTimeS,
+        elapsedTimeS: durationS,
+        areaM2: pipelineResult.areaM2,
+      });
     }
 
     return {

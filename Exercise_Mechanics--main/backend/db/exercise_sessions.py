@@ -13,7 +13,7 @@ import json
 import logging
 from datetime import datetime, timezone
 
-from backend import config
+from backend import config, social_publish
 from backend.core.ids import is_valid_user_id
 from backend.db import activity_sessions, connection
 from backend.reports import builder
@@ -103,6 +103,7 @@ def sync_session(user_id: str, session_id: str) -> bool:
         with connection.connect() as conn:
             upsert(conn, built[0])
             activity_sessions.write(conn, built[1])  # its own savepoint: never undoes the row above
+        social_publish.publish(built[1])  # to the member's Social profile; background, never raises
         return True
     except Exception:  # noqa: BLE001 — a database outage must never break training or a rating
         log.exception("could not sync session %s/%s to the database", user_id, session_id)

@@ -3,7 +3,9 @@
   POST /internal/v1/activities   Authorization: Bearer $SOCIAL_INTERNAL_TOKEN
 
 The Run Module's finish worker (or the Exercise backend) calls this once an activity is final.
-It is idempotent on (source, source_ref): re-sending the same run returns the same activity.
+It is idempotent on (source, source_ref): re-sending the same run returns the same activity, with
+its summary (name, distance, duration, calories, metrics) updated to the latest one sent. The
+Exercise backend re-sends a workout after each set, so the profile shows the finished session.
 The activity then shows in the owner's profile and can be shared with
 POST /v1/posts { activity: { source: "activity", activity_id } }. Never exposed to the app.
 """
@@ -50,6 +52,8 @@ def ingest_activity(
     if existing:
         if existing.user_id != user.id:
             raise conflict("source_ref already belongs to another user.")
+        _update_summary(existing, body)
+        db.commit()
         return InternalActivityOut(activity_id=existing.id, created=False)
     activity = Activity(
         user_id=user.id,
@@ -72,9 +76,20 @@ def ingest_activity(
         db.rollback()
         existing = db.scalar(select(Activity).where(Activity.source == body.source, Activity.source_ref == body.source_ref))
         if existing and existing.user_id == user.id:
+            _update_summary(existing, body)
+            db.commit()
             return InternalActivityOut(activity_id=existing.id, created=False)
         raise conflict("source_ref already belongs to another user.") from None
     social.after_activity_recorded(db, activity, settings)
     db.commit()
     response.status_code = status.HTTP_201_CREATED
     return InternalActivityOut(activity_id=activity.id, created=True)
+
+
+def _update_summary(activity: Activity, body: InternalActivityIn) -> None:
+    """A re-sent activity carries its latest summary; its identity (owner, source, type) stays."""
+    activity.name = body.name
+    activity.distance_m = body.distance_m
+    activity.duration_s = body.duration_s
+    activity.calories = body.calories
+    activity.metrics = body.metrics

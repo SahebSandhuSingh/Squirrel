@@ -1,21 +1,22 @@
-"""Alembic environment. Database URL: SOCIAL_DATABASE_URL (or the `url` passed in by tests)."""
+"""Alembic environment. Database URL: SOCIAL_DATABASE_URL, else DATABASE_URL (or the `url` passed in by
+tests); see app.config.database_url_from_env."""
 
 from __future__ import annotations
 
-import os
 from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from app.config import database_url_from_env
 from app.models import Base
 
 config = context.config
 if config.config_file_name is not None and config.attributes.get("configure_logger", True):
     fileConfig(config.config_file_name)
 
-url = config.get_main_option("sqlalchemy.url") or os.environ.get("SOCIAL_DATABASE_URL", "sqlite:///./social.db")
-config.set_main_option("sqlalchemy.url", url)
+url = config.get_main_option("sqlalchemy.url") or database_url_from_env()
+config.set_main_option("sqlalchemy.url", url.replace("%", "%%"))  # ConfigParser: a literal % is %%
 target_metadata = Base.metadata
 
 

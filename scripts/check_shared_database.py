@@ -1,23 +1,24 @@
-"""Check that the Exercise backend and the Run Module can share one PostgreSQL + PostGIS database.
+"""Check that the Exercise backend, the Run Module and the Social service can share one PostgreSQL +
+PostGIS database.
 
-Both modules write to the same database server (locally the compose `postgres`, in production
+All three write to the same database server (locally the compose `postgres`, in production
 Supabase), each through its own migrations and its own code. They never read each other's tables, so
 the only way they can break each other is by creating an object with the same name. This script
 proves they do not:
 
   1. Each module's migrations run alone in a fresh database, and the objects each creates are
      recorded (tables, views, sequences, indexes; per schema).
-  2. The two sets must not overlap. An overlap fails the check and names the objects.
-  3. Both modules migrate into one database, in both orders, and then again (the second run must be a
-     no-op), so neither assumes it runs first or alone.
+  2. No two sets may overlap. An overlap fails the check and names the objects.
+  3. All modules migrate into one database, in forward and reverse order, and then again (the second
+     run must be a no-op), so none assumes it runs first or alone.
 
 It only runs each module's own migration command; it imports nothing from either module.
 
     python scripts/check_shared_database.py postgresql://postgres:postgres@localhost:5435/postgres
 
 The URL is a maintenance connection with CREATEDB (the throwaway databases are created next to its
-database and always dropped). Needs the Exercise requirements (psycopg) and
-`npm ci` in run-module/backend. Exit status 0 = compatible, 1 = collision or migration failure.
+database and always dropped). Needs the Exercise requirements (psycopg), `npm ci` in
+run-module/backend, and the Social requirements for SOCIAL_PYTHON (default: social-backend/.venv). Exit status 0 = compatible, 1 = collision or migration failure.
 """
 
 from __future__ import annotations
@@ -35,6 +36,10 @@ import psycopg
 ROOT = Path(__file__).resolve().parent.parent
 EXERCISE_DIR = ROOT / "Exercise_Mechanics--main"
 RUN_BACKEND_DIR = ROOT / "run-module" / "backend"
+SOCIAL_DIR = ROOT / "squirrel-social-profile-social-fixed" / "social-backend"
+SOCIAL_PYTHON = os.environ.get("SOCIAL_PYTHON") or str(
+    SOCIAL_DIR / ".venv" / "bin" / "python" if (SOCIAL_DIR / ".venv").is_dir() else sys.executable
+)
 
 # Each module's own migration command, exactly as its README / the compose file runs it.
 MODULES = {
@@ -42,6 +47,8 @@ MODULES = {
     "run_module": (["node", "node_modules/node-pg-migrate/bin/node-pg-migrate.js", "up",
                     "--migrations-dir", "../db/migrations", "--database-url-var", "DATABASE_URL"],
                    RUN_BACKEND_DIR),
+    # Alembic, as its Dockerfile runs it; reads DATABASE_URL like the others (app/config.py).
+    "social": ([SOCIAL_PYTHON, "-m", "alembic", "upgrade", "head"], SOCIAL_DIR),
 }
 
 # Everything with a name in a schema: tables, partitioned tables, views, materialized views,
@@ -108,17 +115,19 @@ def check(admin_url: str) -> list[str]:
         print(f"{module}: {len(created[module])} objects "
               f"({sum(v == 'table' for v in created[module].values())} tables)")
 
-    # 2. No name may belong to both.
-    shared = sorted(created["exercise"].keys() & created["run_module"].keys())
-    for name in shared:
-        problems.append(f"both modules create {name} "
-                        f"(exercise: {created['exercise'][name]}, run_module: {created['run_module'][name]})")
+    # 2. No name may belong to two modules.
+    names = list(MODULES)
+    for i, first in enumerate(names):
+        for second in names[i + 1:]:
+            for name in sorted(created[first].keys() & created[second].keys()):
+                problems.append(f"{first} and {second} both create {name} "
+                                f"({first}: {created[first][name]}, {second}: {created[second][name]})")
     if problems:
         return problems  # migrating them together would only fail on the same names
 
-    # 3. Together in one database, either order, twice.
-    expected = created["exercise"].keys() | created["run_module"].keys()
-    for order in (("exercise", "run_module"), ("run_module", "exercise")):
+    # 3. Together in one database, forward and reverse order, twice.
+    expected = set().union(*(created[m].keys() for m in names))
+    for order in (tuple(names), tuple(reversed(names))):
         label = "then".join(m[:3] for m in order)
         with scratch_database(admin_url, label) as url:
             before = objects(url)
@@ -153,11 +162,11 @@ def main(argv: list[str]) -> int:
         print(f"FAIL: {exc}")
         return 1
     if problems:
-        print("FAIL: the two modules cannot share one database:")
+        print("FAIL: the modules cannot share one database:")
         for problem in problems:
             print(f"  - {problem}")
         return 1
-    print("OK: the Exercise backend and the Run Module can share one database")
+    print("OK: the Exercise backend, the Run Module and the Social service can share one database")
     return 0
 
 

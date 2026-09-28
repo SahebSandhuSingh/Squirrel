@@ -4,6 +4,8 @@
 #   squirrel-exercise   Exercise Mechanics API + live-coaching sockets
 #   squirrel-run-api    Run Module API, with its background workers in the same process
 #                       (RUN_WORKERS_IN_API) and its migrations applied at startup (MIGRATE_ON_START)
+#   squirrel-social     Profile + Social API: profiles, follows, posts, feed (Alembic migrations at
+#                       startup). Finished workouts and runs are published to it by the other two.
 #   squirrel-redis      Render Key Value (Redis) for the Run Module's queues and leaderboard
 #
 # The free plan has no disks, background workers or pre-deploy commands, hence the two switches
@@ -26,6 +28,10 @@ envVarGroups:
       # Day boundary for the XP daily caps (run-module/docs/decisions/ADR-027).
       - key: XP_TIMEZONE
         value: Asia/Kolkata
+      # Service-to-service password: the Exercise backend and the Run Module publish finished
+      # workouts and runs to squirrel-social's /internal/v1/activities with it.
+      - key: SOCIAL_INTERNAL_TOKEN
+        generateValue: true
 
 services:
   - type: web
@@ -47,6 +53,10 @@ services:
       # Partner Hunt's XP gate: the Run Module's public address, e.g. https://squirrel-run-api.onrender.com
       # (free services cannot receive private-network traffic).
       - key: RUN_MODULE_URL
+        sync: false
+      # squirrel-social's public address, e.g. https://squirrel-social.onrender.com (unset: workouts
+      # are not published to profiles).
+      - key: SOCIAL_API_URL
         sync: false
       - key: EXERCISE_REQUIRE_AUTH
         value: "1"
@@ -79,10 +89,37 @@ services:
         value: "1"
       - key: RUN_WORKERS_IN_API
         value: "1"
+      # squirrel-social's public address (unset: runs are not published to profiles).
+      - key: SOCIAL_API_URL
+        sync: false
       - key: NODE_ENV
         value: production
       - key: LOG_LEVEL
         value: info
+
+  - type: web
+    name: squirrel-social
+    runtime: docker
+    region: singapore
+    plan: free
+    branch: saheb
+    dockerfilePath: ./squirrel-social-profile-social-fixed/social-backend/Dockerfile
+    dockerContext: ./squirrel-social-profile-social-fixed/social-backend
+    healthCheckPath: /healthz
+    envVars:
+      # JWT_SECRET + JWT_ALGORITHM: verifies the same sign-in tokens as the other two (app/config.py).
+      - fromGroup: squirrel-shared
+      # The same Supabase URL as the other two (its tables do not collide with theirs).
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      # XP and run stats are read from the Run Module with the caller's token, e.g.
+      # https://squirrel-run-api.onrender.com
+      - key: SOCIAL_RUN_MODULE_URL
+        sync: false
+      # Photo uploads need S3-compatible storage (SOCIAL_MEDIA_* in social-backend/.env.example);
+      # without it everything else works and uploads answer 503.
 
   - type: keyvalue
     name: squirrel-redis
