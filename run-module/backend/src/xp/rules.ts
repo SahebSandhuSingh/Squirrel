@@ -22,8 +22,10 @@
  * nothing. So doing it badly on purpose is not faster XP. Rows written before good reps were
  * reported carry `reps` including shallow ones: their good share is `reps × correct_pct`.
  *
- * "Per day" is the calendar day in XP_TIMEZONE (default Asia/Kolkata), not UTC: a UTC day would
- * reset at 5:30 am for Indian users. Within a day, sessions are counted in the order they started,
+ * "Per day" is the person's own calendar day: the time zone their phone recorded the activity in
+ * (metrics.timezone, an IANA name, on runs and exercise sessions alike), else XP_TIMEZONE
+ * (default Asia/Kolkata), never UTC: a UTC day would reset at 5:30 am for Indian users and put a
+ * 00:30 workout on the day before. Within a day, sessions are counted in the order they started,
  * so the cap always cuts the latest ones.
  *
  * Not built, because they are not defined yet: streaks, personal bests, challenges, daily-goal and
@@ -119,6 +121,17 @@ export function runLines(metrics: Record<string, unknown> | null): XpLine[] {
   return lines;
 }
 
+/** The name if it is a valid IANA time zone, else null. */
+export function validTimeZone(zone: unknown): string | null {
+  if (typeof zone !== "string" || !zone.trim() || zone.length > 64) return null;
+  try {
+    new Intl.DateTimeFormat("en-CA", { timeZone: zone });
+    return zone;
+  } catch {
+    return null;
+  }
+}
+
 /** Calendar day (YYYY-MM-DD) of a moment in the given IANA time zone. */
 export function xpDay(moment: Date, timeZone: string): string {
   // en-CA formats as YYYY-MM-DD.
@@ -159,7 +172,8 @@ export function computeXp(rows: ActivityRow[], timeZone: string = DEFAULT_XP_TIM
     const raw = lines.reduce((sum, line) => sum + line.xp, 0);
     if (raw <= 0) continue;
 
-    const bucket = `${key}|${xpDay(row.started_at, timeZone)}`;
+    const zone = validTimeZone(row.metrics?.["timezone"]) ?? timeZone;
+    const bucket = `${key}|${xpDay(row.started_at, zone)}`;
     const used = usedToday.get(bucket) ?? 0;
     const awarded = Math.min(raw, Math.max(0, kind.cap - used));
     usedToday.set(bucket, used + awarded);

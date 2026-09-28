@@ -370,6 +370,16 @@ testRunIds.push(runId2);
     expect(row.metrics["rejection_reason"]).toBeNull();
   });
 
+  it("carries the run's time zone into its activity row, so XP days are the runner's own", async () => {
+    const points = generateSimpleLoop({ noiseStdDevM: 0, rotationDeg: 0 });
+    const { runId, userId } = await seedRun(points); testRunIds.push(runId);
+    await pool.query("UPDATE runs SET timezone = 'Asia/Kolkata' WHERE id = $1", [runId]);
+    await finalizeRun(runId);
+    const { rows } = await pool.query<{ metrics: Record<string, unknown> }>(
+      `SELECT metrics FROM activity_sessions WHERE user_id = $1`, [userId]);
+    expect(rows[0]!.metrics["timezone"]).toBe("Asia/Kolkata");
+  });
+
   it("B1-B5: REJECTED run produces exactly one activity_sessions row", async () => {
     // 10x10 = 100m2 < 500m2 -> rejected below_minimum_area
     const points = generateTinyLoop();

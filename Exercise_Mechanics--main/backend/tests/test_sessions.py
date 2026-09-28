@@ -242,3 +242,10 @@ def test_websocket_identity_failure_is_explicit():
     assert asyncio.run(_session_access(websocket)) is None  # type: ignore[arg-type]
     assert websocket.messages == [{"error": {"code": "invalid_user", "detail": "a valid user_id is required"}}]
     assert websocket.closed == (1008, "invalid_user")
+
+
+def test_the_phones_time_zone_is_kept_and_an_unknown_one_ignored(user_id):
+    for zone, stored in (("Asia/Kolkata", "Asia/Kolkata"), ("Not/AZone", None), ("../etc", None)):
+        status, response = _post(_app(), f"/api/users/{user_id}/sessions", {**_payload(), "timezone": zone})
+        assert status == 201
+        assert read_session_record(user_id, response["session_id"]).get("timezone") == stored

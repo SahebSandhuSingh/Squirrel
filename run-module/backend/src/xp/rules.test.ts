@@ -137,3 +137,22 @@ describe("exercise XP", () => {
     expect(computeXp([], IST)).toEqual({ xp: 0, updated_at: null, breakdown: [] });
   });
 });
+
+describe("each row's own day", () => {
+  const workout = (iso: string, timezone?: string): ActivityRow =>
+    row({ started_at: at(iso), type: "exercise", source_module: "exercise_module", metrics: { good_reps: 35, ...(timezone ? { timezone } : {}) } });
+
+  it("puts a 00:30 IST workout on its IST day, not the UTC day before", () => {
+    // 2026-09-26 00:30 IST = 2026-09-25 19:00 UTC; two capped days, not one
+    const rows = [workout("2026-09-25T10:00:00Z", IST), workout("2026-09-25T12:00:00Z", IST), workout("2026-09-25T19:00:00Z", IST)];
+    expect(computeXp(rows, "UTC").xp).toBe(140 + 70);
+  });
+
+  it("follows the phone's zone for each row, falling back to the default", () => {
+    // 23:30 UTC on the 25th is the 26th in Kolkata but still the 25th in New York
+    const ny = [workout("2026-09-25T15:00:00Z", "America/New_York"), workout("2026-09-25T16:00:00Z", "America/New_York"), workout("2026-09-25T23:30:00Z", "America/New_York")];
+    expect(computeXp(ny, IST).xp).toBe(150);
+    const unknown = [workout("2026-09-25T15:00:00Z", "Mars/Olympus"), workout("2026-09-25T16:00:00Z"), workout("2026-09-25T23:30:00Z")];
+    expect(computeXp(unknown, IST).xp).toBe(140 + 70);
+  });
+});

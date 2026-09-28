@@ -51,7 +51,7 @@ describe("XP routes", () => {
   async function addWorkout(userId: string, startedAt: Date, durationS: number): Promise<void> {
     await pool.query(
       `INSERT INTO activity_sessions (id, user_id, type, subtype, started_at, duration_s, metrics, source_module)
-       VALUES ($1, $2, 'exercise', 'squat', $3, $4, '{"reps": 40}', 'exercise_module')`,
+       VALUES ($1, $2, 'exercise', 'squat', $3, $4, '{"reps": 25, "good_reps": 25}', 'exercise_module')`,
       [crypto.randomUUID(), userId, startedAt, durationS]
     );
   }
@@ -69,7 +69,7 @@ describe("XP routes", () => {
     const res = await fastify.inject({ method: "GET", url: "/v1/users/me/xp", headers: bearer(await userToken(ana)) });
     expect(res.statusCode).toBe(200);
     const body = res.json<MeXp>();
-    expect(body.xp).toBe(125 + 50); // her run and her 25-minute workout; not the other user's run
+    expect(body.xp).toBe(125 + 50); // her run and her 25 counted reps; not the other user's run
     expect(body.breakdown).toEqual([
       { reason: "run_completed", xp: 50 },
       { reason: "run_distance", xp: 50 },

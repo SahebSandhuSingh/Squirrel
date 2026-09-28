@@ -3,6 +3,8 @@ export const createRunSchema = {
     type: 'object',
     properties: {
       started_at: { type: 'string', format: 'date-time' },
+      // The phone's IANA time zone: the run's calendar day follows it (daily XP cap).
+      timezone: { type: 'string', maxLength: 64 },
     },
     additionalProperties: true,
   },

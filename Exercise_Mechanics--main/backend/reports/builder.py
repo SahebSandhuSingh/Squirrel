@@ -16,11 +16,12 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from backend.activity_rating.store import read_rating
 from backend.config import user_dir
+from backend.localtime import now_local, to_local
 from backend.reports.workout_score import activity_metrics, rep_workout_score, timed_workout_score, trend
 from backend.sessions.store import read_session_record
 
@@ -62,12 +63,13 @@ def _session_dir(uid: str, sid: str) -> Path:
 
 # ----------------------------------------------------------------- date helpers
 
-def _parse_created(created_at: str | None) -> tuple[str, str, str]:
-    """(date 'YYYY-MM-DD', day 'Mon', start_time 'HH:MM') from an ISO timestamp."""
+def _parse_created(created_at: str | None, time_zone: object = None) -> tuple[str, str, str]:
+    """(date 'YYYY-MM-DD', day 'Mon', start_time 'HH:MM') of an ISO timestamp on the person's own
+    clock: the session's time zone (backend/localtime.py), never UTC."""
     if not created_at:
         return "", "", ""
     try:
-        dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        dt = to_local(datetime.fromisoformat(created_at.replace("Z", "+00:00")), time_zone)
     except ValueError:
         return created_at[:10], "", ""
     return dt.strftime("%Y-%m-%d"), dt.strftime("%a"), dt.strftime("%H:%M")
@@ -279,7 +281,7 @@ def _exercise_report(record: dict, uid: str, sid: str, exercise_id: str) -> dict
         return _timed_exercise_report(record, sid, exercise_id, workout_dir)
     reps, templates, not_counted = _collect_reps(workout_dir)
 
-    date, day, start_time = _parse_created(record.get("created_at"))
+    date, day, start_time = _parse_created(record.get("created_at"), record.get("timezone"))
     meta = plan.get("metadata") or {}
     measure = "reps"
     reps_per_set = int(target.get("value") or 0)
@@ -371,7 +373,7 @@ def _timed_exercise_report(
     plan = record.get("plan") or {}
     target = plan.get("target") or {}
     meta = plan.get("metadata") or {}
-    date, day, start_time = _parse_created(record.get("created_at"))
+    date, day, start_time = _parse_created(record.get("created_at"), record.get("timezone"))
     planned_sets = int(plan.get("sets") or 0)
     target_ms = int(target.get("value_ms") or 0)
     summaries: list[tuple[int, dict]] = [
@@ -534,7 +536,7 @@ def build_overview(uid: str, sid: str) -> dict | None:
     plan = record.get("plan") or {}
     exercise_id = plan.get("exercise_id")
     report = _exercise_report(record, uid, sid, exercise_id) if exercise_id else None
-    date, day, start_time = _parse_created(record.get("created_at"))
+    date, day, start_time = _parse_created(record.get("created_at"), record.get("timezone"))
 
     exercises: list[dict] = []
     session_scores: list[float] = []
@@ -642,7 +644,7 @@ def list_sessions(uid: str) -> list[dict]:
         if overview is None:
             continue
         plan = record.get("plan") or {}
-        date, day, start_time = _parse_created(record.get("created_at"))
+        date, day, start_time = _parse_created(record.get("created_at"), record.get("timezone"))
         out.append({
             "session_id": sid, "date": date, "day": day, "start_time": start_time,
             "exercise": plan.get("exercise_name") or plan.get("exercise_id") or "",
@@ -655,7 +657,7 @@ def list_sessions(uid: str) -> list[dict]:
 def build_activity(uid: str, year: int) -> list[str]:
     dates: set[str] = set()
     for _sid, record in _iter_session_records(uid):
-        date, _day, _start = _parse_created(record.get("created_at"))
+        date, _day, _start = _parse_created(record.get("created_at"), record.get("timezone"))
         if date.startswith(f"{year:04d}-"):
             dates.add(date)
     return sorted(dates)
@@ -667,7 +669,7 @@ def build_progress(uid: str) -> dict:
         overview = build_overview(uid, sid)
         if overview is None:
             continue
-        date, day, start_time = _parse_created(record.get("created_at"))
+        date, day, start_time = _parse_created(record.get("created_at"), record.get("timezone"))
         sessions.append({
             "session_id": sid, "date": date, "day": day, "start_time": start_time,
             "score": overview["session_score"], "reps": overview["total_reps"],
@@ -675,6 +677,7 @@ def build_progress(uid: str) -> dict:
             "activity_rating": (overview["activity_rating"] or {}).get("rating"),
             "exercises": [e["name"] for e in overview["exercises"]] or [None],
             "_time": overview["total_time_s"] or 0.0,
+            "_zone": record.get("timezone"),
         })
     sessions.sort(key=lambda s: (s["date"], s["start_time"]))  # oldest -> newest
 
@@ -687,6 +690,8 @@ def build_progress(uid: str) -> dict:
         top = max(scored, key=lambda s: s["score"])
         best = {"score": top["score"], "date": top["date"], "session_id": top["session_id"]}
     total_time = sum(s["_time"] for s in sessions)
+    # "Today" on the person's clock: the zone of their latest session (their phone's).
+    today = now_local(sessions[-1]["_zone"] if sessions else None).date()
 
     return {
         "sessions": [{k: v for k, v in s.items() if not k.startswith("_")} for s in sessions],
@@ -696,38 +701,54 @@ def build_progress(uid: str) -> dict:
         "latest_score": latest_score,
         "delta": delta,
         "best": best,
-        "streak_days": _streak_days({s["date"] for s in sessions}),
-        "this_week": _sessions_this_week(sessions),
+        "streak_days": _streak_days({s["date"] for s in sessions}, today),
+        "best_streak_days": _best_streak_days({s["date"] for s in sessions}),
+        "this_week": _sessions_this_week(sessions, today),
         "total_time_s": round(total_time, 1) if total_time else None,
         "insights": _progress_insights(scored, len(sessions)),
     }
 
 
-def _sessions_this_week(sessions: list[dict]) -> int:
-    iso_year, iso_week, _ = datetime.now().isocalendar()
+def _sessions_this_week(sessions: list[dict], today: date) -> int:
+    """Sessions in today's Monday-to-Sunday week, by their local dates."""
+    iso_year, iso_week, _ = today.isocalendar()
     count = 0
     for s in sessions:
         try:
-            dt = datetime.strptime(s["date"], "%Y-%m-%d")
+            day = datetime.strptime(s["date"], "%Y-%m-%d").date()
         except ValueError:
             continue
-        y, w, _ = dt.isocalendar()
+        y, w, _ = day.isocalendar()
         if (y, w) == (iso_year, iso_week):
             count += 1
     return count
 
 
-def _streak_days(dates: set[str]) -> int:
-    parsed = sorted({datetime.strptime(d, "%Y-%m-%d").date() for d in dates if d})
+def _dates(values: set[str]) -> list[date]:
+    return sorted({datetime.strptime(d, "%Y-%m-%d").date() for d in values if d})
+
+
+def _streak_days(dates: set[str], today: date) -> int:
+    """The current streak: consecutive training days ending today, or yesterday (today's workout
+    may still be ahead). A missed day ends it."""
+    days = set(_dates(dates))
+    cursor = today if today in days else today - timedelta(days=1)
+    streak = 0
+    while cursor in days:
+        streak += 1
+        cursor -= timedelta(days=1)
+    return streak
+
+
+def _best_streak_days(dates: set[str]) -> int:
+    """The longest run of consecutive training days ever."""
+    parsed = _dates(dates)
     if not parsed:
         return 0
     streak = best = 1
     for prev, cur in zip(parsed, parsed[1:]):
-        if (cur - prev).days == 1:
-            streak += 1
-            best = max(best, streak)
-        elif cur != prev:
-            streak = 1
+        streak = streak + 1 if (cur - prev).days == 1 else 1
+        best = max(best, streak)
     return best
 
 

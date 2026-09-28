@@ -81,6 +81,7 @@ export async function finalizeRun(runId: string): Promise<FinalizeResult> {
       started_at: Date;
       distance_m: number | null;
       elapsed_time_s: number | null;
+      timezone: string | null;
     }>(SELECT_RUN_FOR_UPDATE, [runId]);
 
     if (runRes.rows.length === 0) {
@@ -186,6 +187,7 @@ export async function finalizeRun(runId: string): Promise<FinalizeResult> {
         elapsed_time_s: durationS,
         territory_claimed: false,
         rejection_reason: reason,
+        ...(run.timezone ? { timezone: run.timezone } : {}),
       };
       if (band) metrics.band = band;
 
@@ -315,7 +317,8 @@ export async function finalizeRun(runId: string): Promise<FinalizeResult> {
         elapsed_time_s: durationS,
         territory_claimed: true,
         rejection_reason: null,
-        band: scoreRes.band
+        band: scoreRes.band,
+        ...(run.timezone ? { timezone: run.timezone } : {}),
       }),
     ]);
 

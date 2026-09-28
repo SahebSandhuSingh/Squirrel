@@ -19,7 +19,7 @@
 -- [0] SELECT_RUN_FOR_UPDATE
 -- Lock the run row for the duration of the transaction.
 -- Returns fields needed for idempotency and the activity_session write.
-SELECT user_id, status, started_at, distance_m, elapsed_time_s
+SELECT user_id, status, started_at, distance_m, elapsed_time_s, timezone
 FROM   runs
 WHERE  id = $1
 FOR UPDATE;

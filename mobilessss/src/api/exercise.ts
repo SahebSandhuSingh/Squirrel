@@ -27,6 +27,7 @@
 import { EXERCISE_API_URL } from '@/api/config';
 import { api } from '@/api/client';
 import { withRetry } from '@/api/endpoints';
+import { deviceTimeZone } from '@/logic/localDay';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -142,7 +143,9 @@ export type ExerciseProgress = {
   latest_score: number | null;
   delta: number | null;
   best: { score: number; date: string; session_id: string } | null;
+  /** Current streak (consecutive local days ending today or yesterday). */
   streak_days: number;
+  best_streak_days?: number;
   this_week: number;
   total_time_s?: number | null;
   insights: string[];
@@ -166,7 +169,9 @@ export const exerciseApi = {
 
   // Non-idempotent creates are NOT retried: a lost response would mint a duplicate session.
   /** The backend accepts exactly one exercise per session (Prototype 1). */
-  createSession: (userId: string, exercise: SessionExerciseInput) => ex<CreatedSession>(`${u(userId)}/sessions`, { body: { exercises: [exercise] } }),
+  // The phone's time zone: the session's day and time follow it (history, streaks, XP day).
+  createSession: (userId: string, exercise: SessionExerciseInput) =>
+    ex<CreatedSession>(`${u(userId)}/sessions`, { body: { exercises: [exercise], timezone: deviceTimeZone() } }),
 
   sessions: (userId: string) => withRetry(() => ex<{ sessions: SessionListItem[] }>(`${u(userId)}/sessions`)).then((r) => r.sessions ?? []),
   overview: (userId: string, sessionId: string) => withRetry(() => ex<SessionOverview>(`${u(userId)}/sessions/${encodeURIComponent(sessionId)}/overview`)),

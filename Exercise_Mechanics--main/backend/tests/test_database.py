@@ -223,7 +223,7 @@ def test_an_account_session_writes_one_activity_row_for_xp(shared):
     assert str(row["user_id"]) == ACCOUNT
     assert (row["type"], row["subtype"], row["source_module"]) == ("exercise", "squat", "exercise_module")
     assert row["started_at"] == started
-    assert row["duration_s"] == 25 * 60  # the session's length, which the XP tiers use
+    assert row["duration_s"] == 25 * 60  # the session's length (XP no longer uses it: reps do)
     metrics = row["metrics"]
     assert metrics["reps"] == len(REPS) and metrics["sets"] == 1 and metrics["session_id"] == SID
     assert metrics["active_time_s"] == rows(shared)[0]["duration_s"]  # active exercise time, kept too
@@ -231,6 +231,15 @@ def test_an_account_session_writes_one_activity_row_for_xp(shared):
     assert row["calories_kcal"] is None and row["intensity"] is None
     sync_session(ACCOUNT, SID)  # syncing again updates the same row
     assert len(activity_rows(shared)) == 1
+
+
+def test_the_activity_row_carries_the_phones_time_zone(shared):
+    _account_session(SID, datetime.fromisoformat("2026-09-21T19:00:00+00:00"), minutes=25)
+    session_file = config.USERS_DIR / ACCOUNT / "sessions" / SID / "session.json"
+    session_file.write_text(json.dumps({**json.loads(session_file.read_text()), "timezone": "Asia/Kolkata"}))
+    sync_session(ACCOUNT, SID)
+    [row] = activity_rows(shared)
+    assert row["metrics"]["timezone"] == "Asia/Kolkata"  # the Run Module's XP day follows it
 
 
 def test_only_accounts_get_activity_rows(shared):

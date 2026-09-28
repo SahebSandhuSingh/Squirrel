@@ -25,7 +25,7 @@ envVarGroups:
         generateValue: true
       - key: JWT_ALGORITHM
         value: HS256
-      # Day boundary for the XP daily caps (run-module/docs/decisions/ADR-027).
+      # XP day for activities that do not carry the phone's own time zone (ADR-027).
       - key: XP_TIMEZONE
         value: Asia/Kolkata
       # Service-to-service password: the Exercise backend and the Run Module publish finished

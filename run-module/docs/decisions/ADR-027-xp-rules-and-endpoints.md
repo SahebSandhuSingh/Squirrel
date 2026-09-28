@@ -42,8 +42,10 @@ write-only rule still holds for everything else.
   module can mint the other's XP.
 
 ### 3. The day is local, not UTC
-Caps use the calendar day in `XP_TIMEZONE` (default `Asia/Kolkata`). A UTC day would reset at
-5:30 am for Indian users. Within a day, sessions count in the order they started, so the cap cuts
+Caps use the person's own calendar day: the IANA time zone the phone sent with the activity
+(`metrics.timezone`, on runs and exercise sessions), else `XP_TIMEZONE` (default `Asia/Kolkata`).
+A UTC day would reset at 5:30 am for Indian users and put a 00:30 workout on the day before;
+one server-wide zone would do the same for anyone outside it. Within a day, sessions count in the order they started, so the cap cuts
 the latest ones and the result does not depend on read order. (The leaderboard keeps its UTC
 buckets, ADR-016; that is a separate ranking concern.)
 

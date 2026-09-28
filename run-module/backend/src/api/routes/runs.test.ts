@@ -79,6 +79,19 @@ describe('Runs API', () => {
     expect(dbRes.rows[0].status).toBe('active');
   });
 
+  it('POST /v1/runs keeps a valid phone time zone and drops an invalid one', async () => {
+    const token = await createToken(crypto.randomUUID());
+    const create = (timezone: string) => fastify.inject({
+      method: 'POST', url: '/v1/runs', headers: { authorization: `Bearer ${token}` }, payload: { timezone },
+    });
+    const good = JSON.parse((await create('Asia/Kolkata')).body);
+    const bad = JSON.parse((await create('Not/AZone')).body);
+    const { rows } = await pool.query('SELECT id, timezone FROM runs WHERE id = ANY($1)', [[good.run_id, bad.run_id]]);
+    const zone = Object.fromEntries(rows.map((r: { id: string; timezone: string | null }) => [r.id, r.timezone]));
+    expect(zone[good.run_id]).toBe('Asia/Kolkata');
+    expect(zone[bad.run_id]).toBeNull();
+  });
+
   it('AC2: POST /v1/runs with no token returns 401', async () => {
     const res = await fastify.inject({
       method: 'POST',

@@ -57,8 +57,9 @@ def _is_uuid(value: str) -> bool:
         return False
 
 
-def build_activity_row(session_row: dict, report: dict) -> dict | None:
-    """The activity_sessions row for a session, from its exercise_sessions row and its report."""
+def build_activity_row(session_row: dict, report: dict, time_zone: str | None = None) -> dict | None:
+    """The activity_sessions row for a session, from its exercise_sessions row and its report.
+    `time_zone` is the phone's (session.json): the Run Module counts the daily XP cap on that day."""
     if not _is_uuid(session_row["user_id"]):
         return None
     length = session_row["end_time"] - session_row["start_time"]
@@ -74,6 +75,7 @@ def build_activity_row(session_row: dict, report: dict) -> dict | None:
             "sets": session_row["sets"],
             "active_time_s": session_row["duration_s"],
             "session_id": session_row["session_id"],
+            **({"timezone": time_zone} if time_zone else {}),
         },
     }
 

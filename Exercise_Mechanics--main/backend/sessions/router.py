@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from backend.core.ids import is_valid_user_id
 from backend.engine.loader import ConfigurationError, load_exercise_config
+from backend.localtime import valid_zone
 from backend.sessions.store import create_session_record
 from backend.users.store import read_profile, read_skill
 from backend.workouts.catalog import load_catalog
@@ -37,6 +38,9 @@ class SessionCreate(BaseModel):
 
     # P1A deliberately persists one exercise. Multi-exercise sequencing is Stage 12.
     exercises: list[SessionExercise] = Field(min_length=1, max_length=1)
+    # The phone's IANA time zone (e.g. "Asia/Kolkata"): the session's day and time follow it
+    # (backend/localtime.py). Unknown names are ignored, never an error.
+    timezone: str | None = Field(default=None, max_length=64)
 
 
 class RepSessionTarget(BaseModel):
@@ -107,5 +111,5 @@ def create_session(user_id: str, body: SessionCreate) -> dict:
         },
     }
     skill_level, _ = read_skill(user_id)
-    record = create_session_record(user_id, plan, skill_level)
+    record = create_session_record(user_id, plan, skill_level, time_zone=valid_zone(body.timezone))
     return {"session_id": record["session_id"], **plan}

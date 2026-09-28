@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from backend import config, social_publish
 from backend.core.ids import is_valid_user_id
 from backend.db import activity_sessions, connection
+from backend.localtime import valid_zone
 from backend.reports import builder
 from backend.sessions.store import is_valid_session_id, read_session_record
 
@@ -82,7 +83,7 @@ def _build(user_id: str, session_id: str) -> tuple[dict, dict | None] | None:
         "workout_score": report["workout_score"]["score"],
         "activity_rating": rating.get("rating"),
     }
-    return row, activity_sessions.build_activity_row(row, report)
+    return row, activity_sessions.build_activity_row(row, report, valid_zone(record.get("timezone")))
 
 
 def upsert(conn, row: dict) -> None:

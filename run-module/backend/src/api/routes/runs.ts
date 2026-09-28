@@ -6,6 +6,7 @@ import { requireAuth } from '../../auth/verify-jwt.js';
 import { pool } from '../../db/pool.js';
 import { createRunSchema, uploadPointsSchema, finishRunSchema, getRunSummarySchema } from '../schemas/runs.js';
 import { enqueueFinalizeRun } from '../../workers/finalize_run/queue.js';
+import { validTimeZone } from '../../xp/rules.js';
 
 const gunzip = util.promisify(zlib.gunzip);
 
@@ -58,11 +59,11 @@ const runsRoutes: FastifyPluginAsync = async (fastify) => {
     preHandler: requireAuth,
     schema: createRunSchema,
   }, async (request, reply) => {
-    const { started_at } = (request.body as { started_at?: string }) || {};
+    const { started_at, timezone } = (request.body as { started_at?: string; timezone?: string }) || {};
     const runId = crypto.randomUUID();
     const userId = request.userId; // Trust boundary: only read from token subject
 
-    await pool.query(INSERT_RUN, [runId, userId, started_at || new Date().toISOString()]);
+    await pool.query(INSERT_RUN, [runId, userId, started_at || new Date().toISOString(), validTimeZone(timezone)]);
 
     return reply.status(201).send({ run_id: runId });
   });

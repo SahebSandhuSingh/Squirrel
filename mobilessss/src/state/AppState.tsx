@@ -1,5 +1,6 @@
 import { COMING_SOON, isLocked, LOCKED_MISSIONS } from '@/data/features';
-import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState as AppStateRN } from 'react-native';
 import { DEFAULT_CITY_ID, cityById, type City } from '@/data/cities';
 import { crewsForCity, eventsForCity, placesForCity, type Crew, type EventItem, type Place } from '@/data/community';
 import { seedMissions, type Mission } from '@/data/missions';
@@ -8,6 +9,7 @@ import { CURRENT_USER_ID, userById, type User } from '@/data/users';
 import type { AvatarLook } from '@/types';
 import { districtsForCity, type District } from '@/data/territory';
 import { runXp, type XpLine } from '@/logic/xp';
+import { localDayKey, localWeekKey } from '@/logic/localDay';
 import type { Verdict } from '@/logic/track';
 
 export const XP_PER_LEVEL = 2000;
@@ -121,6 +123,31 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [activeExercise, setActiveExercise] = useState<ActiveExercise | null>(null);
   const activeExerciseRef = useRef<ActiveExercise | null>(null);
   const [exerciseToday, setExerciseToday] = useState({ sessions: 0, minutes: 0, kcal: 0 });
+
+  // "Today" and "this week" are the phone's own calendar (logic/localDay): at local midnight the
+  // day's counters and daily missions start over, and at the local Monday the weekly ones.
+  const [calendar, setCalendar] = useState(() => ({ day: localDayKey(), week: localWeekKey() }));
+  useEffect(() => {
+    const tick = () => setCalendar((c) => {
+      const day = localDayKey();
+      return day === c.day ? c : { day, week: localWeekKey() };
+    });
+    const id = setInterval(tick, 30_000);
+    const sub = AppStateRN.addEventListener('change', (next) => { if (next === 'active') tick(); });
+    return () => { clearInterval(id); sub.remove(); };
+  }, []);
+  const seenCalendar = useRef(calendar);
+  useEffect(() => {
+    const before = seenCalendar.current;
+    if (before === calendar) return;
+    seenCalendar.current = calendar;
+    const tabs = new Set(['Daily', ...(calendar.week !== before.week ? ['Weekly'] : [])]);
+    setXpToday(0);
+    setRunXpToday(0);
+    setExerciseToday({ sessions: 0, minutes: 0, kcal: 0 });
+    setMissions((all) => all.map((m) => (tabs.has(m.tab) ? { ...m, current: 0 } : m)));
+    setClaimed((ids) => new Set([...ids].filter((id) => !seedMissions.some((m) => m.id === id && tabs.has(m.tab)))));
+  }, [calendar]);
 
   const toast = useCallback((text: string, icon?: string, color?: string) => {
     const id = ++toastId.current;

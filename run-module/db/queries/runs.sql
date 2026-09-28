@@ -3,8 +3,8 @@
 
 ----
 -- [0] INSERT_RUN
-INSERT INTO runs (id, user_id, status, started_at)
-VALUES ($1, $2, 'active', $3);
+INSERT INTO runs (id, user_id, status, started_at, timezone)
+VALUES ($1, $2, 'active', $3, $4);
 
 ----
 -- [1] SELECT_RUN_FOR_VALIDATION

@@ -7,7 +7,7 @@
  */
 
 import { pool } from "../db/pool.js";
-import { computeXp, DEFAULT_XP_TIMEZONE, type ActivityRow, type XpSummary } from "./rules.js";
+import { computeXp, DEFAULT_XP_TIMEZONE, validTimeZone, type ActivityRow, type XpSummary } from "./rules.js";
 
 const SELECT_ACTIVITY = `
   SELECT id, type, source_module, started_at, duration_s, metrics, created_at
@@ -15,17 +15,10 @@ const SELECT_ACTIVITY = `
   WHERE  user_id = $1
 `;
 
-/** The IANA time zone XP days follow. An unknown zone falls back to the default rather than
- *  failing every XP read. */
+/** The IANA time zone XP days follow for rows that do not carry their own. An unknown zone falls
+ *  back to the default rather than failing every XP read. */
 export function xpTimeZone(): string {
-  const zone = process.env["XP_TIMEZONE"]?.trim();
-  if (!zone) return DEFAULT_XP_TIMEZONE;
-  try {
-    new Intl.DateTimeFormat("en-CA", { timeZone: zone });
-    return zone;
-  } catch {
-    return DEFAULT_XP_TIMEZONE;
-  }
+  return validTimeZone(process.env["XP_TIMEZONE"]?.trim()) ?? DEFAULT_XP_TIMEZONE;
 }
 
 export async function getUserXp(userId: string): Promise<XpSummary> {

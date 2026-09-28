@@ -150,7 +150,7 @@ See [`.env.example`](.env.example) for all required variables.
 | `PORT` | HTTP server port (default: 3000) |
 | `NODE_ENV` | `development` \| `test` \| `production` |
 | `LOG_LEVEL` | Pino log level (`info`, `debug`, etc.) |
-| `XP_TIMEZONE` | Optional. Day boundary for the XP daily caps (default `Asia/Kolkata`) |
+| `XP_TIMEZONE` | Optional. Day boundary for the XP daily caps when an activity does not carry the phone's own time zone (`metrics.timezone`; default `Asia/Kolkata`) |
 
 ## XP
 

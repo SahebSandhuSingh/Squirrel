@@ -430,7 +430,13 @@ exercise time is in `metrics.active_time_s`, next to reps (counted only), good r
 counted, correct %, depth, Workout Score and sets. The Run Module turns these rows into XP
 ([ADR-027](../run-module/docs/decisions/ADR-027-xp-rules-and-endpoints.md)): 2 XP per counted rep
 (high knees: 1 per 2 counted lifts), at most 70 a session and 150 from exercise a day. Only
-controlled, full-range reps count (`configs/fsm.yaml` `count_shallow`, `min_rep_ms`). If the Run
+controlled, full-range reps count (`configs/fsm.yaml` `count_shallow`, `min_rep_ms`).
+
+Days and times are the person's own: the app sends the phone's IANA time zone when it creates a
+session, and history, reports, the activity calendar, the streak (the current one), "this week"
+and the activity row's `metrics.timezone` (the Run Module's XP day) all follow it
+(`backend/localtime.py`). Sessions without one use `EXERCISE_DEFAULT_TIMEZONE` (default
+`Asia/Kolkata`). Timestamps are still stored in UTC. If the Run
 Module's migrations have not run yet, the table is missing: the session's own row is still written
 and a warning is logged; a backfill adds the row later.
 
