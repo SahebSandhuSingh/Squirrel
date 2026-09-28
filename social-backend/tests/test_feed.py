@@ -104,5 +104,8 @@ def test_feed_carries_viewer_state(api, client):
     assert (items[other]["liked_by_me"], items[other]["saved_by_me"]) == (False, True)
     author_obj = items[pid]["author"]
     assert set(author_obj) == {"id", "username", "display_name", "avatar_look", "avatar_url", "level", "verified"}
+    assert items[pid]["following_author"] is False
+    api.follow(viewer, author_obj["id"])
+    assert all(p["following_author"] for p in api.feed(viewer)["items"])
     # the author sees a clean slate for their own likes
     assert api.feed(author)["items"][1]["liked_by_me"] is False

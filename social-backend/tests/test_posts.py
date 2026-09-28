@@ -279,4 +279,4 @@ def test_feed_page_query_count_is_constant(api, client, database):
         event.remove(database.engine, "before_cursor_execute", count)
     assert len(small["items"]) == 3 and len(big["items"]) == 15
     assert n_small == n_big, (n_small, n_big)
-    assert n_big <= 6
+    assert n_big <= 7

@@ -376,6 +376,9 @@ class PostOut(BaseModel):
     liked_by_me: bool
     saved_by_me: bool
     is_mine: bool
+    # Viewer follows the author (accepted) / has a pending request — so cards render Follow correctly.
+    following_author: bool
+    requested_author: bool
     created_at: datetime
 
 

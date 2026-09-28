@@ -183,6 +183,8 @@ def serialize_posts(
     ids = [r[0].id for r in rows]
     liked = set(db.scalars(select(PostLike.post_id).where(PostLike.user_id == viewer_id, PostLike.post_id.in_(ids))))
     saved = set(db.scalars(select(PostSave.post_id).where(PostSave.user_id == viewer_id, PostSave.post_id.in_(ids))))
+    author_ids = {r[1].id for r in rows}
+    follows = dict(db.execute(select(Follow.followee_id, Follow.status).where(Follow.follower_id == viewer_id, Follow.followee_id.in_(author_ids))).all())
     urls = media_urls(db, storage, [r[0].media_id for r in rows] + [r[1].avatar_media_id for r in rows])
     out = []
     for post, author, xp, activity in rows:
@@ -203,6 +205,8 @@ def serialize_posts(
                 liked_by_me=post.id in liked,
                 saved_by_me=post.id in saved,
                 is_mine=post.author_id == viewer_id,
+                following_author=follows.get(author.id) == "accepted",
+                requested_author=follows.get(author.id) == "pending",
                 created_at=post.created_at,
             )
         )
