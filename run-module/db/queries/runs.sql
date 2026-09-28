@@ -32,7 +32,7 @@ ON CONFLICT (run_id, seq) DO NOTHING;
 ----
 -- [5] UPDATE_RUN_STATUS_FINISHING
 UPDATE runs
-SET status = 'finishing'
+SET status = 'finishing', finishing_at = now()
 WHERE id = $1 AND status IN ('active', 'paused');
 
 ----

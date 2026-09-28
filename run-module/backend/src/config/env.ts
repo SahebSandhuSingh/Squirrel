@@ -105,3 +105,7 @@ export const JWT_ISSUER = process.env["JWT_ISSUER"] ?? undefined;
  * are rejected.
  */
 export const JWT_AUDIENCE = process.env["JWT_AUDIENCE"] ?? undefined;
+export const RATE_LIMIT_POINTS_PER_MIN = parseInt(process.env.RATE_LIMIT_POINTS_PER_MIN || '60', 10);
+export const RATE_LIMIT_POINTS_PER_DAY = parseInt(process.env.RATE_LIMIT_POINTS_PER_DAY || '2000', 10);
+export const RATE_LIMIT_RUNS_CREATE_PER_DAY = parseInt(process.env.RATE_LIMIT_RUNS_CREATE_PER_DAY || '50', 10);
+export const RATE_LIMIT_WRITE_PER_MIN = parseInt(process.env.RATE_LIMIT_WRITE_PER_MIN || '120', 10);

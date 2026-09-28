@@ -35,6 +35,8 @@ import tilesRoutes from './routes/tiles.js';
 import { leaderboardRoutes } from './routes/leaderboard.js';
 import { xpRoutes } from './routes/xp.js';
 import { liveRoutes } from './routes/live.js';
+import { challengesRoutes } from './routes/challenges.js';
+import { rateLimitPlugin } from './rate-limit.js';
 import { registerCors } from './cors.js';
 export { requireAuth } from "../auth/verify-jwt.js";
 
@@ -52,6 +54,7 @@ const fastify = Fastify({
 
 
 await registerCors(fastify, process.env["CORS_ALLOWED_ORIGINS"]);
+await fastify.register(rateLimitPlugin);
 await fastify.register(healthRoutes);
 await fastify.register(runsRoutes);
 await fastify.register(territoriesRoutes, { prefix: '/v1/territories' });
@@ -59,6 +62,7 @@ await fastify.register(tilesRoutes);
 await fastify.register(leaderboardRoutes, { prefix: '/v1/leaderboard' });
 await fastify.register(xpRoutes);
 await fastify.register(liveRoutes);
+await fastify.register(challengesRoutes, { prefix: '/v1/challenges' });
 
 const start = async (): Promise<void> => {
   try {

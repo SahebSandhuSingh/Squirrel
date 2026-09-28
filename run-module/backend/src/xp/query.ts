@@ -15,6 +15,17 @@ const SELECT_ACTIVITY = `
   WHERE  user_id = $1
 `;
 
+const SELECT_CHALLENGE_XP = `
+  SELECT COALESCE(SUM(cp.xp_awarded), 0) AS xp,
+         MAX(c.resolved_at) AS updated_at
+  FROM challenge_participants cp
+  JOIN challenges c ON c.id = cp.challenge_id
+  WHERE cp.user_id = $1
+    AND cp.is_winner IS TRUE
+    AND cp.xp_awarded > 0
+    AND c.state = 'resolved'
+`;
+
 /** The IANA time zone XP days follow for rows that do not carry their own. An unknown zone falls
  *  back to the default rather than failing every XP read. */
 export function xpTimeZone(): string {
@@ -23,7 +34,21 @@ export function xpTimeZone(): string {
 
 export async function getUserXp(userId: string): Promise<XpSummary> {
   const { rows } = await pool.query<ActivityRow>(SELECT_ACTIVITY, [userId]);
-  return computeXp(rows, xpTimeZone());
+  const summary = computeXp(rows, xpTimeZone());
+  const challenge = await pool.query<{ xp: string | number; updated_at: Date | null }>(SELECT_CHALLENGE_XP, [userId]);
+  const challengeXp = Number(challenge.rows[0]?.xp ?? 0);
+  if (challengeXp <= 0) return summary;
+
+  const challengeUpdatedAt = challenge.rows[0]?.updated_at ?? null;
+  return {
+    ...summary,
+    xp: summary.xp + challengeXp,
+    updated_at:
+      challengeUpdatedAt && (!summary.updated_at || challengeUpdatedAt > summary.updated_at)
+        ? challengeUpdatedAt
+        : summary.updated_at,
+    breakdown: [...summary.breakdown, { reason: "challenge completed", xp: challengeXp }],
+  };
 }
 
 export async function meetsXpGate(userId: string, minXp: number): Promise<boolean> {

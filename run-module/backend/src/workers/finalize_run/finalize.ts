@@ -111,6 +111,11 @@ export async function finalizeRun(runId: string): Promise<FinalizeResult> {
       [runId]
     );
 
+    const activityStartedAt = pointsRes.rows.reduce<Date | null>((earliest, point) => {
+      if (!earliest || point.recorded_at < earliest) return point.recorded_at;
+      return earliest;
+    }, null) ?? new Date();
+
     const points: LatLng[] = pointsRes.rows.map((r) => ({ lat: r.lat, lng: r.lng }));
 
     // 3. Compute duration for the activity session
@@ -194,7 +199,7 @@ export async function finalizeRun(runId: string): Promise<FinalizeResult> {
       await client.query(INSERT_ACTIVITY_SESSION, [
         crypto.randomUUID(),
         run.user_id,
-        run.started_at,
+        activityStartedAt,
         durationS,
         intensity,
         JSON.stringify(metrics),
@@ -307,7 +312,7 @@ export async function finalizeRun(runId: string): Promise<FinalizeResult> {
     await client.query(INSERT_ACTIVITY_SESSION, [
       crypto.randomUUID(),
       run.user_id,
-      run.started_at,
+      activityStartedAt,
       durationS,
       intensity,
       JSON.stringify({

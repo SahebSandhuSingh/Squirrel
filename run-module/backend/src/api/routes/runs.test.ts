@@ -10,6 +10,7 @@ import { JWT_SECRET, JWT_ALGORITHM } from '../../config/env.js';
 import zlib from 'zlib';
 import util from 'util';
 import * as finalizeQueue from '../../workers/finalize_run/queue.js';
+import { recoverStuckFinishingRuns } from '../../workers/finalize_run/queue.js';
 import { generateSimpleLoop } from '../../geometry/__fixtures__/shape-tracks.js';
 export const testRunIds: string[] = [];
 export const testUserIds: string[] = [];
@@ -41,6 +42,7 @@ describe('Runs API', () => {
       await pool.query("DELETE FROM run_rejections WHERE run_id = ANY($1)", [ids]);
       await pool.query("DELETE FROM run_point_flags WHERE run_id = ANY($1)", [ids]);
       await pool.query("DELETE FROM run_batches WHERE run_id = ANY($1)", [ids]);
+      await pool.query("DELETE FROM activity_sessions WHERE user_id = ANY($1)", [uids]);
       await pool.query("DELETE FROM run_points WHERE run_id = ANY($1)", [ids]);
       await pool.query("DELETE FROM runs WHERE id = ANY($1)", [ids]);
       testRunIds.length = 0;
@@ -276,6 +278,31 @@ describe('Runs API', () => {
 
     const dbRes = await pool.query('SELECT status FROM runs WHERE id = $1', [runId]);
     expect(dbRes.rows[0].status).toBe('finishing');
+  });
+
+  it('F1: a lost enqueue is recovered and the run is finalized only once', async () => {
+    const userId = crypto.randomUUID();
+    testUserIds.push(userId);
+    const token = await createToken(userId);
+    const created = await fastify.inject({ method: 'POST', url: '/v1/runs', headers: { authorization: `Bearer ${token}` }, payload: {} });
+    const runId = JSON.parse(created.body).run_id;
+    testRunIds.push(runId);
+
+    const enqueueSpy = vi.spyOn(finalizeQueue, 'enqueueFinalizeRun')
+      .mockRejectedValueOnce(new Error('Redis unavailable'))
+      .mockResolvedValue(undefined);
+    const finish = await fastify.inject({ method: 'POST', url: `/v1/runs/${runId}/finish`, headers: { authorization: `Bearer ${token}` } });
+    expect(finish.statusCode).toBe(500);
+    expect((await pool.query('SELECT status FROM runs WHERE id = $1', [runId])).rows[0].status).toBe('finishing');
+
+    await pool.query("UPDATE runs SET finishing_at = now() - interval '2 minutes' WHERE id = $1", [runId]);
+    expect(await recoverStuckFinishingRuns()).toContain(runId);
+    expect(enqueueSpy).toHaveBeenCalledWith(runId);
+
+    await finalizeRun(runId);
+    await finalizeRun(runId);
+    expect((await pool.query('SELECT status FROM runs WHERE id = $1', [runId])).rows[0].status).toBe('rejected');
+    expect((await pool.query('SELECT count(*)::int AS count FROM activity_sessions WHERE user_id = $1', [userId])).rows[0].count).toBe(1);
   });
 
   it('AC9: END TO END', async () => {

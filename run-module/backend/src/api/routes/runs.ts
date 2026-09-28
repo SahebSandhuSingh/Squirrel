@@ -7,6 +7,13 @@ import { pool } from '../../db/pool.js';
 import { createRunSchema, uploadPointsSchema, finishRunSchema, getRunSummarySchema } from '../schemas/runs.js';
 import { enqueueFinalizeRun } from '../../workers/finalize_run/queue.js';
 import { validTimeZone } from '../../xp/rules.js';
+import { getRateLimitOptions, rateLimitPlugin } from '../rate-limit.js';
+import {
+  RATE_LIMIT_POINTS_PER_MIN,
+  RATE_LIMIT_POINTS_PER_DAY,
+  RATE_LIMIT_RUNS_CREATE_PER_DAY,
+  RATE_LIMIT_WRITE_PER_MIN,
+} from '../../config/env.js';
 
 const gunzip = util.promisify(zlib.gunzip);
 
@@ -43,6 +50,8 @@ interface IdempotencyRow {
 }
 
 const runsRoutes: FastifyPluginAsync = async (fastify) => {
+  if (!fastify.hasDecorator('rateLimit')) await fastify.register(rateLimitPlugin);
+
   // We need to parse application/json and application/gzip.
   // Actually, @fastify/compress does not decompress incoming bodies automatically.
   // We can add a content type parser for gzipped JSON.
@@ -56,7 +65,10 @@ const runsRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post('/v1/runs', {
-    preHandler: requireAuth,
+    preHandler: [
+      requireAuth,
+      fastify.rateLimit(getRateLimitOptions(RATE_LIMIT_RUNS_CREATE_PER_DAY, '1 day', 'runs_create_day')),
+    ],
     schema: createRunSchema,
   }, async (request, reply) => {
     const { started_at, timezone } = (request.body as { started_at?: string; timezone?: string }) || {};
@@ -69,7 +81,11 @@ const runsRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post('/v1/runs/:id/points', {
-    preHandler: requireAuth,
+    preHandler: [
+      requireAuth,
+      fastify.rateLimit(getRateLimitOptions(RATE_LIMIT_POINTS_PER_MIN, '1 minute', 'points_min')),
+      fastify.rateLimit(getRateLimitOptions(RATE_LIMIT_POINTS_PER_DAY, '1 day', 'points_day')),
+    ],
     schema: uploadPointsSchema,
     bodyLimit: 10485760, // 10MB to accommodate up to 1000 points easily
   }, async (request, reply) => {
@@ -156,7 +172,10 @@ const runsRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post('/v1/runs/:id/finish', {
-    preHandler: requireAuth,
+    preHandler: [
+      requireAuth,
+      fastify.rateLimit(getRateLimitOptions(RATE_LIMIT_WRITE_PER_MIN, '1 minute', 'write_min')),
+    ],
     schema: finishRunSchema,
   }, async (request, reply) => {
     const runId = (request.params as { id: string }).id;

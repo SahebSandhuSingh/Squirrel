@@ -17,6 +17,7 @@ import {
 } from "../../geometry/__fixtures__/shape-tracks.js";
 import { createLocalProjection } from "../../geometry/projection.js";
 import type { LatLng } from "../../geometry/types.js";
+import { computeXp, DEFAULT_XP_TIMEZONE, xpDay, type ActivityRow } from "../../xp/rules.js";
 
 // We hoist the mock of pipeline.js so we can intercept processTrack in A2
 vi.mock("../../geometry/pipeline.js", async (importOriginal) => {
@@ -75,6 +76,7 @@ describe("finalizeRun Worker", () => {
       await pool.query("DELETE FROM run_rejections WHERE run_id = ANY($1)", [ids]);
       await pool.query("DELETE FROM run_point_flags WHERE run_id = ANY($1)", [ids]);
       await pool.query("DELETE FROM run_batches WHERE run_id = ANY($1)", [ids]);
+      await pool.query("DELETE FROM activity_sessions WHERE user_id = ANY($1)", [uids]);
       await pool.query("DELETE FROM run_points WHERE run_id = ANY($1)", [ids]);
       await pool.query("DELETE FROM runs WHERE id = ANY($1)", [ids]);
       testRunIds.length = 0;
@@ -368,6 +370,35 @@ testRunIds.push(runId2);
     expect(row.metrics["territory_claimed"]).toBe(true);
     expect(row.metrics["area_m2"]).toBeGreaterThan(0);
     expect(row.metrics["rejection_reason"]).toBeNull();
+  });
+
+  it("F2: a run claimed three days earlier earns XP on its earliest recorded point day", async () => {
+    const points = generateSimpleLoop({ noiseStdDevM: 0, rotationDeg: 0 });
+    const { runId, userId } = await seedRun(points);
+    testRunIds.push(runId);
+    testUserIds.push(userId);
+    await pool.query("UPDATE runs SET started_at = started_at - interval '3 days' WHERE id = $1", [runId]);
+
+    const firstPoint = await pool.query<{ first_point_at: Date }>(
+      "SELECT min(recorded_at) AS first_point_at FROM run_points WHERE run_id = $1", [runId]
+    );
+    await finalizeRun(runId);
+
+    const activity = await pool.query<ActivityRow>(
+      `SELECT id, type, source_module, started_at, duration_s, metrics, created_at
+       FROM activity_sessions WHERE user_id = $1 AND source_module = 'run_module'`, [userId]
+    );
+    expect(activity.rows).toHaveLength(1);
+    expect(activity.rows[0]!.started_at.getTime()).toBe(firstPoint.rows[0]!.first_point_at.getTime());
+    const xp = computeXp([activity.rows[0]!]);
+    expect(xp.byDay).toHaveProperty(xpDay(firstPoint.rows[0]!.first_point_at, DEFAULT_XP_TIMEZONE));
+
+    const secondRunSameDay = {
+      ...activity.rows[0]!,
+      id: crypto.randomUUID(),
+      created_at: new Date(activity.rows[0]!.created_at.getTime() + 1000),
+    };
+    expect(computeXp([activity.rows[0]!, secondRunSameDay]).xp).toBeLessThanOrEqual(150);
   });
 
   it("carries the run's time zone into its activity row, so XP days are the runner's own", async () => {

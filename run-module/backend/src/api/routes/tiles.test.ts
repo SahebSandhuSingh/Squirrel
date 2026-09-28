@@ -2,7 +2,6 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import Fastify from "fastify";
 import tilesRoutes from "./tiles.js";
 import { pool } from "../../db/pool.js";
-import { SignJWT } from "jose";
 import crypto from "crypto";
 import * as VectorTile from "@mapbox/vector-tile";
 import * as PbfNamespace from "pbf";
@@ -11,13 +10,10 @@ const Pbf = (PbfNamespace as any).PbfReader || (PbfNamespace as any).default || 
 const fastify = Fastify();
 fastify.register(tilesRoutes);
 
-const JWT_SECRET = new TextEncoder().encode("dev-local-jwt-secret-not-for-production-use");
+import { createTestToken } from "../../auth/test-token.js";
 
 async function createToken(userId: string) {
-  return new SignJWT({})
-    .setProtectedHeader({ alg: "HS256" })
-    .setSubject(userId)
-    .sign(JWT_SECRET);
+  return createTestToken(userId);
 }
 
 describe("MVT Tiles API", () => {

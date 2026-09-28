@@ -12,6 +12,7 @@ import { startLeaderboardSyncWorker, scheduleSnapshotJob } from './leaderboard_s
 import { startDecayWorker, scheduleDecayJob } from './decay/queue.js';
 import { startNotificationWorker } from '../notifications/emitter.js';
 import { startNotificationDeliveryWorker } from '../notifications/deliver.js';
+import { startChallengeResolverWorker, scheduleChallengeResolverJob } from '../challenges/queue.js';
 
 export async function startAllWorkers(): Promise<Worker[]> {
   const workers = [
@@ -20,6 +21,7 @@ export async function startAllWorkers(): Promise<Worker[]> {
     startDecayWorker(),
     startNotificationWorker(),
     startNotificationDeliveryWorker(),
+    startChallengeResolverWorker(),
   ];
 
   await scheduleSnapshotJob();
@@ -27,6 +29,9 @@ export async function startAllWorkers(): Promise<Worker[]> {
 
   await scheduleDecayJob();
   console.log('Scheduled nightly decay job.');
+
+  await scheduleChallengeResolverJob();
+  console.log('Scheduled challenge resolver job.');
 
   return workers;
 }

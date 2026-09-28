@@ -12,9 +12,28 @@ export const enqueueFinalizeRun = async (runId: string) => {
   await finalizeRunQueue.add('finalize', { runId }, { jobId: runId });
 };
 
+/** Re-enqueue runs whose finish request was persisted but whose queue job was lost. */
+export async function recoverStuckFinishingRuns(): Promise<string[]> {
+  const { rows } = await pool.query<{ id: string }>(
+    `SELECT id FROM runs
+     WHERE status = 'finishing' AND finishing_at < now() - interval '1 minute'
+     ORDER BY finishing_at DESC
+     LIMIT 100`
+  );
+  for (const row of rows) await enqueueFinalizeRun(row.id);
+  return rows.map((row) => row.id);
+}
+
 // Only start the worker if this file is run directly
 export function startFinalizeRunWorker() {
   console.log('Starting finalizeRun worker...');
+
+  const recoveryTimer = setInterval(() => {
+    void recoverStuckFinishingRuns().catch((err) => {
+      console.error('Failed to recover stuck finishing runs:', err);
+    });
+  }, 60_000);
+  recoveryTimer.unref();
   
   const worker = new Worker(
     'finalize_run',
