@@ -186,6 +186,7 @@ async def setup_ws(websocket: WebSocket) -> None:
                             exercise,
                             baseline=orch.baseline,
                             target=target,
+                            variant=_variant(access),
                         )
                         set_dir = (
                             user_dir(uid)
@@ -294,6 +295,12 @@ async def _training_access(websocket: WebSocket) -> SessionAccess | None:
         return None
 
 
+def _variant(access: SessionAccess) -> str | None:
+    """The planned variant (curls: "single" / "double"), or None."""
+    variant = access.record.get("plan", {}).get("variant")
+    return variant if isinstance(variant, str) else None
+
+
 def _movement_target(access: SessionAccess) -> MovementTarget | None:
     target = access.record.get("plan", {}).get("target")
     try:
@@ -333,6 +340,7 @@ async def train_ws(websocket: WebSocket) -> None:
             access.exercise_id,
             baseline=baseline,
             target=target,
+            variant=_variant(access),
         )
     except KeyError as exc:
         await _train_error(websocket, "INVALID_EXERCISE", str(exc), close=True)

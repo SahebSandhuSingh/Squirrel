@@ -62,7 +62,8 @@ export default function ExerciseSession() {
 }
 
 function ExerciseCard({ e, uid, sid, open, onToggle }: { e: OverviewExercise; uid: string; sid: string; open: boolean; onToggle: () => void }) {
-  const planned = e.measure === 'reps' ? `${e.planned.sets} × ${e.planned.reps_per_set ?? '?'} reps` : `${e.planned.sets} × ${e.planned.duration_seconds ?? '?'} s`;
+  const planned = (e.measure === 'reps' ? `${e.planned.sets} × ${e.planned.reps_per_set ?? '?'} reps` : `${e.planned.sets} × ${e.planned.duration_seconds ?? '?'} s`)
+    + (e.planned.weight_kg ? ` · ${e.planned.weight_kg} kg` : '');
   return (
     <View style={styles.card}>
       <PressScale onPress={onToggle} disabled={!e.has_data} scaleTo={0.99} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }} accessibilityLabel={`${e.name} report`}>

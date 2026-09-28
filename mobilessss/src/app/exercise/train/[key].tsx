@@ -22,7 +22,7 @@ import { CoachSession, type CoachState, type PoseFrame } from '@/workout/coach';
 import { liveView } from '@/workout/liveView';
 import { PoseCamera } from '@/workout/tracker/PoseCamera';
 import { PoseDebugOverlay } from '@/workout/PoseDebugOverlay';
-import { exerciseProfile } from '@/workout/exerciseProfiles';
+import { getReadyText } from '@/workout/exerciseProfiles';
 import type { TrackerStatus } from '@/workout/tracker/types';
 
 /**
@@ -303,12 +303,13 @@ const SAVE_RETRY_MS = 90_000;
 function LiveWorkout({ userId }: { userId: string }) {
   useKeepAwake();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ key: string; sets?: string; value?: string; rest?: string; session?: string }>();
+  const params = useLocalSearchParams<{ key: string; sets?: string; value?: string; rest?: string; session?: string; weight?: string }>();
   const ex = exerciseByKey(String(params.key)) ?? exerciseByKey('squat')!;
   const timed = ex.measure === 'time';
   const sets = Number(params.sets) || PLAN_BOUNDS.sets.value;
   const target = Number(params.value) || (timed ? PLAN_BOUNDS.time.value : 15);
   const rest = Number(params.rest ?? PLAN_BOUNDS.rest.value);
+  const weightKg = Number(params.weight) > 0 ? Number(params.weight) : undefined;
 
   const [perm, requestPerm] = useCameraPermissions();
   const [session, setSession] = useState<LiveSession | null>(
@@ -353,6 +354,7 @@ function LiveWorkout({ userId }: { userId: string }) {
           const s = await exerciseApi.createSession(userId, {
             name: ex.name, slug: ex.slug, ...(ex.variant ? { variant: ex.variant } : {}), body_part: ex.bodyPart,
             training_tag: ex.tag, measure: ex.measure, sets, value: target, rest_seconds: sets > 1 ? rest : 0,
+            ...(weightKg ? { weight_kg: weightKg } : {}),
           });
           if (!cancelled) setSession({ id: s.session_id, exercise: s.exercise_id, variant: s.variant ?? undefined });
           return;
@@ -371,7 +373,7 @@ function LiveWorkout({ userId }: { userId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [session, userId, ex, sets, target, rest]);
+  }, [session, userId, ex, sets, target, rest, weightKg]);
 
   // The coaching session. Server messages arrive ~30 a second; the screen redraws at most ~8 a
   // second, except at once when something structural changes (phase, set, rest, error).
@@ -584,7 +586,7 @@ function LiveWorkout({ userId }: { userId: string }) {
         <View style={[styles.getReady, { top: insets.top + 156 }]} pointerEvents="none">
           <Text style={styles.kicker}>Get in position · set {state?.set ?? 1} of {sets}</Text>
           <Display size={56} color={colors.primary}>{view.getReady}</Display>
-          <Text style={styles.getReadySub}>{exerciseProfile(ex.slug).getReady}</Text>
+          <Text style={styles.getReadySub}>{getReadyText(ex.slug, ex.variant)}</Text>
         </View>
       )}
 

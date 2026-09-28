@@ -134,7 +134,7 @@ def test_session_report_summary_and_faults(user_id):
     report = builder.build_session_report(user_id, _SID)
     assert report is not None
     assert report["exercise_id"] == "squat"
-    assert report["planned"] == {"sets": 1, "reps_per_set": 3, "total": 3}
+    assert report["planned"] == {"sets": 1, "reps_per_set": 3, "total": 3, "weight_kg": None}
     assert report["actual"] == {"reps_completed": 3, "sets_completed": 1}
     assert report["depth_target"] == 85
     s = report["summary"]

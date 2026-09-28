@@ -326,7 +326,8 @@ def _exercise_report(record: dict, uid: str, sid: str, exercise_id: str) -> dict
         "measure": measure,
         "body_part": meta.get("body_part"),
         "training_tag": meta.get("training_tag"),
-        "planned": {"sets": planned_sets, "reps_per_set": reps_per_set, "total": planned_sets * reps_per_set},
+        "planned": {"sets": planned_sets, "reps_per_set": reps_per_set, "total": planned_sets * reps_per_set,
+                    "weight_kg": plan.get("weight_kg")},
         "actual": {"reps_completed": len(reps), "sets_completed": len(set_dirs)},
         "depth_target": depth_target,
         "summary": {
@@ -593,7 +594,7 @@ def build_overview(uid: str, sid: str) -> dict | None:
             "has_data": report["summary"]["total_reps"] + not_counted_total > 0,
             "avg_form_score": avg,
             "planned": {"sets": report["planned"]["sets"], "reps_per_set": report["planned"]["reps_per_set"],
-                        "total": report["planned"]["total"]},
+                        "total": report["planned"]["total"], "weight_kg": report["planned"].get("weight_kg")},
             "actual": report["actual"],
             "plan_met": report["actual"]["reps_completed"] >= report["planned"]["total"],
             "shallow_reps": report["summary"]["shallow_reps"],

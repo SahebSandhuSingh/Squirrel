@@ -48,9 +48,15 @@ class BicepCurlAdapter:
         baseline: dict,
         target_reps: int,
         config: ExerciseConfiguration,
+        variant: str | None = None,
     ) -> None:
         if not isinstance(target_reps, int) or isinstance(target_reps, bool) or target_reps < 1:
             raise BicepCurlAdapterConfigurationError("target_reps must be a positive integer")
+        if variant not in (None, "single", "double"):
+            raise BicepCurlAdapterConfigurationError("variant must be 'single', 'double' or None")
+        # The planned curl (session plan): "double" needs both arms through every rep, "single"
+        # counts the working arm and says so when both arms curl. None (older sessions): either.
+        self._variant = variant
         if not isinstance(baseline, dict):
             raise BicepCurlAdapterConfigurationError("baseline must be a mapping")
 
@@ -98,6 +104,9 @@ class BicepCurlAdapter:
         # Per-arm peaks for the attempt in flight. The FSM only ever sees min(left, right), so
         # without these a capture cannot say WHICH arm limited a shallow rep.
         self._arm_peaks = _empty_arm_peaks()
+        # The highest point BOTH arms reached together this attempt, from frames where both were
+        # measured (single-arm plan: both arms curling is the wrong exercise).
+        self._both_arms_peak = 0.0
         self._capture_rollover_pending = False
         self._start_new_capture_rep = False
 
@@ -193,6 +202,11 @@ class BicepCurlAdapter:
             "left": max(self._arm_peaks["left"], rom_reading.left_ratio),
             "right": max(self._arm_peaks["right"], rom_reading.right_ratio),
         }
+        both_seen = rom_reading.arms_seen == "both"
+        if both_seen and state.phase != SETUP:
+            self._both_arms_peak = max(
+                self._both_arms_peak, min(rom_reading.left_ratio, rom_reading.right_ratio)
+            )
         rule_states = self._rule_states(readings)
         timeline_frame = TimelineFrame(frame.t_ms, state.phase, rule_states, tracking=True)
 
@@ -250,6 +264,9 @@ class BicepCurlAdapter:
                 )
             )
             self._pending_shallow_cue = False
+        variant_cue = self._variant_cue(state, rom_reading, both_seen)
+        if variant_cue is not None:
+            candidates.append(variant_cue)
         # A rep that did not count (too fast, or short of full range) is said at once.
         not_counted = rep_outcome.not_counted_cue(
             state.completed_attempt,
@@ -263,12 +280,45 @@ class BicepCurlAdapter:
         self._previous_phase = state.phase
         return self._status(state, readings, issues, cue)
 
+    def _variant_cue(self, state, reading, both_seen: bool) -> CueCandidate | None:
+        """Say when the arms do not match the planned curl (field test: a single-arm plan counted
+        double-arm reps with no word about it)."""
+        cues = self._config.templates["curl_rom"].get("variant_cues") or {}
+        if self._variant == "single" and state.attempt_completed:
+            both = self._both_arms_peak >= self._config.templates["curl_rom"]["full_rom_gate"] / 2
+            self._both_arms_peak = 0.0
+            if both and cues.get("single"):
+                return CueCandidate("curl_variant", cues["single"], 1, display_ms=2500.0)
+        if state.attempt_discarded:
+            self._both_arms_peak = 0.0
+        if (
+            self._variant == "double"
+            and both_seen
+            and state.phase == SETUP
+            and reading.leading_ratio >= float(self._config.fsm["min_rep_peak"])
+            and min(reading.left_ratio, reading.right_ratio) <= self._descent_trigger
+            and cues.get("double")
+        ):
+            # One arm is curling and the other has not left rest: a double curl never starts.
+            return CueCandidate("curl_variant", cues["double"], 1, display_ms=2500.0)
+        return None
+
     def _observation(self, reading) -> RepObservation:
         """Turn one curl frame into the movement facts the FSM acts on.
 
-        Everything follows the leading arm (`max`): the movement is under way as soon as either
-        arm leaves rest, reaches full range when either arm does, and is over once the higher arm
-        is back down — so both-arm, alternating and one-arm curls all count."""
+        Double-arm plan: the WEAKER arm drives the rep (`min`): it starts when both arms leave rest
+        and reaches full range only when both do, and it is over once both are back down (`max`).
+        Otherwise everything follows the leading arm (`max`): the movement is under way as soon as
+        either arm leaves rest, reaches full range when either arm does, and is over once the
+        higher arm is back down. A hidden arm reads as the visible one (rules/curl_rom.py)."""
+        if self._variant == "double":
+            weaker = min(reading.left_ratio, reading.right_ratio)
+            return RepObservation(
+                progress=weaker,
+                movement_started=weaker > self._descent_trigger,
+                full_rom_reached=self._rom.is_full_rom(weaker),
+                returned_to_rest=reading.leading_ratio < self._top_return,
+            )
         return RepObservation(
             progress=reading.progress,
             movement_started=reading.leading_ratio > self._descent_trigger,
@@ -458,6 +508,7 @@ def build_bicep_curl_adapter(
     baseline: dict,
     target_reps: int,
     config: ExerciseConfiguration | None = None,
+    variant: str | None = None,
 ) -> BicepCurlAdapter:
     """Build bicep curl from its validated config and per-set body-relative wrist references."""
     selected_config = config or load_exercise_config("bicep_curl")
@@ -466,6 +517,7 @@ def build_bicep_curl_adapter(
             baseline=baseline,
             target_reps=target_reps,
             config=selected_config,
+            variant=variant,
         )
     except (KeyError, TypeError, ValueError, RuntimeError) as exc:
         if isinstance(exc, BicepCurlAdapterConfigurationError):

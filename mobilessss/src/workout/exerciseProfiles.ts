@@ -57,3 +57,13 @@ export const EXERCISE_PROFILES: Record<string, ExerciseProfile> = {
 const DEFAULT_PROFILE: ExerciseProfile = { posture: 'standing', view: 'front', essential: [...SHOULDERS, ...HIPS, ...KNEES, ...ANKLES], optional: [J.nose, ...ARMS], getReady: STAND };
 
 export const exerciseProfile = (slug: string): ExerciseProfile => EXERCISE_PROFILES[slug] ?? DEFAULT_PROFILE;
+
+/** The get-ready instruction for a planned exercise: curls name the dumbbells (the camera cannot
+ *  see a weight, so it is asked for) and the planned arms. */
+export function getReadyText(slug: string, variant?: 'single' | 'double'): string {
+  if (slug === 'bicep_curl') {
+    const arms = variant === 'single' ? ' Curl one arm at a time.' : variant === 'double' ? ' Curl both arms together.' : '';
+    return `Grab your dumbbells. Stand facing the phone with your whole body in view, arms hanging, and hold still.${arms}`;
+  }
+  return exerciseProfile(slug).getReady;
+}

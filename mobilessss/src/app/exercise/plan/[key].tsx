@@ -21,6 +21,8 @@ export default function PlanExercise() {
   const [sets, setSets] = useState<number>(PLAN_BOUNDS.sets.value);
   const [value, setValue] = useState<number>(unit.value);
   const [rest, setRest] = useState<number>(PLAN_BOUNDS.rest.value);
+  // Dumbbell exercises: what the person lifts (optional, 0 = not set). Recorded, never detected.
+  const [weight, setWeight] = useState<number>(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreatedSession | null>(null);
@@ -51,6 +53,7 @@ export default function PlanExercise() {
         sets,
         value,
         rest_seconds: sets > 1 ? rest : 0,
+        ...(weight > 0 ? { weight_kg: weight } : {}),
       });
       tap('success');
       invalidateExercise(user.user_id);
@@ -77,6 +80,7 @@ export default function PlanExercise() {
                 <Text style={styles.meta}>
                   {created.sets} × {target}
                   {created.variant ? ` · ${created.variant} arm` : ''}
+                  {created.weight_kg ? ` · ${created.weight_kg} kg` : ''}
                   {created.sets > 1 ? ` · ${created.rest_seconds}s rest` : ''}
                 </Text>
               </View>
@@ -132,7 +136,16 @@ export default function PlanExercise() {
           onChange={setValue}
         />
         {sets > 1 && <Stepper label="Rest between sets" value={rest} unit="s" min={PLAN_BOUNDS.rest.min} max={PLAN_BOUNDS.rest.max} step={PLAN_BOUNDS.rest.step} onChange={setRest} />}
+        {ex.slug === 'bicep_curl' && (
+          <Stepper label={weight > 0 ? 'Dumbbell weight (each)' : 'Dumbbell weight (optional)'} value={weight} unit="kg" min={0} max={50} step={0.5} onChange={setWeight} />
+        )}
       </View>
+      {ex.slug === 'bicep_curl' && (
+        <Text style={[styles.meta, { marginTop: 8 }]}>
+          {ex.variant === 'single' ? 'Single-arm: curl one arm at a time; only that arm counts.' : 'Both arms curl together; a rep counts when both arms reach the top.'}
+          {' '}Curls are for dumbbells: the camera can’t see a weight, so tell us what you lift.
+        </Text>
+      )}
 
       {error && (
         <View style={[styles.notice, { borderColor: 'rgba(255,92,122,0.4)' }]}>
@@ -146,7 +159,7 @@ export default function PlanExercise() {
         iconLeft="play"
         variant="secondary"
         size="md"
-        onPress={() => router.push({ pathname: '/exercise/train/[key]', params: { key: ex.key, sets: String(sets), value: String(value), rest: String(sets > 1 ? rest : 0) } })}
+        onPress={() => router.push({ pathname: '/exercise/train/[key]', params: { key: ex.key, sets: String(sets), value: String(value), rest: String(sets > 1 ? rest : 0), ...(weight > 0 ? { weight: String(weight) } : {}) } })}
         style={{ marginTop: 10 }}
       />
       <Text style={[styles.meta, { marginTop: 10, textAlign: 'center' }]}>The coach runs one exercise per session for now.</Text>

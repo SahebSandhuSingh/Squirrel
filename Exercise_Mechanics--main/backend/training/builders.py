@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from inspect import signature
 from typing import Protocol
 
 from backend.core.frame import TrainingFrame
@@ -77,7 +78,10 @@ def build_training_adapter(
     baseline: dict,
     target: MovementTarget,
     config: ExerciseConfiguration | None = None,
+    variant: str | None = None,
 ) -> TrainingAdapter:
+    """``variant`` is the session plan's ("single" / "double" for curls), passed to exercises whose
+    builder takes one."""
     builder = EXERCISE_BUILDERS.get(exercise_id)
     if builder is None:
         raise KeyError(f"no training adapter registered for '{exercise_id}'")
@@ -86,7 +90,8 @@ def build_training_adapter(
     if isinstance(target, RepTarget):
         if movement_type != "reps":
             raise ValueError("repetition target does not match the exercise movement type")
-        return builder(baseline=baseline, target_reps=target.value, config=selected_config)
+        extra = {"variant": variant} if variant and "variant" in signature(builder).parameters else {}
+        return builder(baseline=baseline, target_reps=target.value, config=selected_config, **extra)
     if isinstance(target, TimeTarget):
         if movement_type != "time":
             raise ValueError("timed target does not match the exercise movement type")

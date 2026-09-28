@@ -58,6 +58,8 @@ export type SessionExerciseInput = {
   name: string; // 1–120
   slug: string; // ^[a-z0-9_]+$, must be an enabled catalog id
   variant?: 'single' | 'double';
+  /** Optional: what the person lifts (kg per dumbbell). Recorded, not detected. */
+  weight_kg?: number;
   body_part: string;
   training_tag: string;
   measure: 'reps' | 'time'; // must equal the exercise's movement type
@@ -71,6 +73,7 @@ export type CreatedSession = {
   exercise_id: string;
   exercise_name: string;
   variant: 'single' | 'double' | null;
+  weight_kg?: number | null;
   sets: number;
   target: SessionTarget;
   rest_seconds: number;
@@ -86,7 +89,7 @@ export type OverviewExercise = {
   measure: 'reps' | 'time';
   has_data: boolean;
   avg_form_score: number | null;
-  planned: { sets: number; reps_per_set?: number; total?: number; duration_seconds?: number };
+  planned: { sets: number; reps_per_set?: number; total?: number; duration_seconds?: number; weight_kg?: number | null };
   actual?: { reps_completed: number; sets_completed: number };
   /* Counted (full-range, controlled) reps reached the plan. */
   plan_met?: boolean;
@@ -114,7 +117,7 @@ export type Coaching = { rule: string; issue_name: string; reps: number[]; fix: 
 export type RepExerciseReport = {
   session_id: string; date: string; day: string; start_time: string; skill_level: string; exercise: string;
   exercise_id: string; measure: 'reps'; body_part: string | null; training_tag: string | null;
-  planned: { sets: number; reps_per_set: number; total: number };
+  planned: { sets: number; reps_per_set: number; total: number; weight_kg?: number | null };
   actual: { reps_completed: number; sets_completed: number };
   depth_target?: number;
   summary: { avg_form_score: number | null; total_reps: number; good_reps?: number; not_counted?: { shallow: number; too_fast: number; other: number }; shallow_reps: number; best: number | null; worst: number | null; avg_rep_time_s: number | null; total_time_s: number | null };

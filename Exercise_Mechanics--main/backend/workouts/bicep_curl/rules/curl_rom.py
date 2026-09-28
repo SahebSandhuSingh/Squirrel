@@ -101,6 +101,9 @@ class CurlRomReading:
     right_full: bool          # did the right arm alone reach the gate
     weaker_side: str          # 'left' or 'right' — the arm that curled less (coaching only)
     shortfall: float | None   # gate − progress when the curl is short; None at/over the gate
+    # The arms actually measured this frame ('both', 'left' or 'right'); a missing arm's ratio
+    # above is the other arm's.
+    arms_seen: str = "both"
 
 
 class CurlRomRule:
@@ -197,6 +200,7 @@ class CurlRomRule:
             ratios[side] = ratio
         if not ratios:
             return None
+        arms_seen = "both" if len(ratios) == 2 else next(iter(ratios))
         for side, other in (("left", "right"), ("right", "left")):
             if side not in ratios:
                 ratios[side], offsets[side] = ratios[other], offsets[other]
@@ -223,6 +227,7 @@ class CurlRomRule:
                 if progress < self._full_rom_gate
                 else None
             ),
+            arms_seen=arms_seen,
         )
 
     def is_full_rom(self, progress: float) -> bool:

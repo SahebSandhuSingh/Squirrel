@@ -218,6 +218,11 @@ templates:
     min_upper_arm_px: 30
     full_rom_gate: 0.75
     shallow_next_rep_cue_ms: 500
+    # The planned curl (session variant), said when the arms do not match it: a single-arm set in
+    # which both arms curl together, or a double-arm set in which one arm stays down.
+    variant_cues:
+      single: "Single-arm curl: curl one arm at a time."
+      double: "Curl with both arms together."
     scoring:
       role: rom
       mode: rom

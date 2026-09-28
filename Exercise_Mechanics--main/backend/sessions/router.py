@@ -23,6 +23,9 @@ class SessionExercise(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     slug: str = Field(min_length=1, max_length=40, pattern=r"^[a-z0-9_]+$")
     variant: Literal["single", "double"] | None = None
+    # Optional, what the person says they lift (kg per dumbbell). Recorded, never detected: the
+    # pose model cannot see a weight.
+    weight_kg: float | None = Field(default=None, gt=0, le=200)
     body_part: str = Field(min_length=1, max_length=80)
     training_tag: str = Field(min_length=1, max_length=80)
     measure: Literal["reps", "time"]
@@ -58,6 +61,7 @@ class SessionCreated(BaseModel):
     exercise_id: str
     exercise_name: str
     variant: Literal["single", "double"] | None
+    weight_kg: float | None = None
     sets: int
     target: RepSessionTarget | TimedSessionTarget
     rest_seconds: int
@@ -101,6 +105,7 @@ def create_session(user_id: str, body: SessionCreate) -> dict:
         "exercise_id": exercise.slug,
         "exercise_name": exercise.name,
         "variant": exercise.variant,
+        "weight_kg": exercise.weight_kg,
         "sets": exercise.sets,
         "target": target,
         "rest_seconds": exercise.rest_seconds,
