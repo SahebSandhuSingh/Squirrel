@@ -84,7 +84,8 @@ class PushUpSetupAdapter:
                 "depth_reference",
                 "failed",
                 "baseline_depth_reference_unavailable",
-                template["cue"],
+                # Not the live "lower further" cue: the captured top position had no usable arm.
+                "Hold the top with your near arm straight and in the picture.",
             )
         angles = rule.baseline_elbow_angles_deg
         return ConditionResult(
@@ -120,7 +121,7 @@ class PushUpSetupAdapter:
                     template_id,
                     "unavailable",
                     "plank_ready_unavailable",
-                    template["cue"],
+                    template.get("unavailable_cue", template["cue"]),
                 )
             if not reading.torso_horizontal:
                 reason = "not_in_plank_position"
@@ -134,7 +135,7 @@ class PushUpSetupAdapter:
                 template_id,
                 "passed" if reading.passed else "failed",
                 reason,
-                None if reading.passed else template["cue"],
+                None if reading.passed else (template.get("reason_cues") or {}).get(reason, template["cue"]),
                 {
                     "elbow_angle_deg": reading.elbow_angle_deg,
                     "body_line_offset": reading.body_line_offset,
@@ -156,7 +157,7 @@ class PushUpSetupAdapter:
                     template_id,
                     "unavailable",
                     "side_view_orientation_unavailable",
-                    template["cue"],
+                    template.get("unavailable_cue", template["cue"]),
                 )
             # A warning band is not a gate failure: it is "close enough to measure, and worth saying".
             passed = not reading.not_ok
@@ -172,6 +173,7 @@ class PushUpSetupAdapter:
                     "torso_length_px": reading.torso_length_px,
                     "state": reading.state,
                     "skeleton_color": reading.skeleton_color,
+                    "far_side_hidden": reading.far_side_hidden,
                 },
             )
         raise ValueError(f"unsupported push-up setup template: {template_id}")

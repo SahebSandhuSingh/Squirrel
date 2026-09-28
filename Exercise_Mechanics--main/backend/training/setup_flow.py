@@ -7,7 +7,7 @@ from math import isfinite
 from numbers import Real
 
 from backend.config import CONFIDENCE_MIN
-from backend.core.keypoints import missing_keypoints
+from backend.core.keypoints import missing_either_side, missing_keypoints
 from backend.training.baseline import BaselineCollector, BaselineQuality
 from backend.training.setup_config import SetupConfig
 from backend.training.setup_contract import ConditionResult, SetupExerciseAdapter
@@ -167,18 +167,13 @@ class SetupOrchestrator:
         )
 
     def _update_precheck(self, keypoints: dict, now_ms: float) -> None:
-        missing = tuple(
-            missing_keypoints(
-                keypoints,
-                self._config.required_keypoints,
-                self._min_visibility,
-            )
-        )
+        missing = self._missing(keypoints)
         results = self._adapter.evaluate(self._config.pre_check_templates, keypoints)
         self._assert_result_ids(self._config.pre_check_templates, results)
         self._last_missing = missing
         self._last_conditions = results
-        self._validation_results = ()
+        # The reason the last capture was rejected (unsteady, tracking gap, validation) stays in the
+        # status until the next capture starts, so the person can read why the ring emptied.
         all_pass = not missing and all(result.passed for result in results)
         if not all_pass:
             # A flicker shorter than invalid_pause_ms (landmark jitter: a relaxed knee read at
@@ -206,13 +201,7 @@ class SetupOrchestrator:
             self._begin_capture()
 
     def _update_capture(self, keypoints: dict, now_ms: float) -> None:
-        missing = tuple(
-            missing_keypoints(
-                keypoints,
-                self._config.required_keypoints,
-                self._min_visibility,
-            )
-        )
+        missing = self._missing(keypoints)
         results = self._adapter.evaluate(
             self._config.baseline_capture_templates,
             keypoints,
@@ -320,10 +309,17 @@ class SetupOrchestrator:
         self._begin_capture()
         self._validation_results = validation_results
 
+    def _missing(self, keypoints: dict) -> tuple[str, ...]:
+        return (
+            *missing_keypoints(keypoints, self._config.required_keypoints, self._min_visibility),
+            *missing_either_side(keypoints, self._config.either_side, self._min_visibility),
+        )
+
     def _new_collector(self) -> BaselineCollector:
         return BaselineCollector(
             self._config.required_keypoints,
             min_visibility=self._min_visibility,
+            either_side=self._config.either_side,
         )
 
     @staticmethod

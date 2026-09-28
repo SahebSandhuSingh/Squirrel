@@ -118,6 +118,8 @@ templates:
     required_keypoints: [left_shoulder, right_shoulder, left_hip, right_hip]
     issue: "The camera is seeing the body front-on instead of from the side."
     cue: "Turn your side to the camera."
+    # No reading (neither side's shoulder and hip tracked) is not "front-on": say what is missing.
+    unavailable_cue: "Keep your shoulder and hip in the picture, side-on to the camera."
     coaching: "Part of the set was recorded front-on. Push-up depth and body alignment can only be measured from the side, so set the camera at your side, level with your torso, with your whole body in frame."
     policy:
       # Seen from the side, the left and right shoulders sit almost on top of each other in the
@@ -179,6 +181,13 @@ templates:
       ]
     issue: "The baseline must be captured at the top of a push-up: arms extended, body straight, side-on."
     cue: "Get into the top of a push-up with straight arms and a straight body."
+    # Setup says WHICH part is wrong (field test: the camera was never accepted and nothing said
+    # why). Keyed by reason_id; `unavailable_cue` is for a frame where no side can be read at all.
+    reason_cues:
+      not_in_plank_position: "Get down into a plank: hands under your shoulders, body level."
+      arms_not_extended: "Straighten your arms at the top of the push-up."
+      body_not_straight: "Keep your body in one straight line: hips level with your shoulders."
+    unavailable_cue: "Keep your whole side in the picture: shoulder, arm, hip and ankle."
     setup_policy:
       # Absolute checks (unlike the live body line, which is baseline-relative) — this IS the check
       # that decides whether a baseline may become someone's reference.

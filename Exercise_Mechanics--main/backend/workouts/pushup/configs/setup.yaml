@@ -6,27 +6,17 @@
 # is what every live signal is measured against: the captured elbow angle is push-up depth's zero
 # point, and the captured shoulder-hip-ankle geometry is the body line's reference.
 #
-# KEYPOINT GATE AND THE SIDE-ON VIEW — the one thing to validate on a rig capture first.
-# Both sides are listed because the live rules read whichever side the camera can see (see
-# kinematics.analysis_side), so the gate insists the whole body is trackable before a set starts.
-# The gate floor is the global CONFIDENCE_MIN (0.5) in backend/config.py, applied to every name
-# below. In a true profile view the far-side limbs are occluded and MediaPipe reports them as
-# predictions; if a capture shows the far side sitting under 0.5 and blocking setup, the per-exercise
-# lever is this list (drop the far side to the midline joints), NOT the global floor.
+# KEYPOINT GATE AND THE SIDE-ON VIEW. Side-on, the far arm, hip and ankle are hidden behind the
+# near ones and the pose model reports them below the confidence floor. Requiring both sides here
+# (as this file did) refused exactly the view push-ups are measured from: in the field the camera
+# angle was never accepted. So the gate needs ONE whole side, whichever the camera sees; the live
+# rules already read the better-tracked side (kinematics.usable_side). The far side's predicted
+# positions are still kept in the baseline; stillness is measured on the side in view.
 schema_version: 1
 exercise: pushup
 
-keypoints:
-  - left_shoulder
-  - right_shoulder
-  - left_elbow
-  - right_elbow
-  - left_wrist
-  - right_wrist
-  - left_hip
-  - right_hip
-  - left_ankle
-  - right_ankle
+keypoints: []
+either_side: [shoulder, elbow, wrist, hip, ankle]
 
 pre_check:
   enabled: true

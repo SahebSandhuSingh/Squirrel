@@ -22,6 +22,7 @@ import { CoachSession, type CoachState, type PoseFrame } from '@/workout/coach';
 import { liveView } from '@/workout/liveView';
 import { PoseCamera } from '@/workout/tracker/PoseCamera';
 import { PoseDebugOverlay } from '@/workout/PoseDebugOverlay';
+import { exerciseProfile } from '@/workout/exerciseProfiles';
 import type { TrackerStatus } from '@/workout/tracker/types';
 
 /**
@@ -583,7 +584,7 @@ function LiveWorkout({ userId }: { userId: string }) {
         <View style={[styles.getReady, { top: insets.top + 156 }]} pointerEvents="none">
           <Text style={styles.kicker}>Get in position · set {state?.set ?? 1} of {sets}</Text>
           <Display size={56} color={colors.primary}>{view.getReady}</Display>
-          <Text style={styles.getReadySub}>Stand where your whole body is in view, stand straight and hold still. Tracking starts automatically.</Text>
+          <Text style={styles.getReadySub}>{exerciseProfile(ex.slug).getReady}</Text>
         </View>
       )}
 

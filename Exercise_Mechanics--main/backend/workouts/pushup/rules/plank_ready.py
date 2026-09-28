@@ -32,12 +32,12 @@ from backend.workouts.pushup.kinematics import (
     distance,
     joint_angle,
     line_offset,
-    midpoint,
     usable_side,
 )
 
 RULE_ID = "plank_ready"
-#: Per-side chain for the limb checks; the torso check uses both sides' shoulders and hips.
+#: The per-side chain every check reads (whichever side the camera sees best). REQUIRED_KEYPOINTS
+#: names both sides because either may be the one in view.
 JOINTS = ("shoulder", "elbow", "wrist", "hip", "ankle")
 REQUIRED_KEYPOINTS = (
     "left_shoulder",
@@ -102,14 +102,10 @@ class PlankReadyRule:
         if offset is None:
             return None
 
-        both_shoulders = reader(keypoints, ("left_shoulder", "right_shoulder"))
-        both_hips = reader(keypoints, ("left_hip", "right_hip"))
-        if both_shoulders is None or both_hips is None:
-            return None
-        torso_angle = degrees_from_horizontal(
-            midpoint(both_shoulders["left_shoulder"], both_shoulders["right_shoulder"]),
-            midpoint(both_hips["left_hip"], both_hips["right_hip"]),
-        )
+        # The torso angle from the analysed side's own shoulder and hip: side-on, the far side is
+        # hidden behind the near one (and lies on the same line), so requiring it would refuse
+        # exactly the view push-ups are measured from.
+        torso_angle = degrees_from_horizontal(points["shoulder"], points["hip"])
         if torso_angle is None:
             return None
 

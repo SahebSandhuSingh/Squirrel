@@ -25,6 +25,12 @@ contributes nothing to any score. It is also the one template active in all thre
 every phase: the camera angle has to be right before the set starts AND stay right, because a user
 rotating a few degrees between reps silently corrupts both live signals.
 
+THE FAR SIDE MAY BE HIDDEN: side-on, the far shoulder and hip are behind the near ones, and the
+pose model reports them as predictions below the confidence floor. That is the view this check
+asks for, so it must not refuse to measure it: when one side's shoulder AND hip are confidently
+tracked, the spread is measured from all four positions (the hidden ones as predicted), and
+`far_side_hidden` says so. Only when neither side's shoulder and hip are tracked is there no reading.
+
 FRAME HYSTERESIS: the raw band is debounced over consecutive frames (`confirm_frames` to raise,
 `clear_frames` to clear) so a single noisy frame neither tells a correctly placed user to reposition
 nor clears a genuinely front-on setup. Hysteresis is switched OFF for the setup adapter, which needs
@@ -63,6 +69,8 @@ class SideViewReading:
     #: frames in either direction — that lag is the point.
     not_ok: bool
     side: str | None
+    #: A far-side shoulder or hip was below the confidence floor (measured as predicted).
+    far_side_hidden: bool = False
 
 
 class SideViewOrientationRule:
@@ -99,14 +107,29 @@ class SideViewOrientationRule:
         self._flagged = False
 
     def read(self, keypoints: dict) -> SideViewReading | None:
-        """Classify one live frame. None when the shoulders/hips are not confidently tracked."""
-        return self._evaluate(usable_xy(keypoints, REQUIRED_KEYPOINTS))
+        """Classify one live frame. None unless one side's shoulder and hip are confidently tracked."""
+        points = usable_xy(keypoints, REQUIRED_KEYPOINTS)
+        if points is not None:
+            return self._evaluate(points)
+        near_side = any(
+            usable_xy(keypoints, (f"{side}_shoulder", f"{side}_hip")) is not None
+            for side in ("left", "right")
+        )
+        predicted = reference_xy(keypoints, REQUIRED_KEYPOINTS)
+        if not near_side or predicted is None:
+            return None
+        return self._evaluate(predicted, far_side_hidden=True)
 
     def read_reference(self, keypoints: dict) -> SideViewReading | None:
         """Classify a persisted baseline, which stores geometry without visibility."""
         return self._evaluate(reference_xy(keypoints, REQUIRED_KEYPOINTS))
 
-    def _evaluate(self, points: dict[str, tuple[float, float]] | None) -> SideViewReading | None:
+    def _evaluate(
+        self,
+        points: dict[str, tuple[float, float]] | None,
+        *,
+        far_side_hidden: bool = False,
+    ) -> SideViewReading | None:
         if points is None:
             return None
         shoulder_mid = midpoint(points["left_shoulder"], points["right_shoulder"])
@@ -132,6 +155,7 @@ class SideViewOrientationRule:
             skeleton_color=matched.skeleton_color,
             not_ok=self._debounce(matched.state == "not_ok"),
             side=matched.side,
+            far_side_hidden=far_side_hidden,
         )
 
     def _debounce(self, raw_not_ok: bool) -> bool:

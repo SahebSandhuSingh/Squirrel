@@ -128,7 +128,9 @@ class TestRuleWiring:
             live_rule_module("elbow_flare_corridor")
 
     def test_setup_keypoints_cover_every_setup_requirement(self, config):
-        declared = set(config.setup["keypoints"])
+        declared = set(config.setup["keypoints"]) | {
+            f"{side}_{base}" for base in config.setup.get("either_side", []) for side in ("left", "right")
+        }
         for context in ("pre_check", "baseline_capture"):
             for rule_id, active in config.contexts[context].items():
                 if active:

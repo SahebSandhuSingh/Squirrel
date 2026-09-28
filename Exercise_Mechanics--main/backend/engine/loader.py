@@ -955,16 +955,27 @@ def _validate_setup(raw: dict, slug: str) -> dict:
     if raw.get("exercise") != slug:
         raise ConfigurationError(f"setup.exercise must equal '{slug}'")
     keypoints = raw.get("keypoints")
+    # Optional: joints needed on ONE side only, by base name (a side-on exercise).
+    either_side = raw.get("either_side", [])
+    if (
+        not isinstance(either_side, list)
+        or any(not isinstance(base, str) for base in either_side)
+        or len(set(either_side)) != len(either_side)
+    ):
+        raise ConfigurationError("setup.either_side must be a unique list of joint names")
+    side_names = [f"{side}_{base}" for base in either_side for side in ("left", "right")]
     if (
         not isinstance(keypoints, list)
-        or not keypoints
+        or not (keypoints or either_side)
         or any(not isinstance(name, str) for name in keypoints)
         or len(set(keypoints)) != len(keypoints)
     ):
-        raise ConfigurationError("setup.keypoints must be a unique non-empty list")
-    unknown = [name for name in keypoints if name not in set(ALL_LANDMARKS)]
+        raise ConfigurationError("setup.keypoints must be a unique list, non-empty without either_side")
+    unknown = [name for name in (*keypoints, *side_names) if name not in set(ALL_LANDMARKS)]
     if unknown:
         raise ConfigurationError(f"setup has unknown keypoints: {unknown}")
+    if set(keypoints) & set(side_names):
+        raise ConfigurationError("setup.keypoints and setup.either_side overlap")
     pre_check = _mapping(raw.get("pre_check"), "setup.pre_check")
     if not isinstance(pre_check.get("enabled"), bool):
         raise ConfigurationError("setup.pre_check.enabled must be boolean")
@@ -1023,7 +1034,10 @@ def _validate_setup_context_alignment(
             "baseline_capture condition templates require setup.baseline.required to be true"
         )
 
-    setup_keypoints = set(setup["keypoints"])
+    # Joints needed on one side only are captured for both sides (either may be the one in view).
+    setup_keypoints = set(setup["keypoints"]) | {
+        f"{side}_{base}" for base in setup.get("either_side", []) for side in ("left", "right")
+    }
     for context in ("pre_check", "baseline_capture"):
         required = {
             keypoint

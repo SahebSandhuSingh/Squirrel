@@ -25,8 +25,13 @@ export type ExerciseProfile = {
   view: 'front' | 'side';
   /** Must be tracked and inside the picture before the set can start. */
   essential: readonly number[];
+  /** 'either': the essential joints are needed on ONE side only (side-on: the far side is hidden
+   *  behind the near one), mirroring setup.yaml `either_side`. Default 'both'. */
+  sides?: 'both' | 'either';
   /** Tracked when visible, never required. */
   optional: readonly number[];
+  /** What to do while getting ready, before tracking starts. */
+  getReady: string;
 };
 
 const SHOULDERS = [J.leftShoulder, J.rightShoulder];
@@ -35,14 +40,20 @@ const HIPS = [J.leftHip, J.rightHip];
 const KNEES = [J.leftKnee, J.rightKnee];
 const ANKLES = [J.leftAnkle, J.rightAnkle];
 
+const STAND = 'Stand facing the phone with your whole body in view, stand tall and hold still. Tracking starts automatically.';
+
 export const EXERCISE_PROFILES: Record<string, ExerciseProfile> = {
-  squat: { posture: 'standing', view: 'front', essential: [J.nose, ...SHOULDERS, ...HIPS, ...KNEES, ...ANKLES], optional: ARMS },
-  bicep_curl: { posture: 'standing', view: 'front', essential: [...SHOULDERS, ...ARMS, ...HIPS, ...ANKLES], optional: [J.nose, ...KNEES] },
-  high_knee: { posture: 'standing', view: 'front', essential: [...SHOULDERS, ...HIPS, ...KNEES, ...ANKLES], optional: [J.nose, ...ARMS] },
-  pushup: { posture: 'plank', view: 'side', essential: [...SHOULDERS, ...ARMS, ...HIPS, ...ANKLES], optional: [J.nose, ...KNEES] },
+  squat: { posture: 'standing', view: 'front', essential: [J.nose, ...SHOULDERS, ...HIPS, ...KNEES, ...ANKLES], optional: ARMS, getReady: STAND },
+  bicep_curl: { posture: 'standing', view: 'front', essential: [...SHOULDERS, ...ARMS, ...HIPS, ...ANKLES], optional: [J.nose, ...KNEES], getReady: STAND },
+  high_knee: { posture: 'standing', view: 'front', essential: [...SHOULDERS, ...HIPS, ...KNEES, ...ANKLES], optional: [J.nose, ...ARMS], getReady: STAND },
+  pushup: {
+    posture: 'plank', view: 'side', sides: 'either',
+    essential: [...SHOULDERS, ...ARMS, ...HIPS, ...ANKLES], optional: [J.nose, ...KNEES],
+    getReady: 'Phone on the floor, side-on to you, your whole body from hands to feet in view. Get into the top of a push-up with straight arms and hold still.',
+  },
 };
 
 /** Whole body, standing: for an exercise the app does not know yet. */
-const DEFAULT_PROFILE: ExerciseProfile = { posture: 'standing', view: 'front', essential: [...SHOULDERS, ...HIPS, ...KNEES, ...ANKLES], optional: [J.nose, ...ARMS] };
+const DEFAULT_PROFILE: ExerciseProfile = { posture: 'standing', view: 'front', essential: [...SHOULDERS, ...HIPS, ...KNEES, ...ANKLES], optional: [J.nose, ...ARMS], getReady: STAND };
 
 export const exerciseProfile = (slug: string): ExerciseProfile => EXERCISE_PROFILES[slug] ?? DEFAULT_PROFILE;

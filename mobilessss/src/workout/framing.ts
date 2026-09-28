@@ -59,6 +59,14 @@ export const MESSAGES: Record<FramingKind, string> = {
   excellent: 'Perfect · hold still',
 };
 
+/** A plank is framed by moving the phone (it lies on the floor beside the person), not the body. */
+const PLANK_MESSAGES: Partial<Record<FramingKind, string>> = {
+  move_back: 'Move the phone a little farther away',
+  move_closer: 'Move the phone a little closer',
+};
+const messageFor = (kind: FramingKind, profile: ExerciseProfile) =>
+  (profile.posture === 'plank' ? PLANK_MESSAGES[kind] : undefined) ?? MESSAGES[kind];
+
 /** The server's confidence floor for a joint it computes on (backend config CONFIDENCE_MIN). */
 export const VIS = 0.5;
 /** A joint within this margin of the picture's edge counts as cut off. */
@@ -71,8 +79,16 @@ const CENTRE: [number, number] = [0.2, 0.8];
 
 type Lm = readonly [number, number, number, number];
 
+/** Left-side landmark index → its right-side twin (MediaPipe numbering: odd left, even right). */
+const twin = (i: number) => (i >= 11 && i % 2 === 1 ? i + 1 : i >= 12 && i % 2 === 0 ? i - 1 : i);
+const isLeft = (i: number) => i >= 11 && i % 2 === 1;
+
 export function assessFraming(landmarks: readonly Lm[] | null, profile: ExerciseProfile): Framing {
-  const total = profile.essential.length;
+  // Side-on exercises need the essential chain on ONE side: judge the side closer to complete.
+  const chain = profile.sides === 'either'
+    ? [...new Set(profile.essential.map((i) => (isLeft(i) || i < 11 ? i : twin(i))))]
+    : profile.essential;
+  const total = chain.length;
   const empty: Framing = { kind: 'no_person', ok: false, message: MESSAGES.no_person, visibleEssential: 0, totalEssential: total, visibleLandmarks: 0, confidence: 0, box: null, bodyHeight: 0 };
   if (!landmarks || landmarks.length < 29) return empty;
 
@@ -89,10 +105,15 @@ export function assessFraming(landmarks: readonly Lm[] | null, profile: Exercise
   const box = { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
   const bodyHeight = Math.min(1, Math.max(0, Math.min(1, box.y1) - Math.max(0, box.y0)));
   const cx = (Math.max(0, box.x0) + Math.min(1, box.x1)) / 2;
-  const essentialOk = profile.essential.filter((i) => tracked(i) && inside(i));
-  const confidence = profile.essential.reduce((a, i) => a + (landmarks[i]?.[3] ?? 0), 0) / total;
+  const ok = (i: number) => tracked(i) && inside(i);
+  // For 'either', the left chain or its right twin, whichever has more joints in view.
+  const essential = profile.sides === 'either' && chain.filter((i) => ok(twin(i))).length > chain.filter(ok).length
+    ? chain.map(twin)
+    : chain;
+  const essentialOk = essential.filter(ok);
+  const confidence = essential.reduce((a, i) => a + (landmarks[i]?.[3] ?? 0), 0) / total;
   const base = { visibleEssential: essentialOk.length, totalEssential: total, visibleLandmarks, confidence, box, bodyHeight };
-  const verdict = (kind: FramingKind): Framing => ({ ...base, kind, ok: kind === 'good' || kind === 'excellent', message: MESSAGES[kind] });
+  const verdict = (kind: FramingKind): Framing => ({ ...base, kind, ok: kind === 'good' || kind === 'excellent', message: messageFor(kind, profile) });
 
   // A standing body whose shoulders→hips axis runs across the picture: the phone is on its side.
   // Only from torso joints that are really in the picture: the model's guesses for joints outside
@@ -103,7 +124,7 @@ export function assessFraming(landmarks: readonly Lm[] | null, profile: Exercise
     if (Math.abs(hx - sx) > Math.abs(hy - sy) * 1.2) return verdict('turn_upright');
   }
 
-  const missing = profile.essential.filter((i) => !(tracked(i) && inside(i)));
+  const missing = essential.filter((i) => !ok(i));
   if (missing.length > 0) {
     // Where are they lost? Cut off at an edge (their predicted position is outside the picture)
     // tells the direction to move; otherwise they are hidden.
@@ -113,7 +134,8 @@ export function assessFraming(landmarks: readonly Lm[] | null, profile: Exercise
     // Too big for the picture (cut off at the top/bottom, or wider than most of it): step back.
     // Only a body that fits but sits to one side is asked to move sideways.
     const tooWide = Math.min(1, box.x1) - Math.max(0, box.x0) > 0.75;
-    if (below || above || tooWide) return verdict('move_back');
+    // In a plank the phone is on the floor beside the person: cut off anywhere, the phone moves.
+    if (below || above || tooWide || (profile.posture === 'plank' && (leftEdge || rightEdge))) return verdict('move_back');
     if (leftEdge && !rightEdge) return verdict('move_left');    // image left = screen right (mirrored)
     if (rightEdge && !leftEdge) return verdict('move_right');
     if (leftEdge && rightEdge) return verdict('move_back');
