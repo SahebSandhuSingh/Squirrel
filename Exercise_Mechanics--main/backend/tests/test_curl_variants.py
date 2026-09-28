@@ -10,7 +10,7 @@ from backend.training.builders import build_training_adapter
 from backend.training.target_contract import RepTarget
 from backend.workouts.bicep_curl.adapter import build_bicep_curl_adapter
 
-from tests.test_bicep_curl_adapter import _BASELINE, _frame
+from backend.tests.test_bicep_curl_adapter import _BASELINE, _frame
 
 
 def _curls(adapter, arms: list[tuple[float, float]], seconds: float = 2.0, t: int = 0):
@@ -58,5 +58,5 @@ def test_the_session_variant_reaches_the_curl_adapter_only():
     curl = build_training_adapter("bicep_curl", baseline=_BASELINE, target=RepTarget("reps", 5), variant="double")
     assert curl._variant == "double"
     # Exercises without variants ignore it rather than failing.
-    from tests.test_squat_adapter import _baseline
+    from backend.tests.test_squat_adapter import _baseline
     build_training_adapter("squat", baseline=_baseline(), target=RepTarget("reps", 5), variant="double")

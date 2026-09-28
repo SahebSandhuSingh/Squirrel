@@ -15,7 +15,7 @@ from backend.engine.loader import load_exercise_config
 from backend.engine.rep_fsm import RepFSM
 from backend.workouts.squat.adapter import build_squat_adapter
 
-from tests.test_squat_adapter import _baseline, _frame
+from backend.tests.test_squat_adapter import _baseline, _frame
 
 
 def _rep(peak: float, duration_ms: int, start_ms: int, *, rest_ms: int = 600) -> list[tuple[float, int]]:
