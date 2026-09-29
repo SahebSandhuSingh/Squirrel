@@ -4,6 +4,9 @@
   • POST /api/auth/register — create an account (email + code + password + name) and sign in.
   • POST /api/auth/login    — exchange email + password for tokens.
   • POST /api/auth/refresh  — rotate a refresh token into a fresh token pair.
+  • POST /api/auth/email/start  — email a 6-digit code to sign in, or to join (no password).
+  • POST /api/auth/email/verify — exchange that code for tokens; a new address becomes an account
+    (it needs a name). Code-only accounts have no usable password.
 
 All are rate-limited (auth/throttle.py): 429 with Retry-After when over a limit. Sign-up is open to
 the allowed email domains only (config.allowed_email_domains: any .ac.in address by default), and needs
@@ -16,8 +19,11 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend import config, mailer
+import secrets
+
 from backend.auth.store import (
     EmailTaken,
+    mark_email_verified,
     consume_refresh_token,
     email_verified,
     issue_refresh_token,
@@ -47,6 +53,16 @@ class EmailCodeBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     email: str = Field(min_length=3, max_length=200, pattern=_EMAIL_PATTERN)
+
+
+class EmailVerifyBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email:      str = Field(min_length=3, max_length=200, pattern=_EMAIL_PATTERN)
+    code:       str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+    # Needed only when the address has no account yet (the reply to /email/start says which).
+    first_name: str | None = Field(default=None, min_length=1, max_length=80)
+    last_name:  str | None = Field(default=None, max_length=80)
 
 
 class LoginBody(BaseModel):
@@ -114,18 +130,7 @@ def check_sign_up_email(email: str, code: str | None) -> bool:
 def email_code(body: EmailCodeBody, request: Request) -> dict:
     if read_credential(body.email) is not None:
         raise HTTPException(status_code=409, detail="an account with this email already exists")
-    try:
-        ttl = email_codes.send_code(body.email, throttle.client_address(request))
-    except email_codes.DomainNotAllowed:
-        raise domain_error() from None
-    except email_codes.ResendTooSoon as exc:
-        raise HTTPException(status_code=429, detail=f"Wait {exc.retry_after_s} seconds before asking for another code.",
-                            headers={"Retry-After": str(exc.retry_after_s)}) from None
-    except throttle.Throttled as exc:
-        raise throttle.too_many(exc) from None
-    except mailer.EmailNotSent:
-        raise HTTPException(status_code=503, detail="We couldn't send the email just now. Try again in a minute.") from None
-    return {"sent": True, "expires_in_s": ttl}
+    return {"sent": True, "expires_in_s": _send(body.email, request)}
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
@@ -171,3 +176,57 @@ def refresh(body: RefreshBody, request: Request) -> dict:
     if user_id is None:
         raise HTTPException(status_code=401, detail="invalid or expired refresh token")
     return token_pair(user_id)
+
+
+def _send(email: str, request: Request, *, any_domain: bool = False) -> int:
+    try:
+        return email_codes.send_code(email, throttle.client_address(request), any_domain=any_domain)
+    except email_codes.DomainNotAllowed:
+        raise domain_error() from None
+    except email_codes.ResendTooSoon as exc:
+        raise HTTPException(status_code=429, detail=f"Wait {exc.retry_after_s} seconds before asking for another code.",
+                            headers={"Retry-After": str(exc.retry_after_s)}) from None
+    except throttle.Throttled as exc:
+        raise throttle.too_many(exc) from None
+    except mailer.EmailNotSent:
+        raise HTTPException(status_code=503, detail="We couldn't send the email just now. Try again in a minute.") from None
+
+
+@router.post("/email/start", status_code=status.HTTP_202_ACCEPTED)
+def email_start(body: EmailCodeBody, request: Request) -> dict:
+    """A code to sign in with. An existing account gets one whatever its domain (it may predate the
+    allow-list); a new address must be an allowed one. `new_account` tells the app to ask for a name."""
+    exists = read_credential(body.email) is not None
+    if not exists and not email_codes.domain_allowed(body.email):
+        raise domain_error()
+    ttl = _send(body.email, request, any_domain=exists)
+    return {"sent": True, "expires_in_s": ttl, "new_account": not exists}
+
+
+@router.post("/email/verify")
+def email_verify(body: EmailVerifyBody, request: Request) -> dict:
+    credential = read_credential(body.email)
+    if credential is None:
+        # Check everything that doesn't spend the code first, so a missing name costs no attempt.
+        if not body.first_name or not body.first_name.strip():
+            raise HTTPException(status_code=422, detail="Tell us your name to create the account.")
+        if not email_codes.domain_allowed(body.email):
+            raise domain_error()
+        count_sign_up(request)
+    try:
+        email_codes.consume_code(body.email, body.code)
+    except email_codes.CodeInvalid:
+        raise HTTPException(status_code=400, detail="That code didn't work. Check it, or ask for a new one.") from None
+    if credential is not None:
+        mark_email_verified(credential["user_id"])
+        return {**token_pair(credential["user_id"], verified=True), "new_account": False}
+    try:
+        # Nobody knows this password: the account signs in with emailed codes only.
+        user_id = register_account(body.email, secrets.token_urlsafe(32), body.first_name.strip(),
+                                   (body.last_name or "").strip(), email_verified=True)
+    except EmailTaken:  # created by a concurrent request with the same code? sign that account in
+        credential = read_credential(body.email)
+        if credential is None:
+            raise
+        return {**token_pair(credential["user_id"], verified=True), "new_account": False}
+    return {**token_pair(user_id, verified=True), "new_account": True}

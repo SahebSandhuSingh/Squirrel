@@ -165,3 +165,15 @@ def email_verified(user_id: str) -> bool:
         except (FileNotFoundError, ValueError):
             profile = None
     return bool(profile and profile.get("email_verified_at"))
+
+
+def mark_email_verified(user_id: str, now: datetime | None = None) -> None:
+    """Record that the account proved its email (a code sign-in on an account made before
+    verification was on). No-op when already recorded or the profile is missing."""
+    from backend.users.store import read_profile, write_profile
+
+    profile = read_profile(user_id)
+    if not profile or profile.get("email_verified_at"):
+        return
+    profile["email_verified_at"] = (now or datetime.now(timezone.utc)).isoformat()
+    write_profile(user_id, profile)

@@ -168,3 +168,66 @@ def test_accounts_made_without_verification_carry_no_ev_claim(app, monkeypatch):
 def test_any_domain_when_the_allow_list_is_a_star(app, monkeypatch, outbox):
     monkeypatch.setenv(config.ALLOWED_EMAIL_DOMAINS_ENV, "*")
     assert call(app, "POST", "/api/auth/email-code", json={"email": "x@gmail.com"}).status == 202
+
+
+# ---------------------------------------------------------------- code-only sign-in (/email/start, /email/verify)
+
+def test_a_new_address_joins_with_a_code_and_a_name(app, outbox):
+    r = call(app, "POST", "/api/auth/email/start", json={"email": _EMAIL})
+    assert r.status == 202 and r.json()["new_account"] is True
+    code = _code(outbox)
+    # no name: refused without spending the code
+    assert call(app, "POST", "/api/auth/email/verify", json={"email": _EMAIL, "code": code}).status == 422
+    r = call(app, "POST", "/api/auth/email/verify", json={"email": _EMAIL, "code": code, "first_name": "Aanya"})
+    assert r.status == 200
+    body = r.json()
+    assert body["new_account"] is True and _claims(body["access_token"])["ev"] is True
+    profile = read_profile(body["user_id"])
+    assert profile["first_name"] == "Aanya" and profile["last_name"] == "" and profile["email_verified_at"]
+    # the code is spent
+    assert call(app, "POST", "/api/auth/email/verify", json={"email": _EMAIL, "code": code}).status == 400
+
+
+def test_an_existing_account_signs_in_with_a_code(app, outbox):
+    call(app, "POST", "/api/auth/email-code", json={"email": _EMAIL})
+    user_id = call(app, "POST", "/api/auth/register", json={**_ACCOUNT, "code": _code(outbox)}).json()["user_id"]
+    r = call(app, "POST", "/api/auth/email/start", json={"email": _EMAIL})
+    assert r.status == 202 and r.json()["new_account"] is False
+    r = call(app, "POST", "/api/auth/email/verify", json={"email": _EMAIL, "code": _code(outbox)})
+    assert r.status == 200 and r.json()["user_id"] == user_id and r.json()["new_account"] is False
+
+
+def test_a_code_only_account_has_no_usable_password(app, outbox):
+    call(app, "POST", "/api/auth/email/start", json={"email": _EMAIL})
+    call(app, "POST", "/api/auth/email/verify", json={"email": _EMAIL, "code": _code(outbox), "first_name": "Aanya"})
+    for guess in ("", "correct horse", "None"):
+        assert call(app, "POST", "/api/auth/login", json={"email": _EMAIL, "password": guess or "x"}).status == 401
+
+
+def test_code_sign_in_keeps_the_domain_rule_for_new_addresses(app, outbox):
+    assert call(app, "POST", "/api/auth/email/start", json={"email": "x@gmail.com"}).status == 403
+    assert call(app, "POST", "/api/auth/email/verify",
+                json={"email": "x@gmail.com", "code": "123456", "first_name": "X"}).status == 403
+    assert outbox == []
+
+
+def test_an_older_account_outside_the_allow_list_can_still_sign_in(app, monkeypatch, outbox):
+    # made before the allow-list and verification existed
+    monkeypatch.setenv(config.EMAIL_VERIFICATION_ENV, "off")
+    monkeypatch.setenv(config.ALLOWED_EMAIL_DOMAINS_ENV, "*")
+    user_id = call(app, "POST", "/api/auth/register",
+                   json={**_ACCOUNT, "email": "old@gmail.com"}).json()["user_id"]
+    monkeypatch.setenv(config.EMAIL_VERIFICATION_ENV, "on")
+    monkeypatch.delenv(config.ALLOWED_EMAIL_DOMAINS_ENV)
+    assert call(app, "POST", "/api/auth/email/start", json={"email": "old@gmail.com"}).status == 202
+    r = call(app, "POST", "/api/auth/email/verify", json={"email": "old@gmail.com", "code": _code(outbox)})
+    assert r.status == 200 and r.json()["user_id"] == user_id
+    # signing in with the code proves the address from now on
+    assert _claims(r.json()["access_token"])["ev"] is True and read_profile(user_id)["email_verified_at"]
+
+
+def test_a_wrong_code_does_not_sign_in(app, outbox):
+    call(app, "POST", "/api/auth/email/start", json={"email": _EMAIL})
+    wrong = f"{(int(_code(outbox)) + 1) % 1_000_000:06d}"
+    r = call(app, "POST", "/api/auth/email/verify", json={"email": _EMAIL, "code": wrong, "first_name": "Aanya"})
+    assert r.status == 400

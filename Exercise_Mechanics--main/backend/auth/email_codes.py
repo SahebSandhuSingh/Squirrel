@@ -154,12 +154,14 @@ def _delete(email: str) -> None:
 
 # ---------------------------------------------------------------- the flow
 
-def send_code(email: str, caller: str, *, now: float | None = None) -> int:
-    """Email a fresh code to `email`. Returns its lifetime in seconds.
+def send_code(email: str, caller: str, *, now: float | None = None, any_domain: bool = False) -> int:
+    """Email a fresh code to `email`. Returns its lifetime in seconds. `any_domain` skips the
+    allow-list (a sign-in code for an account that already exists).
 
     Raises DomainNotAllowed, ResendTooSoon, throttle.Throttled or mailer.EmailNotSent."""
     now = time.time() if now is None else now
-    check_domain(email)
+    if not any_domain:
+        check_domain(email)
     previous = _read(email)
     if previous is not None and now - previous.sent_at < RESEND_AFTER_S:
         raise ResendTooSoon(int(RESEND_AFTER_S - (now - previous.sent_at)) + 1)
@@ -175,7 +177,7 @@ def send_code(email: str, caller: str, *, now: float | None = None) -> int:
         mailer.send_email(
             normalize_email(email),
             f"{code} is your Squirrel Social code",
-            f"Your Squirrel Social sign-up code is {code}.\n\n"
+            f"Your Squirrel Social code is {code}.\n\n"
             f"It works for {CODE_TTL_S // 60} minutes. If you didn't ask for it, ignore this email.\n",
         )
     except mailer.EmailNotSent:
