@@ -301,6 +301,28 @@ class InternalNotificationOut(BaseModel):
     created: bool
 
 
+class InternalPeopleResolveIn(_In):
+    """From another service (campus-service) that knows people by their token `sub` and needs
+    Social's names and public profile ids. The only place a subject↔profile mapping leaves Social."""
+
+    subjects: Annotated[list[Annotated[str, Field(min_length=1, max_length=255)]], Field(max_length=200)] = []
+    profile_ids: Annotated[list[uuid.UUID], Field(max_length=200)] = []
+
+
+class InternalPerson(BaseModel):
+    subject: str
+    profile_id: uuid.UUID
+    username: str
+    display_name: str
+    avatar_url: str | None
+    hostel: str | None
+    level: int
+
+
+class InternalPeopleResolveOut(BaseModel):
+    people: list[InternalPerson]
+
+
 # --------------------------------------------------------------------------- boards & stats
 
 

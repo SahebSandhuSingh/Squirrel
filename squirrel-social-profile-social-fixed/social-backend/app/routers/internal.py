@@ -3,6 +3,9 @@
   POST /internal/v1/activities              Authorization: Bearer $SOCIAL_INTERNAL_TOKEN
   POST /internal/v1/notifications           a territory steal (Run Module) → the in-app list + push
   POST /internal/v1/tasks/event-reminders   send due event reminders now (for an external cron)
+  POST /internal/v1/people/resolve          token subjects / profile ids → Social names, profile ids,
+                                            avatar, hostel, level (campus-service); unseen subjects
+                                            are provisioned like a first sign-in
 
 The Run Module's finish worker (or the Exercise backend) calls this once an activity is final.
 It is idempotent on (source, source_ref): re-sending the same run returns the same activity, with
@@ -18,16 +21,22 @@ import hmac
 from typing import Annotated
 
 from fastapi import APIRouter, Header, Request, Response, status
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 
 from app.auth import bearer_token, get_or_create_user
 from app.db import utcnow
-from app.deps import DB, AppSettings
+from app.deps import DB, AppSettings, Storage
 from app.errors import ApiError, conflict
-from app.models import Activity, User
+from app.models import Activity, User, UserStats
 from app.schemas import InternalActivityOut, InternalActivityIn
-from app.schemas_community import InternalNotificationIn, InternalNotificationOut
+from app.schemas_community import (
+    InternalNotificationIn,
+    InternalNotificationOut,
+    InternalPeopleResolveIn,
+    InternalPeopleResolveOut,
+    InternalPerson,
+)
 from app.services import notify as notifications
 from app.services import dates, reminders, social
 
@@ -150,3 +159,62 @@ def run_event_reminders(
 ):
     _check_service_token(settings, authorization)
     return {"reminded_events": reminders.send_due(db, settings)}
+
+
+@router.post("/people/resolve", response_model=InternalPeopleResolveOut)
+def resolve_people(
+    body: InternalPeopleResolveIn,
+    db: DB,
+    settings: AppSettings,
+    storage: Storage,
+    authorization: Annotated[str | None, Header()] = None,
+):
+    """Token subjects and/or public profile ids → one row per person, in request order (subjects
+    first), each person once. Every subject comes back: one Social has never seen gets its profile
+    now, as on a first sign-in. Unknown profile ids are left out. A fixed number of queries,
+    plus one provisioning round per genuinely new subject."""
+    _check_service_token(settings, authorization)
+    subjects = list(dict.fromkeys(body.subjects))
+    profile_ids = list(dict.fromkeys(body.profile_ids))
+    if not subjects and not profile_ids:
+        return InternalPeopleResolveOut(people=[])
+
+    def load() -> list[tuple[User, int]]:
+        where = []
+        if subjects:
+            where.append(User.auth_subject.in_(subjects))
+        if profile_ids:
+            where.append(User.id.in_(profile_ids))
+        return db.execute(
+            select(User, func.coalesce(UserStats.xp, 0))
+            .outerjoin(UserStats, UserStats.user_id == User.id)
+            .where(or_(*where))
+        ).all()
+
+    rows = load()
+    seen = {u.auth_subject for u, _ in rows}
+    new = [s for s in subjects if s not in seen]
+    if new:
+        for subject in new:
+            get_or_create_user(db, subject)
+        rows = load()
+
+    urls = social.media_urls(db, storage, [u.avatar_media_id for u, _ in rows])
+    by_subject = {u.auth_subject: (u, xp) for u, xp in rows}
+    by_id = {u.id: (u, xp) for u, xp in rows}
+    ordered = [by_subject[s] for s in subjects if s in by_subject] + [by_id[i] for i in profile_ids if i in by_id]
+    people, emitted = [], set()
+    for user, xp in ordered:
+        if user.id in emitted:
+            continue
+        emitted.add(user.id)
+        people.append(InternalPerson(
+            subject=user.auth_subject,
+            profile_id=user.id,
+            username=user.username,
+            display_name=user.display_name,
+            avatar_url=urls.get(user.avatar_media_id),
+            hostel=user.hostel,
+            level=social.level_for(xp, settings),
+        ))
+    return InternalPeopleResolveOut(people=people)
