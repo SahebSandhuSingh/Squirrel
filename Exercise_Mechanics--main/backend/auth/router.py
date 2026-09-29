@@ -7,6 +7,8 @@
   • POST /api/auth/email/start  — email a 6-digit code to sign in, or to join (no password).
   • POST /api/auth/email/verify — exchange that code for tokens; a new address becomes an account
     (it needs a name). Code-only accounts have no usable password.
+  • GET  /api/auth/jwks.json   — the RS256 public key as a JWK set (empty while tokens are HS256),
+    for services that verify tokens by JWKS URL (the Social service's SOCIAL_JWKS_URL).
 
 All are rate-limited (auth/throttle.py): 429 with Retry-After when over a limit. Sign-up is open to
 the allowed email domains only (config.allowed_email_domains: any .ac.in address by default), and needs
@@ -31,7 +33,7 @@ from backend.auth.store import (
     register_account,
 )
 from backend.auth import email_codes, throttle
-from backend.auth.tokens import burn_password_check, issue_access_token, verify_password
+from backend.auth.tokens import burn_password_check, issue_access_token, public_jwks, verify_password
 
 router = APIRouter(prefix="/api/auth")
 
@@ -230,3 +232,8 @@ def email_verify(body: EmailVerifyBody, request: Request) -> dict:
             raise
         return {**token_pair(credential["user_id"], verified=True), "new_account": False}
     return {**token_pair(user_id, verified=True), "new_account": True}
+
+
+@router.get("/jwks.json")
+def jwks() -> dict:
+    return public_jwks()

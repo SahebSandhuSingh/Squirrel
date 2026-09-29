@@ -44,6 +44,7 @@ from backend.auth.router import router as auth_router
 from backend.cors import add_cors
 from backend.db import connection as db_connection
 from backend.db.migrate import migrate
+from backend.auth import tokens as auth_tokens
 from backend.deeplinks.router import router as deeplinks_router
 from backend.engine.loader import validate_enabled_exercises
 from backend.moderation.router import router as moderation_router
@@ -71,7 +72,9 @@ log = logging.getLogger(__name__)
 async def _lifespan(_app: FastAPI):
     """With DATABASE_URL set, bring the schema up to date before serving. A database that is down
     is logged, not fatal: sessions keep being stored on disk and can be backfilled later, and sign-in
-    and profiles (which live in the database) answer with errors until it is back."""
+    and profiles (which live in the database) answer with errors until it is back. A signing key
+    that doesn't load stops the start: every sign-in would fail with it."""
+    print(f"[auth] tokens are signed with {auth_tokens.algorithm()}")
     if db_connection.enabled():
         try:
             applied = migrate()

@@ -21,11 +21,14 @@
 envVarGroups:
   - name: squirrel-shared
     envVars:
-      # One secret for sign-in on both backends: Exercise signs the tokens, the Run Module checks them.
+      # Sign-in tokens: the Exercise backend signs them, the Run Module and the Social service check
+      # them. HS256: JWT_SECRET is the shared secret. RS256 (DEPLOY.md §2d): JWT_SECRET is the PUBLIC
+      # key (PEM), JWT_ALGORITHM is RS256, and squirrel-exercise holds the private key. Both are set
+      # in the dashboard (sync: false) so a Blueprint sync never flips them back.
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_ALGORITHM
-        value: HS256
+        sync: false
       # XP day for activities that do not carry the phone's own time zone (ADR-027).
       - key: XP_TIMEZONE
         value: Asia/Kolkata
@@ -46,6 +49,8 @@ services:
     healthCheckPath: /
     envVars:
       - fromGroup: squirrel-shared
+      # RS256 only (DEPLOY.md §2d): add the private key as a Secret File jwt-private.pem on this
+      # service, then set JWT_PRIVATE_KEY_FILE=/etc/secrets/jwt-private.pem. Unset: HS256.
       - key: DATABASE_URL
         sync: false
       # The Vercel web app's address(es), comma-separated; `*` for preview URLs (backend/cors.py).

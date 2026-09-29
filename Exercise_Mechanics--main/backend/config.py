@@ -40,6 +40,12 @@ INVITES_DIR = _REPO_ROOT / "data" / "invites"   # opaque invite tokens → invit
 AUTH_SECRET_ENV            = "SQUIRREL_AUTH_SECRET"
 # Fallback: the Run Module's secret. With both backends on one secret, one sign-in serves both.
 SHARED_JWT_SECRET_ENV      = "JWT_SECRET"
+# RS256 (ADR-003): with a private key set, tokens are signed with it and only RS256 is accepted; the
+# Run Module and the Social service verify with the public key (JWT_SECRET = the public PEM and
+# JWT_ALGORITHM = RS256 in the shared group). JWT_PRIVATE_KEY holds the PEM itself (escaped newlines
+# allowed); JWT_PRIVATE_KEY_FILE names a file holding it (a Render secret file). Neither set: HS256.
+JWT_PRIVATE_KEY_ENV        = "JWT_PRIVATE_KEY"
+JWT_PRIVATE_KEY_FILE_ENV   = "JWT_PRIVATE_KEY_FILE"
 ACCESS_TOKEN_TTL_SECONDS   = 15 * 60
 REFRESH_TOKEN_TTL_SECONDS  = 30 * 24 * 3600
 

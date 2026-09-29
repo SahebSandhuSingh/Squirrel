@@ -145,6 +145,36 @@ website:
 
 Without these the in-app notification list still works.
 
+## 2d. Switch sign-in tokens to RS256 (before real users)
+
+Today the Exercise backend signs sign-in tokens with a shared secret (HS256) that the Run Module and
+the Social service also hold. With RS256 only the Exercise backend holds the private key; the other
+two verify with the public key. Everything below is one change: Render redeploys a service when its
+variables change, so do steps 2 and 3 back to back; sign-in fails in between (a few minutes). Nobody has to sign in again: the app's next request gets a 401 once, refreshes, and receives
+an RS256 token.
+
+1. On your computer (keep the private key off chat, email and the repository):
+
+   ```bash
+   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out jwt-private.pem
+   openssl pkey -in jwt-private.pem -pubout -out jwt-public.pem
+   ```
+
+2. Render → **squirrel-exercise → Environment → Secret Files → Add**: name `jwt-private.pem`,
+   contents of `jwt-private.pem`. Then add the variable
+   `JWT_PRIVATE_KEY_FILE` = `/etc/secrets/jwt-private.pem`. (Sign-up codes are then hashed with a
+   key derived from the private key, never with JWT_SECRET, which becomes public in step 3.)
+3. Render → **Env Groups → squirrel-shared**: `JWT_SECRET` = the whole contents of
+   `jwt-public.pem` (from `-----BEGIN PUBLIC KEY-----` to `-----END PUBLIC KEY-----`), and
+   `JWT_ALGORITHM` = `RS256`. The Run Module and the Social service read both from this group.
+4. Redeploy squirrel-exercise, squirrel-run-api and squirrel-social (Manual Deploy → Deploy latest
+   commit). The Exercise log says `[auth] tokens are signed with RS256`;
+   `https://squirrel-exercise.onrender.com/api/auth/jwks.json` lists the public key.
+5. Check: sign in on the website, open Profile (Social) and start a run (Run Module).
+
+To go back: remove `JWT_PRIVATE_KEY_FILE` from squirrel-exercise, set the group's `JWT_SECRET` to a
+new random secret and `JWT_ALGORITHM` to `HS256`, redeploy all three.
+
 ## 3. Connect the web app
 
 1. Vercel → **Settings → Environment Variables** (Production and Preview):
