@@ -80,7 +80,9 @@ export const isEndpointUnavailable = (e: unknown): e is EndpointUnavailableError
  */
 export type GateRule<A> = { capability: Capability; when?: (...args: A extends (...a: infer P) => unknown ? P : never) => boolean };
 export function gateEndpoints<S extends object>(service: S, rules: { [K in keyof S]?: GateRule<S[K]> }, opted?: Set<Capability>): S {
-  const out = { ...service } as S;
+  // Not a copy ({ ...service }): the "off" service is a Proxy with no own keys, and copying it
+  // gives an empty object. Everything not gated is looked up on the service itself.
+  const out = Object.create(service) as S;
   for (const key of Object.keys(rules) as (keyof S)[]) {
     const rule = rules[key] as { capability: Capability; when?: (...a: unknown[]) => boolean } | undefined;
     const original = service[key];

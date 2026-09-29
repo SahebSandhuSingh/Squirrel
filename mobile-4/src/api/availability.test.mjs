@@ -57,3 +57,11 @@ test('opting an endpoint in (backend shipped) passes calls through, per endpoint
   assert.equal(endpointAvailability('heatmap', parseLiveEndpoints('heatmap')).status, 'available');
   assert.equal(endpointAvailability('sharedWorkout', none).status, 'unavailable');
 });
+
+test('a Proxy service (the "off" campus API) keeps every method, gated or not', async () => {
+  const off = new Proxy({}, { get: (_t, key) => () => Promise.reject(new Error(`off:${String(key)}`)) });
+  const api = gateEndpoints(off, { heatmap: { capability: 'heatmap' } }, new Set());
+  assert.equal(typeof api.config, 'function');
+  await assert.rejects(api.config(), /off:config/);
+  await assert.rejects(api.heatmap('24h'), (e) => isEndpointUnavailable(e));
+});
