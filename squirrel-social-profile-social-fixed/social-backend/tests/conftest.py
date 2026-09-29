@@ -127,7 +127,7 @@ class FakeStorage:
 
 # --------------------------------------------------------------------------- database
 
-TABLES = ["push_tokens", "notifications", "challenges", "checkins", "event_rsvps", "events", "crew_vouches",
+TABLES = ["push_tokens", "notifications", "social_challenges", "checkins", "event_rsvps", "events", "crew_vouches",
           "crew_members", "crews", "members", "user_badges", "comments", "post_saves", "post_likes", "posts", "media", "activities", "follows", "user_stats", "users"]
 
 

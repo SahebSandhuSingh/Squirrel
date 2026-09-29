@@ -11,7 +11,9 @@ Why each table exists:
   crews / crew_members / crew_vouches   crews, who is in them since when, and who vouches for whom
   events / event_rsvps                  meetups (of a crew or open to all) and who is going
   checkins        "I'm here" at an event or a meetup spot, optionally telling friends; no GPS
-  challenges      head-to-head: most verified km or most workouts in N days
+  social_challenges  head-to-head: most verified km or most workouts in N days (named
+                     social_challenges since 0003: the Run Module owns `challenges` in the
+                     shared database; databases that ran the older 0002 are renamed by 0003)
   notifications   the in-app list (a push goes out alongside); dedupe_key absorbs retries
   push_tokens     the Expo push tokens of each user's devices
 """
@@ -141,7 +143,7 @@ def upgrade() -> None:
     op.create_index("ix_checkins_event", "checkins", ["event_id", "user_id"])
 
     op.create_table(
-        "challenges",
+        "social_challenges",
         sa.Column("id", sa.Uuid(), primary_key=True),
         sa.Column("challenger_id", sa.Uuid(), _user_fk(), nullable=False),
         sa.Column("opponent_id", sa.Uuid(), _user_fk(), nullable=False),
@@ -155,13 +157,13 @@ def upgrade() -> None:
         sa.Column("winner_id", sa.Uuid(), _user_fk(ondelete="SET NULL")),
         sa.Column("created_at", UTCDateTime(), nullable=False),
         sa.Column("finished_at", UTCDateTime()),
-        sa.CheckConstraint("challenger_id <> opponent_id", name="ck_challenges_not_self"),
-        sa.CheckConstraint("metric IN ('km', 'workouts')", name="ck_challenges_metric"),
-        sa.CheckConstraint("days BETWEEN 1 AND 30", name="ck_challenges_days"),
-        sa.CheckConstraint("status IN ('pending', 'accepted', 'declined', 'finished', 'cancelled')", name="ck_challenges_status"),
+        sa.CheckConstraint("challenger_id <> opponent_id", name="ck_social_challenges_not_self"),
+        sa.CheckConstraint("metric IN ('km', 'workouts')", name="ck_social_challenges_metric"),
+        sa.CheckConstraint("days BETWEEN 1 AND 30", name="ck_social_challenges_days"),
+        sa.CheckConstraint("status IN ('pending', 'accepted', 'declined', 'finished', 'cancelled')", name="ck_social_challenges_status"),
     )
-    op.create_index("ix_challenges_challenger", "challenges", ["challenger_id", "created_at"])
-    op.create_index("ix_challenges_opponent", "challenges", ["opponent_id", "created_at"])
+    op.create_index("ix_social_challenges_challenger", "social_challenges", ["challenger_id", "created_at"])
+    op.create_index("ix_social_challenges_opponent", "social_challenges", ["opponent_id", "created_at"])
 
     op.create_table(
         "notifications",
@@ -199,7 +201,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute(sa.text("DELETE FROM user_badges WHERE badge_id IN ('founding-squirrel', 'founding-500')"))
     op.execute(sa.text("DELETE FROM badges WHERE id IN ('founding-squirrel', 'founding-500')"))
-    for table in ("push_tokens", "notifications", "challenges", "checkins", "event_rsvps", "events",
+    for table in ("push_tokens", "notifications", "social_challenges", "checkins", "event_rsvps", "events",
                   "crew_vouches", "crew_members", "crews", "members"):
         op.drop_table(table)
     with op.batch_alter_table("users") as batch:

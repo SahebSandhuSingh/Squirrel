@@ -404,7 +404,8 @@ class Challenge(Base):
     """Head-to-head: who runs more verified km, or finishes more workouts, in `days` days from
     when the opponent accepts. Scores come from `activities`, never from the app."""
 
-    __tablename__ = "challenges"
+    # Not "challenges": that name belongs to the Run Module in the shared database (migration 0003).
+    __tablename__ = "social_challenges"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
     challenger_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
@@ -421,12 +422,12 @@ class Challenge(Base):
     finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
     __table_args__ = (
-        CheckConstraint("challenger_id <> opponent_id", name="ck_challenges_not_self"),
-        CheckConstraint("metric IN ('km', 'workouts')", name="ck_challenges_metric"),
-        CheckConstraint("days BETWEEN 1 AND 30", name="ck_challenges_days"),
-        CheckConstraint("status IN ('pending', 'accepted', 'declined', 'finished', 'cancelled')", name="ck_challenges_status"),
-        Index("ix_challenges_challenger", "challenger_id", "created_at"),
-        Index("ix_challenges_opponent", "opponent_id", "created_at"),
+        CheckConstraint("challenger_id <> opponent_id", name="ck_social_challenges_not_self"),
+        CheckConstraint("metric IN ('km', 'workouts')", name="ck_social_challenges_metric"),
+        CheckConstraint("days BETWEEN 1 AND 30", name="ck_social_challenges_days"),
+        CheckConstraint("status IN ('pending', 'accepted', 'declined', 'finished', 'cancelled')", name="ck_social_challenges_status"),
+        Index("ix_social_challenges_challenger", "challenger_id", "created_at"),
+        Index("ix_social_challenges_opponent", "opponent_id", "created_at"),
     )
 
 
