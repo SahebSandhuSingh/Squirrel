@@ -99,7 +99,7 @@ services:
     region: singapore
     plan: free
     branch: saheb
-    dockerfilePath: ./deploy/run-module.Dockerfile
+    dockerfilePath: ./run-module/Dockerfile
     dockerContext: ./run-module
     healthCheckPath: /health
     envVars:

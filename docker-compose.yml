@@ -25,7 +25,7 @@ x-social-token: &social-token ${SOCIAL_INTERNAL_TOKEN:-local-social-service-toke
 x-run-module: &run-module
   build:
     context: ./run-module
-    dockerfile: ../deploy/run-module.Dockerfile
+    dockerfile: Dockerfile
   image: squirrel-run-module
   environment:
     DATABASE_URL: *database-url

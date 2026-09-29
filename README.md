@@ -46,9 +46,9 @@ docker compose up --build
 A server that stored accounts in files before: `docker compose exec exercise python -m backend.db import-files`
 copies them into the database once (safe to repeat).
 
-The Run Module image is built from [`deploy/run-module.Dockerfile`](deploy/run-module.Dockerfile),
-kept outside `run-module/` so that folder stays exactly as its team ships it. The Exercise image is
-its existing `Dockerfile`.
+The Run Module image is built from [`run-module/Dockerfile`](run-module/Dockerfile),
+inside the `run-module/` build context. The Exercise image is its existing
+`Dockerfile`.
 
 **Without Docker**, give both the same `DATABASE_URL` and run each the usual way. Each module's own
 README has the details. The Run Module's npm scripts read `run-module/backend/.env` (they fail
