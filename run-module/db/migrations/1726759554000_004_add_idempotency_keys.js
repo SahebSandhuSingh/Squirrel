@@ -1,3 +1,5 @@
+/* This filename sorts before migrations it depends on. node-pg-migrate is pinned to 7.9.1 because it orders by embedded timestamp. Changing the migration tool or major version requires renaming this file and updating every migration ledger; see ADR-031. */
+
 export const up = async (pgm) => {
   pgm.createTable('idempotency_keys', {
     key: { type: 'text', notNull: true },

@@ -34,6 +34,8 @@ The renumbering was verified three ways:
 
 Migration 004's filename sorts before migrations it depends on. `node-pg-migrate` 7.9.1 orders migrations by the timestamp in the filename, not alphabetically, so it applies 004 after the schema migration that creates `runs`. This remains a latent risk if a different migration tool or version sorts filenames alphabetically.
 
+**Toolchain pin:** `node-pg-migrate` is pinned to exactly `7.9.1` for this reason; the pin is load-bearing, not incidental.
+
 ### 3. Production JWT verification requires RS256
 
 `render.yaml` currently sets `JWT_ALGORITHM=HS256` with a shared secret. This contradicts ADR-003, which requires RS256 before real user data. It has not yet changed because the Exercise Module is the only service that issues tokens, and switching algorithms requires all three services to change together.
