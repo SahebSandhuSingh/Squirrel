@@ -1,0 +1,207 @@
+import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import { getPool, many, one, query, withTransaction } from '../db/pool.js';
+import type { Queryable } from '../db/pool.js';
+import { currentUser, requireAuth } from '../auth/plugin.js';
+import { errors } from '../lib/errors.js';
+import { isUuid } from '../lib/ids.js';
+import { notify } from '../notifications/service.js';
+import { isBlockedEitherWay } from '../blocks/service.js';
+import { getPeopleLite } from '../users/repo.js';
+
+type MeetupStatus = 'proposed' | 'confirmed' | 'cancelled' | 'completed';
+type MeetupRow = {
+  id: string; created_by: string; zone_id: string | null; place_text: string | null; starts_at: string;
+  status: Exclude<MeetupStatus, 'completed'> | MeetupStatus; created_at: string; updated_at: string; zone_name?: string | null;
+};
+type ParticipantRow = { meetup_id: string; user_id: string; role: 'host' | 'guest'; status: 'invited' | 'accepted' | 'declined'; responded_at: string | null };
+
+const CreateBody = z.object({
+  zone_id: z.string().trim().min(1).max(64).nullable().optional(),
+  place_text: z.string().trim().max(240).nullable().optional(),
+  starts_at: z.string().datetime({ offset: true }),
+  invitee_ids: z.array(z.string().trim().min(1).max(128)).min(1).max(50),
+}).strict().refine((b) => !!b.zone_id || !!b.place_text, { message: 'Provide a zone_id or place_text.' })
+  .refine((b) => new Set(b.invitee_ids).size === b.invitee_ids.length, { path: ['invitee_ids'], message: 'Invitee ids must be unique.' });
+const IdParams = z.object({ id: z.string().refine(isUuid, 'invalid id') });
+const StatusQuery = z.object({ status: z.enum(['proposed', 'confirmed', 'cancelled', 'completed']).optional() });
+const EmptyBody = z.object({}).strict();
+
+function effectiveStatus(row: MeetupRow): MeetupStatus {
+  return row.status === 'confirmed' && Date.parse(row.starts_at) <= Date.now() ? 'completed' : row.status;
+}
+
+async function loadMeetup(id: string, q: Queryable = getPool(), lock = false): Promise<MeetupRow | null> {
+  return one<MeetupRow>(
+    `SELECT m.*, z.name AS zone_name FROM meetups m LEFT JOIN zones z ON z.id = m.zone_id WHERE m.id = $1${lock ? ' FOR UPDATE OF m' : ''}`,
+    [id], q,
+  );
+}
+
+async function participants(meetupId: string, q: Queryable = getPool()) {
+  return many<ParticipantRow>(
+    `SELECT meetup_id, user_id, role, status, responded_at FROM meetup_participants WHERE meetup_id = $1 ORDER BY role DESC, user_id`,
+    [meetupId], q,
+  );
+}
+
+async function lockPeople(ids: string[], q: Queryable) {
+  await many(`SELECT id FROM users WHERE id = ANY($1::text[]) ORDER BY id FOR UPDATE`, [[...new Set(ids)].sort()], q);
+}
+
+async function blockedFromViewer(viewerId: string, parts: ParticipantRow[], q?: Queryable) {
+  for (const p of parts) {
+    if (p.user_id !== viewerId && await isBlockedEitherWay(viewerId, p.user_id, q)) return true;
+  }
+  return false;
+}
+
+async function serialize(row: MeetupRow, parts?: ParticipantRow[]) {
+  const rows = parts ?? await participants(row.id);
+  const people = await many<{ id: string; display_name: string; avatar_url: string | null; hostel: string | null; open_to_meet: boolean; open_to_meet_until: string | null }>(
+    `SELECT u.id, u.display_name, u.avatar_url, h.short_name AS hostel, u.open_to_meet, u.open_to_meet_until
+     FROM users u LEFT JOIN hostels h ON h.id = u.hostel_id WHERE u.id = ANY($1::text[])`, [rows.map((p) => p.user_id)],
+  );
+  const personMap = new Map(people.map((p) => [p.id, p]));
+  return {
+    id: row.id, created_by: row.created_by, zone_id: row.zone_id,
+    zone: row.zone_id ? { id: row.zone_id, name: row.zone_name ?? row.zone_id } : null,
+    place_text: row.place_text, starts_at: row.starts_at, status: effectiveStatus(row),
+    created_at: row.created_at, updated_at: row.updated_at,
+    participants: rows.map((p) => {
+      const person = personMap.get(p.user_id);
+      return { user_id: p.user_id, role: p.role, status: p.status, responded_at: p.responded_at,
+        person: person ? { user_id: person.id, display_name: person.display_name, avatar_url: person.avatar_url, hostel: person.hostel,
+          // open_to_meet is exposed as a profile hint only; no meetup decision reads it.
+          open_to_meet: person.open_to_meet && (!person.open_to_meet_until || Date.parse(person.open_to_meet_until) > Date.now()) } : null };
+    }),
+  };
+}
+
+async function requireVisibleParticipant(meetupId: string, viewerId: string) {
+  const row = await loadMeetup(meetupId);
+  if (!row) throw errors.notFound('Meetup');
+  const parts = await participants(meetupId);
+  if (!parts.some((p) => p.user_id === viewerId) || await blockedFromViewer(viewerId, parts)) throw errors.notFound('Meetup');
+  return { row, parts };
+}
+
+export async function meetupRoutes(app: FastifyInstance) {
+  app.post('/v1/meetups', { preHandler: requireAuth }, async (req, reply) => {
+    const host = currentUser(req);
+    const body = CreateBody.parse(req.body ?? {});
+    if (Date.parse(body.starts_at) <= Date.now()) throw errors.invalid('starts_at must be in the future.');
+    if (body.invitee_ids.includes(host.id)) throw errors.invalid('You cannot invite yourself.');
+    if (body.zone_id && !(await one(`SELECT 1 FROM zones WHERE id = $1 AND is_active`, [body.zone_id]))) throw errors.notFound('Zone');
+    const users = await many<{ id: string }>(`SELECT id FROM users WHERE id = ANY($1::text[]) AND NOT is_banned`, [body.invitee_ids]);
+    if (users.length !== body.invitee_ids.length) throw errors.notFound('Squirrel');
+
+    const created = await withTransaction(async (tx) => {
+      await lockPeople([host.id, ...body.invitee_ids], tx);
+      const participantIds = [host.id, ...body.invitee_ids];
+      for (let i = 0; i < participantIds.length; i++) for (let j = i + 1; j < participantIds.length; j++) {
+        if (await isBlockedEitherWay(participantIds[i]!, participantIds[j]!, tx)) throw errors.conflict('meetup_blocked', 'You cannot invite someone who has blocked you or whom you have blocked.');
+      }
+      const meetup = await one<MeetupRow>(
+        `INSERT INTO meetups (created_by, zone_id, place_text, starts_at)
+         VALUES ($1, $2, $3, $4) RETURNING *`,
+        [host.id, body.zone_id ?? null, body.place_text?.trim() || null, body.starts_at], tx,
+      );
+      await query(`INSERT INTO meetup_participants (meetup_id, user_id, role, status, responded_at) VALUES ($1, $2, 'host', 'accepted', now())`, [meetup!.id, host.id], tx);
+      for (const id of body.invitee_ids) {
+        await query(`INSERT INTO meetup_participants (meetup_id, user_id, role, status) VALUES ($1, $2, 'guest', 'invited')`, [meetup!.id, id], tx);
+      }
+      return meetup!;
+    });
+    for (const id of body.invitee_ids) await notify(id, 'meetup.invited', `${host.display_name} invited you to a meetup.`, { meetup_id: created.id }, host.id);
+    reply.code(201);
+    const fresh = await loadMeetup(created.id);
+    return serialize(fresh!);
+  });
+
+  app.get('/v1/meetups', { preHandler: requireAuth }, async (req) => {
+    const viewer = currentUser(req);
+    const { status } = StatusQuery.parse(req.query);
+    const rows = await many<MeetupRow>(
+      `SELECT m.*, z.name AS zone_name FROM meetups m
+       JOIN meetup_participants mp ON mp.meetup_id = m.id
+       LEFT JOIN zones z ON z.id = m.zone_id
+       WHERE mp.user_id = $1 ORDER BY m.starts_at, m.created_at DESC LIMIT 100`, [viewer.id],
+    );
+    const out = [];
+    for (const row of rows) {
+      const parts = await participants(row.id);
+      if (await blockedFromViewer(viewer.id, parts)) continue;
+      if (status && effectiveStatus(row) !== status) continue;
+      out.push(await serialize(row, parts));
+    }
+    return { meetups: out };
+  });
+
+  app.get('/v1/meetups/:id', { preHandler: requireAuth }, async (req) => {
+    const { id } = IdParams.parse(req.params);
+    const { row, parts } = await requireVisibleParticipant(id, currentUser(req).id);
+    return serialize(row, parts);
+  });
+
+  for (const action of ['accept', 'decline', 'cancel', 'leave'] as const) {
+    app.post(`/v1/meetups/:id/${action}`, { preHandler: requireAuth }, async (req) => {
+      EmptyBody.parse(req.body ?? {});
+      const user = currentUser(req);
+      const { id } = IdParams.parse(req.params);
+      const result = await withTransaction(async (tx) => {
+        const row = await loadMeetup(id, tx, true);
+        if (!row) throw errors.notFound('Meetup');
+        const parts = await participants(id, tx);
+        const actor = parts.find((p) => p.user_id === user.id);
+        if (!actor) throw errors.notFound('Meetup');
+        await lockPeople(parts.map((p) => p.user_id), tx);
+        if (action === 'accept' && await blockedFromViewer(user.id, parts, tx)) throw errors.notFound('Meetup');
+        const status = effectiveStatus(row);
+        let cancelledByResponses = false;
+
+        if (action === 'accept' || action === 'decline') {
+          if (actor.role !== 'guest' || actor.status !== 'invited') throw errors.notFound('Meetup');
+          if (row.status === 'cancelled' || status === 'completed') throw errors.conflict('meetup_closed', 'This meetup is no longer open for responses.');
+          if (action === 'accept') {
+            await query(`UPDATE meetup_participants SET status = 'accepted', responded_at = now() WHERE meetup_id = $1 AND user_id = $2`, [id, user.id], tx);
+            await query(`UPDATE meetups SET status = 'confirmed', updated_at = now() WHERE id = $1`, [id], tx);
+          } else {
+            await query(`UPDATE meetup_participants SET status = 'declined', responded_at = now() WHERE meetup_id = $1 AND user_id = $2`, [id, user.id], tx);
+            const pending = await one<{ n: number }>(`SELECT count(*)::int AS n FROM meetup_participants WHERE meetup_id = $1 AND role = 'guest' AND status <> 'declined'`, [id], tx);
+            if (!pending?.n) {
+              await query(`UPDATE meetups SET status = 'cancelled', updated_at = now() WHERE id = $1`, [id], tx);
+              cancelledByResponses = true;
+            }
+          }
+        } else if (action === 'cancel') {
+          if (actor.role !== 'host') throw errors.notFound('Meetup');
+          if (status === 'completed' || row.status === 'cancelled') throw errors.conflict('meetup_closed', 'A completed or cancelled meetup cannot be cancelled.');
+          await query(`UPDATE meetups SET status = 'cancelled', updated_at = now() WHERE id = $1`, [id], tx);
+        } else {
+          if (actor.role !== 'guest') throw errors.notFound('Meetup');
+          if (actor.status !== 'accepted') throw errors.conflict('meetup_participant_state', 'Only an accepted guest can leave.');
+          await query(`UPDATE meetup_participants SET status = 'declined', responded_at = now() WHERE meetup_id = $1 AND user_id = $2`, [id, user.id], tx);
+          const remaining = await one<{ n: number }>(`SELECT count(*)::int AS n FROM meetup_participants WHERE meetup_id = $1 AND role = 'guest' AND status <> 'declined'`, [id], tx);
+          if (!remaining?.n) {
+            await query(`UPDATE meetups SET status = 'cancelled', updated_at = now() WHERE id = $1`, [id], tx);
+            cancelledByResponses = true;
+          }
+        }
+        return { row: (await loadMeetup(id, tx))!, parts: await participants(id, tx), cancelledByResponses };
+      });
+
+      if (action === 'accept') await notify(result.row.created_by, 'meetup.accepted', `${user.display_name} accepted your meetup invitation.`, { meetup_id: id, status: 'accepted' }, user.id);
+      if (action === 'decline' || action === 'leave') await notify(result.row.created_by, 'meetup.declined', action === 'leave' ? 'A participant is no longer attending your meetup.' : `${user.display_name} declined your meetup invitation.`, { meetup_id: id, status: 'declined' }, user.id);
+      if ((action === 'decline' || action === 'leave') && result.cancelledByResponses) {
+        await notify(result.row.created_by, 'meetup.cancelled', 'The meetup was cancelled after all guests declined or withdrew.', { meetup_id: id, status: 'cancelled' }, user.id);
+      }
+      if (action === 'cancel') {
+        for (const p of result.parts.filter((p) => p.role === 'guest' && p.status !== 'declined')) {
+          await notify(p.user_id, 'meetup.cancelled', `${user.display_name} cancelled the meetup.`, { meetup_id: id, status: 'cancelled' }, user.id);
+        }
+      }
+      return serialize(result.row, result.parts);
+    });
+  }
+}

@@ -52,6 +52,14 @@ export function parseLiveEndpoints(raw: string | undefined): Set<Capability> {
 }
 const OPTED_IN = parseLiveEndpoints(process.env.EXPO_PUBLIC_LIVE_ENDPOINTS);
 
+/**
+ * The env opt-ins plus capabilities a configured backend is known to serve (e.g. campus-service
+ * serves sharedZones and heatmap). Pass the result to gateEndpoints / endpointAvailability.
+ */
+export function optedInWith(extra: readonly Capability[], base: Set<Capability> = OPTED_IN): Set<Capability> {
+  return new Set([...base, ...extra]);
+}
+
 export type EndpointAvailability = { status: 'available' } | { status: 'unavailable'; capability: Capability; reason: string };
 
 export function endpointAvailability(c: Capability, opted: Set<Capability> = OPTED_IN): EndpointAvailability {

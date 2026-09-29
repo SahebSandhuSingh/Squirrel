@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { campusApi, type ZoneDetail } from '@/api/campus';
+import { isPlaceholderZone } from '@/api/campus/campusShapes';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
 import { ErrorState, LoadingRows } from '@/components/campus/States';
 import { TerritoryActionButton } from '@/components/campus/TerritoryAction';
@@ -97,6 +98,9 @@ export function ZonePanel({ zoneId, meId, showOpen = false }: { zoneId: string; 
       </View>
       <Text style={styles.meta}>{km(d.stats.distance_7d_m)} moved here this week{shielded ? ` · shielded for ${untilTime(t.shield_until)}` : ''}</Text>
 
+      {/* An unsurveyed outline: say so beside the actions, but never block them. */}
+      {isPlaceholderZone(d.zone) && <ApproximateNote />}
+
       {/* Actions — only what the backend allows right now */}
       {rel === 'unclaimed' && <TerritoryActionButton zoneId={zoneId} zoneName={d.zone.name} action="claim" availability={a.claim} onDone={() => detail.reload()} onFailed={detail.reload} />}
       {rel === 'mine' && (
@@ -147,7 +151,23 @@ export function ZonePanel({ zoneId, meId, showOpen = false }: { zoneId: string; 
   );
 }
 
+/** Shown wherever a zone's outline is a placeholder (geometry_source 'dev_placeholder'). */
+export function ApproximateNote({ compact = false }: { compact?: boolean }) {
+  return (
+    <View style={[styles.approx, compact && styles.approxCompact]} accessible accessibilityLabel="Approximate outline, not surveyed yet. Claiming still works.">
+      <Icon name="vector-polygon" size={compact ? 14 : 16} color={colors.gold} />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.approxTitle}>Approximate outline — not surveyed yet</Text>
+        {!compact && <Text style={styles.meta}>The shape on the map is a rough stand-in. Claim, steal and defend work as usual; the outline may change once it’s mapped.</Text>}
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  approx: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderRadius: radius.md, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.gold, padding: 10 },
+  approxCompact: { alignItems: 'center', paddingVertical: 6, paddingHorizontal: 8 },
+  approxTitle: { color: colors.gold, fontFamily: fonts.label, fontSize: 13, letterSpacing: 0.4 },
   kindIcon: { width: 44, height: 44, borderRadius: 14, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cardHi },
   owner: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, padding: 10 },
   empty: { width: 38, height: 38, borderRadius: 19, borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },

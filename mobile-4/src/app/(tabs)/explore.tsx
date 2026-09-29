@@ -10,7 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Mascot } from '@/art/Mascot';
 import { featureUnavailable } from '@/api/campus';
 import type { Heatmap, HeatWindow, MapPlayer, Zone } from '@/api/campus/types';
-import { getHeatmap } from '@/api/campus/discovery';
+import { DEFAULT_HEAT_WINDOW, getHeatmap } from '@/api/campus/discovery';
 import { ErrorState, SourceBadge } from '@/components/campus/States';
 import { relationOf } from '@/components/campus/territoryUi';
 import { EmptyNearby, MapBanner, MapHeader, MapSheet, NearbyUsersSheet, PlayerSheet, PoiSheet, TerritorySheet } from '@/components/map/MapChrome';
@@ -40,7 +40,7 @@ export default function MapScreen() {
   const [sheet, setSheet] = useState<Sheet>(null);
   // Map → Heat: an optional layer; fetched only while it's on.
   const [heatOn, setHeatOn] = useState(false);
-  const [heatWindow, setHeatWindow] = useState<HeatWindow>('24h');
+  const [heatWindow, setHeatWindow] = useState<HeatWindow>(DEFAULT_HEAT_WINDOW);
   const heat = useCampus<Heatmap>(`map:heat:${heatWindow}`, () => getHeatmap(heatWindow), { enabled: heatOn });
   useRefreshOnFocus(heat.reload, 60_000);
   const meId = me.data?.user_id ?? null;

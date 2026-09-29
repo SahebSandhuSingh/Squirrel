@@ -46,7 +46,8 @@ const centroid = (xy: [number, number][]): [number, number] => [xy.reduce((s, p)
 
 export const MOCK_ZONES: Zone[] = DEFS.map((d) => {
   const [cx, cy] = centroid(d.xy);
-  return { id: d.id, name: d.name, short_name: d.short, kind: d.kind, hostel: d.hostel, polygon: d.xy.map(([x, y]) => toLatLng(x, y)), centroid: toLatLng(cx, cy) };
+  // Sketched outlines, like campus-service's unsurveyed zones: the map draws them as approximate.
+  return { id: d.id, name: d.name, short_name: d.short, kind: d.kind, hostel: d.hostel, polygon: d.xy.map(([x, y]) => toLatLng(x, y)), centroid: toLatLng(cx, cy), geometry_source: 'dev_placeholder' };
 });
 
 /** Ray casting in local metres. */

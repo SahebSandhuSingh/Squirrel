@@ -11,10 +11,7 @@ import { CAMPUS_API_URL } from '@/api/config';
 import { withRetry } from '@/api/endpoints';
 import type * as T from '@/api/campus/types';
 
-const base = CAMPUS_API_URL;
-const get = <R,>(path: string) => withRetry(() => api<R>(path, { base }));
-const send = <R,>(path: string, method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', body?: unknown) => api<R>(path, { base, method, body });
-const qs = (p: Record<string, string | number | undefined>) => {
+export const qs = (p: Record<string, string | number | undefined>) => {
   const s = Object.entries(p)
     .filter(([, v]) => v !== undefined && v !== '')
     .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
@@ -23,89 +20,103 @@ const qs = (p: Record<string, string | number | undefined>) => {
 };
 const id = encodeURIComponent;
 
-export const httpCampusApi: T.CampusApi = {
-  config: () => get<T.AppConfig>('/v1/config'),
-  stats: () => get<T.LaunchStats>('/v1/campus/stats'),
+/** GET with retries (429 / 5xx / network) and a plain write, both against `base`. */
+export function restClient(base: string) {
+  return {
+    get: <R,>(path: string) => withRetry(() => api<R>(path, { base })),
+    send: <R,>(path: string, method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', body?: unknown) => api<R>(path, { base, method, body }),
+  };
+}
 
-  me: () => get<T.Me>('/v1/me'),
-  updateMe: (patch) => send<T.Me>('/v1/me', 'PATCH', patch),
-  setOpenToMeet: (enabled) => send<T.OpenToMeet>('/v1/me/open-to-meet', 'PUT', { enabled }),
-  profile: (userId) => get<T.Profile>(`/v1/users/${id(userId)}`),
-  sharedContext: (userId) => get<T.SharedContext>(`/v1/users/${id(userId)}/context`),
-  badges: async () => (await get<{ badges: T.Badge[] }>('/v1/me/badges')).badges,
+/** The full contract over REST at `base` (a dedicated campus backend). */
+export function makeHttpCampusApi(base: string): T.CampusApi {
+  const { get, send } = restClient(base);
+  return {
+    config: () => get<T.AppConfig>('/v1/config'),
+    stats: () => get<T.LaunchStats>('/v1/campus/stats'),
 
-  zones: async () => (await get<{ zones: T.Zone[] }>('/v1/zones')).zones,
-  territories: () => get<{ territories: T.Territory[]; as_of: string }>('/v1/territories'),
-  zone: (zoneId) => get<T.ZoneDetail>(`/v1/zones/${id(zoneId)}`),
-  territoryAction: (zoneId, action, idempotencyKey) => send<T.TerritoryActionResult>(`/v1/zones/${id(zoneId)}/${action}`, 'POST', { idempotency_key: idempotencyKey }),
+    me: () => get<T.Me>('/v1/me'),
+    updateMe: (patch) => send<T.Me>('/v1/me', 'PATCH', patch),
+    setOpenToMeet: (enabled) => send<T.OpenToMeet>('/v1/me/open-to-meet', 'PUT', { enabled }),
+    profile: (userId) => get<T.Profile>(`/v1/users/${id(userId)}`),
+    sharedContext: (userId) => get<T.SharedContext>(`/v1/users/${id(userId)}/context`),
+    badges: async () => (await get<{ badges: T.Badge[] }>('/v1/me/badges')).badges,
 
-  submitActivity: (input) => send<{ activity_id: string }>('/v1/activities', 'POST', input),
-  activityZones: (activityId) => get<T.ActivityZones>(`/v1/runs/${id(activityId)}/zones`),
+    zones: async () => (await get<{ zones: T.Zone[] }>('/v1/zones')).zones,
+    territories: () => get<{ territories: T.Territory[]; as_of: string }>('/v1/territories'),
+    zone: (zoneId) => get<T.ZoneDetail>(`/v1/zones/${id(zoneId)}`),
+    territoryAction: (zoneId, action, idempotencyKey) => send<T.TerritoryActionResult>(`/v1/zones/${id(zoneId)}/${action}`, 'POST', { idempotency_key: idempotencyKey }),
 
-  crews: ({ q, scope }) => get<T.Page<T.Crew>>(`/v1/crews${qs({ q, scope })}`),
-  crew: (crewId) => get<T.CrewDetail>(`/v1/crews/${id(crewId)}`),
-  joinCrew: (crewId) => send<T.Crew>(`/v1/crews/${id(crewId)}/join`, 'POST'),
-  leaveCrew: (crewId) => send<T.Crew>(`/v1/crews/${id(crewId)}/leave`, 'POST'),
-  createCrew: (input) => send<T.Crew>('/v1/crews', 'POST', input),
+    submitActivity: (input) => send<{ activity_id: string }>('/v1/activities', 'POST', input),
+    activityZones: (activityId) => get<T.ActivityZones>(`/v1/runs/${id(activityId)}/zones`),
 
-  events: ({ scope }) => get<T.Page<T.EventSummary>>(`/v1/events${qs({ scope })}`),
-  event: (eventId) => get<T.EventDetail>(`/v1/events/${id(eventId)}`),
-  rsvp: (eventId, going) => send<T.EventDetail>(`/v1/events/${id(eventId)}/rsvp`, going ? 'PUT' : 'DELETE'),
-  createEvent: (input) => send<T.EventDetail>('/v1/events', 'POST', input),
+    crews: ({ q, scope }) => get<T.Page<T.Crew>>(`/v1/crews${qs({ q, scope })}`),
+    crew: (crewId) => get<T.CrewDetail>(`/v1/crews/${id(crewId)}`),
+    joinCrew: (crewId) => send<T.Crew>(`/v1/crews/${id(crewId)}/join`, 'POST'),
+    leaveCrew: (crewId) => send<T.Crew>(`/v1/crews/${id(crewId)}/leave`, 'POST'),
+    createCrew: (input) => send<T.Crew>('/v1/crews', 'POST', input),
 
-  suggestedPeople: async (mode) => (await get<{ people: T.PersonCard[] }>(`/v1/people/suggested${qs({ mode })}`)).people,
-  activeNow: () => get<T.ActiveNow>('/v1/people/active'),
+    events: ({ scope }) => get<T.Page<T.EventSummary>>(`/v1/events${qs({ scope })}`),
+    event: (eventId) => get<T.EventDetail>(`/v1/events/${id(eventId)}`),
+    rsvp: (eventId, going) => send<T.EventDetail>(`/v1/events/${id(eventId)}/rsvp`, going ? 'PUT' : 'DELETE'),
+    createEvent: (input) => send<T.EventDetail>('/v1/events', 'POST', input),
 
-  challengeTypes: async () => (await get<{ types: T.ChallengeTypeInfo[] }>('/v1/challenge-invites/types')).types,
-  invites: async (box) => (await get<{ invites: T.ChallengeInvite[] }>(`/v1/challenge-invites${qs({ box })}`)).invites,
-  createInvite: (input) => send<T.ChallengeInvite>('/v1/challenge-invites', 'POST', input),
-  respondInvite: (inviteId, action) => send<T.ChallengeInvite>(`/v1/challenge-invites/${id(inviteId)}/${action}`, 'POST'),
+    suggestedPeople: async (mode) => (await get<{ people: T.PersonCard[] }>(`/v1/people/suggested${qs({ mode })}`)).people,
+    activeNow: () => get<T.ActiveNow>('/v1/people/active'),
 
-  squirrelBoard: (period, limit = 10) => get<T.SquirrelBoard>(`/v1/leaderboards/squirrels${qs({ period, limit })}`),
-  hostelBoard: (period) => get<T.HostelBoard>(`/v1/leaderboards/hostels${qs({ period })}`),
+    challengeTypes: async () => (await get<{ types: T.ChallengeTypeInfo[] }>('/v1/challenge-invites/types')).types,
+    invites: async (box) => (await get<{ invites: T.ChallengeInvite[] }>(`/v1/challenge-invites${qs({ box })}`)).invites,
+    createInvite: (input) => send<T.ChallengeInvite>('/v1/challenge-invites', 'POST', input),
+    respondInvite: (inviteId, action) => send<T.ChallengeInvite>(`/v1/challenge-invites/${id(inviteId)}/${action}`, 'POST'),
 
-  mapFeatures: () => get<T.MapFeatures>('/v1/map/features'),
-  nearbyPlayers: () => get<T.NearbyPlayers>('/v1/map/players'),
-  zonePlayers: async (zoneId) => (await get<{ players: T.PersonSummary[] }>(`/v1/zones/${id(zoneId)}/players`)).players,
-  updatePresence: (p) => send<{ accepted: boolean }>('/v1/map/presence', 'PUT', p),
-  searchPeople: async (q) => (await get<{ people: T.PersonSummary[] }>(`/v1/people/search${qs({ q })}`)).people,
+    squirrelBoard: (period, limit = 10) => get<T.SquirrelBoard>(`/v1/leaderboards/squirrels${qs({ period, limit })}`),
+    hostelBoard: (period) => get<T.HostelBoard>(`/v1/leaderboards/hostels${qs({ period })}`),
 
-  pokeStatus: (userId) => get<T.Relationship>(`/v1/pokes/status/${id(userId)}`),
-  sendPoke: (userId, key) => send<T.PokeResult>('/v1/pokes', 'POST', { to_user_id: userId, idempotency_key: key }),
-  // Same endpoint: the backend decides whether this completes a mutual poke. `reply` is a hint for analytics.
-  pokeBack: (userId, key) => send<T.PokeResult>('/v1/pokes', 'POST', { to_user_id: userId, idempotency_key: key, reply: true }),
-  incomingPokes: async () => (await get<{ pokes: T.IncomingPoke[] }>('/v1/pokes/incoming')).pokes,
-  friendshipStatus: (userId) => get<{ user_id: string; friends: boolean; since: string | null }>(`/v1/friends/status/${id(userId)}`),
+    mapFeatures: () => get<T.MapFeatures>('/v1/map/features'),
+    nearbyPlayers: () => get<T.NearbyPlayers>('/v1/map/players'),
+    zonePlayers: async (zoneId) => (await get<{ players: T.PersonSummary[] }>(`/v1/zones/${id(zoneId)}/players`)).players,
+    updatePresence: (p) => send<{ accepted: boolean }>('/v1/map/presence', 'PUT', p),
+    searchPeople: async (q) => (await get<{ people: T.PersonSummary[] }>(`/v1/people/search${qs({ q })}`)).people,
 
-  notifications: () => get<{ items: T.AppNotification[]; unread: number }>('/v1/notifications'),
-  markNotificationsRead: (ids) => send<{ unread: number }>('/v1/notifications/read', 'POST', { ids }),
+    pokeStatus: (userId) => get<T.Relationship>(`/v1/pokes/status/${id(userId)}`),
+    sendPoke: (userId, key) => send<T.PokeResult>('/v1/pokes', 'POST', { to_user_id: userId, idempotency_key: key }),
+    // Same endpoint: the backend decides whether this completes a mutual poke. `reply` is a hint for analytics.
+    pokeBack: (userId, key) => send<T.PokeResult>('/v1/pokes', 'POST', { to_user_id: userId, idempotency_key: key, reply: true }),
+    incomingPokes: async () => (await get<{ pokes: T.IncomingPoke[] }>('/v1/pokes/incoming')).pokes,
+    friendshipStatus: (userId) => get<{ user_id: string; friends: boolean; since: string | null }>(`/v1/friends/status/${id(userId)}`),
 
-  // Dev B — shared zones (the per-person overlap is sharedContext above), heatmap, Squirrel Dates
-  sharedZones: () => get<T.SharedZonesIndex>('/v1/me/shared-zones'),
-  heatmap: (window) => get<T.Heatmap>(`/v1/map/heatmap${qs({ window })}`),
-  dateSuggestions: (forUserId) => get<T.DateSuggestions>(`/v1/dates/suggestions${qs({ user_id: forUserId })}`),
-  dismissDateSuggestion: async (suggestionId) => {
-    await send<void>(`/v1/dates/suggestions/${id(suggestionId)}/dismiss`, 'POST');
-    return { dismissed: true };
-  },
-  dateSettings: () => get<T.DateSettings>('/v1/dates/settings'),
-  setDateSettings: (enabled) => send<T.DateSettings>('/v1/dates/settings', 'PUT', { enabled }),
-  blockStatus: (userId) => get<T.BlockState>(`/v1/users/${id(userId)}/block`),
-  setBlocked: (userId, blocked) => send<T.BlockState>(`/v1/users/${id(userId)}/block`, blocked ? 'POST' : 'DELETE'),
+    notifications: () => get<{ items: T.AppNotification[]; unread: number }>('/v1/notifications'),
+    markNotificationsRead: (ids) => send<{ unread: number }>('/v1/notifications/read', 'POST', { ids }),
 
-  // Dev A — media (same presigned flow as the Social service), meetup ratings, ambassadors
-  createUpload: (input) => send<T.UploadTicket>('/v1/media/uploads', 'POST', input),
-  completeUpload: (mediaId) => send<T.MediaItem>(`/v1/media/${id(mediaId)}/complete`, 'POST'),
-  media: (mediaId) => get<T.MediaItem>(`/v1/media/${id(mediaId)}`),
-  meetupRating: (meetupId) => get<T.MeetupRatingState>(`/v1/meetups/${id(meetupId)}/rating`),
-  rateMeetup: (meetupId, input, key) => send<T.MeetupRatingResult>(`/v1/meetups/${id(meetupId)}/ratings`, 'POST', { ...input, idempotency_key: key }),
-  ambassador: () => get<T.AmbassadorState>('/v1/ambassador/application'),
-  applyAmbassador: (answers, key) => send<T.AmbassadorApplication>('/v1/ambassador/application', 'POST', { answers, idempotency_key: key }),
+    // Dev B — shared zones (the per-person overlap is sharedContext above), heatmap, Squirrel Dates
+    sharedZones: () => get<T.SharedZonesIndex>('/v1/me/shared-zones'),
+    heatmap: (window) => get<T.Heatmap>(`/v1/map/heatmap${qs({ window })}`),
+    dateSuggestions: (forUserId) => get<T.DateSuggestions>(`/v1/dates/suggestions${qs({ user_id: forUserId })}`),
+    dismissDateSuggestion: async (suggestionId) => {
+      await send<void>(`/v1/dates/suggestions/${id(suggestionId)}/dismiss`, 'POST');
+      return { dismissed: true };
+    },
+    dateSettings: () => get<T.DateSettings>('/v1/dates/settings'),
+    setDateSettings: (enabled) => send<T.DateSettings>('/v1/dates/settings', 'PUT', { enabled }),
+    blockStatus: (userId) => get<T.BlockState>(`/v1/users/${id(userId)}/block`),
+    setBlocked: (userId, blocked) => send<T.BlockState>(`/v1/users/${id(userId)}/block`, blocked ? 'POST' : 'DELETE'),
 
-  meetups: async () => (await get<{ meetups: T.Meetup[] }>('/v1/meetups')).meetups,
-  meetup: (meetupId) => get<T.Meetup>(`/v1/meetups/${id(meetupId)}`),
-  checkIn: (meetupId, notify) => send<T.CheckInResult>(`/v1/meetups/${id(meetupId)}/check-in`, 'POST', { notify_safety_contact: notify }),
-};
+    // Dev A — media (same presigned flow as the Social service), meetup ratings, ambassadors
+    createUpload: (input) => send<T.UploadTicket>('/v1/media/uploads', 'POST', input),
+    completeUpload: (mediaId) => send<T.MediaItem>(`/v1/media/${id(mediaId)}/complete`, 'POST'),
+    media: (mediaId) => get<T.MediaItem>(`/v1/media/${id(mediaId)}`),
+    meetupRating: (meetupId) => get<T.MeetupRatingState>(`/v1/meetups/${id(meetupId)}/rating`),
+    rateMeetup: (meetupId, input, key) => send<T.MeetupRatingResult>(`/v1/meetups/${id(meetupId)}/ratings`, 'POST', { ...input, idempotency_key: key }),
+    ambassador: () => get<T.AmbassadorState>('/v1/ambassador/application'),
+    applyAmbassador: (answers, key) => send<T.AmbassadorApplication>('/v1/ambassador/application', 'POST', { answers, idempotency_key: key }),
+
+    meetups: async () => (await get<{ meetups: T.Meetup[] }>('/v1/meetups')).meetups,
+    meetup: (meetupId) => get<T.Meetup>(`/v1/meetups/${id(meetupId)}`),
+    checkIn: (meetupId, notify) => send<T.CheckInResult>(`/v1/meetups/${id(meetupId)}/check-in`, 'POST', { notify_safety_contact: notify }),
+  };
+}
+
+export const httpCampusApi: T.CampusApi = makeHttpCampusApi(CAMPUS_API_URL);
 
 /** Human list of routes, for docs and the "missing endpoints" report. */
 export const CAMPUS_ROUTES = [

@@ -40,7 +40,7 @@ export function RunZones({ state, meId, onRetry }: { state: RunZonesState; meId:
       )}
       {state.status === 'ready' && state.data && state.data.status === 'processing' && (
         <View style={{ gap: 8 }}>
-          <Text style={styles.note}>The server is still verifying this activity. Zone eligibility appears once it’s done.</Text>
+          <Text style={styles.note}>{state.note ?? 'The server is still verifying this activity. Zone eligibility appears once it’s done.'}</Text>
           <Button label="Check again" size="sm" variant="secondary" iconLeft="refresh" onPress={onRetry} />
         </View>
       )}

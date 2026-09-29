@@ -180,6 +180,36 @@ an RS256 token.
 To go back: remove `JWT_PRIVATE_KEY_FILE` from squirrel-exercise, set the group's `JWT_SECRET` to a
 new random secret and `JWT_ALGORITHM` to `HS256`, redeploy all three.
 
+## 2e. Campus service (zones, territory, map) — after the RS256 switch
+
+`campus-service/` accepts RS256 tokens only, so do §2d first. Created earlier it rejects every
+token and looks broken while it isn't. Nothing else depends on it: the app uses it only once
+`EXPO_PUBLIC_CAMPUS_SERVICE_URL` is set on Vercel (§3).
+
+1. **Its own database:** supabase.com → New project (free, same region as the first). Database →
+   Extensions → enable **postgis**. Copy its **Session pooler** URL (as in §2) with
+   `?sslmode=verify-full&sslrootcert=/etc/secrets/prod-ca-2021.crt`; the CA file already on the
+   `squirrel-shared` group is the same for every Supabase project.
+2. **Render:** Blueprint → sync (or New → Web Service from `render.yaml`'s `squirrel-campus`). It asks for:
+   - `DATABASE_URL`: the NEW project's URL from step 1 (never the shared one).
+   - `AUTH_JWKS_URL`: `https://squirrel-exercise.onrender.com/api/auth/jwks.json`. Leave
+     `AUTH_ISSUER` / `AUTH_AUDIENCE` unset.
+   - `SOCIAL_API_URL`: `https://squirrel-social.onrender.com` (names and profile ids come from there,
+     with `SOCIAL_INTERNAL_TOKEN` from the group).
+   - `CORS_ORIGINS`: the Vercel address(es).
+   - `REALTIME_PUBLIC_URL`: `wss://squirrel-campus.onrender.com/v1/realtime`.
+3. First start applies its migrations and seeds the hostels and **placeholder** zones
+   (`geometry_source: dev_placeholder`, shown dashed and labelled approximate in the app). Surveyed
+   outlines replace them permanently when loaded (`campus-service/docs/GEOGRAPHIC_DATA_REQUIRED.md`).
+4. Check: `https://squirrel-campus.onrender.com/healthz` and `/readyz` answer, and `/v1/zones` lists
+   the zones.
+5. **Vercel:** add `EXPO_PUBLIC_CAMPUS_SERVICE_URL=https://squirrel-campus.onrender.com` and redeploy.
+   Map, zones, territory, presence, heatmap and shared zones then come from campus-service;
+   everything else stays on squirrel-social.
+
+Note: with campus-service on, a finished run's GPS is also sent to it (it verifies runs itself to
+decide who may claim a zone), so GPS is stored in two databases. Include that in the privacy review.
+
 ## 3. Connect the web app
 
 1. Vercel → **Settings → Environment Variables** (Production and Preview):

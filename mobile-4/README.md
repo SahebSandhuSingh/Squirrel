@@ -103,7 +103,33 @@ The campus contract below is served by the Social service through an adapter
 | Exercises: catalog, sessions, camera coaching, reports | Exercise backend `/api/...` |
 | "Moving right now" counter | Run Module `/v1/live` + Exercise `/api/live` |
 
-**Not live yet** (the screens say so, never invented data): named zones and claim / steal / defend,
+**campus-service (the map world).** Set `EXPO_PUBLIC_CAMPUS_SERVICE_URL` (the `campus-service/` backend,
+routes under `/v1`) next to the Social URL and the campus API splits by feature
+(`src/api/campus/campusShapes.ts` → `makeHybridCampusApi`, REST in `campusService.ts`):
+
+| campus-service | Social (unchanged) |
+|---|---|
+| `zones`, `territories`, `zone`, `territoryAction` (claim / steal / defend) | profiles, `me` / `updateMe`, badges |
+| `submitActivity`, `activityZones` (run → zone eligibility) | crews, events, meetups |
+| `mapFeatures`, `nearbyPlayers`, `updatePresence` | challenges / invites, leaderboards |
+| `activeNow`, `setOpenToMeet`, `sharedContext` | notifications, people search / suggestions, pokes, friends |
+| `sharedZones`, `heatmap` (7-day window) — no longer gated | Squirrel Dates, blocking, media, `zonePlayers` (no campus route yet) |
+| `config`: `realtime_url`, `features.defend` / `open_to_meet`; `stats`: `zones_total` / `zones_claimed`; `me.open_to_meet` | the rest of `config`, `stats` and `me` (Social's values if campus-service is down) |
+
+User ids are the same on both (campus-service returns Social profile ids and names). Shapes that
+differ are adapted in `campusShapes.ts` (map features GeoJSON → `MapFeatures` with an empty base map and
+`zones`; heatmap cells; shared zones by person; Active-now cards; `hidden_reason` codes → text).
+After a GPS run the Run Module upload happens as before; then the same points go one-shot to
+`POST /v1/activities` and the zones panel reads `GET /v1/activities/{id}/zones`, re-checking a few
+times while verification is `processing`. A campus error only shows in the zones panel. Hostel pickers
+use Social's hostel list (the profile lives there). For the web build, allow the app's origin in
+campus-service's `CORS_ORIGINS`. Unset: everything behaves exactly as before.
+
+**Approximate zones.** Zones whose `geometry_source` is `dev_placeholder` (unsurveyed outlines; the dev
+mock's zones too) are drawn with a dotted outline, a lighter fill and an `≈ APPROXIMATE` label, and the
+zone screen / map sheet say "Approximate outline — not surveyed yet". Claiming still works.
+
+**Not live yet** without campus-service (the screens say so, never invented data): named zones and claim / steal / defend,
 the campus map's base layer and players, presence, pokes and friends, Open to Meet, Active-now
 people, Date Mode, meetups, all-time boards, daily / group challenges (progress-service), and the
 Dev A / Dev B endpoints in `src/api/availability.ts`. Connection mode and "onboarding done" are kept
@@ -244,7 +270,7 @@ The campus map is Squirrel Social's own renderer: react-native-svg with a pan/zo
 Everything below is frontend. The backend work belongs to Dev A and Dev B, and none of it is claimed as done here.
 
 - Screens import feature adapters in `api/campus/`: `discovery.ts`, `community.ts` and `media.ts`. They never call `fetch` directly.
-- **Availability is per endpoint, not per service** (`api/availability.ts`, wired in `api/campus/index.ts`). The six campus endpoints with no backend yet are gated in *every* mode (live, dev mock, off): shared zones, heatmap, media, meetup rating, ambassador, and `profile_details` on `PATCH /v1/me`. Squirrel Dates is built (Social service) and is no longer gated. A gated call rejects with `EndpointUnavailableError` (`code: <capability>_unavailable`). All other campus calls go straight through, so one missing endpoint never fails another.
+- **Availability is per endpoint, not per service** (`api/availability.ts`, wired in `api/campus/index.ts`). The six campus endpoints with no backend yet are gated in *every* mode (live, dev mock, off): shared zones, heatmap, media, meetup rating, ambassador, and `profile_details` on `PATCH /v1/me`. With `EXPO_PUBLIC_CAMPUS_SERVICE_URL` set (on top of Social), shared zones and heatmap are served by campus-service and opted in (`optedInWith`); tests in `src/api/campusService.test.mjs`. Squirrel Dates is built (Social service) and is no longer gated. A gated call rejects with `EndpointUnavailableError` (`code: <capability>_unavailable`). All other campus calls go straight through, so one missing endpoint never fails another.
 - **Four states, kept distinct:** data, empty (`[]` — "nothing yet"), **unavailable** ("<Feature> · Not live yet", layout kept, only the dependent action disabled, no retry) and **error** (401/403/400/422/5xx/offline — shown as errors with retry or sign-in). `featureUnavailable()` is true only for `EndpointUnavailableError`, campus off, 404 `no_route`/no code, 501, or 503 `*_unavailable`.
 - **No fake success anywhere:** the dev mock doesn't implement these six — no invented heat cells, uploads, ratings, ambassador forms, stored profile details or related notifications. (It does mock Squirrel Dates, now that it's built, from the demo people's zones.)
 - **When a backend ships:** set it to `true` in `BUILT` in `api/availability.ts`, or opt it in without a code change with `EXPO_PUBLIC_LIVE_ENDPOINTS=heatmap,ambassador` (comma-separated capability names: `sharedZones, heatmap, dateSuggestions, media, meetupRating, ambassador, profileDetails, sharedWorkout`). Tests: `src/api/availability.test.mjs` (`npm test`).

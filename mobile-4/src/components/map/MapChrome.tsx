@@ -8,8 +8,10 @@ import { router } from 'expo-router';
 import type { MapPlayer, PersonSummary, Poi, Zone } from '@/api/campus/types';
 import { getZonePlayers, searchPeople } from '@/api/campus/map';
 import { errorText } from '@/api/campus';
+import { isPlaceholderZone } from '@/api/campus/campusShapes';
 import { Avatar } from '@/components/Avatar';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
+import { ApproximateNote } from '@/components/campus/ZonePanel';
 import { displayStatus, relationOf, shortTime, STATUS_UI } from '@/components/campus/territoryUi';
 import { NearbyUserCard } from '@/components/social/NearbyUserCard';
 import { Button, Display, Icon, Kicker, NATIVE, ProgressBar, tap } from '@/components/ui';
@@ -140,6 +142,7 @@ export function TerritorySheet({ zone, meId }: { zone: Zone; meId: string | null
           <Text style={[styles.statusText, { color: ui.color }]}>{ui.label}</Text>
         </View>
       </View>
+      {isPlaceholderZone(zone) && <ApproximateNote compact />}
       {t?.owner ? (
         <View style={styles.owner}>
           <PersonAvatar person={t.owner} size={40} ring={mine ? colors.primary : colors.secondary} link={false} />

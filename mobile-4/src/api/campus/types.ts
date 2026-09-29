@@ -228,6 +228,12 @@ export type Zone = {
   centroid: LatLng;
   /** For hostel zones: the hostel team it belongs to (Hostel vs Hostel). */
   hostel: string | null;
+  /**
+   * Where the outline comes from (campus-service): 'survey' | 'osm' | 'dev_placeholder'. A
+   * 'dev_placeholder' shape is a rough stand-in nobody has surveyed yet — drawn as approximate,
+   * still claimable. Absent on backends that don't say.
+   */
+  geometry_source?: string | null;
 };
 
 export type Territory = {
@@ -448,6 +454,8 @@ export type MapFeatures = {
   buildings: { id: string; polygon: LatLng[] }[];
   terrain: { id: string; kind: 'green' | 'water' | 'field'; polygon: LatLng[] }[];
   pois: Poi[];
+  /** campus-service: the active zones behind its features (each with `geometry_source`). */
+  zones?: Zone[];
 };
 
 export type Poi = {

@@ -5,6 +5,7 @@
  */
 import { memo } from 'react';
 import { G, Polygon, Polyline, Text as SvgText } from 'react-native-svg';
+import { isPlaceholderZone } from '@/api/campus/campusShapes';
 import type { MapFeatures, Zone } from '@/api/campus/types';
 import { displayStatus, RELATION_COLOR, relationOf, STATUS_UI } from '@/components/campus/territoryUi';
 import { tap } from '@/components/ui';
@@ -42,14 +43,23 @@ export const BaseLayer = memo(function BaseLayer({ features, proj }: { features:
 
 type ZoneShapeProps = { zone: Zone; points: string; label: [number, number]; selected: boolean; meId: string | null; fontSize: number; onSelect?: (id: string) => void };
 
-/** One territory: colour = who holds it, dash = neutral/contested/attack, opacity = strength. */
+/** Dotted outline of a zone nobody has surveyed yet (geometry_source 'dev_placeholder'). */
+const APPROX_DASH = '3 11';
+
+/**
+ * One territory: colour = who holds it, dash = neutral/contested/attack, opacity = strength.
+ * A placeholder outline (not surveyed) is drawn lighter, dotted and labelled APPROXIMATE —
+ * still selectable and claimable.
+ */
 export const ZoneShape = memo(function ZoneShape({ zone, points, label, selected, meId, fontSize, onSelect }: ZoneShapeProps) {
   const t = useTerritory(zone.id);
   const rel = relationOf(t, meId);
   const status = displayStatus(t);
   const mine = rel === 'mine';
+  const approx = isPlaceholderZone(zone);
   const c = status === 'contested' || status === 'under_attack' ? STATUS_UI[status].color : mine ? RELATION_COLOR.mine : STATUS_UI[status].color;
   const strength = t?.control ?? (t?.owner ? 0.6 : 0);
+  const fillOpacity = selected ? 0.4 : status === 'neutral' ? 0.05 : 0.1 + strength * 0.22;
   const line2 =
     status === 'neutral'
       ? 'NEUTRAL'
@@ -63,15 +73,16 @@ export const ZoneShape = memo(function ZoneShape({ zone, points, label, selected
       }
     : undefined;
   return (
-    <G onPress={press} accessibilityLabel={`${zone.name}: ${STATUS_UI[status].label}${t?.owner ? `, held by ${mine ? 'you' : t.owner.display_name}` : ''}`}>
+    <G onPress={press} accessibilityLabel={`${zone.name}: ${STATUS_UI[status].label}${t?.owner ? `, held by ${mine ? 'you' : t.owner.display_name}` : ''}${approx ? '. Approximate outline, not surveyed yet' : ''}`}>
       <Polygon
         points={points}
         fill={c}
-        fillOpacity={selected ? 0.4 : status === 'neutral' ? 0.05 : 0.1 + strength * 0.22}
+        fillOpacity={approx ? fillOpacity * 0.5 : fillOpacity}
         stroke={c}
-        strokeOpacity={selected ? 1 : 0.85}
+        strokeOpacity={selected ? 1 : approx ? 0.6 : 0.85}
         strokeWidth={selected ? 7 : status === 'under_attack' ? 5 : 3}
-        strokeDasharray={status === 'neutral' ? '12 10' : status === 'contested' ? '22 8' : status === 'under_attack' ? '6 6' : undefined}
+        strokeDasharray={approx ? APPROX_DASH : status === 'neutral' ? '12 10' : status === 'contested' ? '22 8' : status === 'under_attack' ? '6 6' : undefined}
+        strokeLinecap={approx ? 'round' : undefined}
         strokeLinejoin="round"
       />
       <SvgText x={label[0]} y={label[1] - fontSize * 0.15} fill={colors.text} fontSize={fontSize} fontFamily={fonts.labelBold} fontWeight="700" textAnchor="middle" opacity={0.92}>
@@ -80,6 +91,11 @@ export const ZoneShape = memo(function ZoneShape({ zone, points, label, selected
       {!!line2 && (
         <SvgText x={label[0]} y={label[1] + fontSize * 0.9} fill={c} fontSize={fontSize * 0.66} fontFamily={fonts.label} textAnchor="middle">
           {line2}
+        </SvgText>
+      )}
+      {approx && (
+        <SvgText x={label[0]} y={label[1] + fontSize * (line2 ? 1.65 : 0.9)} fill={colors.dim} fontSize={fontSize * 0.56} fontFamily={fonts.label} textAnchor="middle" letterSpacing={1}>
+          ≈ APPROXIMATE
         </SvgText>
       )}
     </G>

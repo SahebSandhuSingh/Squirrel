@@ -11,9 +11,11 @@
  * campus endpoints with no backend yet reject with EndpointUnavailableError in every mode, while
  * the rest of the service keeps working. One missing endpoint never takes down another.
  */
-import { EndpointUnavailableError, gateEndpoints, isEndpointUnavailable } from '@/api/availability';
+import { endpointAvailability as availabilityOf, EndpointUnavailableError, gateEndpoints, isEndpointUnavailable, optedInWith, type Capability } from '@/api/availability';
 import { ApiError, getApiToken } from '@/api/client';
-import { CAMPUS_API_CONFIGURED, CAMPUS_MOCKS_ENABLED, CAMPUS_ON_SOCIAL, REALTIME_URL } from '@/api/config';
+import { CAMPUS_API_CONFIGURED, CAMPUS_MOCKS_ENABLED, CAMPUS_ON_SOCIAL, CAMPUS_SERVICE_CONFIGURED, CAMPUS_SERVICE_URL, REALTIME_URL } from '@/api/config';
+import { makeHybridCampusApi } from '@/api/campus/campusShapes';
+import { makeCampusServiceApi } from '@/api/campus/campusService';
 import { httpCampusApi } from '@/api/campus/http';
 import { socialCampusApi } from '@/api/campus/social';
 import { mockCampusApi, mockRealtime } from '@/api/campus/mock/server';
@@ -29,9 +31,29 @@ const offApi: CampusApi = new Proxy({} as CampusApi, {
   get: () => () => Promise.reject(new ApiError(0, 'Campus features aren’t live yet', { code: NOT_LIVE, detail: 'Campus features aren’t live yet' })),
 });
 
+/**
+ * Split by feature: with the Social service live AND campus-service configured
+ * (EXPO_PUBLIC_CAMPUS_SERVICE_URL), campus-service serves the map world (zones, territory, runs →
+ * zones, map players / presence, Active now, Open to Meet, shared zones, heatmap) and Social keeps
+ * everything else (api/campus/campusShapes.ts → makeHybridCampusApi). Unset: exactly as before.
+ */
+export const CAMPUS_MAP_ON_SERVICE = CAMPUS_SOURCE === 'live' && CAMPUS_ON_SOCIAL && CAMPUS_SERVICE_CONFIGURED;
+
 /** Live: a dedicated campus backend (EXPO_PUBLIC_CAMPUS_API_URL) speaks the contract itself; the
- *  Social service is adapted to it (api/campus/social.ts). */
-const sourceApi: CampusApi = CAMPUS_SOURCE === 'mock' ? mockCampusApi : CAMPUS_SOURCE === 'live' ? (CAMPUS_ON_SOCIAL ? socialCampusApi : httpCampusApi) : offApi;
+ *  Social service is adapted to it (api/campus/social.ts), optionally with campus-service's map world. */
+const sourceApi: CampusApi =
+  CAMPUS_SOURCE === 'mock'
+    ? mockCampusApi
+    : CAMPUS_SOURCE === 'live'
+      ? CAMPUS_ON_SOCIAL
+        ? CAMPUS_MAP_ON_SERVICE
+          ? makeHybridCampusApi(socialCampusApi, makeCampusServiceApi(CAMPUS_SERVICE_URL))
+          : socialCampusApi
+        : httpCampusApi
+      : offApi;
+
+/** Capabilities campus-service serves on top of the env opt-ins; undefined (the env default) otherwise. */
+const OPTED: Set<Capability> | undefined = CAMPUS_MAP_ON_SERVICE ? optedInWith(['sharedZones', 'heatmap']) : undefined;
 
 /** Method → capability for every endpoint that isn't built yet. Everything unlisted passes through. */
 export const campusApi: CampusApi = gateEndpoints(sourceApi, {
@@ -50,10 +72,13 @@ export const campusApi: CampusApi = gateEndpoints(sourceApi, {
   applyAmbassador: { capability: 'ambassador' },
   // PATCH /v1/me itself is live; only the profile_details field has no backend yet.
   updateMe: { capability: 'profileDetails', when: (patch) => patch.profile_details !== undefined },
-});
+}, OPTED);
 
 export { EndpointUnavailableError, isEndpointUnavailable };
-export { CAPABILITY_LABEL, endpointAvailability, isEndpointAvailable, type Capability } from '@/api/availability';
+export { CAPABILITY_LABEL, type Capability } from '@/api/availability';
+/** Availability as the campus API sees it (campus-service's capabilities included when it's configured). */
+export const endpointAvailability = (c: Capability) => availabilityOf(c, OPTED);
+export const isEndpointAvailable = (c: Capability) => endpointAvailability(c).status === 'available';
 
 // ---------------------------------------------------------------------------
 // Errors

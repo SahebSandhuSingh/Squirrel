@@ -7,6 +7,10 @@
 #   squirrel-social     Profile + Social API: profiles, follows, posts, feed, crews, events, challenges,
 #                       waitlist, boards and notifications (Alembic migrations at startup). Finished
 #                       workouts, runs and territory steals are published to it by the other two.
+#   squirrel-campus     campus-service: named zones, territory (claim/steal/defend), map, presence,
+#                       heatmap, shared zones. Its OWN database (a second Supabase project with
+#                       PostGIS), migrations and placeholder zones at startup, worker in-process.
+#                       Accepts RS256 tokens only: create it after the RS256 switch (DEPLOY.md §2e).
 #   squirrel-redis      Render Key Value (Redis) for the Run Module's queues and leaderboard
 #
 # The free plan has no disks, background workers or pre-deploy commands, hence the two switches
@@ -157,6 +161,46 @@ services:
       # Only if the Expo project has "enhanced push security" on (expo.dev → project → Access tokens).
       - key: EXPO_ACCESS_TOKEN
         sync: false
+
+  - type: web
+    name: squirrel-campus
+    runtime: docker
+    region: singapore
+    plan: free
+    branch: saheb
+    dockerfilePath: ./campus-service/Dockerfile
+    dockerContext: ./campus-service
+    healthCheckPath: /healthz
+    envVars:
+      # For SOCIAL_INTERNAL_TOKEN (names and profile ids come from squirrel-social) and the Supabase
+      # CA file. campus-service ignores JWT_SECRET / JWT_ALGORITHM: it verifies with AUTH_JWKS_URL.
+      - fromGroup: squirrel-shared
+      # A SECOND Supabase project (PostGIS on), not the shared one: its own migrations and ledger.
+      - key: DATABASE_URL
+        sync: false
+      # https://squirrel-exercise.onrender.com/api/auth/jwks.json (RS256 only). Leave AUTH_ISSUER and
+      # AUTH_AUDIENCE unset: the Exercise tokens carry neither claim.
+      - key: AUTH_JWKS_URL
+        sync: false
+      # https://squirrel-social.onrender.com
+      - key: SOCIAL_API_URL
+        sync: false
+      # The Vercel address(es), comma-separated.
+      - key: CORS_ORIGINS
+        sync: false
+      # wss://squirrel-campus.onrender.com/v1/realtime (unset: the app refreshes on focus).
+      - key: REALTIME_PUBLIC_URL
+        sync: false
+      - key: NODE_ENV
+        value: production
+      - key: MIGRATE_ON_START
+        value: "1"
+      # Hostels + placeholder zones (geometry_source = dev_placeholder); real outlines replace them.
+      - key: SEED_ZONES_ON_START
+        value: "1"
+      # The verification worker runs inside the API (one free service; it pauses while asleep).
+      - key: WORKER_INLINE
+        value: "1"
 
   - type: keyvalue
     name: squirrel-redis

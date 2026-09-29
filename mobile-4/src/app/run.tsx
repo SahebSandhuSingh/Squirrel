@@ -17,7 +17,7 @@ import * as Location from 'expo-location';
 import { Scene } from '@/art/Scene';
 import { RunRoute } from '@/art/CityMap';
 import { Mascot } from '@/art/Mascot';
-import { campusApi, CAMPUS_SOURCE, type ActivityType, type LatLng } from '@/api/campus';
+import { campusApi, CAMPUS_MAP_ON_SERVICE, CAMPUS_SOURCE, type ActivityType, type LatLng } from '@/api/campus';
 import { formatArea, rejectionText, submitRun, TERMINAL_STATUSES, xpApi, type RunSummary } from '@/api/endpoints';
 import { useAuth } from '@/auth/AuthProvider';
 import { CampusMap } from '@/components/campus/CampusMap';
@@ -57,6 +57,10 @@ const VERDICT_UI: Record<Outcome, { label: string; icon: React.ComponentProps<ty
   processing: { label: 'Still processing', icon: 'progress-clock', color: colors.dim },
 };
 
+/** Backoff for re-reading zones while campus-service verifies an activity. */
+const ZONE_POLL_MS = [3000, 5000, 8000, 13000, 20000];
+const VERIFYING_NOTE = 'The campus is still verifying your GPS. Zones appear here as soon as it’s done — this usually takes a few seconds.';
+
 type Summary = FinishRunResult & { verdict: Outcome; reason: string; km: number; time: string; pace: string; uploadNote?: string; areaText?: string; uploadFailed?: boolean };
 
 export default function Run() {
@@ -84,6 +88,7 @@ export default function Run() {
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [zonesState, setZonesState] = useState<RunZonesState>({ status: 'idle' });
+  const [zonePolls, setZonePolls] = useState(0);
   const [stage, setStage] = useState<keyof typeof STAGE_TEXT>('uploading');
   const [canSkipWait, setCanSkipWait] = useState(false);
 
@@ -247,11 +252,16 @@ export default function Run() {
   // ---- Zones: recorded activity → backend eligibility (never inferred here)
   const loadZones = useCallback(async () => {
     setZonesState({ status: 'loading' });
+    setZonePolls(0);
     try {
       if (CAMPUS_SOURCE === 'off') return setZonesState({ status: 'unavailable', note: 'Zone claiming switches on when the campus backend goes live.' });
-      let id = activityIdRef.current ?? runIdRef.current;
-      if (CAMPUS_SOURCE === 'mock' && !activityIdRef.current) {
-        // Dev mock records the route itself; live runs are recorded by the Run Module.
+      // campus-service decides zones from GPS it verifies itself and doesn't know Run Module run
+      // ids, so the same points go to it one-shot, after (never instead of) the Run Module upload.
+      // Only real, signed-in GPS activities: a demo route never reaches real territory.
+      const toCampusService = CAMPUS_MAP_ON_SERVICE && live && sourceRef.current === 'gps' && track.points.length > 1;
+      let id = CAMPUS_MAP_ON_SERVICE ? activityIdRef.current : (activityIdRef.current ?? runIdRef.current);
+      if ((CAMPUS_SOURCE === 'mock' || toCampusService) && !activityIdRef.current) {
+        // The dev mock and campus-service record the route themselves; the Run Module keeps its own copy.
         const pts = track.points.map((p) => ({ lat: p.lat, lng: p.lon, recorded_at: new Date(p.t).toISOString(), accuracy_m: p.accuracy ?? 10 }));
         const r = await campusApi.submitActivity({ type: kind, started_at: new Date(startedAt.current).toISOString(), ended_at: new Date(endedAt.current).toISOString(), points: pts });
         activityIdRef.current = r.activity_id;
@@ -260,14 +270,42 @@ export default function Run() {
       if (!id) {
         return setZonesState({
           status: 'unavailable',
-          note: sourceRef.current === 'demo' ? 'Demo activities (no GPS) can’t unlock zones.' : 'Upload the activity first — zones are checked once the server has your route.',
+          note:
+            sourceRef.current === 'demo'
+              ? 'Demo activities (no GPS) can’t unlock zones.'
+              : CAMPUS_MAP_ON_SERVICE && !live
+                ? 'Sign in to unlock zones — the campus checks your route once it has it.'
+                : 'Upload the activity first — zones are checked once the server has your route.',
         });
       }
-      setZonesState({ status: 'ready', data: await campusApi.activityZones(id) });
+      const data = await campusApi.activityZones(id);
+      setZonesState({ status: 'ready', data, note: CAMPUS_MAP_ON_SERVICE && data.status === 'processing' ? VERIFYING_NOTE : undefined });
     } catch (e) {
       setZonesState({ status: 'error', error: e });
     }
-  }, [track.points, kind]);
+  }, [track.points, kind, live]);
+
+  // campus-service verifies asynchronously: while it answers 'processing', look again a few times
+  // (backing off, ~50 s in all), then leave it to "Check again". Never a tight loop.
+  useEffect(() => {
+    const d = zonesState.status === 'ready' ? zonesState.data : undefined;
+    const id = activityIdRef.current;
+    if (!CAMPUS_MAP_ON_SERVICE || !d || d.status !== 'processing' || !id || zonePolls >= ZONE_POLL_MS.length) return;
+    let current = true;
+    const t = setTimeout(async () => {
+      try {
+        const data = await campusApi.activityZones(id);
+        if (current) setZonesState({ status: 'ready', data, note: data.status === 'processing' ? VERIFYING_NOTE : undefined });
+      } catch {
+        // Keep "still verifying" on screen; the next look (or Check again) tries again.
+      }
+      if (current) setZonePolls((n) => n + 1);
+    }, ZONE_POLL_MS[zonePolls]);
+    return () => {
+      current = false;
+      clearTimeout(t);
+    };
+  }, [zonesState, zonePolls]);
 
   // ---- Upload to the Run Module (live), resumable
   const upload = useCallback(async (): Promise<Partial<Summary> & { kmFinal?: number; minutes?: number; pace?: string; serverXpTotal?: number }> => {

@@ -8,6 +8,10 @@
  *                                 The campus screens run on it (api/campus/http.ts adapts the routes).
  *   EXPO_PUBLIC_CAMPUS_API_URL    Only for a separate campus backend with the full contract; defaults to
  *                                 the Social service.
+ *   EXPO_PUBLIC_CAMPUS_SERVICE_URL campus-service (routes under /v1): the map world — zones, territory,
+ *                                 activities → zones, presence, Active now, heatmap, shared zones. With the
+ *                                 Social service, those go here and everything else stays on Social
+ *                                 (api/campus/hybrid.ts). Empty: the app behaves exactly as without it.
  *   EXPO_PUBLIC_PROGRESS_API_URL  progress-service (not built); empty = Progress uses the Run Module's XP
  *   EXPO_PUBLIC_REALTIME_URL      optional WebSocket for live updates (the backend's /v1/config can also provide it)
  *   EXPO_PUBLIC_DEV_MOCKS         '1' forces the in-memory dev mock for campus APIs, '0' disables it (default: on in dev builds only)
@@ -32,6 +36,9 @@ export const CAMPUS_API_URL = RAW_CAMPUS_URL || SOCIAL_API_URL;
 export const CAMPUS_API_CONFIGURED = CAMPUS_API_URL.length > 0;
 /** True when the campus contract is served by the Social service through the adapter in api/campus/http.ts. */
 export const CAMPUS_ON_SOCIAL = !RAW_CAMPUS_URL && SOCIAL_API_CONFIGURED;
+/** campus-service base URL (no trailing slash; the app appends the /v1 paths itself, like the others). */
+export const CAMPUS_SERVICE_URL = trim(process.env.EXPO_PUBLIC_CAMPUS_SERVICE_URL);
+export const CAMPUS_SERVICE_CONFIGURED = CAMPUS_SERVICE_URL.length > 0;
 export const REALTIME_URL = trim(process.env.EXPO_PUBLIC_REALTIME_URL);
 const MOCK_FLAG = process.env.EXPO_PUBLIC_DEV_MOCKS;
 /**
