@@ -26,6 +26,7 @@ from app.models import Activity, Challenge, User
 from app.schemas_community import ChallengeList, ChallengeOut, ChallengeSide, CreateChallengeRequest
 from app.services import community
 from app.services import notify as notifications
+from app.services.dates import is_blocked
 from app.services.social import can_see_content
 
 router = APIRouter(prefix="/v1/challenges", tags=["challenges"])
@@ -124,7 +125,7 @@ def create_challenge(body: CreateChallengeRequest, db: DB, viewer: CurrentViewer
     if body.opponent_id == viewer.id:
         raise invalid("Challenge someone else.", "self_challenge")
     opponent = db.get(User, body.opponent_id)
-    if opponent is None or not can_see_content(db, viewer.id, opponent):
+    if opponent is None or not can_see_content(db, viewer.id, opponent) or is_blocked(db, viewer.id, opponent.id):
         raise not_found("User not found.")
     open_count = db.scalar(select(func.count()).select_from(Challenge).where(
         Challenge.challenger_id == viewer.id, Challenge.status.in_(["pending", "accepted"])))

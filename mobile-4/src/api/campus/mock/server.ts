@@ -623,6 +623,7 @@ function summary(s: PlayerSeed): T.PersonSummary {
 }
 
 const DATE_MODE_ON = process.env.EXPO_PUBLIC_MOCK_DATE_MODE === 'on';
+const dates = { enabled: false, dismissed: new Set<string>(), blocked: new Set<string>() };
 
 export const mockCampusApi: T.CampusApi = {
   async config() {
@@ -631,7 +632,7 @@ export const mockCampusApi: T.CampusApi = {
       campus: { id: 'iiser-kolkata', name: 'IISER Kolkata', short_name: 'IISER K', email_domains: ['iiserkol.ac.in'], center: MOCK_ZONES[0].centroid, launched_at: iso(t0 - 14 * 24 * HOUR) },
       features: {
         create_crew: true,
-        create_event: false,
+        create_event: true,
         defend: true,
         open_to_meet: true,
         date_mode: DATE_MODE_ON
@@ -925,6 +926,24 @@ export const mockCampusApi: T.CampusApi = {
     return detailOf(e);
   },
 
+  async createEvent(input) {
+    await delay();
+    maybeFail();
+    const title = input.title.trim();
+    if (title.length < 3) throw fail(422, 'invalid', 'Give it a title of at least 3 characters');
+    if (Date.parse(input.starts_at) <= now()) throw fail(422, 'invalid', 'Pick a time in the future');
+    const zone = MOCK_ZONES.find((z) => z.name === input.venue.trim());
+    const me = person(ME)!;
+    const e = ev({
+      id: `ev-${now().toString(36)}`, title, type: input.type, starts_at: input.starts_at, ends_at: input.ends_at ?? null,
+      location: { name: input.venue.trim() || 'On campus', zone_id: zone?.id ?? null }, host: { type: 'user', id: ME, name: me.display_name },
+      capacity: input.capacity ?? null, territory_challenge: null, description: input.description?.trim() || null, meetup_id: null, going: [ME], extra: 0,
+    });
+    events.push(e);
+    refreshEvent(e);
+    return detailOf(e);
+  },
+
   async suggestedPeople(mode) {
     await delay();
     if (mode === 'date') {
@@ -1101,15 +1120,57 @@ export const mockCampusApi: T.CampusApi = {
     return { unread: notes.filter((n) => !n.read).length };
   },
 
-  // ---- The seven endpoints with no backend yet (shared zones, heatmap, Squirrel Dates, media,
-  // meetup ratings, ambassadors; profile_details is gated on PATCH /v1/me). The dev mock does NOT
+  // ---- The six endpoints with no backend yet (shared zones, heatmap, media, meetup ratings,
+  // ambassadors; profile_details is gated on PATCH /v1/me). The dev mock does NOT
   // fake them: they reject as unavailable, exactly like the live build, so the UI shows
   // "Not live yet" instead of invented data. api/campus/index.ts gates them before they get here.
   sharedZones: () => unavailable('sharedZones'),
   heatmap: () => unavailable('heatmap'),
-  dateSuggestions: () => unavailable('dateSuggestions'),
-  dismissDateSuggestion: () => unavailable('dateSuggestions'),
-  inviteFromSuggestion: () => unavailable('dateSuggestions'),
+  // Squirrel Dates (built on the Social service): mocked from the demo people's zones. Suggestion
+  // only — nothing is sent to anyone. `open` stands in for the other person's opt-in.
+  async dateSuggestions(forUserId) {
+    await delay();
+    if (!dates.enabled) return { available: true, enabled: false, reason: 'Turn on Squirrel Dates to get suggestions for people who share your campus spots.', suggestions: [] };
+    const mine = new Set(person(ME)!.ranZones);
+    const suggestions = people
+      .filter((p) => p.user_id !== ME && p.open && !dates.dismissed.has(p.user_id) && !dates.blocked.has(p.user_id) && (!forUserId || p.user_id === forUserId))
+      .map((p) => ({ p, zone: MOCK_ZONES.find((z) => mine.has(z.id) && p.ranZones.includes(z.id)) }))
+      .filter((x): x is { p: MockPerson; zone: (typeof MOCK_ZONES)[number] } => !!x.zone)
+      .slice(0, 3)
+      .map(({ p, zone }, i) => ({
+        id: p.user_id,
+        person: lite(p),
+        reason: `You're both often around ${zone.name}. You both tend to be there on ${['Tuesday', 'Thursday', 'Saturday'][i]} evenings.`,
+        zone: { id: zone.id, name: zone.name },
+        suggested_time: iso(nextDow([2, 4, 6][i], 18)),
+      }));
+    return { available: true, enabled: true, reason: null, suggestions };
+  },
+  async dismissDateSuggestion(suggestionId) {
+    await delay();
+    dates.dismissed.add(suggestionId);
+    return { dismissed: true };
+  },
+  async dateSettings() {
+    await delay();
+    return { enabled: dates.enabled, zones_ready: true };
+  },
+  async setDateSettings(enabled) {
+    await delay();
+    dates.enabled = enabled;
+    return { enabled, zones_ready: true };
+  },
+  async blockStatus(userId) {
+    await delay();
+    return { user_id: userId, blocked: dates.blocked.has(userId) };
+  },
+  async setBlocked(userId, blocked) {
+    await delay();
+    if (userId === ME) throw fail(422, 'self_block', "You can't block yourself.");
+    if (blocked) dates.blocked.add(userId);
+    else dates.blocked.delete(userId);
+    return { user_id: userId, blocked };
+  },
   createUpload: () => unavailable('media'),
   completeUpload: () => unavailable('media'),
   media: () => unavailable('media'),

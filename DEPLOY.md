@@ -126,6 +126,11 @@ minute.
 - `SOCIAL_HOSTELS`: the hostel names, comma-separated (`Hostel A,Hostel B,...`). Until it is set
   the hostel picker and the hostel vs hostel board stay hidden.
 - `SOCIAL_APP_URL`: the Vercel address, for invite links (`…/sign-in?mode=create&invite=CODE`).
+- `SOCIAL_ZONES_FILE` (Squirrel Dates): the named campus zones. Write `campus-zones.json` (format in
+  `squirrel-social-profile-social-fixed/social-backend/README.md`, "Squirrel Dates"), add it under
+  **Secret Files**, and set `SOCIAL_ZONES_FILE=/etc/secrets/campus-zones.json`. Until then the
+  Squirrel Dates section stays hidden in the app. Use surveyed outlines: the dev mock's zones in
+  `mobile-4/src/api/campus/mock/geo.ts` are hand-placed sketches.
 
 Everything else is automatic: the waitlist and invite codes, the Founding Squirrel (first 15
 verified members) and Founding 500 badges, crews, events, check-ins, challenges, the daily stats,

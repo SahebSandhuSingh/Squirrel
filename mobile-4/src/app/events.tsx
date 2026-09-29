@@ -7,7 +7,7 @@ import { EventRow } from '@/components/campus/EventRow';
 import { isStudyBreak, StudyBreakCard } from '@/components/events/StudyBreak';
 import { EmptyNote, ErrorState, LoadingRows, SourceBadge } from '@/components/campus/States';
 import { Header, IconButton, Screen, Segmented } from '@/components/ui';
-import { useCampus, useRealtime, useRefreshOnFocus } from '@/hooks/useCampus';
+import { useCampus, useConfig, useRealtime, useRefreshOnFocus } from '@/hooks/useCampus';
 import { FeatureGate, SoonScreen } from '@/components/Locked';
 
 const TABS = ['Upcoming', 'Going'] as const;
@@ -24,6 +24,7 @@ function Events() {
   const [tab, setTab] = useState<(typeof TABS)[number]>('Upcoming');
   const scope = tab === 'Going' ? 'mine' : 'upcoming';
   const list = useCampus(`events:${scope}`, () => campusApi.events({ scope }));
+  const canPlan = useConfig().data?.features.create_event ?? false;
   useRefreshOnFocus(list.reload);
   // Participant counts move live; patch them in place rather than refetching the list.
   useRealtime((m) => {
@@ -37,7 +38,7 @@ function Events() {
   const items = featured ? all.filter((e) => e.id !== featured.id) : all;
   return (
     <Screen tabBar={false} scroll={false}>
-      <Header back title="Events" right={<><IconButton icon="calendar-check" onPress={() => router.push('/meetups')} label="Meetups and check-in" /><SourceBadge /></>} />
+      <Header back title="Events" right={<>{canPlan && <IconButton icon="calendar-plus" onPress={() => router.push('/event/plan')} label="Plan a meetup" />}<IconButton icon="calendar-check" onPress={() => router.push('/meetups')} label="Meetups and check-in" /><SourceBadge /></>} />
       <Segmented items={TABS} value={tab} onChange={setTab} />
       <FlatList
         data={items}

@@ -35,6 +35,9 @@ LIMITS: dict[str, tuple[int, int]] = {
     "checkin": (20, 3600),
     "challenge:create": (20, 86_400),
     "push:register": (20, 60),
+    "dates:settings": (20, 3600),
+    "dates:dismiss": (60, 3600),
+    "block": (30, 3600),
 }
 
 

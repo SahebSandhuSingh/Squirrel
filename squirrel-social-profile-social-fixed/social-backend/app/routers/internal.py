@@ -17,7 +17,7 @@ from __future__ import annotations
 import hmac
 from typing import Annotated
 
-from fastapi import APIRouter, Header, Response, status
+from fastapi import APIRouter, Header, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -29,7 +29,7 @@ from app.models import Activity, User
 from app.schemas import InternalActivityOut, InternalActivityIn
 from app.schemas_community import InternalNotificationIn, InternalNotificationOut
 from app.services import notify as notifications
-from app.services import reminders, social
+from app.services import dates, reminders, social
 
 router = APIRouter(prefix="/internal/v1", tags=["internal"], include_in_schema=False)
 
@@ -45,6 +45,7 @@ def _check_service_token(settings, authorization: str | None) -> None:
 @router.post("/activities", response_model=InternalActivityOut)
 def ingest_activity(
     body: InternalActivityIn,
+    request: Request,
     response: Response,
     db: DB,
     settings: AppSettings,
@@ -57,6 +58,7 @@ def ingest_activity(
         if existing.user_id != user.id:
             raise conflict("source_ref already belongs to another user.")
         _update_summary(existing, body)
+        dates.record_visits(db, existing, settings, request.app.state.route_points)
         db.commit()
         return InternalActivityOut(activity_id=existing.id, created=False)
     activity = Activity(
@@ -85,6 +87,8 @@ def ingest_activity(
             return InternalActivityOut(activity_id=existing.id, created=False)
         raise conflict("source_ref already belongs to another user.") from None
     social.after_activity_recorded(db, activity, settings)
+    # Squirrel Dates: which named zones the run passed (opted-in runners only; never fails the ingest).
+    dates.record_visits(db, activity, settings, request.app.state.route_points)
     db.commit()
     response.status_code = status.HTTP_201_CREATED
     return InternalActivityOut(activity_id=activity.id, created=True)

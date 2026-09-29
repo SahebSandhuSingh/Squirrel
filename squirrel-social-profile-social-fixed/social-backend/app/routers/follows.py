@@ -20,6 +20,7 @@ from app.models import Follow, User, UserStats
 from app.pagination import before, clamp_limit, decode_uuid_cursor, encode_cursor
 from app.schemas import FollowResult, FollowStatus, UserPage
 from app.services import social
+from app.services.dates import is_blocked
 from app.services.social import bump, insert_ignore
 
 router = APIRouter(prefix="/v1", tags=["follows"])
@@ -46,6 +47,8 @@ def follow(user_id: uuid.UUID, db: DB, viewer: CurrentViewer, limiter: Limiter):
     if user_id == viewer.id:
         raise invalid("You can't follow yourself.", "self_follow")
     target = social.get_user_or_404(db, user_id)
+    if is_blocked(db, viewer.id, target.id):
+        raise not_found("User not found.")
     limiter.hit("follow", str(viewer.id))
     status = "pending" if target.visibility == "private" else "accepted"
     inserted = insert_ignore(db, Follow, {"follower_id": viewer.id, "followee_id": target.id, "status": status, "created_at": utcnow()})

@@ -14,6 +14,8 @@ import os
 from dataclasses import dataclass, field
 from functools import lru_cache
 
+from app.services.zones import Zone, load_zones
+
 
 def _int(name: str, default: int) -> int:
     raw = os.environ.get(name)
@@ -78,6 +80,9 @@ class Settings:
     referrals_to_skip: int = 3
     # Local day and month for daily stats, boards and "km this month" (the campus's time zone).
     community_timezone: str = "Asia/Kolkata"
+    # Named campus zones for Squirrel Dates (SOCIAL_ZONES_FILE or SOCIAL_ZONES; services/zones.py).
+    # Empty: Squirrel Dates says the campus zones aren't set up yet.
+    zones: tuple[Zone, ...] = field(default_factory=tuple)
 
     # --- notifications ------------------------------------------------------------------
     push_enabled: bool = True                # send Expo pushes (SOCIAL_PUSH=off to only store them)
@@ -131,6 +136,7 @@ def get_settings() -> Settings:
         founding_total=_int("SOCIAL_FOUNDING_TOTAL", 500),
         referrals_to_skip=_int("SOCIAL_REFERRALS_TO_SKIP", 3),
         community_timezone=os.environ.get("SOCIAL_COMMUNITY_TIMEZONE", "Asia/Kolkata"),
+        zones=load_zones(os.environ.get("SOCIAL_ZONES"), _opt("SOCIAL_ZONES_FILE")),
         push_enabled=os.environ.get("SOCIAL_PUSH", "on").lower() not in ("off", "0", "false"),
         expo_access_token=_opt("EXPO_ACCESS_TOKEN"),
         reminders_enabled=os.environ.get("SOCIAL_EVENT_REMINDERS", "on").lower() not in ("off", "0", "false"),

@@ -2,11 +2,12 @@
  * Profile (yours or someone else's), entirely from the backend profile. Sections render only
  * when their data exists, so new/removed backend fields don't break the layout.
  */
+import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Scene } from '@/art/Scene';
-import { campusApi, featureUnavailable, type Me, type Profile, type SharedContext } from '@/api/campus';
+import { campusApi, errorText, featureUnavailable, type BlockState, type Me, type Profile, type SharedContext } from '@/api/campus';
 import { useAuth } from '@/auth/AuthProvider';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
 import { PokeButton } from '@/components/social/PokeButton';
@@ -19,7 +20,8 @@ import { BadgeRow, Icebreakers, ModeChip, OpenToMeetToggle } from '@/components/
 import { ErrorState, LoadingRows, SignedOutState, SourceBadge } from '@/components/campus/States';
 import { km, shortTime } from '@/components/campus/territoryUi';
 import { Button, Card, Display, Icon, IconButton, PressScale, Scrim, SectionHeader, TAB_BAR_SPACE, tap } from '@/components/ui';
-import { useCampus, useMe, useRefreshOnFocus } from '@/hooks/useCampus';
+import { invalidateCampus, useAction, useCampus, useMe, useRefreshOnFocus } from '@/hooks/useCampus';
+import { useApp } from '@/state/AppState';
 import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
 
 export function CampusProfileView({ userId, isMe }: { userId?: string; isMe: boolean }) {
@@ -253,8 +255,42 @@ export function CampusProfileView({ userId, isMe }: { userId?: string; isMe: boo
             </View>
           </>
         )}
+        {!isMe && userId && <BlockRow userId={userId} name={p.display_name} />}
       </View>
     </ScrollView>
+  );
+}
+
+/** Block / unblock. Two taps to block. Works both ways: no Squirrel Dates suggestions, follows or challenges. */
+function BlockRow({ userId, name }: { userId: string; name: string }) {
+  const { toast } = useApp();
+  const r = useCampus<BlockState>(`block:${userId}`, () => campusApi.blockStatus(userId));
+  const act = useAction((blocked: boolean) => campusApi.setBlocked(userId, blocked));
+  const [confirm, setConfirm] = useState(false);
+  if (!r.data) return null; // unknown or not live: no half-working button
+  const blocked = r.data.blocked;
+  const first = name.split(' ')[0];
+  const press = async () => {
+    tap();
+    if (!blocked && !confirm) return setConfirm(true);
+    const next = await act.run(!blocked);
+    setConfirm(false);
+    if (next) {
+      r.mutate(next);
+      invalidateCampus('dates');
+      toast(next.blocked ? `${first} is blocked` : `${first} is unblocked`, next.blocked ? 'account-cancel-outline' : 'account-check-outline', colors.dim);
+    }
+  };
+  return (
+    <View style={{ marginTop: 28 }}>
+      <LinkRow
+        icon={blocked ? 'account-check-outline' : 'account-cancel-outline'}
+        label={blocked ? `Unblock ${first}` : confirm ? `Tap again to block ${first}` : `Block ${first}`}
+        detail={act.status === 'error' ? errorText(act.error) : blocked ? 'You won’t be suggested to each other' : 'No suggestions, follows or challenges between you'}
+        detailColor={act.status === 'error' ? colors.coral : undefined}
+        onPress={act.status === 'loading' ? () => undefined : press}
+      />
+    </View>
   );
 }
 

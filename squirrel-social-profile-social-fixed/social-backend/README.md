@@ -63,6 +63,10 @@ them. `tests/test_concurrency.py` hammers this on PostgreSQL.
   college, interests, badges and follower lists are hidden (post URLs return 404). Follows become
   requests that the owner accepts. Switching back to public accepts pending requests.
 - Internal ingestion refuses metric keys that look like location data (`lat`, `route`, …).
+- Squirrel Dates is the one feature that looks at a route, and only for members who opted in: it
+  reads the finished run's points from the Run Module's `run_points` (read-only, shared database)
+  and keeps which named campus zone the run passed, on which local day and hour. No point, route or
+  minute is stored; opting out deletes those rows, and they are pruned after 56 days.
 
 ### Performance
 
@@ -189,6 +193,32 @@ saves 120/min, follows 60/min, profile updates 20/min, username checks 60/min, u
 Profiles also carry `hostel`, `stats.month_km / month_runs / month_workouts` (verified this month) and
 `crews` (member since, vouches).
 
+### Squirrel Dates and blocking (migration `0004_squirrel_dates`)
+
+Suggestion only: a person, a named campus zone and a time. It never invites or notifies anyone. To
+meet, the member plans an ordinary event (`POST /v1/events`), which the app opens pre-filled.
+
+| Route | What |
+|---|---|
+| `GET·PUT /v1/dates/settings {enabled}` | Opt in or out; off by default. Opting in scans the member's runs of the last 28 days; opting out deletes their zone visits |
+| `GET /v1/dates/suggestions[?user_id=]` | Up to 3 suggestions: `{available, enabled, reason, suggestions[{id, user, reason, zone{id,name}, suggested_time}]}`. `available` is false until zones are configured |
+| `POST /v1/dates/suggestions/{id}/dismiss` | "Maybe later": that person isn't suggested to you for 30 days (`id` is their user id) |
+| `GET·POST·DELETE /v1/users/{id}/block`, `GET /v1/users/me/blocks` | Block. It works both ways: never suggested to each other, follows removed, no new follows or challenges |
+
+Rules (`app/services/dates.py`), all in both directions:
+- both members opted in, neither blocked the other, and you didn't dismiss them in the last 30 days;
+- both passed the same zone at least twice in the last 28 days, on runs the Run Module finalized.
+
+The zone is the one you share most. The time is the next weekday and hour you both use it most
+(else the busiest for either of you), between 6 AM and 9 PM and at least 2 hours ahead.
+
+Zones are configuration, never user data: `SOCIAL_ZONES_FILE` (or inline `SOCIAL_ZONES`), a JSON
+list of `{"id", "name", "polygon": [[lat, lng], …]}` or `{"id", "name", "center": [lat, lng],
+"radius_m"}`. A run visits a zone when at least 2 of its points fall inside. Bad JSON stops the
+service at start-up. Zone visits come from `run_points` when the Run Module publishes a finished run
+(`POST /internal/v1/activities`, `source_ref` = run id). If that table isn't there, the run is
+recorded without zones.
+
 ### Exercise/Run → Activity → optional Post
 
 1. The Run Module finalises a run (unchanged).
@@ -225,6 +255,7 @@ This matches how the app already uses it, but it must be confirmed against the R
 | `SOCIAL_CORS_ORIGINS` | for Expo web | – | Comma-separated browser origins |
 | `SOCIAL_RATE_LIMITS` | no | `on` | `off` disables limits (tests/dev only) |
 | `SOCIAL_HOSTELS` | for hostel vs hostel | – | Comma-separated hostel names members pick from. Unset: the picker and the hostel board stay hidden |
+| `SOCIAL_ZONES_FILE` / `SOCIAL_ZONES` | for Squirrel Dates | – | Named campus zones (JSON, see "Squirrel Dates"). Unset: Dates reports the zones aren't set up and suggests nothing |
 | `SOCIAL_APP_URL` | for invite links | – | The web app's address; invite links are `…/sign-in?mode=create&invite=CODE` |
 | `SOCIAL_FOUNDING_FIRST`, `SOCIAL_FOUNDING_TOTAL` | no | `15`, `500` | Founding Squirrel / Founding 500 places |
 | `SOCIAL_REFERRALS_TO_SKIP` | no | `3` | Verified friends needed to skip the line |

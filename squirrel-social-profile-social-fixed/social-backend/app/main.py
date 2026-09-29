@@ -19,10 +19,11 @@ from app.config import Settings, get_settings
 from app.db import Database
 from app.errors import ApiError, api_error_handler
 from app.ratelimit import RateLimiter
-from app.routers import challenges, community, crews, events, feed, follows, internal, media, notifications, posts, profiles
+from app.routers import blocks, challenges, community, crews, dates, events, feed, follows, internal, media, notifications, posts, profiles
 from app.services.media import MediaStorage, make_storage
 from app.services.push import ExpoPush, PushSender
 from app.services.reminders import ReminderLoop
+from app.services.route_points import RoutePoints, SqlRoutePoints
 from app.services.run_module import HttpRunModule, RunModule
 
 
@@ -34,6 +35,7 @@ def create_app(
     storage: MediaStorage | None = None,
     limiter: RateLimiter | None = None,
     push: PushSender | None = None,
+    route_points: RoutePoints | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
 
@@ -54,6 +56,7 @@ def create_app(
     app.state.run_module = run_module or HttpRunModule(settings.run_module_url, settings.run_module_timeout_s)
     app.state.storage = storage or make_storage(settings)
     app.state.limiter = limiter or RateLimiter(enabled=settings.rate_limits_enabled)
+    app.state.route_points = route_points or SqlRoutePoints()
 
     app.add_exception_handler(ApiError, api_error_handler)
     if settings.cors_origins:
@@ -69,7 +72,8 @@ def create_app(
 
     # profiles first: its literal /users/me/… and /users/search routes must win over /users/{id}/….
     for r in (profiles.router, follows.router, feed.router, posts.router, media.router, internal.router,
-              community.router, crews.router, events.router, challenges.router, notifications.router):
+              community.router, crews.router, events.router, challenges.router, notifications.router, dates.router,
+              blocks.router):
         app.include_router(r)
 
     @app.get("/healthz", include_in_schema=False)

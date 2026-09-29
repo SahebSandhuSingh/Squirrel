@@ -3,8 +3,9 @@
  * campus screens run live without a dedicated campus backend:
  *
  *   Social service (EXPO_PUBLIC_SOCIAL_API_URL)   profile, membership + founding badge, hostels,
- *       crews, events + RSVP, people search / suggestions, head-to-head challenges (as challenge
- *       invites), XP and hostel boards, notifications
+ *       crews, events + RSVP + planning one, people search / suggestions, head-to-head challenges
+ *       (as challenge invites), XP and hostel boards, notifications, Squirrel Dates (suggestion
+ *       only) and blocking
  *   Run Module + Exercise backend                 the "moving right now" counter (/v1/live, /api/live)
  *   This device                                   connection mode and "onboarding done" (no backend
  *       field yet; kept per account in SecureStore / localStorage)
@@ -18,7 +19,7 @@
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { ApiError, getApiToken, hasApiToken } from '@/api/client';
-import { challengesApi, communityApi, crewsApi, eventsApi, liveCounts, notificationsApi, type Challenge, type CrewDetail as SocialCrewDetail, type CrewOut, type EventOut, type Membership, type UserSummary } from '@/api/community';
+import { blocksApi, challengesApi, communityApi, crewsApi, datesApi, eventsApi, liveCounts, notificationsApi, type Challenge, type CrewDetail as SocialCrewDetail, type CrewOut, type EventOut, type Interest, type Membership, type UserSummary } from '@/api/community';
 import { profileApi, type Follower, type PublicProfile } from '@/api/social';
 import { jwtSubject } from '@/auth/jwt';
 import { appRoute } from '@/notifications/routes';
@@ -86,6 +87,7 @@ function crew(c: CrewOut): T.Crew {
 }
 
 const EVENT_TYPE: Record<string, T.EventType> = { running: 'run', walking: 'walk' };
+const EVENT_KIND: Record<T.EventCreate['type'], Interest> = { run: 'running', walk: 'walking', social: 'other' };
 
 function eventSummary(e: EventOut): T.EventSummary {
   return {
@@ -310,6 +312,16 @@ export const socialCampusApi: T.CampusApi = {
   },
   event: async (eventId) => eventDetail(await eventsApi.get(eventId)),
   rsvp: async (eventId, going) => eventDetail(await (going ? eventsApi.rsvp(eventId) : eventsApi.unrsvp(eventId))),
+  createEvent: async (input) =>
+    eventDetail(await eventsApi.create({
+      title: input.title,
+      kind: EVENT_KIND[input.type],
+      starts_at: input.starts_at,
+      ends_at: input.ends_at ?? null,
+      venue: input.venue,
+      capacity: input.capacity ?? null,
+      description: input.description ?? '',
+    })),
 
   suggestedPeople: async (mode) => {
     if (mode === 'date') return notLive('Date Mode')();
@@ -368,9 +380,24 @@ export const socialCampusApi: T.CampusApi = {
 
   sharedZones: notLive('Shared zones'),
   heatmap: notLive('The activity heatmap'),
-  dateSuggestions: notLive('Squirrel Dates'),
-  dismissDateSuggestion: notLive('Squirrel Dates'),
-  inviteFromSuggestion: notLive('Squirrel Dates'),
+  // Squirrel Dates: suggestion only. A suggestion's id is the suggested person's id.
+  dateSuggestions: async (forUserId) => {
+    const r = await datesApi.suggestions(forUserId);
+    return {
+      available: r.available,
+      enabled: r.enabled,
+      reason: r.reason,
+      suggestions: r.suggestions.map((d) => ({ id: d.id, person: { ...person(d.user), level: d.user.level }, reason: d.reason, zone: d.zone, suggested_time: d.suggested_time })),
+    };
+  },
+  dismissDateSuggestion: async (suggestionId) => {
+    await datesApi.dismiss(suggestionId);
+    return { dismissed: true };
+  },
+  dateSettings: () => datesApi.settings(),
+  setDateSettings: (enabled) => datesApi.setEnabled(enabled),
+  blockStatus: (userId) => blocksApi.status(userId),
+  setBlocked: (userId, blocked) => (blocked ? blocksApi.block(userId) : blocksApi.unblock(userId)),
   createUpload: notLive('Photo uploads'),
   completeUpload: notLive('Photo uploads'),
   media: notLive('Photo uploads'),

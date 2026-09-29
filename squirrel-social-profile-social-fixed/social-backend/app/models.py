@@ -3,18 +3,21 @@
 justifies them (a like, a follow, a post), guarded by the unique constraints.
 
 Privacy by construction: no email, no password, no GPS. A run becomes an `activities` row with
-distance / duration only; its route and territory geometry stay in the Run Module.
+distance / duration only; its route and territory geometry stay in the Run Module. The one thing
+derived from a route is `zone_visits` (Squirrel Dates): which named campus zone, which day and
+hour, kept only for people who opted in and deleted when they opt out.
 """
 
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     JSON,
     Boolean,
     CheckConstraint,
+    Date,
     Float,
     ForeignKey,
     Index,
@@ -469,4 +472,73 @@ class PushToken(Base):
     __table_args__ = (
         CheckConstraint("platform IN ('ios', 'android', 'web')", name="ck_push_tokens_platform"),
         Index("ix_push_tokens_user", "user_id"),
+    )
+
+
+# --------------------------------------------------------------------------- Squirrel Dates (0004)
+
+
+class UserBlock(Base):
+    """`blocker` never sees `blocked` suggested again, and neither can follow or challenge the other.
+    One row, one direction; every check reads both directions."""
+
+    __tablename__ = "user_blocks"
+
+    blocker_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    blocked_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+
+    __table_args__ = (
+        PrimaryKeyConstraint("blocker_id", "blocked_id", name="pk_user_blocks"),
+        CheckConstraint("blocker_id <> blocked_id", name="ck_user_blocks_not_self"),
+        Index("ix_user_blocks_blocked", "blocked_id"),
+    )
+
+
+class DatesPref(Base):
+    """Opt-in to Squirrel Dates. No row = off: nobody is suggested, or suggested to, by default."""
+
+    __tablename__ = "dates_prefs"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+
+    __table_args__ = (Index("ix_dates_prefs_enabled", "enabled"),)
+
+
+class ZoneVisit(Base):
+    """A finished run passed through a named campus zone: the zone, the local day and hour, nothing
+    else (no points, no route, no minute). One row per run and zone, so a re-sent run counts once."""
+
+    __tablename__ = "zone_visits"
+
+    activity_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("activities.id", ondelete="CASCADE"), nullable=False)
+    zone_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    visited_on: Mapped[date] = mapped_column(Date, nullable=False)
+    weekday: Mapped[int] = mapped_column(SmallInteger, nullable=False)  # 0 = Monday, campus time
+    hour: Mapped[int] = mapped_column(SmallInteger, nullable=False)     # 0–23, campus time
+
+    __table_args__ = (
+        PrimaryKeyConstraint("activity_id", "zone_id", name="pk_zone_visits"),
+        CheckConstraint("weekday BETWEEN 0 AND 6", name="ck_zone_visits_weekday"),
+        CheckConstraint("hour BETWEEN 0 AND 23", name="ck_zone_visits_hour"),
+        Index("ix_zone_visits_zone_day", "zone_id", "visited_on"),
+        Index("ix_zone_visits_user_day", "user_id", "visited_on"),
+    )
+
+
+class DateDismissal(Base):
+    """"Maybe later" on a Squirrel Dates suggestion: that person isn't suggested again for a while."""
+
+    __tablename__ = "date_dismissals"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    other_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    dismissed_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+
+    __table_args__ = (
+        PrimaryKeyConstraint("user_id", "other_id", name="pk_date_dismissals"),
+        CheckConstraint("user_id <> other_id", name="ck_date_dismissals_not_self"),
     )

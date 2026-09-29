@@ -147,6 +147,10 @@ services:
       # Hostels members pick from for hostel vs hostel, comma-separated (unset: hidden).
       - key: SOCIAL_HOSTELS
         sync: false
+      # Named campus zones for Squirrel Dates (JSON; format in social-backend/README.md). Upload
+      # campus-zones.json as a Secret File and set /etc/secrets/campus-zones.json (unset: Dates off).
+      - key: SOCIAL_ZONES_FILE
+        sync: false
       # The web app's address, for invite links, e.g. https://squirrel-social.vercel.app
       - key: SOCIAL_APP_URL
         sync: false

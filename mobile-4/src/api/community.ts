@@ -14,6 +14,8 @@
  *   GET|POST /v1/challenges · POST /v1/challenges/:id/accept|decline|cancel
  *   GET /v1/notifications · /unread-count · POST /v1/notifications/read
  *   POST /v1/me/push-tokens · DELETE /v1/me/push-tokens/:token
+ *   GET|PUT /v1/dates/settings · GET /v1/dates/suggestions?user_id · POST /v1/dates/suggestions/:id/dismiss
+ *   GET|POST|DELETE /v1/users/:id/block                        Squirrel Dates (suggestion only) and blocking
  */
 import { api } from '@/api/client';
 import { API_CONFIGURED, EXERCISE_API_CONFIGURED, EXERCISE_API_URL, SOCIAL_API_URL } from '@/api/config';
@@ -125,6 +127,12 @@ export type AppNotification = {
 };
 export type NotificationPage = Page<AppNotification> & { unread: number };
 
+/** Squirrel Dates: advisory only — there is no invite endpoint. */
+export type DateSuggestionOut = { id: string; user: UserSummary; reason: string; zone: { id: string; name: string }; suggested_time: string | null };
+export type DateSuggestionsOut = { available: boolean; enabled: boolean; reason: string | null; suggestions: DateSuggestionOut[] };
+export type DatesSettings = { enabled: boolean; zones_ready: boolean };
+export type BlockResult = { user_id: string; blocked: boolean };
+
 const s = <T>(path: string, init: { method?: string; body?: unknown } = {}) => api<T>(path, { ...init, base: SOCIAL_API_URL });
 const safe = <T>(path: string, init: { method?: string; body?: unknown } = {}) => withRetry(() => s<T>(path, init));
 const id = encodeURIComponent;
@@ -167,6 +175,19 @@ export const eventsApi = {
     s<CheckIn>(`/v1/events/${id(eventId)}/checkin`, { body: { notify_user_ids: notifyUserIds, note } }),
   meetupCheckIn: (place: string, notifyUserIds: string[] = [], note = '') =>
     s<CheckIn>('/v1/checkins', { body: { place, notify_user_ids: notifyUserIds, note } }),
+};
+
+export const datesApi = {
+  settings: () => safe<DatesSettings>('/v1/dates/settings'),
+  setEnabled: (enabled: boolean) => s<DatesSettings>('/v1/dates/settings', { method: 'PUT', body: { enabled } }),
+  suggestions: (userId?: string) => safe<DateSuggestionsOut>(`/v1/dates/suggestions${qs({ user_id: userId })}`),
+  dismiss: (personId: string) => s<void>(`/v1/dates/suggestions/${id(personId)}/dismiss`, { method: 'POST' }),
+};
+
+export const blocksApi = {
+  status: (userId: string) => safe<BlockResult>(`/v1/users/${id(userId)}/block`),
+  block: (userId: string) => s<BlockResult>(`/v1/users/${id(userId)}/block`, { method: 'POST' }),
+  unblock: (userId: string) => s<BlockResult>(`/v1/users/${id(userId)}/block`, { method: 'DELETE' }),
 };
 
 export const challengesApi = {

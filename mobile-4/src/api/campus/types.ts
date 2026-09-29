@@ -336,6 +336,17 @@ export type EventSummary = {
   meeting_point?: string | null;
 };
 
+/** Planning an event ("Plan a meetup"): a normal event anyone can see and RSVP to. Nobody is invited. */
+export type EventCreate = {
+  title: string;
+  type: 'run' | 'walk' | 'social';
+  starts_at: string;
+  ends_at?: string | null;
+  venue: string;
+  capacity?: number | null;
+  description?: string;
+};
+
 export type EventDetail = EventSummary & {
   description: string | null;
   participants: PersonLite[];
@@ -533,16 +544,23 @@ export type HeatCell = { id: string; center: LatLng; radius_m: number; intensity
 export type HeatWindow = '1h' | '24h' | '7d';
 export type Heatmap = { available: boolean; reason: string | null; window: HeatWindow | (string & {}); generated_at: string; cells: HeatCell[]; min_people_per_cell: number | null };
 
+/**
+ * Advisory only: who, where and when. A suggestion never sends anything to anyone; to meet, the
+ * member plans an event themselves (createEvent) and shares it.
+ */
 export type DateSuggestion = {
   id: string;
   person: PersonLite & { level?: number };
-  /** Written by the backend from real shared data ("You both run at Sports Ground Loop"). */
+  /** Written by the backend from real shared data ("You're both often around Sports Ground Loop."). */
   reason: string;
   zone: { id: string; name: string } | null;
   suggested_time: string | null;
-  can_invite: boolean;
 };
-export type DateSuggestions = { available: boolean; reason: string | null; suggestions: DateSuggestion[] };
+/** `available` false: campus zones aren't set up. `enabled`: the viewer's own opt-in (off by default). */
+export type DateSuggestions = { available: boolean; enabled: boolean; reason: string | null; suggestions: DateSuggestion[] };
+export type DateSettings = { enabled: boolean; zones_ready: boolean };
+/** Whether *I* blocked this person. A block works both ways for suggestions, follows and challenges. */
+export type BlockState = { user_id: string; blocked: boolean };
 
 // ---------------------------------------------------------------------------
 // Photo upload (Dev A) — presigned PUT, then complete; moderation decides visibility
@@ -680,6 +698,7 @@ export interface CampusApi {
   events(params: { scope?: 'upcoming' | 'mine' }): Promise<Page<EventSummary>>;
   event(eventId: string): Promise<EventDetail>;
   rsvp(eventId: string, going: boolean): Promise<EventDetail>;
+  createEvent(input: EventCreate): Promise<EventDetail>;
 
   suggestedPeople(mode: 'friends' | 'date'): Promise<PersonCard[]>;
   activeNow(): Promise<ActiveNow>;
@@ -715,7 +734,10 @@ export interface CampusApi {
   heatmap(window: HeatWindow): Promise<Heatmap>;
   dateSuggestions(forUserId?: string): Promise<DateSuggestions>;
   dismissDateSuggestion(suggestionId: string): Promise<{ dismissed: true }>;
-  inviteFromSuggestion(suggestionId: string, idempotencyKey: string): Promise<{ invite_id: string }>;
+  dateSettings(): Promise<DateSettings>;
+  setDateSettings(enabled: boolean): Promise<DateSettings>;
+  blockStatus(userId: string): Promise<BlockState>;
+  setBlocked(userId: string, blocked: boolean): Promise<BlockState>;
   // Dev A
   createUpload(input: UploadRequest): Promise<UploadTicket>;
   completeUpload(mediaId: string): Promise<MediaItem>;

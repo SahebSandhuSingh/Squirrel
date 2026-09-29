@@ -244,9 +244,9 @@ The campus map is Squirrel Social's own renderer: react-native-svg with a pan/zo
 Everything below is frontend. The backend work belongs to Dev A and Dev B, and none of it is claimed as done here.
 
 - Screens import feature adapters in `api/campus/`: `discovery.ts`, `community.ts` and `media.ts`. They never call `fetch` directly.
-- **Availability is per endpoint, not per service** (`api/availability.ts`, wired in `api/campus/index.ts`). The seven campus endpoints with no backend yet are gated in *every* mode (live, dev mock, off): shared zones, heatmap, Squirrel Dates, media, meetup rating, ambassador, and `profile_details` on `PATCH /v1/me`. A gated call rejects with `EndpointUnavailableError` (`code: <capability>_unavailable`). All other campus calls go straight through, so one missing endpoint never fails another.
+- **Availability is per endpoint, not per service** (`api/availability.ts`, wired in `api/campus/index.ts`). The six campus endpoints with no backend yet are gated in *every* mode (live, dev mock, off): shared zones, heatmap, media, meetup rating, ambassador, and `profile_details` on `PATCH /v1/me`. Squirrel Dates is built (Social service) and is no longer gated. A gated call rejects with `EndpointUnavailableError` (`code: <capability>_unavailable`). All other campus calls go straight through, so one missing endpoint never fails another.
 - **Four states, kept distinct:** data, empty (`[]` — "nothing yet"), **unavailable** ("<Feature> · Not live yet", layout kept, only the dependent action disabled, no retry) and **error** (401/403/400/422/5xx/offline — shown as errors with retry or sign-in). `featureUnavailable()` is true only for `EndpointUnavailableError`, campus off, 404 `no_route`/no code, 501, or 503 `*_unavailable`.
-- **No fake success anywhere:** the dev mock no longer implements these seven — no invented heat cells, date suggestions, uploads, ratings, ambassador forms, stored profile details or related notifications.
+- **No fake success anywhere:** the dev mock doesn't implement these six — no invented heat cells, uploads, ratings, ambassador forms, stored profile details or related notifications. (It does mock Squirrel Dates, now that it's built, from the demo people's zones.)
 - **When a backend ships:** set it to `true` in `BUILT` in `api/availability.ts`, or opt it in without a code change with `EXPO_PUBLIC_LIVE_ENDPOINTS=heatmap,ambassador` (comma-separated capability names: `sharedZones, heatmap, dateSuggestions, media, meetupRating, ambassador, profileDetails, sharedWorkout`). Tests: `src/api/availability.test.mjs` (`npm test`).
 
 | Feature | Where | API (status) |
@@ -254,7 +254,7 @@ Everything below is frontend. The backend work belongs to Dev A and Dev B, and n
 | **Shared Zones** | Profile → People & places → Shared zones (`/shared`), someone's profile → shared-zones row (`/shared/[id]`), notifications | `GET /v1/users/{id}/context` (existing overlap API, Dev B; optional `activity_count` per zone), `GET /v1/me/shared-zones` (**expected, Dev B**) |
 | **Activity Heatmap** | Map → 🔥 toggle; window 1h / 24h / 7d, legend in words, privacy line | `GET /v1/map/heatmap?window=` → aggregated cells `{center, radius_m, intensity, level}` (**expected, Dev B**). The app only draws them |
 | **Study-Break Walk** | Home (leads "Happening on campus"), Events (featured on Upcoming), event page (JOIN WALK / YOU'RE IN) | Existing Events API. Optional fields `template: 'study_break_walk'`, `duration_min`, `meeting_point` (**expected, Dev A**) |
-| **Squirrel Dates** | Social tab section, someone's profile (only when there's a suggestion) | `GET /v1/dates/suggestions[?user_id=]`, `POST …/{id}/dismiss`, `POST …/{id}/invite` (**expected, Dev B**) |
+| **Squirrel Dates** | Social tab section (opt-in card, then one suggestion at a time, "Turn off"), someone's profile (only when there's a suggestion), Block on profiles | `GET·PUT /v1/dates/settings`, `GET /v1/dates/suggestions[?user_id=]`, `POST …/{id}/dismiss`, `GET·POST·DELETE /v1/users/{id}/block` (**live, Social**). Suggestion only: no invite endpoint. "Plan a meetup" opens `/event/plan` pre-filled with the zone and time, which creates a normal event (`POST /v1/events`) |
 | **Post-meetup rating** | Meetup page, after it ends; notification reminder | `GET /v1/meetups/{id}/rating` (eligibility, rateable people excluding you, optional dimensions, trust score), `POST /v1/meetups/{id}/ratings` (**expected, Dev A**) |
 | **Photo upload** | New Post, Meetup page (`<PhotoUpload purpose=…>`) | Social service's presigned flow: `POST /v1/media/uploads` → PUT → `POST /v1/media/{id}/complete`, plus `GET /v1/media/{id}` with `moderation` (**expected, Dev A**) |
 | **Ambassador** | Profile → More → Become an ambassador (`/ambassador`) | `GET /v1/ambassador/application` (open flag, fields, existing application), `POST` answers (**expected, Dev A**) |
@@ -264,7 +264,8 @@ Everything below is frontend. The backend work belongs to Dev A and Dev B, and n
 - A photo isn't shown on a post until the backend reports `status: ready` and `moderation: approved`. Photos are resized on the device to ≤ 1600 px JPEG, with a 480 px preview.
 - You can't rate yourself, and ratings are private. A trust score appears only if the API returns one.
 - The ambassador form renders only the fields the backend sends, and the status replaces the form once you've applied.
-- Squirrel Dates are optional and dismissible ("Maybe later"). The copy makes no romantic assumptions.
+- Squirrel Dates are opt-in on both sides, optional and dismissible ("Maybe later"), and never send anything to the other person: the card says so. The copy makes no romantic assumptions.
+- "Plan a meetup" follows the Events lock (`data/features.ts`): while Events is locked it shows the "coming soon" toast.
 
 **What each one shows until its backend ships:**
 
@@ -272,7 +273,7 @@ Everything below is frontend. The backend work belongs to Dev A and Dev B, and n
 |---|---|
 | Shared zones (`GET /v1/me/shared-zones`) | `/shared` keeps its header; the list is "Shared zones · Not live yet". The per-person overlap (`/v1/users/{id}/context`) is live and unaffected. |
 | Heatmap | The Heat panel opens and says "Heatmap · Not live yet"; the 1h/24h/7d picker is disabled. The map, players and zones keep working. |
-| Squirrel Dates | The Social section stays in place with "Squirrel Dates · Not live yet"; no Invite/Maybe later actions. The per-profile card stays hidden. |
+| Squirrel Dates | Live. Without campus zones on the server (`SOCIAL_ZONES_FILE`) the Social section is hidden; if the endpoint is missing it reads "Squirrel Dates · Not live yet". The per-profile card stays hidden. |
 | Media | The photo tile reads "Photo uploads · Not live yet" and can't be tapped; posting without a photo still works. |
 | Meetup rating | The meetup page works (check-in etc.); the rating block reads "Meetup ratings · Not live yet". |
 | Ambassador | Profile row detail reads "Not live yet"; `/ambassador` keeps its title and shows the Not live yet card instead of the form. |

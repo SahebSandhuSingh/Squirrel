@@ -367,5 +367,49 @@ class MonthVerification(BaseModel):
     workouts: int
 
 
+
+# --------------------------------------------------------------------------- Squirrel Dates & blocks
+
+
+class DatesSettingsRequest(_In):
+    enabled: bool
+
+
+class DatesSettings(BaseModel):
+    enabled: bool
+    # False until campus zones are configured (SOCIAL_ZONES_FILE): opting in is allowed, nothing is suggested.
+    zones_ready: bool
+
+
+class ZoneRef(BaseModel):
+    id: str
+    name: str
+
+
+class DateSuggestionOut(BaseModel):
+    """Advisory: a person, a zone and a time. Nothing is sent to anyone; to meet, plan an event."""
+
+    id: str                   # the suggested person's id; POST …/{id}/dismiss hides them for a while
+    user: UserSummary
+    reason: str
+    zone: ZoneRef
+    suggested_time: datetime | None
+
+
+class DateSuggestions(BaseModel):
+    available: bool           # False only when campus zones aren't configured
+    enabled: bool             # the viewer's opt-in
+    reason: str | None
+    suggestions: list[DateSuggestionOut]
+
+
+class BlockResult(BaseModel):
+    user_id: uuid.UUID
+    blocked: bool
+
+
+class BlockList(BaseModel):
+    items: list[UserSummary]
+
 CrewDetail.model_rebuild()
 EventOut.model_rebuild()

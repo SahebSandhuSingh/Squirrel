@@ -51,6 +51,7 @@ export const httpCampusApi: T.CampusApi = {
   events: ({ scope }) => get<T.Page<T.EventSummary>>(`/v1/events${qs({ scope })}`),
   event: (eventId) => get<T.EventDetail>(`/v1/events/${id(eventId)}`),
   rsvp: (eventId, going) => send<T.EventDetail>(`/v1/events/${id(eventId)}/rsvp`, going ? 'PUT' : 'DELETE'),
+  createEvent: (input) => send<T.EventDetail>('/v1/events', 'POST', input),
 
   suggestedPeople: async (mode) => (await get<{ people: T.PersonCard[] }>(`/v1/people/suggested${qs({ mode })}`)).people,
   activeNow: () => get<T.ActiveNow>('/v1/people/active'),
@@ -83,8 +84,14 @@ export const httpCampusApi: T.CampusApi = {
   sharedZones: () => get<T.SharedZonesIndex>('/v1/me/shared-zones'),
   heatmap: (window) => get<T.Heatmap>(`/v1/map/heatmap${qs({ window })}`),
   dateSuggestions: (forUserId) => get<T.DateSuggestions>(`/v1/dates/suggestions${qs({ user_id: forUserId })}`),
-  dismissDateSuggestion: (suggestionId) => send<{ dismissed: true }>(`/v1/dates/suggestions/${id(suggestionId)}/dismiss`, 'POST'),
-  inviteFromSuggestion: (suggestionId, key) => send<{ invite_id: string }>(`/v1/dates/suggestions/${id(suggestionId)}/invite`, 'POST', { idempotency_key: key }),
+  dismissDateSuggestion: async (suggestionId) => {
+    await send<void>(`/v1/dates/suggestions/${id(suggestionId)}/dismiss`, 'POST');
+    return { dismissed: true };
+  },
+  dateSettings: () => get<T.DateSettings>('/v1/dates/settings'),
+  setDateSettings: (enabled) => send<T.DateSettings>('/v1/dates/settings', 'PUT', { enabled }),
+  blockStatus: (userId) => get<T.BlockState>(`/v1/users/${id(userId)}/block`),
+  setBlocked: (userId, blocked) => send<T.BlockState>(`/v1/users/${id(userId)}/block`, blocked ? 'POST' : 'DELETE'),
 
   // Dev A — media (same presigned flow as the Social service), meetup ratings, ambassadors
   createUpload: (input) => send<T.UploadTicket>('/v1/media/uploads', 'POST', input),
@@ -117,7 +124,7 @@ export const CAMPUS_ROUTES = [
   'GET /v1/runs/{id}/zones',
   'POST /v1/activities (dev/mock recorder only)',
   'GET /v1/crews, GET /v1/crews/{id}, POST /v1/crews, POST /v1/crews/{id}/join | leave',
-  'GET /v1/events, GET /v1/events/{id}, PUT|DELETE /v1/events/{id}/rsvp',
+  'GET /v1/events, GET /v1/events/{id}, POST /v1/events, PUT|DELETE /v1/events/{id}/rsvp',
   'GET /v1/people/suggested?mode=friends|date',
   'GET /v1/people/active',
   'GET /v1/challenge-invites/types, GET|POST /v1/challenge-invites, POST /v1/challenge-invites/{id}/accept | decline | cancel',
@@ -130,7 +137,8 @@ export const CAMPUS_ROUTES = [
   // Expected from Dev B
   'GET /v1/me/shared-zones',
   'GET /v1/map/heatmap?window=1h|24h|7d',
-  'GET /v1/dates/suggestions?user_id=, POST /v1/dates/suggestions/{id}/dismiss | invite',
+  'GET /v1/dates/suggestions?user_id=, POST /v1/dates/suggestions/{id}/dismiss, GET|PUT /v1/dates/settings',
+  'GET|POST|DELETE /v1/users/{id}/block',
   // Expected from Dev A (media mirrors the Social service's presigned flow; the rest are new)
   'POST /v1/media/uploads, PUT {upload_url}, POST /v1/media/{id}/complete, GET /v1/media/{id}',
   'GET /v1/meetups/{id}/rating, POST /v1/meetups/{id}/ratings',

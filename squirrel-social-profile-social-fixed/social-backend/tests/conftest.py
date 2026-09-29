@@ -107,6 +107,18 @@ class FakeRunModule:
         return run
 
 
+class FakeRoutePoints:
+    """Stands in for the Run Module's run_points: run id → [(lat, lng, recorded_at)]."""
+
+    def __init__(self):
+        self.runs: dict[str, list] = {}
+        self.reads: list[str] = []
+
+    def points(self, db, run_id: str) -> list:
+        self.reads.append(run_id)
+        return list(self.runs.get(run_id, []))
+
+
 class FakeStorage:
     configured = True
 
@@ -127,7 +139,7 @@ class FakeStorage:
 
 # --------------------------------------------------------------------------- database
 
-TABLES = ["push_tokens", "notifications", "social_challenges", "checkins", "event_rsvps", "events", "crew_vouches",
+TABLES = ["date_dismissals", "zone_visits", "dates_prefs", "user_blocks", "push_tokens", "notifications", "social_challenges", "checkins", "event_rsvps", "events", "crew_vouches",
           "crew_members", "crews", "members", "user_badges", "comments", "post_saves", "post_likes", "posts", "media", "activities", "follows", "user_stats", "users"]
 
 
@@ -184,8 +196,14 @@ def pushes() -> RecordingPush:
 
 
 @pytest.fixture
-def client(settings, database, run_module, storage, limiter, pushes) -> TestClient:
-    app = create_app(settings, database=database, run_module=run_module, storage=storage, limiter=limiter, push=pushes)
+def route_points() -> FakeRoutePoints:
+    return FakeRoutePoints()
+
+
+@pytest.fixture
+def client(settings, database, run_module, storage, limiter, pushes, route_points) -> TestClient:
+    app = create_app(settings, database=database, run_module=run_module, storage=storage, limiter=limiter, push=pushes,
+                     route_points=route_points)
     return TestClient(app)
 
 

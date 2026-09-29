@@ -2,8 +2,10 @@
 PostGIS database.
 
 All three write to the same database server (locally the compose `postgres`, in production
-Supabase), each through its own migrations and its own code. They never read each other's tables, so
-the only way they can break each other is by creating an object with the same name. This script
+Supabase), each through its own migrations and its own code. Apart from the documented contracts
+between them (the Exercise backend writes `activity_sessions`; Social reads the Run Module's
+`run_points` for Squirrel Dates, read-only), each keeps to its own tables, so the way they can
+break each other at migration time is by creating an object with the same name. This script
 proves they do not:
 
   1. Each module's migrations run alone in a fresh database, and the objects each creates are
