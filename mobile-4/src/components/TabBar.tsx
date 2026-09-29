@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, NATIVE, tap } from '@/components/ui';
 import type { IconName } from '@/data/icons';
 import { alpha, colors, fonts, gradients, isLightTheme, MAX_WIDTH } from '@/theme';
+import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 
 type BottomTabBarProps = Parameters<NonNullable<React.ComponentProps<typeof Tabs>['tabBar']>>[0];
 
@@ -17,7 +18,7 @@ const ICONS: Record<string, [IconName, IconName]> = {
 };
 
 function TabItem({ focused, label, icons, onPress }: { focused: boolean; label: string; icons: [IconName, IconName]; onPress: () => void }) {
-  const v = useRef(new Animated.Value(focused ? 1 : 0)).current;
+  const v = useAnimatedValue(focused ? 1 : 0);
   useEffect(() => {
     Animated.spring(v, { toValue: focused ? 1 : 0, useNativeDriver: NATIVE, speed: 20, bounciness: 8 }).start();
   }, [focused, v]);

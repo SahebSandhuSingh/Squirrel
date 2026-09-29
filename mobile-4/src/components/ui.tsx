@@ -22,6 +22,7 @@ import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-na
 import * as Haptics from 'expo-haptics';
 import { alpha, colors, DISPLAY_SKEW, fonts, gradients, isLightTheme, MAX_WIDTH, radius } from '@/theme';
 import type { IconName } from '@/data/icons';
+import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 
 export const Icon = MaterialCommunityIcons;
 export const NATIVE = Platform.OS !== 'web';
@@ -46,7 +47,7 @@ export const TAB_BAR_SPACE = 104;
 
 /** Fade + rise on mount. Stagger lists with `index`. */
 export function FadeIn({ children, index = 0, delay = 0, style, from = 14 }: { children: React.ReactNode; index?: number; delay?: number; style?: StyleProp<ViewStyle>; from?: number }) {
-  const v = useRef(new Animated.Value(0)).current;
+  const v = useAnimatedValue(0);
   useEffect(() => {
     Animated.timing(v, { toValue: 1, duration: 420, delay: delay + Math.min(index, 10) * 55, easing: Easing.out(Easing.cubic), useNativeDriver: NATIVE }).start();
   }, [v, index, delay]);
@@ -61,7 +62,7 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 /** Pressable that springs down slightly when touched. */
 export function PressScale({ children, style, scaleTo = 0.97, haptic = true, onPress, accessibilityLabel, accessibilityRole = 'button', accessibilityState, ...rest }: Omit<PressableProps, 'style'> & { children: React.ReactNode; style?: StyleProp<ViewStyle>; scaleTo?: number; haptic?: boolean }) {
-  const s = useRef(new Animated.Value(1)).current;
+  const s = useAnimatedValue(1);
   const to = (v: number) => Animated.spring(s, { toValue: v, useNativeDriver: NATIVE, speed: 40, bounciness: 6 }).start();
   return (
     <AnimatedPressable
@@ -83,7 +84,7 @@ export function PressScale({ children, style, scaleTo = 0.97, haptic = true, onP
 
 /** Looping pulse ring, used for map markers and live indicators. */
 export function Pulse({ size = 40, color = colors.primary, style }: { size?: number; color?: string; style?: StyleProp<ViewStyle> }) {
-  const v = useRef(new Animated.Value(0)).current;
+  const v = useAnimatedValue(0);
   useEffect(() => {
     const loop = Animated.loop(Animated.timing(v, { toValue: 1, duration: 1800, easing: Easing.out(Easing.quad), useNativeDriver: NATIVE }));
     loop.start();
@@ -103,7 +104,7 @@ export function Pulse({ size = 40, color = colors.primary, style }: { size?: num
 
 /** Number that counts up/down to its value. */
 export function AnimatedNumber({ value, style, format = (n) => Math.round(n).toLocaleString('en-IN') }: { value: number; style?: StyleProp<TextStyle>; format?: (n: number) => string }) {
-  const v = useRef(new Animated.Value(value)).current;
+  const v = useAnimatedValue(value);
   const [shown, setShown] = useState(value);
   useEffect(() => {
     const id = v.addListener(({ value: n }) => setShown(n));
@@ -291,7 +292,7 @@ export function Chips<T extends string>({ items, value, onChange, icons, style }
 export function Segmented<T extends string>({ items, value, onChange, accent = 'primary', style, labels }: { items: readonly T[]; value: T; onChange: (v: T) => void; accent?: 'primary' | 'secondary'; style?: StyleProp<ViewStyle>; labels?: Partial<Record<T, string>> }) {
   const [w, setW] = useState(0);
   const idx = Math.max(0, items.indexOf(value));
-  const x = useRef(new Animated.Value(idx)).current;
+  const x = useAnimatedValue(idx);
   useEffect(() => {
     Animated.spring(x, { toValue: idx, useNativeDriver: NATIVE, speed: 18, bounciness: 5 }).start();
   }, [idx, x]);
@@ -323,7 +324,7 @@ export function Segmented<T extends string>({ items, value, onChange, accent = '
 
 export function ProgressBar({ progress, color = colors.primary, color2, height = 6, style, animated = true }: { progress: number; color?: string; color2?: string; height?: number; style?: StyleProp<ViewStyle>; animated?: boolean }) {
   const p = Math.max(0, Math.min(1, progress));
-  const v = useRef(new Animated.Value(animated ? 0 : p)).current;
+  const v = useAnimatedValue(animated ? 0 : p);
   useEffect(() => {
     Animated.timing(v, { toValue: p, duration: 800, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
   }, [p, v]);

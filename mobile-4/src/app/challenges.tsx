@@ -9,6 +9,7 @@ import { Button, Card, Display, EmptyState, FadeIn, Header, Icon, Kicker, Progre
 import { challenges as demoChallenges, fmtEnds, fmtMetric, type Challenge, type ChallengeKind } from '@/data/challenges';
 import type { IconName } from '@/data/icons';
 import { users } from '@/data/users';
+import { NotLiveYet } from '@/components/campus/States';
 import { useApp } from '@/state/AppState';
 import { colors, fonts, radius } from '@/theme';
 
@@ -74,6 +75,8 @@ export default function Challenges() {
   const { mode } = useAuth();
   const { toast } = useApp();
   const live = progressLive(mode);
+  // Signed in to the real backends but no progress-service: never pass the demo list off as real.
+  const unserved = !live && mode === 'live';
   const remote = useRemote(live ? 'progress:challenges' : null, () => progressApi.challenges('current'));
   const all = useMemo(() => (live ? (remote.data?.challenges ?? []).map(fromServer) : demoChallenges), [live, remote.data]);
   // "Special" only exists on the server; the tab shows up when there is something in it.
@@ -115,6 +118,13 @@ export default function Challenges() {
         <Text style={{ color: colors.secondary }}>battle.</Text>
       </Display>
       <Tagline size={16} rotate={-2} style={{ marginTop: 6 }}>Progress counts itself. Just move.</Tagline>
+      {unserved ? (
+        <View style={{ gap: 12, marginTop: 16 }}>
+          <NotLiveYet name="Daily & group challenges" body="These open when the challenge service is live. You can already challenge a friend to a 7-day distance or workout duel." />
+          <Button label="Challenge a friend" icon="sword-cross" onPress={() => router.push('/invite/new')} />
+        </View>
+      ) : (
+      <>
       <Segmented items={tabs} value={tab} onChange={setTab} />
       {live && !remote.data && remote.loading ? (
         <View style={{ gap: 12 }}>
@@ -144,6 +154,8 @@ export default function Challenges() {
         </View>
       )}
       {live && remote.data && remote.error && <Text style={[styles.meta, { marginTop: 10, color: colors.coral }]}>Showing the last update · {remote.error}</Text>}
+      </>
+      )}
       <View style={styles.note}>
         <Icon name="information-outline" size={16} color={colors.dim} />
         <Text style={styles.noteText}>Challenges read your real runs and steps, and XP lands automatically when they resolve. Missions are the tap-to-log goals on Home.</Text>

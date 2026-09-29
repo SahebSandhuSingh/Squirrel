@@ -19,6 +19,7 @@
  */
 import { api, ApiError } from '@/api/client';
 import type { Fix } from '@/logic/track';
+import { deviceTimeZone } from '@/logic/localDay';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -107,9 +108,10 @@ export const idempotencyKey = (runId: string, batch: RunPoint[]) => `${runId}:po
 
 export const runsApi = {
   // ASSUMPTION: request body. The contract specifies the response ({ run_id }) only;
-  // `activity_type: 'walk'` is our addition, sent only for walks so run requests stay byte-identical.
+  // `activity_type: 'walk'` is our addition, sent only for walks. The phone's time zone: the
+  // run's day (daily XP cap) follows it.
   create: (startedAt: string, activityType: 'run' | 'walk' = 'run') =>
-    withRetry(() => api<RunCreated>('/v1/runs', { body: activityType === 'walk' ? { started_at: startedAt, activity_type: 'walk' } : { started_at: startedAt } })),
+    withRetry(() => api<RunCreated>('/v1/runs', { body: { started_at: startedAt, timezone: deviceTimeZone(), ...(activityType === 'walk' ? { activity_type: 'walk' } : {}) } })),
   uploadPoints: (runId: string, batch: RunPoint[]) =>
     withRetry(() => api<unknown>(`/v1/runs/${runId}/points`, { body: { idempotency_key: idempotencyKey(runId, batch), points: batch } })),
   finish: (runId: string) => withRetry(() => api<{ status: RunStatus }>(`/v1/runs/${runId}/finish`, { method: 'POST' })),

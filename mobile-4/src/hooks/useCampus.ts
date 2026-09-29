@@ -4,7 +4,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { campusApi, CAMPUS_SOURCE, realtimeMode, setRealtimeUrl, subscribeRealtime, type RealtimeMessage } from '@/api/campus';
+import { campusApi, CAMPUS_SOURCE, featureUnavailable, realtimeMode, setRealtimeUrl, subscribeRealtime, type RealtimeMessage } from '@/api/campus';
 import { invalidateRemote, useRemote } from '@/api/useRemote';
 import { useAuth } from '@/auth/AuthProvider';
 import { hydrateTerritories, territoriesLoadedAt, upsertTerritory } from '@/state/territoryStore';
@@ -39,6 +39,22 @@ export function useConfig() {
 
 export const useMe = () => useCampus('me', () => campusApi.me());
 export const useZones = () => useCampus('zones', () => campusApi.zones(), { needsAuth: false });
+/**
+ * Hostels to pick from: the backend's hostel zones, or the campus's hostel list when it has no
+ * zones (the Social service). `none`: neither has any yet; `error`: a real failure to show.
+ */
+export function useHostelOptions() {
+  const zones = useZones();
+  const config = useConfig();
+  const fromZones = (zones.data ?? []).filter((z) => z.kind === 'hostel').map((z) => ({ id: z.id, label: z.hostel ?? z.name }));
+  const fromConfig = (config.data?.campus.hostels ?? []).map((h) => ({ id: h, label: h }));
+  const options = fromZones.length ? fromZones : fromConfig;
+  const zonesSettled = !!zones.data || !!zones.error;
+  const loading = !options.length && (!zonesSettled || config.loading);
+  const failed = !options.length && !loading && !!zones.error && !featureUnavailable(zones.cause);
+  return { options, loading, none: !options.length && !loading && !failed, error: failed ? zones : null };
+}
+
 /** Stylised base map (roads, buildings, terrain, POIs). Public and static — cached for the session. */
 export const useMapFeatures = () => useCampus('map:features', () => campusApi.mapFeatures(), { needsAuth: false });
 

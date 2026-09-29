@@ -5,7 +5,7 @@ import { campusApi, errorText, type ConnectionMode, type Me } from '@/api/campus
 import { modeUi } from '@/components/campus/Social';
 import { ErrorState, LoadingRows, SignedOutState } from '@/components/campus/States';
 import { Button, Header, Icon, PressScale, Screen, tap } from '@/components/ui';
-import { invalidateCampus, useAction, useMe, useZones } from '@/hooks/useCampus';
+import { invalidateCampus, useAction, useHostelOptions, useMe } from '@/hooks/useCampus';
 import { useApp } from '@/state/AppState';
 import { alpha, colors, fonts, radius } from '@/theme';
 
@@ -27,7 +27,7 @@ export default function EditProfile() {
 
 function Form({ me, onSaved }: { me: Me; onSaved: (m: Me) => void }) {
   const { toast } = useApp();
-  const zones = useZones();
+  const hostelOptions = useHostelOptions();
   const [name, setName] = useState(me.display_name);
   const [bio, setBio] = useState(me.bio ?? '');
   const [mode, setMode] = useState<ConnectionMode | null>(me.connection_mode);
@@ -40,7 +40,7 @@ function Form({ me, onSaved }: { me: Me; onSaved: (m: Me) => void }) {
       ...(hostel ? { hostel_zone_id: hostel } : {}),
     }),
   );
-  const hostels = (zones.data ?? []).filter((z) => z.kind === 'hostel');
+  const hostels = hostelOptions.options;
   const submit = async () => {
     const r = await save.run();
     if (r) {
@@ -79,7 +79,7 @@ function Form({ me, onSaved }: { me: Me; onSaved: (m: Me) => void }) {
               const on = hostel === h.id;
               return (
                 <PressScale key={h.id} onPress={() => { tap(); setHostel(h.id); }} style={[styles.chip, on && { borderColor: colors.primary, backgroundColor: alpha(colors.primary, 0.08) }]} scaleTo={0.96} accessibilityRole="radio" accessibilityState={{ selected: on }}>
-                  <Text style={[styles.chipText, on && { color: colors.primary }]}>{h.hostel ?? h.name}</Text>
+                  <Text style={[styles.chipText, on && { color: colors.primary }]}>{h.label}</Text>
                 </PressScale>
               );
             })}

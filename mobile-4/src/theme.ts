@@ -122,6 +122,8 @@ const light: Palette = {
 };
 
 export const colors: Palette = isLightTheme ? light : dark;
+/** The dark palette in both themes, for screens drawn over the camera (the live workout). */
+export const darkColors: Palette = dark;
 
 /** Same colour at a given opacity: alpha('#D7FF1F', 0.1) → 'rgba(215,255,31,0.1)'. */
 export function alpha(hex: string, a: number) {

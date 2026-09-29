@@ -7,7 +7,7 @@ Built with Expo SDK 57, React Native 0.86, Expo Router and TypeScript. It runs o
 ## Run it
 
 ```bash
-cd mobile
+cd mobile-4
 npm install
 npx expo start          # i = iOS simulator, a = Android, w = web, or scan the QR code with Expo Go
 ```
@@ -19,7 +19,7 @@ npm run typecheck       # tsc --noEmit
 npx expo start --web    # browser preview at phone size
 ```
 
-Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-haptics`, `expo-font`, Google Fonts), so no custom dev build is needed. It uses no paid APIs, and all data is local demo data.
+With no backend URLs (`.env.example`) it runs on local demo data. Live workouts (camera pose tracking in a WebView) and push notifications need a development build (`npx expo run:ios|android` or EAS); the web build works in the browser.
 
 ## Screens
 
@@ -83,6 +83,32 @@ Locked missions are listed last and left out of the done/XP counters and claimab
 
 **Campus, not city.** Each city in `data/cities.ts` has a `campus`, and the leaderboard ranks students on that campus. The Run Module's leaderboard API only offers `scope=global` today, so signed-in rows are labelled as all runners until a campus scope exists.
 
+## Backends today (what is live)
+
+The campus contract below is served by the Social service through an adapter
+(`src/api/campus/social.ts`) until a dedicated campus backend exists:
+
+| Live (real data) | Source |
+|---|---|
+| Profile, name, bio, hostel, founding badge, month km | Social `/v1/users/me/profile`, `/v1/me/membership` |
+| Hostels in onboarding and Edit profile | Social `/v1/community/config` (`SOCIAL_HOSTELS`) |
+| Crews: list, search, create, join, leave | Social `/v1/crews` |
+| Events and RSVP (screens still locked by `LOCKED.events`) | Social `/v1/events` |
+| Challenge invites = 7-day distance / workout duels | Social `/v1/challenges` |
+| Squirrels board (daily, weekly) and Hostel vs Hostel | Social `/v1/leaderboards/xp`, `/hostels` |
+| Notifications (and push on phones) | Social `/v1/notifications`, Expo push |
+| Invite friends: code, place in line, "invite 3 to skip the line" | Social `/v1/me/membership`, `/v1/me/referral` (`/referral`) |
+| People search and suggestions | Social `/v1/users/search`, `/suggestions` |
+| Runs, run XP, XP total | Run Module `/v1/runs`, `/v1/users/me/xp` |
+| Exercises: catalog, sessions, camera coaching, reports | Exercise backend `/api/...` |
+| "Moving right now" counter | Run Module `/v1/live` + Exercise `/api/live` |
+
+**Not live yet** (the screens say so, never invented data): named zones and claim / steal / defend,
+the campus map's base layer and players, presence, pokes and friends, Open to Meet, Active-now
+people, Date Mode, meetups, all-time boards, daily / group challenges (progress-service), and the
+Dev A / Dev B endpoints in `src/api/availability.ts`. Connection mode and "onboarding done" are kept
+on the device until the Social service has fields for them.
+
 ## Campus social (IISER Kolkata launch)
 
 The IISER-first social layer: **Move → Discover people → Claim territory → Join crews → Meet IRL**.
@@ -119,7 +145,7 @@ WS   realtime_url  →  territory.updated · stats.updated · invite.updated · 
 
 **Privacy.** The app never shows another person's exact location or route: the Map draws only the approximate, backend-snapped positions it is given, Active Now uses coarse proximity buckets, and only your own route is drawn. Nearby people are shown only while you're Open to Meet. No secrets in `EXPO_PUBLIC_*`.
 
-**Sign-in.** `.ac.in` emails get a one-time code (`POST {AUTH_URL}/email/start`, `/email/verify` → `{ access_token }` — an assumption until the account service exists). In the dev mock the code is `246810`.
+**Sign-in.** One account for every backend, on the Exercise backend: `POST /api/auth/email/start {email}` emails a 6-digit code to a .ac.in address (`new_account` says whether it has an account yet), and `POST /api/auth/email/verify {email, code, first_name?, last_name?}` returns tokens (a new address needs a first name and becomes a verified account with no password). Access tokens last 15 minutes and are refreshed with the single-use refresh token (`api/client.ts`). Password sign-in stays under “Other sign-in options” for older accounts. In the dev mock the code is `246810`.
 
 **Date Mode** unlocks only when `GET /v1/config` reports `features.date_mode.available`; the requirements list comes from the backend.
 

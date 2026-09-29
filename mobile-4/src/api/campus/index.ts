@@ -2,7 +2,8 @@
  * Entry point for the campus social backend. Screens import `campusApi` from here and never
  * call fetch themselves.
  *
- *   live  → REST (api/campus/http.ts) against CAMPUS_API_URL
+ *   live  → REST (api/campus/http.ts) against CAMPUS_API_URL, or the Social service through
+ *           the adapter in api/campus/social.ts
  *   mock  → in-memory dev mock (api/campus/mock/server.ts), dev builds only
  *   off   → every call rejects with "not live yet"; screens show that state, never fake data
  *
@@ -12,8 +13,9 @@
  */
 import { EndpointUnavailableError, gateEndpoints, isEndpointUnavailable } from '@/api/availability';
 import { ApiError, getApiToken } from '@/api/client';
-import { CAMPUS_API_CONFIGURED, CAMPUS_MOCKS_ENABLED, REALTIME_URL } from '@/api/config';
+import { CAMPUS_API_CONFIGURED, CAMPUS_MOCKS_ENABLED, CAMPUS_ON_SOCIAL, REALTIME_URL } from '@/api/config';
 import { httpCampusApi } from '@/api/campus/http';
+import { socialCampusApi } from '@/api/campus/social';
 import { mockCampusApi, mockRealtime } from '@/api/campus/mock/server';
 import type { CampusApi, RealtimeMessage } from '@/api/campus/types';
 
@@ -27,7 +29,9 @@ const offApi: CampusApi = new Proxy({} as CampusApi, {
   get: () => () => Promise.reject(new ApiError(0, 'Campus features aren’t live yet', { code: NOT_LIVE, detail: 'Campus features aren’t live yet' })),
 });
 
-const sourceApi: CampusApi = CAMPUS_SOURCE === 'mock' ? mockCampusApi : CAMPUS_SOURCE === 'live' ? httpCampusApi : offApi;
+/** Live: a dedicated campus backend (EXPO_PUBLIC_CAMPUS_API_URL) speaks the contract itself; the
+ *  Social service is adapted to it (api/campus/social.ts). */
+const sourceApi: CampusApi = CAMPUS_SOURCE === 'mock' ? mockCampusApi : CAMPUS_SOURCE === 'live' ? (CAMPUS_ON_SOCIAL ? socialCampusApi : httpCampusApi) : offApi;
 
 /** Method → capability for every endpoint that isn't built yet. Everything unlisted passes through. */
 export const campusApi: CampusApi = gateEndpoints(sourceApi, {

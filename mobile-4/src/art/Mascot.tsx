@@ -3,6 +3,7 @@ import { Animated, Easing, type StyleProp, type ViewStyle, Platform } from 'reac
 import Svg, { Circle, ClipPath, Defs, Ellipse, G, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { art } from './palette';
 import type { MascotAccessory, MascotPose } from '@/types';
+import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 
 /**
  * Squirrel Social brand mascot: a chibi squirrel in a black hoodie with pink
@@ -768,7 +769,7 @@ type MascotProps = {
 };
 
 export function Mascot({ pose = 'idle', accessory = 'sunglasses', size = 160, animated = false, style }: MascotProps) {
-  const t = useRef(new Animated.Value(0)).current;
+  const t = useAnimatedValue(0);
 
   useEffect(() => {
     if (!animated) return undefined;

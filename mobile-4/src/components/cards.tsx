@@ -1,6 +1,6 @@
 import { FeatureGate, SoonPill, useLocks } from '@/components/Locked';
 import { LOCKED_MISSIONS } from '@/data/features';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Image, Animated, Easing, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -21,6 +21,7 @@ import { userById, type User } from '@/data/users';
 import { useApp } from '@/state/AppState';
 import type { RewardArtKind, SceneKind } from '@/types';
 import { alpha, colors, fonts, radius } from '@/theme';
+import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 
 // ---------------------------------------------------------------------------
 // Scene image
@@ -45,7 +46,7 @@ const fmt = (n: number) => (Number.isInteger(n) ? n.toLocaleString('en-IN') : n.
 export function MissionCard({ mission: m, onLog, claimed, compact }: { mission: Mission; onLog: () => void; claimed: boolean; compact?: boolean }) {
   const locked = LOCKED_MISSIONS.has(m.id);
   const done = !locked && m.current >= m.goal;
-  const pop = useRef(new Animated.Value(done ? 1 : 0)).current;
+  const pop = useAnimatedValue(done ? 1 : 0);
   useEffect(() => {
     if (done) Animated.spring(pop, { toValue: 1, useNativeDriver: NATIVE, speed: 12, bounciness: 14 }).start();
   }, [done, pop]);
@@ -191,9 +192,9 @@ export function SocialPost({ post }: { post: Post }) {
   const { liked, toggleLike, saved, toggleSave, following, toggleFollow, me } = useApp();
   const author = post.authorId === me.id ? me : userById(post.authorId);
   const isLiked = liked.has(post.id);
-  const heart = useRef(new Animated.Value(0)).current;
+  const heart = useAnimatedValue(0);
   const lastTap = useRef<number>(0);
-  const baseLikes = useRef(post.likes);
+  const [baseLikes] = useState(post.likes);
 
   const like = () => {
     tap('impact');
@@ -259,7 +260,7 @@ export function SocialPost({ post }: { post: Post }) {
       <View style={styles.actions}>
         <Pressable onPress={like} style={styles.action} hitSlop={6} accessibilityLabel={isLiked ? 'Unlike' : 'Like'}>
           <Icon name={isLiked ? 'heart' : 'heart-outline'} size={24} color={isLiked ? colors.primary : colors.text} />
-          <Text style={styles.count}>{(baseLikes.current + (isLiked ? 1 : 0)).toLocaleString('en-IN')}</Text>
+          <Text style={styles.count}>{(baseLikes + (isLiked ? 1 : 0)).toLocaleString('en-IN')}</Text>
         </Pressable>
         <Pressable onPress={() => router.push({ pathname: '/post/[id]', params: { id: post.id } })} style={styles.action} hitSlop={6} accessibilityLabel="Comments">
           <Icon name="comment-outline" size={22} color={colors.text} />
@@ -326,7 +327,7 @@ export function MiniBars({ values, color, height = 44, highlightLast = true, bar
 }
 
 function GrowBar({ w, h, color, opacity, delay }: { w: number; h: number; color: string; opacity: number; delay: number }) {
-  const v = useRef(new Animated.Value(0)).current;
+  const v = useAnimatedValue(0);
   useEffect(() => {
     v.setValue(0);
     Animated.timing(v, { toValue: h, duration: 520, delay, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();

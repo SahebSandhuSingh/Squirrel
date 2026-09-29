@@ -348,7 +348,9 @@ export default function Run() {
 
   // Zones load once the summary is up (and again after a successful retry).
   useEffect(() => {
-    if (phase === 'done' && zonesState.status === 'idle') void loadZones();
+    if (phase !== 'done' || zonesState.status !== 'idle') return;
+    const t = setTimeout(() => void loadZones(), 0); // after this render, not inside it
+    return () => clearTimeout(t);
   }, [phase, zonesState.status, loadZones]);
 
   const retryUpload = async () => {

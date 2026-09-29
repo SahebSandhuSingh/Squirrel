@@ -5,6 +5,7 @@ import { Icon, NATIVE } from '@/components/ui';
 import type { IconName } from '@/data/icons';
 import { useApp, type ToastMsg } from '@/state/AppState';
 import { alpha, colors, fonts, MAX_WIDTH, radius } from '@/theme';
+import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 
 /** Renders the toast queue from AppState at the top of the screen. */
 export function ToastHost() {
@@ -20,7 +21,7 @@ export function ToastHost() {
 }
 
 function ToastItem({ t }: { t: ToastMsg }) {
-  const v = useRef(new Animated.Value(0)).current;
+  const v = useAnimatedValue(0);
   useEffect(() => {
     Animated.sequence([
       Animated.spring(v, { toValue: 1, useNativeDriver: NATIVE, speed: 16, bounciness: 8 }),

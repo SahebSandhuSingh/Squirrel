@@ -1,6 +1,6 @@
 /** A notification row: pokes get POKE BACK, friendships get VIEW PROFILE, others link through. */
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import type { AppNotification } from '@/api/campus/types';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
 import { shortTime } from '@/components/campus/territoryUi';
@@ -36,6 +36,7 @@ export function PokeNotificationCard({ n }: { n: AppNotification }) {
     else if (d.zone_id) router.push({ pathname: '/zone/[id]', params: { id: d.zone_id } });
     else if (d.invite_id) router.push('/invites');
     else if (d.event_id) locks.guard('events', () => router.push({ pathname: '/event/[id]', params: { id: d.event_id! } }))();
+    else if (d.route) router.push(d.route as Href);
   };
   return (
     <View style={[styles.row, !n.read && styles.unread]}>

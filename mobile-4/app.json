@@ -36,7 +36,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Squirrel Social uses the camera so you can see your form while you exercise.",
+          "cameraPermission": "Squirrel Social uses the camera to track your body so the coach can count and score your reps. No video is recorded or uploaded.",
           "microphonePermission": false,
           "recordAudioAndroid": false
         }
@@ -47,6 +47,12 @@
           "photosPermission": "Squirrel Social uses a photo only when you choose one to share.",
           "cameraPermission": false,
           "microphonePermission": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#D7FF1F"
         }
       ]
     ],

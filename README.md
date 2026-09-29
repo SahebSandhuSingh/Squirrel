@@ -11,7 +11,8 @@ writes its own.
 | [`mobile/nearby/`](mobile/nearby/) | Android (Kotlin) and iOS (Swift) Bluetooth clients for Nearby Discovery | native | none (talks to the Exercise API) |
 
 **Deploying:** [`DEPLOY.md`](DEPLOY.md): backends and Redis on Render (`render.yaml`), the web app on
-Vercel (`mobilessss/vercel.json`), the database on Supabase.
+Vercel (`mobile-4/`, built by the root `vercel.json`), the database on Supabase. `mobile-4/` is the app;
+`mobilessss/` is the previous one, kept for reference.
 
 Nearby Discovery (Bluetooth "someone near you is on Squirrel Social") is designed in
 [`docs/nearby-discovery.md`](docs/nearby-discovery.md): protocol, proximity scoring, privacy and API.

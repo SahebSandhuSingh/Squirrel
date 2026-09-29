@@ -134,13 +134,13 @@ export function CampusProfileView({ userId, isMe }: { userId?: string; isMe: boo
         {/* Stats */}
         <SectionHeader title="Activity stats" />
         <View style={styles.grid}>
-          <StatTile icon="map-marker-distance" v={km(s.total_distance_m)} l="Total distance" />
+          {s.total_distance_m != null && <StatTile icon="map-marker-distance" v={km(s.total_distance_m)} l="Total distance" />}
           <StatTile icon="calendar-month" v={km(s.month_distance_m)} l="This month" />
-          <StatTile icon="flag-variant" v={String(s.zones_claimed)} l="Zones held" c={colors.primary} />
-          <StatTile icon="shield-check" v={String(s.territories_defended)} l="Defended" c={colors.gold} />
-          <StatTile icon="sword-cross" v={String(s.territories_stolen)} l="Stolen" c={colors.secondary} />
+          {s.zones_claimed != null && <StatTile icon="flag-variant" v={String(s.zones_claimed)} l="Zones held" c={colors.primary} />}
+          {s.territories_defended != null && <StatTile icon="shield-check" v={String(s.territories_defended)} l="Defended" c={colors.gold} />}
+          {s.territories_stolen != null && <StatTile icon="sword-cross" v={String(s.territories_stolen)} l="Stolen" c={colors.secondary} />}
           <StatTile icon="account-group" v={String(s.crew_memberships)} l="Crews" c={colors.blue} />
-          <StatTile icon="calendar-check" v={String(s.events_attended)} l="Events" c={colors.violet} />
+          {s.events_attended != null && <StatTile icon="calendar-check" v={String(s.events_attended)} l="Events" c={colors.violet} />}
           {s.streak_days != null && <StatTile icon="fire" v={`${s.streak_days}d`} l="Streak" c={colors.orange} />}
         </View>
 
@@ -229,6 +229,7 @@ export function CampusProfileView({ userId, isMe }: { userId?: string; isMe: boo
             <SectionHeader title="More" />
             <View style={{ gap: 8 }}>
               <ThemeToggle />
+              <LinkRow icon="account-multiple-plus-outline" label="Invite friends" detail="Invite 3, skip the line" onPress={() => router.push('/referral')} />
               <LinkRow
                 icon="star-four-points-outline"
                 label={ambStatus ? 'Ambassador application' : 'Become an ambassador'}

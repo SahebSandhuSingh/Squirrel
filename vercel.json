@@ -1,9 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "installCommand": "cd mobilessss && npm ci",
-  "buildCommand": "cd mobilessss && npx expo export -p web --clear",
-  "outputDirectory": "mobilessss/dist",
+  "installCommand": "cd mobile-4 && npm ci",
+  "buildCommand": "cd mobile-4 && npx expo export -p web --clear",
+  "outputDirectory": "mobile-4/dist",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
   "headers": [
     {

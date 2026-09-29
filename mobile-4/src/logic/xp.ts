@@ -31,7 +31,8 @@ export const levelFromXp = (xp: number) => Math.floor(xp / XP_PER_LEVEL) + 1;
 export const xpIntoLevel = (xp: number) => xp % XP_PER_LEVEL;
 
 /**
- * Exercise XP (app-side: the Exercise Mechanics backend awards none). A completed session
+ * Exercise XP in demo mode only: signed in, the Run Module's XP engine awards it (2 per counted
+ * rep, quality-based) and the app shows that. Demo: a completed session
  * earns 30 + 2 per rep (or +1 per 10 s for timed sets), capped at 100 per session.
  */
 export const EXERCISE_COMPLETION_XP = 30;

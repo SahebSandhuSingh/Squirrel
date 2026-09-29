@@ -2,7 +2,7 @@
 
 | Part | Where | Config |
 |---|---|---|
-| Web version of the app (`mobilessss/`) | **Vercel** (Hobby) | [`vercel.json`](vercel.json) |
+| Web version of the app (`mobile-4/`) | **Vercel** (Hobby) | [`vercel.json`](vercel.json) |
 | Exercise backend, Run Module API (with its workers), Social API, Redis | **Render** (free) | [`render.yaml`](render.yaml) |
 | Database | **Supabase** (free) | already set up |
 | Phone app | **EAS Build**, then the App Store / Play Store | |
@@ -34,8 +34,8 @@ connect the two.
    **Deploy.** The first deploy builds `main` and fails or shows nothing; that is expected.
 4. **Settings → Environments → Production → Branch Tracking** (older layout: Settings → Git →
    Production Branch): `saheb`. **Settings → Build and Deployment → Node.js Version:** `22.x`, and
-   no Build/Output/Install overrides switched on (the root `vercel.json` builds `mobilessss`).
-5. **Deployments → Create Deployment →** branch `saheb`. The log shows `cd mobilessss && npm ci`,
+   no Build/Output/Install overrides switched on (the root `vercel.json` builds `mobile-4`).
+5. **Deployments → Create Deployment →** branch `saheb`. The log shows `cd mobile-4 && npm ci`,
    the Expo export, and ends with `Exported: dist` after 2–4 minutes. (A build that ends in under a
    second built nothing: check the branch.)
 6. Open the address: the Squirrel Social welcome screen, on sample data.
@@ -138,7 +138,7 @@ with the header `Authorization: Bearer <SOCIAL_INTERNAL_TOKEN>` (the value from 
 **Push notifications** (steals, challenges, events, check-ins) go to the phone app only, not the
 website:
 
-1. In `mobilessss/`: `npx eas-cli@latest init` once. It writes `extra.eas.projectId` into
+1. In `mobile-4/`: `npx eas-cli@latest init` once. It writes `extra.eas.projectId` into
    `app.json`; commit that.
 2. Android: add the FCM (Firebase) key, iOS: the APNs key, with `npx eas-cli@latest credentials`.
 3. Build the app (section 4). It asks for permission after sign-in and registers the phone.
@@ -153,13 +153,13 @@ Without these the in-app notification list still works.
    |---|---|
    | `EXPO_PUBLIC_EXERCISE_API_URL` | `https://squirrel-exercise.onrender.com` |
    | `EXPO_PUBLIC_API_URL` | `https://squirrel-run-api.onrender.com` |
-   | `EXPO_PUBLIC_SOCIAL_API_URL` | `https://squirrel-social.onrender.com` (profiles, follows, posts, feed; unset: sample data) |
+   | `EXPO_PUBLIC_SOCIAL_API_URL` | `https://squirrel-social.onrender.com` (profile, crews, events, duels, boards, notifications; unset: the campus screens say "not live yet") |
 
    `https://`, no trailing slash. Never set `EXPO_PUBLIC_POSE_DEBUG` here: it is a development
-   switch for the pose debug overlay and logs (see `mobilessss/.env.example`). Locally, rebuild with
+   switch for the pose debug overlay and logs (see `mobile-4/.env.example`). Locally, rebuild with
    `--clear` after changing it, or Metro reuses the old value. They are built into the app, so:
 2. **Deployments → latest → ⋯ → Redeploy.**
-3. Open the site, create an account, check that the profile and XP load. The first request after a
+3. Open the site, join with a .ac.in email (a 6-digit code arrives by email), check that the profile and XP load. The first request after a
    quiet spell can take a minute while Render wakes the backend.
    "Cannot reach the server" → the Vercel address is missing from `CORS_ALLOWED_ORIGINS` on Render,
    or an address has a typo.

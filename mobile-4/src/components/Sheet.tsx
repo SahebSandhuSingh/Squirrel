@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NATIVE } from '@/components/ui';
 import { colors, MAX_WIDTH, radius } from '@/theme';
+import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 
 /**
  * Bottom-sheet chrome for routes presented as `transparentModal`.
@@ -11,7 +12,7 @@ import { colors, MAX_WIDTH, radius } from '@/theme';
  */
 export function Sheet({ children, onClose }: { children: React.ReactNode; onClose?: () => void }) {
   const insets = useSafeAreaInsets();
-  const v = useRef(new Animated.Value(0)).current;
+  const v = useAnimatedValue(0);
   useEffect(() => {
     Animated.timing(v, { toValue: 1, duration: 320, easing: Easing.out(Easing.cubic), useNativeDriver: NATIVE }).start();
   }, [v]);

@@ -9,6 +9,7 @@ import { highlightById } from '@/data/highlights';
 import { useApp } from '@/state/AppState';
 import { colors, fonts } from '@/theme';
 import { StatusBar } from 'expo-status-bar';
+import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 
 const DURATION = 4500;
 
@@ -20,7 +21,7 @@ export default function HighlightViewer() {
   const { me } = useApp();
   const h = highlightById(id);
   const [i, setI] = useState(0);
-  const bar = useRef(new Animated.Value(0)).current;
+  const bar = useAnimatedValue(0);
   const count = h?.slides.length ?? 0;
 
   useEffect(() => {

@@ -1,13 +1,21 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform } from 'react-native';
+import { router } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
-import { setApiToken } from '@/api/client';
-import type { ExerciseUser } from '@/api/exercise';
+import { ApiError, setApiToken, setTokenRefresher } from '@/api/client';
+import { setCampusEmail } from '@/api/campus/social';
+import { communityApi } from '@/api/community';
+import { API_CONFIGURED, AUTH_CONFIGURED, CAMPUS_API_CONFIGURED, CAMPUS_MOCKS_ENABLED, EXERCISE_API_CONFIGURED, PROGRESS_API_CONFIGURED, SOCIAL_API_CONFIGURED } from '@/api/config';
+import { exerciseApi, type ExerciseUser } from '@/api/exercise';
+import { invalidateRemote } from '@/api/useRemote';
+import { profileApi } from '@/api/social';
+import { accountApi, type TokenPair } from '@/auth/account';
 import { jwtSubject } from '@/auth/jwt';
-import { API_CONFIGURED, AUTH_CONFIGURED, AUTH_URL, CAMPUS_API_CONFIGURED, CAMPUS_MOCKS_ENABLED, PROGRESS_API_CONFIGURED } from '@/api/config';
+import { unregisterPush, usePushNotifications } from '@/notifications/push';
+import { resetTerritories } from '@/state/territoryStore';
 
-/** Some backend that authenticates the bearer token is configured (Run Module, campus and/or progress-service). */
-const BEARER_BACKEND = API_CONFIGURED || CAMPUS_API_CONFIGURED || PROGRESS_API_CONFIGURED;
+/** Some backend that authenticates the bearer token is configured. */
+const BEARER_BACKEND = API_CONFIGURED || CAMPUS_API_CONFIGURED || PROGRESS_API_CONFIGURED || EXERCISE_API_CONFIGURED || SOCIAL_API_CONFIGURED;
 
 /** Dev-mock sign-in code (only when there's no account service and the campus dev mock is on). */
 const DEV_EMAIL_CODE = '246810';
@@ -16,48 +24,70 @@ const DEV_EMAIL_CODE = '246810';
 export const isAcademicEmail = (e: string) => /^[^\s@]+@([a-z0-9-]+\.)*[a-z0-9-]+\.ac\.in$/i.test(e.trim());
 
 /**
- * Authentication. Every Run Module endpoint needs `Authorization: Bearer <token>` (RS256).
- * No account service exists yet (assessment §4.4 / §7.1), so:
- *  - with EXPO_PUBLIC_AUTH_URL set, sign-in POSTs email/password to `${AUTH_URL}/token`
- *    and expects `{ access_token }` — adjust to the real service's contract;
- *  - a developer can paste a token issued by hand (useful for testing against the backend);
- *  - otherwise the app runs in demo mode.
+ * Authentication. One Squirrel Social account (Exercise backend, /api/auth) signs in to every
+ * backend: the Run Module and the Social service accept the same bearer token, and the Exercise
+ * backend serves /api/users/{id}/... only to that account.
+ *  - Email code: POST /api/auth/email/start sends a 6-digit code to a .ac.in address, and
+ *    /api/auth/email/verify exchanges it for tokens. A new address becomes an account (it needs a
+ *    first name); there is no password.
+ *  - Password sign-in stays for accounts made with one (older builds), under "Other options".
+ *  - A developer can paste a hand-issued token, or use demo mode.
+ * Tokens live in SecureStore (localStorage on web). The 15-minute access token is refreshed
+ * automatically (api/client.ts) with the stored single-use refresh token.
  */
 type Mode = 'loading' | 'signed-out' | 'demo' | 'live';
+
+export type Name = { first_name: string; last_name: string };
 
 type AuthState = {
   mode: Mode;
   email: string | null;
-  /** Signed-in user's id (JWT `sub`), when live and the token carries one. */
+  /** Signed-in user's id (JWT `sub`, a UUID), when live. */
   userId: string | null;
   apiConfigured: boolean;
   authConfigured: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   /**
-   * Email-code sign-in for .ac.in addresses: start sends a code, verify exchanges it for a token.
-   * Returns `devCode` only in the dev mock (no account service configured).
+   * Email-code sign-in for .ac.in addresses: request sends a code, verify exchanges it for tokens.
+   * `newAccount`: the address has no account yet, so verify needs a name. `devCode` only in the dev mock.
    */
-  requestEmailCode: (email: string) => Promise<{ devCode?: string }>;
-  verifyEmailCode: (email: string, code: string) => Promise<void>;
+  requestEmailCode: (email: string) => Promise<{ devCode?: string; newAccount?: boolean }>;
+  /** `invite`: a friend's invite code, claimed on a new account (best effort). */
+  verifyEmailCode: (email: string, code: string, name?: Name, invite?: string) => Promise<{ newAccount: boolean }>;
   signInWithToken: (token: string) => Promise<void>;
   continueDemo: () => void;
   signOut: () => Promise<void>;
-  /**
-   * Exercise Mechanics identity. That backend has no tokens: POST /api/users mints a user_id,
-   * which is kept in the same secure store as the Run token and cleared on sign-out.
-   */
+  /** The email last used to sign in on this device (kept after sign-out, to pre-fill the form). */
+  lastEmail: string | null;
+  /** Why the user was signed out, when it wasn't their choice (shown on the sign-in screen). */
+  notice: string | null;
+  clearNotice: () => void;
+  /** The signed-in account as the form coach sees it (null when signed out or not configured). */
   exerciseUser: ExerciseUser | null;
-  setExerciseUser: (u: ExerciseUser | null) => Promise<void>;
 };
 
 const KEY = 'squirrel.auth.token';
+const REFRESH_KEY = 'squirrel.auth.refresh';
 const EMAIL_KEY = 'squirrel.auth.email';
-const EXERCISE_KEY = 'squirrel.exercise.user';
+const NAME_KEY = 'squirrel.auth.name';
+/** Not cleared on sign-out: only pre-fills the email field next time. */
+const LAST_EMAIL_KEY = 'squirrel.auth.last-email';
+/** Pre-account builds stored a bare coach id here, which anyone could link. Removed on launch. */
+const LEGACY_EXERCISE_KEY = 'squirrel.exercise.user';
 
 const store = {
   get: async (k: string) => (Platform.OS === 'web' ? globalThis.localStorage?.getItem(k) ?? null : SecureStore.getItemAsync(k)),
   set: async (k: string, v: string) => (Platform.OS === 'web' ? globalThis.localStorage?.setItem(k, v) : SecureStore.setItemAsync(k, v)),
   del: async (k: string) => (Platform.OS === 'web' ? globalThis.localStorage?.removeItem(k) : SecureStore.deleteItemAsync(k)),
+};
+
+const parseName = (raw: string | null): Name | null => {
+  try {
+    const n = raw ? (JSON.parse(raw) as Partial<Name>) : null;
+    return n && typeof n.first_name === 'string' && typeof n.last_name === 'string' ? { first_name: n.first_name, last_name: n.last_name } : null;
+  } catch {
+    return null;
+  }
 };
 
 const Ctx = createContext<AuthState | null>(null);
@@ -66,106 +96,215 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [mode, setMode] = useState<Mode>('loading');
   const [email, setEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  const [exerciseUser, setExerciseUserState] = useState<ExerciseUser | null>(null);
+  const [name, setName] = useState<Name | null>(null);
+  const [lastEmail, setLastEmail] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const refreshToken = useRef<string | null>(null);
+  const subject = useRef<string | null>(null);
+
+  /** Never show one account's cached data (profile, crews, notifications…) to another. A refresh keeps it. */
+  const forgetCachedData = useCallback((sub: string | null) => {
+    if (sub === subject.current) return;
+    subject.current = sub;
+    invalidateRemote('');
+    resetTerritories();
+  }, []);
+
+  const clear = useCallback(async () => {
+    await Promise.all([KEY, REFRESH_KEY, EMAIL_KEY, NAME_KEY].map(store.del));
+    refreshToken.current = null;
+    forgetCachedData(null);
+    setApiToken(null);
+    setUserId(null);
+    setEmail(null);
+    setName(null);
+  }, [forgetCachedData]);
+
+  const applyAccess = useCallback(
+    (access: string) => {
+      const sub = jwtSubject(access);
+      forgetCachedData(sub);
+      setApiToken(access);
+      setUserId(sub);
+    },
+    [forgetCachedData],
+  );
+
+  /** Persist a fresh pair from sign-in or refresh. */
+  const savePair = useCallback(
+    async (pair: TokenPair) => {
+      refreshToken.current = pair.refresh_token;
+      await Promise.all([store.set(KEY, pair.access_token), store.set(REFRESH_KEY, pair.refresh_token)]);
+      applyAccess(pair.access_token);
+    },
+    [applyAccess],
+  );
+
+  // One refresher for the whole app. Only a refresh token the server rejects (401) ends the
+  // session; no connection, a rate limit (429) or a server error leaves the user signed in, and
+  // the next request simply tries again.
+  useEffect(() => {
+    setTokenRefresher(async () => {
+      const current = refreshToken.current;
+      if (!current) return null;
+      try {
+        const pair = await accountApi.refresh(current);
+        await savePair(pair);
+        return pair.access_token;
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 401) {
+          await clear();
+          setMode('signed-out');
+          setNotice('Your session ended. Please sign in again.');
+          router.replace('/sign-in');
+        }
+        return null;
+      }
+    });
+    return () => setTokenRefresher(null);
+  }, [savePair, clear]);
 
   useEffect(() => {
     (async () => {
       try {
-        const [t, e, x] = await Promise.all([store.get(KEY), store.get(EMAIL_KEY), store.get(EXERCISE_KEY)]);
-        try {
-          const parsed = x ? (JSON.parse(x) as Partial<ExerciseUser>) : null;
-          if (parsed?.user_id && parsed.first_name) setExerciseUserState(parsed as ExerciseUser);
-        } catch {
-          // corrupt cache: treat as no exercise profile
-        }
+        store.del(LEGACY_EXERCISE_KEY).catch(() => undefined);
+        const [t, r, e, n, last] = await Promise.all([store.get(KEY), store.get(REFRESH_KEY), store.get(EMAIL_KEY), store.get(NAME_KEY), store.get(LAST_EMAIL_KEY)]);
+        setLastEmail(last);
         if (t && BEARER_BACKEND) {
-          setApiToken(t);
-          setUserId(jwtSubject(t));
+          refreshToken.current = r;
+          applyAccess(t);
           setEmail(e);
+          setName(parseName(n));
           setMode('live');
         } else setMode('signed-out');
       } catch {
         setMode('signed-out');
       }
     })();
+  }, [applyAccess]);
+
+  const rememberName = useCallback(async (n: Name) => {
+    setName(n);
+    await store.set(NAME_KEY, JSON.stringify(n));
   }, []);
 
-  const signInWithToken = useCallback(async (t: string) => {
-    await store.set(KEY, t);
-    setApiToken(t);
-    setUserId(jwtSubject(t));
-    setMode('live');
+  const rememberEmail = useCallback(async (em: string) => {
+    await Promise.all([store.set(EMAIL_KEY, em), store.set(LAST_EMAIL_KEY, em)]);
+    setEmail(em);
+    setLastEmail(em);
+    setNotice(null);
   }, []);
+
+  /** The name for greetings; the account works without it if the profile can't be read now. */
+  const loadName = useCallback(
+    async (id: string) => {
+      if (!EXERCISE_API_CONFIGURED) return;
+      const p = await exerciseApi.getProfile(id).catch(() => null);
+      if (p) await rememberName({ first_name: p.first_name, last_name: p.last_name });
+    },
+    [rememberName],
+  );
 
   const signIn = useCallback(
     async (em: string, password: string) => {
-      if (!AUTH_CONFIGURED) throw new Error('No account service is configured yet. Continue in demo mode, or paste a developer token.');
-      const res = await fetch(`${AUTH_URL}/token`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: em, password }) });
-      if (!res.ok) throw new Error(res.status === 401 ? 'Wrong email or password.' : `Sign-in failed (${res.status}).`);
-      const { access_token } = (await res.json()) as { access_token?: string };
-      if (!access_token) throw new Error('Sign-in response had no access_token.');
-      await store.set(EMAIL_KEY, em);
-      setEmail(em);
-      await signInWithToken(access_token);
+      if (!AUTH_CONFIGURED) throw new Error('No account server is configured. Set EXPO_PUBLIC_EXERCISE_API_URL, or explore the demo.');
+      const pair = await accountApi.login(em.trim(), password);
+      await savePair(pair);
+      await rememberEmail(em.trim());
+      await loadName(pair.user_id);
+      setMode('live');
     },
-    [signInWithToken],
+    [savePair, rememberEmail, loadName],
   );
 
-  // ASSUMPTION: account-service routes for email codes (POST /email/start, POST /email/verify →
-  // { access_token }). Adjust here when the real contract lands.
   const requestEmailCode = useCallback(async (em: string) => {
     if (!isAcademicEmail(em)) throw new Error('Use your institute email (it ends in .ac.in).');
     if (AUTH_CONFIGURED) {
-      const res = await fetch(`${AUTH_URL}/email/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: em.trim() }) });
-      if (res.status === 403 || res.status === 422) throw new Error('That email isn’t on the campus list yet.');
-      if (!res.ok) throw new Error(`Couldn’t send the code (${res.status}).`);
-      return {};
+      const r = await accountApi.emailStart(em.trim());
+      return { newAccount: r.newAccount };
     }
     if (CAMPUS_MOCKS_ENABLED) return { devCode: DEV_EMAIL_CODE };
     throw new Error('No account service is connected yet. Explore the demo for now.');
   }, []);
 
   const verifyEmailCode = useCallback(
-    async (em: string, code: string) => {
+    async (em: string, code: string, newName?: Name, invite?: string) => {
       if (AUTH_CONFIGURED) {
-        const res = await fetch(`${AUTH_URL}/email/verify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: em.trim(), code: code.trim() }) });
-        if (res.status === 400 || res.status === 401) throw new Error('That code didn’t work. Check it and try again.');
-        if (!res.ok) throw new Error(`Sign-in failed (${res.status}).`);
-        const { access_token } = (await res.json()) as { access_token?: string };
-        if (!access_token) throw new Error('Sign-in response had no access_token.');
-        await store.set(EMAIL_KEY, em.trim());
-        setEmail(em.trim());
-        await signInWithToken(access_token);
-        return;
+        const pair = await accountApi.emailVerify(em.trim(), code.trim(), newName);
+        await savePair(pair);
+        await rememberEmail(em.trim());
+        if (pair.new_account && newName) {
+          await rememberName(newName);
+          // The Social profile starts as "New Squirrel": give it the name just entered (best effort).
+          if (SOCIAL_API_CONFIGURED) {
+            const displayName = `${newName.first_name} ${newName.last_name}`.trim().slice(0, 40);
+            const named = displayName ? profileApi.update({ display_name: displayName }).catch(() => undefined) : Promise.resolve();
+            // A friend's invite code counts for them once this account exists, after the name is set
+            // so their "joined with your invite" names this person. A failure is ignored (the
+            // Invite screen takes it later).
+            if (invite?.trim()) await named.then(() => communityApi.claimReferral(invite)).catch(() => undefined);
+            else await named;
+          }
+        } else await loadName(pair.user_id);
+        setMode('live');
+        return { newAccount: pair.new_account };
       }
       if (CAMPUS_MOCKS_ENABLED) {
         if (code.trim() !== DEV_EMAIL_CODE) throw new Error('That code didn’t work. (Dev code: 246810)');
         setEmail(em.trim());
         setMode('demo'); // dev mock session: no real token exists
-        return;
+        return { newAccount: false };
       }
       throw new Error('No account service is connected yet.');
     },
-    [signInWithToken],
+    [savePair, rememberEmail, rememberName, loadName],
+  );
+
+  const signInWithToken = useCallback(
+    async (t: string) => {
+      await store.set(KEY, t);
+      refreshToken.current = null;
+      applyAccess(t);
+      setMode('live');
+    },
+    [applyAccess],
   );
 
   const signOut = useCallback(async () => {
-    await Promise.all([store.del(KEY), store.del(EMAIL_KEY), store.del(EXERCISE_KEY)]);
-    setExerciseUserState(null);
-    setApiToken(null);
-    setUserId(null);
-    setEmail(null);
+    await unregisterPush(); // while the token still signs the request
+    await clear();
     setMode('signed-out');
-  }, []);
+  }, [clear]);
 
-  const setExerciseUser = useCallback(async (u: ExerciseUser | null) => {
-    if (u) await store.set(EXERCISE_KEY, JSON.stringify({ user_id: u.user_id, first_name: u.first_name, last_name: u.last_name }));
-    else await store.del(EXERCISE_KEY);
-    setExerciseUserState(u);
-  }, []);
+  const exerciseUser = useMemo<ExerciseUser | null>(
+    () => (mode === 'live' && userId ? { user_id: userId, first_name: name?.first_name ?? '', last_name: name?.last_name ?? '' } : null),
+    [mode, userId, name],
+  );
+
+  useEffect(() => setCampusEmail(email), [email]);
+
+  usePushNotifications(mode === 'live');
 
   return (
-    <Ctx.Provider value={{ mode, email, userId, apiConfigured: BEARER_BACKEND, authConfigured: AUTH_CONFIGURED, signIn, requestEmailCode, verifyEmailCode, signInWithToken, continueDemo: () => setMode('demo'), signOut, exerciseUser, setExerciseUser }}>
+    <Ctx.Provider
+      value={{
+        mode,
+        email,
+        userId,
+        apiConfigured: BEARER_BACKEND,
+        authConfigured: AUTH_CONFIGURED,
+        signIn,
+        requestEmailCode,
+        verifyEmailCode,
+        signInWithToken,
+        continueDemo: () => setMode('demo'),
+        signOut,
+        lastEmail,
+        notice,
+        clearNotice: () => setNotice(null),
+        exerciseUser,
+      }}
+    >
       {children}
     </Ctx.Provider>
   );

@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Defs, Path, RadialGradient, Stop, Circle, Rect } from 'react-native-svg';
+import Svg, { Defs, Path, RadialGradient, Stop, Circle } from 'react-native-svg';
 import { Scene } from '@/art/Scene';
 import { Mascot } from '@/art/Mascot';
 import { RewardArt } from '@/art/Reward';
@@ -14,7 +15,7 @@ import { StatusBar } from 'expo-status-bar';
 import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
 
 function Rays({ size }: { size: number }) {
-  const spin = useRef(new Animated.Value(0)).current;
+  const spin = useAnimatedValue(0);
   useEffect(() => {
     const loop = Animated.loop(Animated.timing(spin, { toValue: 1, duration: 24000, easing: Easing.linear, useNativeDriver: NATIVE }));
     loop.start();
@@ -44,7 +45,7 @@ function Rays({ size }: { size: number }) {
 }
 
 function Confetti({ visible }: { visible: boolean }) {
-  const pieces = useRef(
+  const [pieces] = useState(() =>
     Array.from({ length: 30 }, () => ({
       x: Math.random(),
       y: -0.1 - Math.random() * 0.3,
@@ -56,9 +57,9 @@ function Confetti({ visible }: { visible: boolean }) {
       size: 6 + Math.random() * 10,
       delay: Math.random() * 200,
     }))
-  ).current;
+  );
 
-  const anim = useRef(new Animated.Value(0)).current;
+  const anim = useAnimatedValue(0);
   useEffect(() => {
     if (!visible) return;
     anim.setValue(0);
@@ -103,9 +104,8 @@ export default function LevelUp() {
   const { width, height } = useWindowDimensions();
   const { level, levelXp } = useApp();
   const { gained, coins, leveledUp } = useLocalSearchParams<{ gained?: string; coins?: string; leveledUp?: string }>();
-  const title = useRef(new Animated.Value(0)).current;
-  const cards = useRef([0, 1, 2].map(() => new Animated.Value(0))).current;
-  const showConfetti = useRef(false);
+  const title = useAnimatedValue(0);
+  const [cards] = useState(() => [0, 1, 2].map(() => new Animated.Value(0)));
   const isLevelUp = leveledUp === '1' || !gained;
 
   useEffect(() => {
@@ -114,7 +114,6 @@ export default function LevelUp() {
       // Trigger haptic pattern for level up
       setTimeout(() => tap('impact'), 100);
       setTimeout(() => tap('success'), 200);
-      showConfetti.current = true;
     }
     Animated.sequence([
       Animated.spring(title, { toValue: 1, useNativeDriver: NATIVE, speed: 8, bounciness: 14 }),
@@ -131,7 +130,7 @@ export default function LevelUp() {
       <StatusBar style="light" />
       <Scene kind="city-night" seed={13} aspect={width / height} style={StyleSheet.absoluteFill} />
       <Scrim strong style={{ top: '30%' }} />
-      <Confetti visible={isLevelUp && showConfetti.current} />
+      <Confetti visible={isLevelUp} />
       <View style={[styles.col, { paddingTop: insets.top + 6, paddingBottom: insets.bottom + 16 }]}>
         <IconButton icon="close" onPress={() => (router.canGoBack() ? router.back() : router.replace('/home'))} label="Close" />
 

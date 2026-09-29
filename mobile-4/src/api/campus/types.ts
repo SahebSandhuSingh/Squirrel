@@ -30,6 +30,8 @@ export type Campus = {
   email_domains: string[];
   /** Optional course list for profile building; the app falls back to common programmes. */
   courses?: string[];
+  /** Hostels for Hostel vs Hostel, when the backend has no hostel zones (the Social service's list). */
+  hostels?: string[];
   center: LatLng;
   launched_at: string | null;
 };
@@ -86,14 +88,15 @@ export type Verification = {
   selfie_verified: boolean;
 };
 
+/** null: the backend doesn't track it yet (the tile is hidden, never shown as 0). */
 export type ProfileStats = {
-  total_distance_m: number;
+  total_distance_m: number | null;
   month_distance_m: number;
-  zones_claimed: number;
-  territories_defended: number;
-  territories_stolen: number;
+  zones_claimed: number | null;
+  territories_defended: number | null;
+  territories_stolen: number | null;
   crew_memberships: number;
-  events_attended: number;
+  events_attended: number | null;
   /** null when the backend doesn't compute streaks. */
   streak_days: number | null;
 };
@@ -512,7 +515,8 @@ export type AppNotification = {
   text: string;
   created_at: string;
   read: boolean;
-  data: { user_id?: string; zone_id?: string; invite_id?: string; event_id?: string; poke_id?: string; meetup_id?: string; media_id?: string; application_id?: string; suggestion_id?: string } | null;
+  /** `route`: an app screen to open when nothing more specific applies (the Social service sends these). */
+  data: { user_id?: string; zone_id?: string; invite_id?: string; event_id?: string; poke_id?: string; meetup_id?: string; media_id?: string; application_id?: string; suggestion_id?: string; route?: string } | null;
 };
 
 // ---------------------------------------------------------------------------

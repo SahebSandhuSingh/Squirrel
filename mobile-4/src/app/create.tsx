@@ -29,7 +29,7 @@ export default function Create() {
     <Sheet>
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         <View style={{ flex: 1 }}>
-          <Display size={32}>Let's move</Display>
+          <Display size={32}>Let’s move</Display>
           <Text style={styles.sub}>What are you up to?</Text>
         </View>
       </View>

@@ -1,7 +1,8 @@
 /**
- * SIGN IN / JOIN. Campus-only: a .ac.in email gets a one-time code. Password sign-in and the
- * developer token stay available underneath for testing against real backends.
- * After sign-in, people who haven't finished onboarding go there first.
+ * SIGN IN / JOIN. Campus-only: a .ac.in email gets a one-time code (Exercise backend
+ * /api/auth/email/start → /email/verify). A new address also gives a name, and optionally a
+ * friend's invite code (`?invite=<code>` pre-fills it). Password sign-in (older accounts) and the
+ * developer token stay available underneath. New accounts go to onboarding first.
  */
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -14,7 +15,8 @@ import { Button, Display, IconButton, Kicker, Tagline, tap } from '@/components/
 import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
 
 /** Onboarding first for new accounts; Home otherwise. Falls back to Home if the campus API is down. */
-async function routeAfterSignIn() {
+async function routeAfterSignIn(newAccount = false) {
+  if (newAccount) return router.replace('/onboarding');
   if (CAMPUS_SOURCE === 'off') return router.replace('/home');
   try {
     const me = await campusApi.me();
@@ -27,11 +29,16 @@ async function routeAfterSignIn() {
 export default function SignIn() {
   const insets = useSafeAreaInsets();
   const auth = useAuth();
-  const { mode } = useLocalSearchParams<{ mode?: string }>();
-  const joining = mode === 'join';
-  const [email, setEmail] = useState('');
+  const { mode, invite: invited } = useLocalSearchParams<{ mode?: string; invite?: string }>();
+  const joining = mode === 'join' || mode === 'create'; // 'create': invite links from the Social service
+  const [email, setEmail] = useState(joining ? '' : auth.lastEmail ?? '');
   const [code, setCode] = useState('');
   const [codeSent, setCodeSent] = useState(false);
+  /** The address has no account yet: ask for a name (and take an invite code). */
+  const [newAccount, setNewAccount] = useState(false);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [invite, setInvite] = useState(invited ?? '');
   const [devCode, setDevCode] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [token, setToken] = useState('');
@@ -40,12 +47,13 @@ export default function SignIn() {
   const [error, setError] = useState<string | null>(null);
   const emailOk = isAcademicEmail(email);
 
-  const run = async (fn: () => Promise<void>, after = true) => {
+  const run = async (fn: () => Promise<void | { newAccount: boolean }>, after = true) => {
     setBusy(true);
     setError(null);
+    auth.clearNotice();
     try {
-      await fn();
-      if (after) await routeAfterSignIn();
+      const r = await fn();
+      if (after) await routeAfterSignIn(!!r && r.newAccount);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong.');
     } finally {
@@ -95,6 +103,7 @@ export default function SignIn() {
                 run(async () => {
                   const r = await auth.requestEmailCode(email);
                   setDevCode(r.devCode ?? null);
+                  setNewAccount(!!r.newAccount);
                   setCodeSent(true);
                 }, false)
               }
@@ -103,11 +112,27 @@ export default function SignIn() {
             <>
               <Text style={styles.sent}>Code sent to {email.trim()}{devCode ? ` · dev code ${devCode}` : ''}</Text>
               <TextInput style={[styles.input, styles.code]} value={code} onChangeText={setCode} placeholder="6-digit code" placeholderTextColor={colors.mute} keyboardType="number-pad" maxLength={8} autoComplete="one-time-code" accessibilityLabel="Sign-in code" />
-              <Button label={busy ? 'Checking…' : joining ? 'Join' : 'Sign in'} icon="arrow-right" disabled={busy || code.trim().length < 4} onPress={() => run(() => auth.verifyEmailCode(email, code))} />
+              {newAccount && (
+                <>
+                  <Text style={styles.lead}>New here — what should we call you?</Text>
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <TextInput style={[styles.input, { flex: 1, minWidth: 0 }]} value={firstName} onChangeText={setFirstName} placeholder="First name" placeholderTextColor={colors.mute} autoComplete="given-name" maxLength={80} accessibilityLabel="First name" />
+                    <TextInput style={[styles.input, { flex: 1, minWidth: 0 }]} value={lastName} onChangeText={setLastName} placeholder="Last name" placeholderTextColor={colors.mute} autoComplete="family-name" maxLength={80} accessibilityLabel="Last name" />
+                  </View>
+                  <TextInput style={styles.input} value={invite} onChangeText={setInvite} placeholder="Friend’s invite code (optional)" placeholderTextColor={colors.mute} autoCapitalize="characters" maxLength={16} accessibilityLabel="Invite code" />
+                </>
+              )}
+              <Button
+                label={busy ? 'Checking…' : newAccount ? 'Join' : 'Sign in'}
+                icon="arrow-right"
+                disabled={busy || code.trim().length < 4 || (newAccount && !firstName.trim())}
+                onPress={() => run(() => auth.verifyEmailCode(email, code, newAccount ? { first_name: firstName.trim(), last_name: lastName.trim() } : undefined, invite))}
+              />
               <Text style={styles.link} onPress={() => { setCodeSent(false); setCode(''); }}>Use a different email</Text>
             </>
           )}
           {error && <Text style={styles.error} accessibilityRole="alert">{error}</Text>}
+          {auth.notice && !error && <Text style={styles.sent}>{auth.notice}</Text>}
         </View>
 
         <View style={styles.or}>
@@ -133,10 +158,10 @@ export default function SignIn() {
           <View style={{ gap: 8, marginTop: 8 }}>
             <TextInput style={styles.input} value={password} onChangeText={setPassword} placeholder="Password" placeholderTextColor={colors.mute} secureTextEntry autoComplete="password" />
             <Button label="Sign in with password" size="sm" variant="secondary" disabled={busy || !emailOk || !password || !auth.authConfigured} onPress={() => run(() => auth.signIn(email.trim(), password))} />
-            {!auth.authConfigured && <Text style={styles.warn}>No account service is connected yet (EXPO_PUBLIC_AUTH_URL).</Text>}
+            {!auth.authConfigured && <Text style={styles.warn}>No account service is connected yet (EXPO_PUBLIC_EXERCISE_API_URL).</Text>}
             <TextInput style={[styles.input, { fontFamily: fonts.mono, fontSize: 12 }]} value={token} onChangeText={setToken} placeholder="Developer: paste a backend token (eyJhbGciOi…)" placeholderTextColor={colors.mute} autoCapitalize="none" multiline />
             <Button label="Use token" size="sm" variant="secondary" disabled={!token.trim() || !auth.apiConfigured} onPress={() => run(() => auth.signInWithToken(token.trim()))} />
-            {!auth.apiConfigured && <Text style={styles.warn}>Set EXPO_PUBLIC_API_URL / EXPO_PUBLIC_CAMPUS_API_URL / EXPO_PUBLIC_PROGRESS_API_URL to use a token.</Text>}
+            {!auth.apiConfigured && <Text style={styles.warn}>Set EXPO_PUBLIC_API_URL / EXPO_PUBLIC_SOCIAL_API_URL / EXPO_PUBLIC_EXERCISE_API_URL to use a token.</Text>}
           </View>
         )}
 

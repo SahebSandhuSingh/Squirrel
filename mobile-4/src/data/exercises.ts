@@ -28,6 +28,8 @@ export const EXERCISE_LIBRARY: LibraryExercise[] = [
   { key: 'squat', slug: 'squat', name: 'Squat', bodyPart: 'Lower Body', tag: 'Strength', measure: 'reps', icon: 'human-handsdown', scene: 'hiit', blurb: 'Depth, knee tracking and torso lean, scored every rep.', met: 5 },
   { key: 'bicep_curl_single', slug: 'bicep_curl', variant: 'single', name: 'Single Arm Bicep Curl', bodyPart: 'Upper Body', tag: 'Strength', measure: 'reps', icon: 'arm-flex', scene: 'hiit', blurb: 'Full range, elbows pinned, no shoulder shrug.', met: 3.5 },
   { key: 'bicep_curl_double', slug: 'bicep_curl', variant: 'double', name: 'Double Arm Bicep Curl', bodyPart: 'Upper Body', tag: 'Strength', measure: 'reps', icon: 'arm-flex-outline', scene: 'hiit', blurb: 'Both arms, matched tempo and range.', met: 3.5 },
+  // Coached from the SIDE (the catalog says view: side); same entry as the backend's web coach.
+  { key: 'pushup', slug: 'pushup', name: 'Push-up', bodyPart: 'Upper Body', tag: 'Strength', measure: 'reps', icon: 'weight-lifter', scene: 'hiit', blurb: 'Elbow depth and a straight body line, coached side-on.', met: 3.8 },
   { key: 'high_knee', slug: 'high_knee', name: 'High Knees', bodyPart: 'Full Body · Cardio · Core', tag: 'HIIT', measure: 'time', icon: 'run-fast', scene: 'hiit', blurb: 'Timed set: knee drive height, pace and left/right balance.', met: 8 },
   // Backend catalog slug is `lunge` (the web client's `lunges` key would 422 once enabled).
   { key: 'lunge', slug: 'lunge', name: 'Lunges', bodyPart: 'Lower Body', tag: 'Strength', measure: 'reps', icon: 'walk', scene: 'hiit', blurb: 'Coming soon on the coach.', met: 4 },

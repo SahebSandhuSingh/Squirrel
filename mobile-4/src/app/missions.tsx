@@ -31,7 +31,7 @@ export default function Missions() {
       <Header back title="" right={<><Text style={styles.chLink} onPress={() => router.push('/challenges')}>Challenges →</Text><Coins amount={coins} /></>} />
       <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
         <Display size={56} style={{ lineHeight: 56, flex: 1 }}>
-          Today's{'\n'}
+          Today’s{'\n'}
           <Text style={{ color: colors.primary }}>Missions</Text>
         </Display>
         <Mascot pose="cheer" accessory="crown" size={108} animated style={{ marginBottom: -6 }} />

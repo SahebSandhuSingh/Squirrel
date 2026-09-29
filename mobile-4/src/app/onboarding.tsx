@@ -19,7 +19,7 @@ import { useAuth } from '@/auth/AuthProvider';
 import { isComplete, normalizePhone, validateDetails, type DetailsForm } from '@/logic/profileValidation';
 import { ErrorState, NotLiveYet, SourceBadge } from '@/components/campus/States';
 import { Button, Display, FadeIn, Header, Icon, Kicker, PressScale, ProgressBar, Screen, Tagline, tap } from '@/components/ui';
-import { invalidateCampus, useAction, useConfig, useMe, useZones } from '@/hooks/useCampus';
+import { invalidateCampus, useAction, useConfig, useHostelOptions, useMe } from '@/hooks/useCampus';
 import { alpha, colors, fonts, radius } from '@/theme';
 
 const MODES: { id: ConnectionMode; title: string; line: string; body: string; icon: React.ComponentProps<typeof Icon>['name']; color: string }[] = [
@@ -33,7 +33,7 @@ const STEPS = 5;
 export default function Onboarding() {
   const config = useConfig();
   const me = useMe();
-  const zones = useZones();
+  const hostelOptions = useHostelOptions();
   const [step, setStep] = useState(0);
   const [mode, setMode] = useState<ConnectionMode | null>(null);
   const [hostel, setHostel] = useState<string | null>(null);
@@ -69,7 +69,7 @@ export default function Onboarding() {
     }
   });
   const dateGate = config.data?.features.date_mode;
-  const hostels = (zones.data ?? []).filter((z) => z.kind === 'hostel');
+  const hostels = hostelOptions.options;
   const chosenMode = mode ?? me.data?.connection_mode ?? null;
   const chosenHostel = hostel ?? me.data?.hostel_zone_id ?? null;
 
@@ -195,8 +195,8 @@ export default function Onboarding() {
           <Kicker style={{ marginTop: 16 }}>Step 3 · Hostel</Kicker>
           <Display size={38} style={{ marginTop: 4 }}>Rep your{'\n'}<Text style={{ color: colors.primary }}>hostel</Text></Display>
           <Text style={styles.lead2}>Your moves count toward Hostel vs Hostel. Only your hostel name is shown — never your room.</Text>
-          {zones.error && !zones.data ? (
-            <ErrorState cause={zones.cause} onRetry={zones.reload} compact />
+          {hostelOptions.error ? (
+            <ErrorState cause={hostelOptions.error.cause} onRetry={hostelOptions.error.reload} compact />
           ) : (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 16 }}>
               {hostels.map((h) => {
@@ -204,11 +204,12 @@ export default function Onboarding() {
                 return (
                   <PressScale key={h.id} onPress={() => { tap(); setHostel(h.id); }} scaleTo={0.97} style={[styles.hostel, on && { borderColor: colors.primary, backgroundColor: alpha(colors.primary, 0.08) }]} accessibilityRole="radio" accessibilityState={{ selected: on }}>
                     <Icon name="home-city" size={22} color={on ? colors.primary : colors.dim} />
-                    <Text style={[styles.hostelText, on && { color: colors.primary }]}>{h.hostel ?? h.name}</Text>
+                    <Text style={[styles.hostelText, on && { color: colors.primary }]}>{h.label}</Text>
                   </PressScale>
                 );
               })}
-              {!hostels.length && !zones.error && <Text style={styles.note}>Loading hostels…</Text>}
+              {hostelOptions.loading && <Text style={styles.note}>Loading hostels…</Text>}
+              {hostelOptions.none && <Text style={styles.note}>Hostels aren’t set up yet. You can pick yours later in Edit profile.</Text>}
             </View>
           )}
           <Button label="Continue" icon="arrow-right" onPress={next} style={{ marginTop: 18 }} />

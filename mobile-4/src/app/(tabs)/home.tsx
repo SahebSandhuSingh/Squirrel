@@ -73,7 +73,7 @@ export default function Home() {
       <FadeIn index={1}>
         <Card style={{ marginTop: 14, paddingVertical: 16 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <Text style={styles.cardTitle}>Today's progress</Text>
+            <Text style={styles.cardTitle}>Today’s progress</Text>
             <Pressable onPress={() => router.push('/progress')} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Text style={styles.link}>Stats</Text>
               <Icon name="chevron-right" size={16} color={colors.primary} />

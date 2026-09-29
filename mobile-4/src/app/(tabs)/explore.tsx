@@ -8,6 +8,7 @@ import { Animated, Easing, Linking, Pressable, StyleSheet, Text, View } from 're
 import { router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Mascot } from '@/art/Mascot';
+import { featureUnavailable } from '@/api/campus';
 import type { Heatmap, HeatWindow, MapPlayer, Zone } from '@/api/campus/types';
 import { getHeatmap } from '@/api/campus/discovery';
 import { ErrorState, SourceBadge } from '@/components/campus/States';
@@ -120,9 +121,10 @@ export default function MapScreen() {
       <View style={[styles.banners, { top: headerTop + 64 }]} pointerEvents="box-none">
         <SourceBadge style={{ alignSelf: 'center' }} />
         {/* One banner at a time, most important first, so the map stays visible. */}
-        {players.error ? (
+        {/* A feature with no backend yet is not an error: the map's own Not-live state covers it. */}
+        {players.error && !featureUnavailable(players.cause) ? (
           <MapBanner icon="wifi-off" tone="error" text={loaded ? 'Couldn’t refresh nearby Squirrels. Showing the last update.' : 'Couldn’t load nearby Squirrels.'} action="Retry" onAction={players.reload} />
-        ) : sync.error ? (
+        ) : sync.error && !featureUnavailable(sync.error) ? (
           <MapBanner icon="flag-remove-outline" tone="error" text="Territories didn’t refresh." action="Retry" onAction={sync.reload} />
         ) : (
           <LocationBanner

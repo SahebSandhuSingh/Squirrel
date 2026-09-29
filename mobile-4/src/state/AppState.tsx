@@ -2,6 +2,7 @@ import { COMING_SOON, isLocked, LOCKED_MISSIONS } from '@/data/features';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState as RNAppState } from 'react-native';
 import { enqueueActivity, flushActivities, progressApi, progressLive } from '@/api/progress';
+import { API_CONFIGURED } from '@/api/config';
 import { useAuth } from '@/auth/AuthProvider';
 import { DEFAULT_CITY_ID, cityById, type City } from '@/data/cities';
 import { crewsForCity, eventsForCity, placesForCity, type Crew, type EventItem, type Place } from '@/data/community';
@@ -12,6 +13,7 @@ import { CURRENT_USER_ID, userById, users, type User } from '@/data/users';
 import type { AvatarLook } from '@/types';
 import { districtsForCity, type District } from '@/data/territory';
 import { exerciseXp, runXp, type XpLine } from '@/logic/xp';
+import { localDayKey, localWeekKey } from '@/logic/localDay';
 import type { Verdict } from '@/logic/track';
 import { colors } from '@/theme';
 
@@ -73,7 +75,8 @@ type AppState = {
   runXpToday: number;
   districts: District[];
   /** Replace the local XP total with the server's (GET /v1/users/me/xp). */
-  syncServerXp: (total: number) => void;
+  /** The server's XP total; `gained` (when known) also counts toward today. */
+  syncServerXp: (total: number, gained?: number) => void;
   // exercise
   /** The exercise session in progress (one at a time), or null. */
   activeExercise: ActiveExercise | null;
@@ -136,6 +139,37 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const activeExerciseRef = useRef<ActiveExercise | null>(null);
   const [exerciseToday, setExerciseToday] = useState({ sessions: 0, minutes: 0, kcal: 0 });
 
+  // "Today" and "this week" are the phone's own calendar (logic/localDay): at local midnight the
+  // day's counters and daily missions start over, and at the local Monday the weekly ones.
+  const [calendar, setCalendar] = useState(() => ({ day: localDayKey(), week: localWeekKey() }));
+  useEffect(() => {
+    const tick = () =>
+      setCalendar((c) => {
+        const day = localDayKey();
+        return day === c.day ? c : { day, week: localWeekKey() };
+      });
+    const id = setInterval(tick, 30_000);
+    const sub = RNAppState.addEventListener('change', (next) => {
+      if (next === 'active') tick();
+    });
+    return () => {
+      clearInterval(id);
+      sub.remove();
+    };
+  }, []);
+  const seenCalendar = useRef(calendar);
+  useEffect(() => {
+    const before = seenCalendar.current;
+    if (before === calendar) return;
+    seenCalendar.current = calendar;
+    const tabs = new Set(['Daily', ...(calendar.week !== before.week ? ['Weekly'] : [])]);
+    setXpToday(0);
+    setRunXpToday(0);
+    setExerciseToday({ sessions: 0, minutes: 0, kcal: 0 });
+    setMissions((all) => all.map((m) => (tabs.has(m.tab) ? { ...m, current: 0 } : m)));
+    setClaimed((ids) => new Set([...ids].filter((id) => !seedMissions.some((m) => m.id === id && tabs.has(m.tab)))));
+  }, [calendar]);
+
   const toast = useCallback((text: string, icon?: string, color?: string) => {
     const id = ++toastId.current;
     setToasts((t) => [...t.slice(-2), { id, text, icon, color }]);
@@ -147,6 +181,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   // then XP / today's XP are re-read from the server so nothing here is client-decided.
   const { mode } = useAuth();
   const live = progressLive(mode);
+  /** Without a progress-service, workouts and runs earn XP on the Run Module (the XP engine); the app shows its numbers. */
+  const serverXp = !live && mode === 'live' && API_CONFIGURED;
   const syncProgress = useCallback(async () => {
     try {
       await flushActivities();
@@ -374,7 +410,10 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     finishRun,
     runXpToday,
     districts,
-    syncServerXp: (total) => setXp(total),
+    syncServerXp: useCallback((total: number, gained?: number) => {
+      setXp(total);
+      if (gained && gained > 0) setXpToday((t) => t + gained);
+    }, []),
     activeExercise,
     beginExercise: useCallback((a: Omit<ActiveExercise, 'startedAt'>) => {
       // Guard against duplicate sessions (double taps, two screens): first one wins.
@@ -397,6 +436,9 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         bump('m-active', minutes);
         bump('w-workouts', 1);
         setExerciseToday((t) => ({ sessions: t.sessions + 1, minutes: t.minutes + minutes, kcal: t.kcal + c.kcal }));
+        // Signed in to the Run Module: the Exercise backend's session record earns the XP there
+        // (quality-based), and the screen syncs it with syncServerXp. Nothing local to add.
+        if (serverXp) return { xp: 0, lines: [], leveledUp: false };
         const x = exerciseXp(c.reps, c.timedSeconds);
         const { leveledUp } = addXp(x.total, Math.round(x.total / 4));
         if (live) {
@@ -413,7 +455,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         }
         return { xp: x.total, lines: x.lines, leveledUp };
       },
-      [addXp, live, syncProgress],
+      [addXp, live, serverXp, syncProgress],
     ),
     exerciseToday,
     xpToday,
