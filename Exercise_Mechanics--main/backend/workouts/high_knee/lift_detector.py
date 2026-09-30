@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import isfinite
-from typing import Callable, Literal
+from typing import Callable, Literal, Mapping
 
 from backend.engine.rep_fsm import RepFSM, RepState, fsm_diagnostics
 from backend.training.timed_contract import LiftClassification, LiftSide
@@ -61,6 +61,7 @@ class HighKneeLiftDetector:
         reset_dwell_ms: float,
         stale_phase_ms: float,
         max_frame_delta_ms: float,
+        frame_cadence: Mapping | None = None,
     ) -> None:
         if side not in {"left", "right"}:
             raise ValueError("lift detector side must be 'left' or 'right'")
@@ -77,6 +78,7 @@ class HighKneeLiftDetector:
             reset_dwell_ms=reset_dwell_ms,
             stale_phase_ms=stale_phase_ms,
             max_frame_delta_ms=max_frame_delta_ms,
+            frame_cadence=frame_cadence,
         )
         self._reached_gate = reached_gate
         self._attempt_started_t_ms: float | None = None
@@ -179,6 +181,7 @@ def high_knee_lift_detector(
     reached_gate: Callable[[float], bool],
     fsm: dict,
     max_frame_delta_ms: float,
+    frame_cadence: Mapping | None = None,
 ) -> HighKneeLiftDetector:
     """Build one detector from the strict timed FSM document without adding defaults."""
     return HighKneeLiftDetector(
@@ -194,4 +197,5 @@ def high_knee_lift_detector(
         reset_dwell_ms=fsm["reset_dwell_ms"],
         stale_phase_ms=fsm["stale_phase_ms"],
         max_frame_delta_ms=max_frame_delta_ms,
+        frame_cadence=frame_cadence,
     )

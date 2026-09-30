@@ -521,6 +521,7 @@ def _fsm_inputs(config: ExerciseConfiguration) -> dict:
         )
     }
     values["max_frame_delta_ms"] = config.scoring["max_frame_delta_ms"]
+    values["frame_cadence"] = config.scoring.get("frame_cadence")
     return values
 
 

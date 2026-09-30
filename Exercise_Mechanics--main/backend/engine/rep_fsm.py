@@ -25,7 +25,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from math import isfinite
 from numbers import Real
-from typing import Callable, Literal
+from typing import Callable, Literal, Mapping
+
+from backend.engine.cadence import FrameGapBoundary
 
 _CONDITIONS = frozenset(
     {
@@ -156,7 +158,10 @@ class RepFSM:
     """Exercise-agnostic rep FSM driven entirely by configuration-supplied boundaries.
 
     ``max_frame_delta_ms`` is shared with the evidence timeline. It distinguishes a resumable
-    tracking interruption from a long gap. No constructor tunable has a code default. The lifecycle
+    tracking interruption from a long gap. When ``frame_cadence`` is configured the boundary scales
+    with the observed frame interval (see ``engine/cadence.py``) so a slow phone camera is not read
+    as lost tracking; without it the fixed boundary applies. No constructor tunable has a code
+    default. The lifecycle
     roles (resting/setup phase, reset phase, movement phases and the single returning phase) are
     derived from the transition graph so no phase name is hard-coded.
     """
@@ -175,6 +180,7 @@ class RepFSM:
         reset_dwell_ms: float,
         stale_phase_ms: float,
         max_frame_delta_ms: float,
+        frame_cadence: Mapping | None = None,
     ) -> None:
         if not callable(reached_gate):
             raise ValueError("reached_gate must be callable")
@@ -200,6 +206,7 @@ class RepFSM:
         self._reset_dwell_ms = _positive(reset_dwell_ms, "reset_dwell_ms")
         self._stale_phase_ms = _positive(stale_phase_ms, "stale_phase_ms")
         self._max_frame_delta_ms = _positive(max_frame_delta_ms, "max_frame_delta_ms")
+        self._gap_boundary = FrameGapBoundary(self._max_frame_delta_ms, frame_cadence)
         if not 0 <= self._top_return <= self._descent_trigger < self._min_rep_peak:
             raise ValueError(
                 "progress thresholds must satisfy "
@@ -242,6 +249,7 @@ class RepFSM:
         if self._last_seen_ms is not None and timestamp < self._last_seen_ms:
             raise ValueError("now_ms must be monotonic")
         self._last_seen_ms = timestamp
+        gap_limit_ms = self._gap_boundary.observe(timestamp)
         self._completed_attempt_event = None
         self._emitted_events = set()
         self._fired_transitions = []
@@ -252,9 +260,9 @@ class RepFSM:
 
         if self._last_tracked_ms is not None:
             gap_ms = timestamp - self._last_tracked_ms
-            gap_detected = self._tracking_paused or gap_ms > self._max_frame_delta_ms
+            gap_detected = self._tracking_paused or gap_ms > gap_limit_ms
             if gap_detected:
-                if gap_ms > self._max_frame_delta_ms or not self._recovery_is_compatible(
+                if gap_ms > gap_limit_ms or not self._recovery_is_compatible(
                     value.progress
                 ):
                     if not self._apply_configured_transition(

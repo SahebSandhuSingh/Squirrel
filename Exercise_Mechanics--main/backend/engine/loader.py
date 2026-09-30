@@ -142,7 +142,29 @@ def _validate_templates(
     min_frames = _number(scoring.get("min_active_frames"), "scoring.min_active_frames", minimum=1)
     if not min_frames.is_integer():
         raise ConfigurationError("scoring.min_active_frames must be an integer")
-    _number(scoring.get("max_frame_delta_ms"), "scoring.max_frame_delta_ms", minimum=0, strict=True)
+    max_delta = _number(
+        scoring.get("max_frame_delta_ms"), "scoring.max_frame_delta_ms", minimum=0, strict=True
+    )
+    # Optional: older captured configurations predate it and replay with the fixed boundary.
+    if "frame_cadence" in scoring:
+        cadence = _mapping(scoring.get("frame_cadence"), "scoring.frame_cadence")
+        if set(cadence) != {"tolerance_frames", "max_gap_ms"}:
+            raise ConfigurationError(
+                "scoring.frame_cadence must define exactly tolerance_frames and max_gap_ms"
+            )
+        _number(
+            cadence.get("tolerance_frames"),
+            "scoring.frame_cadence.tolerance_frames",
+            minimum=0,
+            strict=True,
+        )
+        ceiling = _number(
+            cadence.get("max_gap_ms"), "scoring.frame_cadence.max_gap_ms", minimum=0, strict=True
+        )
+        if ceiling < max_delta:
+            raise ConfigurationError(
+                "scoring.frame_cadence.max_gap_ms must be >= scoring.max_frame_delta_ms"
+            )
     _number(scoring.get("cue_min_display_ms"), "scoring.cue_min_display_ms", minimum=0)
 
     landmarks = set(ALL_LANDMARKS)
@@ -1086,4 +1108,5 @@ def fsm_params(slug: str) -> dict:
         raise ConfigurationError("fsm_params is available only for repetition FSMs")
     params = {key: spec[key] for key in _FSM_RUNTIME_KEYS}
     params["max_frame_delta_ms"] = scoring_params(slug)["max_frame_delta_ms"]
+    params["frame_cadence"] = scoring_params(slug).get("frame_cadence")
     return params

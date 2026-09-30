@@ -8,6 +8,12 @@ scoring:
   min_active_ms: 250
   min_active_frames: 5
   max_frame_delta_ms: 100
+  # The tracking-gap boundary scales with the observed frame interval so slow phone cameras
+  # (10-15 fps) are not mistaken for lost tracking: tolerance_frames x median interval, never
+  # below max_frame_delta_ms (unchanged at ~30 fps) and never above max_gap_ms.
+  frame_cadence:
+    tolerance_frames: 3
+    max_gap_ms: 400
   cue_min_display_ms: 800
 
 templates:
