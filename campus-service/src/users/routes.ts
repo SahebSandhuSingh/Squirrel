@@ -4,13 +4,14 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { config } from '../config.js';
-import { getPool, many, one } from '../db/pool.js';
+import { getPool, many, one, withTransaction } from '../db/pool.js';
 import { errors } from '../lib/errors.js';
 import { requireAuth, currentUser } from '../auth/plugin.js';
 import { getUser, updateUser, type UserRow } from './repo.js';
 import { listNotifications, markRead, toApp } from '../notifications/service.js';
 import { getPeopleLite } from './repo.js';
 import { authConfigured } from '../auth/jwt.js';
+import { getProfileDetails, ProfileDetailsInput, saveProfileDetails } from './details.js';
 
 const MePatch = z.object({
   display_name: z.string().trim().min(1).max(60).optional(),
@@ -21,6 +22,7 @@ const MePatch = z.object({
   hostel_id: z.string().max(64).nullable().optional(),
   onboarding_completed: z.boolean().optional(),
   date_mode_enabled: z.boolean().optional(),
+  profile_details: ProfileDetailsInput.optional(),
 }).strict();
 
 const OpenToMeet = z.object({ enabled: z.boolean(), hours: z.number().min(1).max(24 * 7).optional() });
@@ -63,7 +65,7 @@ export async function publicProfile(u: UserRow, viewerId: string | null) {
 async function meResponse(req: FastifyRequest) {
   const u = (await getUser(currentUser(req).id))!;
   return { ...(await publicProfile(u, u.id)), email: u.email, hostel_zone_id: u.hostel_id, hostel_id: u.hostel_id, date_mode_enabled: u.date_mode_enabled, onboarding_completed: u.onboarding_completed, safety_contact_configured: false,
-    open_to_meet_until: u.open_to_meet_until };
+    open_to_meet_until: u.open_to_meet_until, profile_details: await getProfileDetails(u.id) };
 }
 
 export async function userRoutes(app: FastifyInstance) {
@@ -96,7 +98,10 @@ export async function userRoutes(app: FastifyInstance) {
         patch.hostel_id = h.id;
       }
     }
-    await updateUser(user.id, patch);
+    await withTransaction(async (tx) => {
+      await updateUser(user.id, patch, tx);
+      if (p.profile_details) await saveProfileDetails(user.id, p.profile_details, tx);
+    });
     return meResponse(req);
   });
 
