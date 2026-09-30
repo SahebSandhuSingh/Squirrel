@@ -63,6 +63,38 @@ export const httpCampusApi: T.CampusApi = {
   squirrelBoard: (period, limit = 10) => get<T.SquirrelBoard>(`/v1/leaderboards/squirrels${qs({ period, limit })}`),
   hostelBoard: (period) => get<T.HostelBoard>(`/v1/leaderboards/hostels${qs({ period })}`),
 
+  mapFeatures: () => get<T.MapFeatures>('/v1/map/features'),
+  nearbyPlayers: () => get<T.NearbyPlayers>('/v1/map/players'),
+  zonePlayers: async (zoneId) => (await get<{ players: T.PersonSummary[] }>(`/v1/zones/${id(zoneId)}/players`)).players,
+  updatePresence: (p) => send<{ accepted: boolean }>('/v1/map/presence', 'PUT', p),
+  searchPeople: async (q) => (await get<{ people: T.PersonSummary[] }>(`/v1/people/search${qs({ q })}`)).people,
+
+  pokeStatus: (userId) => get<T.Relationship>(`/v1/pokes/status/${id(userId)}`),
+  sendPoke: (userId, key) => send<T.PokeResult>('/v1/pokes', 'POST', { to_user_id: userId, idempotency_key: key }),
+  // Same endpoint: the backend decides whether this completes a mutual poke. `reply` is a hint for analytics.
+  pokeBack: (userId, key) => send<T.PokeResult>('/v1/pokes', 'POST', { to_user_id: userId, idempotency_key: key, reply: true }),
+  incomingPokes: async () => (await get<{ pokes: T.IncomingPoke[] }>('/v1/pokes/incoming')).pokes,
+  friendshipStatus: (userId) => get<{ user_id: string; friends: boolean; since: string | null }>(`/v1/friends/status/${id(userId)}`),
+
+  notifications: () => get<{ items: T.AppNotification[]; unread: number }>('/v1/notifications'),
+  markNotificationsRead: (ids) => send<{ unread: number }>('/v1/notifications/read', 'POST', { ids }),
+
+  // Dev B — shared zones (the per-person overlap is sharedContext above), heatmap, Squirrel Dates
+  sharedZones: () => get<T.SharedZonesIndex>('/v1/me/shared-zones'),
+  heatmap: (window) => get<T.Heatmap>(`/v1/map/heatmap${qs({ window })}`),
+  dateSuggestions: (forUserId) => get<T.DateSuggestions>(`/v1/dates/suggestions${qs({ user_id: forUserId })}`),
+  dismissDateSuggestion: (suggestionId) => send<{ dismissed: true }>(`/v1/dates/suggestions/${id(suggestionId)}/dismiss`, 'POST'),
+  inviteFromSuggestion: (suggestionId, key) => send<{ invite_id: string }>(`/v1/dates/suggestions/${id(suggestionId)}/invite`, 'POST', { idempotency_key: key }),
+
+  // Dev A — media (same presigned flow as the Social service), meetup ratings, ambassadors
+  createUpload: (input) => send<T.UploadTicket>('/v1/media/uploads', 'POST', input),
+  completeUpload: (mediaId) => send<T.MediaItem>(`/v1/media/${id(mediaId)}/complete`, 'POST'),
+  media: (mediaId) => get<T.MediaItem>(`/v1/media/${id(mediaId)}`),
+  meetupRating: (meetupId) => get<T.MeetupRatingState>(`/v1/meetups/${id(meetupId)}/rating`),
+  rateMeetup: (meetupId, input, key) => send<T.MeetupRatingResult>(`/v1/meetups/${id(meetupId)}/ratings`, 'POST', { ...input, idempotency_key: key }),
+  ambassador: () => get<T.AmbassadorState>('/v1/ambassador/application'),
+  applyAmbassador: (answers, key) => send<T.AmbassadorApplication>('/v1/ambassador/application', 'POST', { answers, idempotency_key: key }),
+
   meetups: async () => (await get<{ meetups: T.Meetup[] }>('/v1/meetups')).meetups,
   meetup: (meetupId) => get<T.Meetup>(`/v1/meetups/${id(meetupId)}`),
   checkIn: (meetupId, notify) => send<T.CheckInResult>(`/v1/meetups/${id(meetupId)}/check-in`, 'POST', { notify_safety_contact: notify }),
@@ -91,5 +123,17 @@ export const CAMPUS_ROUTES = [
   'GET /v1/challenge-invites/types, GET|POST /v1/challenge-invites, POST /v1/challenge-invites/{id}/accept | decline | cancel',
   'GET /v1/leaderboards/squirrels, GET /v1/leaderboards/hostels',
   'GET /v1/meetups, GET /v1/meetups/{id}, POST /v1/meetups/{id}/check-in',
-  'WS realtime_url (territory.updated, stats.updated, invite.updated, event.updated, active.updated)',
+  'GET /v1/map/features, GET /v1/map/players, PUT /v1/map/presence, GET /v1/zones/{id}/players, GET /v1/people/search?q=',
+  'GET /v1/pokes/status/{id}, POST /v1/pokes, GET /v1/pokes/incoming, GET /v1/friends/status/{id}',
+  'GET /v1/notifications, POST /v1/notifications/read',
+  // NOT LIVE YET — gated per endpoint in api/availability.ts (reject as unavailable in every mode)
+  // Expected from Dev B
+  'GET /v1/me/shared-zones',
+  'GET /v1/map/heatmap?window=1h|24h|7d',
+  'GET /v1/dates/suggestions?user_id=, POST /v1/dates/suggestions/{id}/dismiss | invite',
+  // Expected from Dev A (media mirrors the Social service's presigned flow; the rest are new)
+  'POST /v1/media/uploads, PUT {upload_url}, POST /v1/media/{id}/complete, GET /v1/media/{id}',
+  'GET /v1/meetups/{id}/rating, POST /v1/meetups/{id}/ratings',
+  'GET|POST /v1/ambassador/application',
+  'WS realtime_url (territory.updated, stats.updated, invite.updated, event.updated, active.updated, poke.received, relationship.updated, friendship.created, notification.created, players.updated)',
 ] as const;

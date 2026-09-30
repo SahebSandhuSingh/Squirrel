@@ -12,6 +12,8 @@ import { shortTime } from '@/components/campus/territoryUi';
 import { Display, Icon, IconButton, PressScale, Scrim, SectionHeader, Tag } from '@/components/ui';
 import { useCampus } from '@/hooks/useCampus';
 import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
+import { SoonPill } from '@/components/Locked';
+import { isLocked } from '@/data/features';
 
 export default function CrewScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -87,7 +89,9 @@ export default function CrewScreen() {
         )}
 
         <SectionHeader title="Upcoming" />
-        {crew.upcoming_events.length ? (
+        {isLocked('events') ? (
+          <SoonPill />
+        ) : crew.upcoming_events.length ? (
           <View style={{ gap: 10 }}>
             {crew.upcoming_events.map((e) => (
               <EventRow key={e.id} event={e} />

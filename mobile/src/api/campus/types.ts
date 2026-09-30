@@ -28,6 +28,8 @@ export type Campus = {
   short_name: string; // "IISER K"
   /** Sign-up is limited to these institutional domains, e.g. ["iiserkol.ac.in"]. */
   email_domains: string[];
+  /** Optional course list for profile building; the app falls back to common programmes. */
+  courses?: string[];
   center: LatLng;
   launched_at: string | null;
 };
@@ -127,8 +129,25 @@ export type Profile = PersonLite & {
 };
 
 /** The signed-in user: the public profile plus private settings. */
+/** Profile-building details (onboarding "About you"). Private to you — never on your public profile. */
+export type Gender = 'woman' | 'man' | 'non_binary' | 'prefer_not_to_say' | (string & {});
+export type ProfileDetails = {
+  full_name: string;
+  personal_email: string;
+  college_email: string;
+  /** E.164, e.g. +919876543210. */
+  phone: string;
+  gender: Gender;
+  age: number;
+  course: string;
+  /** Optional; 0–10 scale. */
+  cgpa: number | null;
+};
+
 export type Me = Profile & {
   email: string | null;
+  /** Absent until the profile-building step has been saved. */
+  profile_details?: ProfileDetails | null;
   hostel_zone_id: string | null;
   date_mode_enabled: boolean;
   onboarding_completed: boolean;
@@ -142,6 +161,8 @@ export type MePatch = Partial<{
   hostel_zone_id: string;
   onboarding_completed: boolean;
   date_mode_enabled: boolean;
+  /** Expected on PATCH /v1/me (frontend contract; the backend validates again). */
+  profile_details: ProfileDetails;
 }>;
 
 export type OpenToMeet = { enabled: boolean; updated_at: string; visible_until: string | null };
@@ -157,7 +178,8 @@ export type Icebreaker = {
 };
 
 export type SharedContext = {
-  shared_zones: { zone_id: string; zone_name: string; relation: 'both_claim' | 'both_ran' | 'you_own_they_ran' | 'they_own_you_ran' | (string & {}) }[];
+  /** `activity_count` (optional): how many of your activities crossed the zone — never when, never the route. */
+  shared_zones: { zone_id: string; zone_name: string; relation: 'both_claim' | 'both_ran' | 'you_own_they_ran' | 'they_own_you_ran' | (string & {}); activity_count?: number | null }[];
   shared_crews: CrewLite[];
   shared_events: { event_id: string; title: string }[];
   icebreakers: Icebreaker[];
@@ -219,7 +241,18 @@ export type Territory = {
   /** Monotonic per zone; the client keeps the highest version it has seen. */
   version: number;
   updated_at: string;
+  /**
+   * The backend's territory state. Optional for older servers; the app then derives a display
+   * state from `owner` + `under_challenge` (neutral / controlled / under attack) — never 'contested'.
+   */
+  status?: TerritoryStatus;
+  /** Owner's control of the zone, 0..1 (drives fill strength). */
+  control?: number | null;
+  /** XP banked in this zone by the owner/team. */
+  xp?: number | null;
 };
+
+export type TerritoryStatus = 'neutral' | 'controlled' | 'contested' | 'under_attack';
 
 export type ActionAvailability = { allowed: boolean; code: string | null; reason: string | null; expires_at: string | null };
 export type ZoneActions = { claim: ActionAvailability; steal: ActionAvailability; defend: ActionAvailability };
@@ -280,7 +313,7 @@ export type CrewDetail = Crew & {
 
 export type CrewCreate = { name: string; description: string; color?: string; icon?: string };
 
-export type EventType = 'run' | 'walk' | 'territory_battle' | 'weekend_war' | 'social' | (string & {});
+export type EventType = 'run' | 'walk' | 'territory_battle' | 'weekend_war' | 'social' | 'study_break_walk' | (string & {});
 
 export type EventSummary = {
   id: string;
@@ -294,6 +327,10 @@ export type EventSummary = {
   capacity: number | null;
   my_rsvp: 'going' | null;
   territory_challenge: { zone_ids: string[]; summary: string; reward_xp: number | null } | null;
+  /** Dev A: short-duration templates on the Events API (e.g. 'study_break_walk'). Optional; absent on older events. */
+  template?: 'study_break_walk' | (string & {}) | null;
+  duration_min?: number | null;
+  meeting_point?: string | null;
 };
 
 export type EventDetail = EventSummary & {
@@ -388,6 +425,205 @@ export type Badge = {
 };
 
 // ---------------------------------------------------------------------------
+// Map world: base features, points of interest, nearby players
+// ---------------------------------------------------------------------------
+
+/** Stylised base map (drawn by the app — not map tiles). Static; cache aggressively. */
+export type MapFeatures = {
+  roads: { id: string; kind: 'road' | 'path'; points: LatLng[] }[];
+  buildings: { id: string; polygon: LatLng[] }[];
+  terrain: { id: string; kind: 'green' | 'water' | 'field'; polygon: LatLng[] }[];
+  pois: Poi[];
+};
+
+export type Poi = {
+  id: string;
+  name: string;
+  kind: 'food' | 'sports' | 'study' | 'hangout' | 'gate' | 'event' | (string & {});
+  position: LatLng;
+  zone_id: string | null;
+  description: string | null;
+};
+
+/**
+ * Someone the backend lets you see on the map. `position` is APPROXIMATE: the backend snaps it
+ * to a coarse cell (see `precision_m`) — never a raw GPS fix, never a home location. Users who
+ * blocked you, hid themselves, or aren't allowed to appear are simply absent.
+ */
+export type MapPlayer = PersonLite & {
+  level: number;
+  xp: number;
+  position: LatLng;
+  precision_m: number;
+  proximity: Proximity | null;
+  activity: ActivityType | 'workout' | null;
+  last_seen_at: string;
+  relationship: RelationshipState;
+};
+
+export type NearbyPlayers = { players: MapPlayer[]; as_of: string; visible: boolean; hidden_reason: string | null };
+
+/** Your own location as reported to the backend for discovery (throttled by the app). */
+export type PresenceUpdate = { lat: number; lng: number; accuracy_m: number | null };
+
+/** A person in search / lists with enough to render a card and a Poke button. */
+export type PersonSummary = PersonLite & { level: number; xp: number; proximity: Proximity | null; relationship: RelationshipState };
+
+// ---------------------------------------------------------------------------
+// Poke → Poke back → Friends
+// ---------------------------------------------------------------------------
+
+/**
+ * none       — nothing between you
+ * poked      — you poked them, waiting for a poke back
+ * poked_you  — they poked you; poking back makes you friends
+ * friends    — mutual poke confirmed by the backend
+ */
+export type RelationshipState = 'none' | 'poked' | 'poked_you' | 'friends';
+
+export type Relationship = {
+  user_id: string;
+  state: RelationshipState;
+  /** Whether the backend accepts a poke right now (cooldowns, privacy, blocks). */
+  can_poke: boolean;
+  reason: string | null;
+  poked_at: string | null;
+  friends_since: string | null;
+};
+
+export type PokeResult = {
+  relationship: Relationship;
+  /** True only when THIS poke completed a mutual poke. */
+  friendship_created: boolean;
+  friend: (PersonLite & { level: number; xp: number }) | null;
+};
+
+export type IncomingPoke = {
+  id: string;
+  from: PersonLite & { level: number; xp: number };
+  created_at: string;
+  status: 'pending' | 'poked_back' | 'expired';
+};
+
+export type AppNotification = {
+  id: string;
+  type: 'poke' | 'friendship' | 'territory' | 'invite' | 'event' | 'ambassador' | 'study_break' | 'media' | 'meetup_rating' | 'shared_zone' | 'date_suggestion' | (string & {});
+  actor: (PersonLite & { level?: number; xp?: number }) | null;
+  text: string;
+  created_at: string;
+  read: boolean;
+  data: { user_id?: string; zone_id?: string; invite_id?: string; event_id?: string; poke_id?: string; meetup_id?: string; media_id?: string; application_id?: string; suggestion_id?: string } | null;
+};
+
+// ---------------------------------------------------------------------------
+// Shared zones (Dev B) · Heatmap (Dev B) · Squirrel Dates (Dev B)
+// ---------------------------------------------------------------------------
+
+/** People you share zones with. Zone-level only — never routes, times or live location. */
+export type SharedZonesPerson = { person: PersonLite & { level?: number }; shared_zones_count: number; top_zone: { zone_id: string; zone_name: string } | null };
+export type SharedZonesIndex = { people: SharedZonesPerson[]; visible: boolean; hidden_reason: string | null };
+
+export type HeatLevel = 'low' | 'active' | 'high';
+/** One aggregated cell. The backend buckets, thresholds and anonymises; the app only draws it. */
+export type HeatCell = { id: string; center: LatLng; radius_m: number; intensity: number; level: HeatLevel; zone_id: string | null };
+export type HeatWindow = '1h' | '24h' | '7d';
+export type Heatmap = { available: boolean; reason: string | null; window: HeatWindow | (string & {}); generated_at: string; cells: HeatCell[]; min_people_per_cell: number | null };
+
+export type DateSuggestion = {
+  id: string;
+  person: PersonLite & { level?: number };
+  /** Written by the backend from real shared data ("You both run at Sports Ground Loop"). */
+  reason: string;
+  zone: { id: string; name: string } | null;
+  suggested_time: string | null;
+  can_invite: boolean;
+};
+export type DateSuggestions = { available: boolean; reason: string | null; suggestions: DateSuggestion[] };
+
+// ---------------------------------------------------------------------------
+// Photo upload (Dev A) — presigned PUT, then complete; moderation decides visibility
+// ---------------------------------------------------------------------------
+
+export type MediaPurpose = 'post' | 'avatar' | 'meetup' | 'event';
+export type UploadRequest = { purpose: MediaPurpose; content_type: string; byte_size: number; context?: { meetup_id?: string; event_id?: string } };
+export type UploadTicket = { media_id: string; upload_url: string; method: 'PUT'; headers: Record<string, string>; expires_at: string };
+export type Moderation = 'pending' | 'approved' | 'rejected';
+/** Nothing is public until `status` is 'ready' AND `moderation` is 'approved'. */
+export type MediaItem = { media_id: string; status: 'pending' | 'ready'; url: string | null; moderation?: Moderation | null; rejection_reason?: string | null };
+
+// ---------------------------------------------------------------------------
+// Post-meetup rating (Dev A)
+// ---------------------------------------------------------------------------
+
+export type RatingDimension = { key: string; label: string };
+export type TrustScore = { value: number; label: string };
+export type MeetupRatingState = {
+  meetup_id: string;
+  can_rate: boolean;
+  /** Why rating isn't possible (not ended yet, you didn't check in, window closed…). */
+  reason: string | null;
+  already_rated: boolean;
+  /** Other attendees you can rate — never yourself. */
+  rateable: PersonLite[];
+  /** Optional structured feedback; empty when the backend doesn't support it. */
+  dimensions: RatingDimension[];
+  trust_score: TrustScore | null;
+};
+export type MeetupRatingInput = { ratings: { user_id: string; stars: 1 | 2 | 3 | 4 | 5; tags: string[] }[] };
+export type MeetupRatingResult = { meetup_id: string; submitted_at: string; trust_score: TrustScore | null };
+
+// ---------------------------------------------------------------------------
+// Ambassador application (Dev A) — the backend owns the form's fields
+// ---------------------------------------------------------------------------
+
+export type AmbassadorField = { key: string; label: string; type: 'text' | 'multiline' | 'select'; required: boolean; max_length: number | null; options?: string[] | null; placeholder?: string | null; prefill?: string | null };
+export type AmbassadorStatus = 'pending' | 'under_review' | 'approved' | 'rejected';
+export type AmbassadorApplication = { id: string; status: AmbassadorStatus; submitted_at: string; decided_at: string | null; message: string | null };
+export type AmbassadorState = { open: boolean; closed_reason: string | null; application: AmbassadorApplication | null; fields: AmbassadorField[] };
+
+// ---------------------------------------------------------------------------
+// Shared workout sessions ("Workout with partner") — expected contract, backend not built yet
+// ---------------------------------------------------------------------------
+
+/**
+ * Lifecycle, decided by the server:
+ *   waiting_for_partner → (partner joins) → lobby → (both ready) → countdown → active → completed
+ *   any point → cancelled (someone left) | expired (invite ran out)
+ */
+export type WorkoutSessionStatus = 'waiting_for_partner' | 'lobby' | 'countdown' | 'active' | 'completed' | 'cancelled' | 'expired';
+export type WorkoutParticipant = {
+  user: PersonLite;
+  role: 'host' | 'partner';
+  ready: boolean;
+  /** Presence on the realtime channel, as seen by the server. */
+  connected: boolean;
+  /** Reps as last reported by that participant's device and accepted by the server. */
+  reps: number;
+  finished_at: string | null;
+  left_at: string | null;
+};
+export type SharedWorkoutSession = {
+  session_id: string;
+  invite_code: string;
+  /** Link to share; opens the app at /workout/join/{code} (universal link or squirrelsocial://). */
+  invite_url: string;
+  exercise: { key: string; name: string; measure: 'reps' | 'time'; target: number | null; sets: number | null };
+  host: WorkoutParticipant;
+  partner: WorkoutParticipant | null;
+  status: WorkoutSessionStatus;
+  created_at: string;
+  expires_at: string;
+  /** Server time when the shared countdown ends and both devices start together. */
+  starts_at: string | null;
+  completed_at: string | null;
+  end_reason: 'completed' | 'host_left' | 'partner_left' | 'expired' | null;
+  /** Server clock at response time, so devices can align their countdown. */
+  server_time: string;
+  /** Only when the backend awards it. */
+  xp_awarded?: { user_id: string; xp: number }[] | null;
+};
+
+// ---------------------------------------------------------------------------
 // Realtime
 // ---------------------------------------------------------------------------
 
@@ -396,7 +632,14 @@ export type RealtimeMessage =
   | { type: 'stats.updated'; data: LaunchStats }
   | { type: 'invite.updated'; data: ChallengeInvite }
   | { type: 'event.updated'; data: { event_id: string; participants_count: number } }
-  | { type: 'active.updated'; data: { active_now: number } };
+  | { type: 'active.updated'; data: { active_now: number } }
+  | { type: 'poke.received'; data: IncomingPoke }
+  | { type: 'relationship.updated'; data: Relationship }
+  | { type: 'friendship.created'; data: { friend: PersonLite & { level: number; xp: number }; relationship: Relationship } }
+  | { type: 'notification.created'; data: AppNotification }
+  | { type: 'players.updated'; data: { as_of: string } }
+  | { type: 'workout.session.updated'; data: SharedWorkoutSession }
+  | { type: 'workout.reps.updated'; data: { session_id: string; user_id: string; reps: number; at: string } };
 
 // ---------------------------------------------------------------------------
 // The service interface both implementations satisfy
@@ -444,6 +687,39 @@ export interface CampusApi {
 
   squirrelBoard(period: LeaderboardPeriod, limit?: number): Promise<SquirrelBoard>;
   hostelBoard(period: LeaderboardPeriod): Promise<HostelBoard>;
+
+  // Map world
+  mapFeatures(): Promise<MapFeatures>;
+  nearbyPlayers(): Promise<NearbyPlayers>;
+  zonePlayers(zoneId: string): Promise<PersonSummary[]>;
+  updatePresence(p: PresenceUpdate): Promise<{ accepted: boolean }>;
+  searchPeople(q: string): Promise<PersonSummary[]>;
+
+  // Poke → friends
+  pokeStatus(userId: string): Promise<Relationship>;
+  sendPoke(userId: string, idempotencyKey: string): Promise<PokeResult>;
+  pokeBack(userId: string, idempotencyKey: string): Promise<PokeResult>;
+  incomingPokes(): Promise<IncomingPoke[]>;
+  friendshipStatus(userId: string): Promise<{ user_id: string; friends: boolean; since: string | null }>;
+
+  // Notifications
+  notifications(): Promise<{ items: AppNotification[]; unread: number }>;
+  markNotificationsRead(ids: string[]): Promise<{ unread: number }>;
+
+  // Dev B
+  sharedZones(): Promise<SharedZonesIndex>;
+  heatmap(window: HeatWindow): Promise<Heatmap>;
+  dateSuggestions(forUserId?: string): Promise<DateSuggestions>;
+  dismissDateSuggestion(suggestionId: string): Promise<{ dismissed: true }>;
+  inviteFromSuggestion(suggestionId: string, idempotencyKey: string): Promise<{ invite_id: string }>;
+  // Dev A
+  createUpload(input: UploadRequest): Promise<UploadTicket>;
+  completeUpload(mediaId: string): Promise<MediaItem>;
+  media(mediaId: string): Promise<MediaItem>;
+  meetupRating(meetupId: string): Promise<MeetupRatingState>;
+  rateMeetup(meetupId: string, input: MeetupRatingInput, idempotencyKey: string): Promise<MeetupRatingResult>;
+  ambassador(): Promise<AmbassadorState>;
+  applyAmbassador(answers: Record<string, string>, idempotencyKey: string): Promise<AmbassadorApplication>;
 
   meetups(): Promise<Meetup[]>;
   meetup(meetupId: string): Promise<Meetup>;

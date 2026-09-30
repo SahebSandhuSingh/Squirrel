@@ -7,7 +7,7 @@ import { ErrorState, LoadingRows, SignedOutState } from '@/components/campus/Sta
 import { Button, Header, Icon, PressScale, Screen, tap } from '@/components/ui';
 import { invalidateCampus, useAction, useMe, useZones } from '@/hooks/useCampus';
 import { useApp } from '@/state/AppState';
-import { colors, fonts, radius } from '@/theme';
+import { alpha, colors, fonts, radius } from '@/theme';
 
 const MODES: ConnectionMode[] = ['friends', 'crew', 'date'];
 
@@ -78,7 +78,7 @@ function Form({ me, onSaved }: { me: Me; onSaved: (m: Me) => void }) {
             {hostels.map((h) => {
               const on = hostel === h.id;
               return (
-                <PressScale key={h.id} onPress={() => { tap(); setHostel(h.id); }} style={[styles.chip, on && { borderColor: colors.primary, backgroundColor: 'rgba(215,255,31,0.08)' }]} scaleTo={0.96} accessibilityRole="radio" accessibilityState={{ selected: on }}>
+                <PressScale key={h.id} onPress={() => { tap(); setHostel(h.id); }} style={[styles.chip, on && { borderColor: colors.primary, backgroundColor: alpha(colors.primary, 0.08) }]} scaleTo={0.96} accessibilityRole="radio" accessibilityState={{ selected: on }}>
                   <Text style={[styles.chipText, on && { color: colors.primary }]}>{h.hostel ?? h.name}</Text>
                 </PressScale>
               );

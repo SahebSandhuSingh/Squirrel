@@ -5,7 +5,7 @@ import { router, Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, NATIVE, tap } from '@/components/ui';
 import type { IconName } from '@/data/icons';
-import { colors, fonts, gradients, MAX_WIDTH } from '@/theme';
+import { alpha, colors, fonts, gradients, isLightTheme, MAX_WIDTH } from '@/theme';
 
 type BottomTabBarProps = Parameters<NonNullable<React.ComponentProps<typeof Tabs>['tabBar']>>[0];
 
@@ -48,7 +48,7 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 
   return (
     <View style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, 10) }]}>
-      <LinearGradient colors={['rgba(17,17,19,0.95)', 'rgba(17,17,19,0.99)']} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={[alpha(colors.panel, 0.95), alpha(colors.panel, 0.99)]} style={StyleSheet.absoluteFill} />
       <View style={styles.bar}>
         {items.slice(0, 2)}
         <Pressable
@@ -75,5 +75,5 @@ const styles = StyleSheet.create({
   label: { fontSize: 11, color: colors.dim, fontFamily: fonts.semibold },
   dot: { width: 16, height: 3, borderRadius: 2, backgroundColor: colors.primary, marginTop: 2 },
   plusWrap: { marginTop: -34, marginHorizontal: 4, borderRadius: 36, shadowColor: colors.primary, shadowOpacity: 0.85, shadowRadius: 18, shadowOffset: { width: 0, height: 0 }, elevation: 14 },
-  plus: { width: 66, height: 66, borderRadius: 33, alignItems: 'center', justifyContent: 'center', borderWidth: 4, borderColor: colors.bg },
+  plus: { width: 66, height: 66, borderRadius: 33, alignItems: 'center', justifyContent: 'center', borderWidth: isLightTheme ? 3 : 4, borderColor: isLightTheme ? colors.text : colors.bg },
 });

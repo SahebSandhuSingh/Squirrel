@@ -1,3 +1,4 @@
+import { ThemeIconButton } from '@/components/ThemeToggle';
 import { selectFeed, type Feed, type Post } from '@/data/posts';
 import { FeatureGate, useLocks } from '@/components/Locked';
 import React, { useCallback, useMemo, useState } from 'react';
@@ -5,13 +6,16 @@ import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-n
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { CAMPUS_SOURCE } from '@/api/campus';
+import { useUnread } from '@/state/socialStore';
+import { NearbySquirrels } from '@/components/social/NearbySquirrels';
+import { SquirrelDatesSection } from '@/components/social/SquirrelDates';
 import { Mascot } from '@/art/Mascot';
 import { Avatar } from '@/components/Avatar';
 import { SceneImage, SocialPost, UserChip } from '@/components/cards';
 import { Display, EmptyState, FadeIn, Icon, IconButton, OverlayKicker, OverlaySub, PressScale, RowSub, RowTitle, Screen, SectionHeader, Segmented, TAB_BAR_SPACE, tap } from '@/components/ui';
 import { users } from '@/data/users';
 import { useApp } from '@/state/AppState';
-import { colors, fonts, radius } from '@/theme';
+import { alpha, colors, fonts, radius } from '@/theme';
 
 const FEEDS: readonly Feed[] = ['For You', 'Following', 'Nearby'];
 
@@ -20,6 +24,7 @@ export default function Social() {
   const [feed, setFeed] = useState<Feed>('For You');
   const { posts, following, toggleFollow, me, city, crews, joinedCrews } = useApp();
   const locks = useLocks();
+  const unread = useUnread();
   const huntLocked = locks.locked('partnerHunt');
 
   const list = useMemo(() => selectFeed(posts, feed, { following, meId: me.id, cityId: city.id }), [posts, feed, following, me.id, city.id]);
@@ -63,8 +68,9 @@ export default function Social() {
       <View style={styles.head}>
         <Display size={34}>Social</Display>
         <View style={{ flexDirection: 'row', gap: 8 }}>
+          <ThemeIconButton />
           <IconButton icon="account-search-outline" onPress={() => router.push('/crews')} label="Find crews" />
-          <IconButton icon="bell-outline" badge={3} onPress={() => router.push('/notifications')} label="Notifications" />
+          <IconButton icon="bell-outline" badge={CAMPUS_SOURCE === 'off' ? 3 : unread ?? undefined} onPress={() => router.push('/notifications')} label="Notifications" />
         </View>
       </View>
 
@@ -137,6 +143,9 @@ export default function Social() {
         </View>
       )}
 
+      {CAMPUS_SOURCE !== 'off' && <NearbySquirrels />}
+      {CAMPUS_SOURCE !== 'off' && <SquirrelDatesSection />}
+
       {feed === 'Nearby' && (
         <Text style={styles.nearbyNote}>
           <Icon name="map-marker" size={13} color={colors.secondary} /> Posts from {city.name} · switch city from Home or Explore
@@ -188,7 +197,7 @@ export default function Social() {
 
 const styles = StyleSheet.create({
   hunt: { flexDirection: 'row', alignItems: 'center', marginTop: 12, marginBottom: 12, backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.lineHi, padding: 12 },
-  huntIcon: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(215,255,31,0.1)', borderWidth: 1, borderColor: 'rgba(215,255,31,0.35)' },
+  huntIcon: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: alpha(colors.primary, 0.1), borderWidth: 1, borderColor: alpha(colors.primary, 0.35) },
   huntLock: { position: 'absolute', right: -5, top: -5, width: 18, height: 18, borderRadius: 9, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.bg },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   addStory: { position: 'absolute', right: 0, bottom: 0, width: 22, height: 22, borderRadius: 11, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.bg },

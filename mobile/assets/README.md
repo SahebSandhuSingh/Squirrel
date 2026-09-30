@@ -8,11 +8,12 @@ The PNGs here are **exports of those same components**, for the app icon and spl
 
 | Path | Contents |
 |---|---|
-| `brand/logo.png` | Brand logo: squirrel with dumbbell, transparent cut-out, 512² |
-| `icon.png` | App icon, 1024² (mascot on a dusk gradient) |
-| `adaptive-icon.png` | Android adaptive-icon foreground, 1024², transparent |
-| `splash-icon.png` | Splash mascot (waving), 1024², transparent |
-| `favicon.png` | Web favicon, 48² |
+| `brand/app-icon-source.png` | **The official app logo & icon** (peeking squirrel in the lime frame), 1254², as supplied. Every icon below is generated from it |
+| `brand/logo.png` | In-app logo (Wordmark on the title and sign-in screens), 512² |
+| `icon.png` | App icon, 1024² (the official logo, full frame) |
+| `adaptive-icon.png` | Android adaptive-icon foreground, 1024²: the art inside the frame, scaled to the circular safe zone; background `#0C0C0C` in app.json |
+| `splash-icon.png` | Splash: the official logo, 1024², on `#0C0C0C` (matches the logo's background) |
+| `favicon.png` | Web favicon, 48² (the official logo) |
 | `illustrations/mascot/` | Squirrel mascot poses: idle, run, celebrate, drink, lift, sit, cheer, sleep, wave; plus idle with crown, headband, headphones and no accessory |
 | `illustrations/characters/` | Female and male fitness avatars in 6 poses (stand, run, wave, lift, yoga, flex) |
 | `illustrations/avatars/` | Portraits of every demo user |

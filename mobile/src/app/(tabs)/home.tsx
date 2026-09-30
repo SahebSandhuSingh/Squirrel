@@ -6,7 +6,8 @@ import { activityLine, selectFeed, timeAgo } from '@/data/posts';
 import { useEffect, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { Mascot } from '@/art/Mascot';
+import { LinearGradient } from 'expo-linear-gradient';
+import { CampusScene } from '@/art/CampusScene';
 import { Avatar } from '@/components/Avatar';
 import { MissionCard, SceneImage } from '@/components/cards';
 import { CAMPUS_SOURCE } from '@/api/campus';
@@ -20,7 +21,7 @@ import { Tape } from '@/components/Brand';
 import { PROGRESS_API_CONFIGURED } from '@/api/config';
 import { xpApi } from '@/api/endpoints';
 import { useApp } from '@/state/AppState';
-import { colors, fonts, radius } from '@/theme';
+import { alpha, colors, fonts, radius } from '@/theme';
 
 const greeting = () => {
   const h = new Date().getHours();
@@ -144,15 +145,20 @@ export default function Home() {
         </View>
       </PressScale>
 
-      {/* Motivation */}
+      {/* The campus is alive: a window onto the world that opens the Map */}
       <FadeIn>
-        <SceneImage kind="city-night" seed={12} height={176} style={{ marginTop: 22 }} scrim={false}>
-          <Mascot pose="lift" size={176} animated style={{ position: 'absolute', left: -6, bottom: -10 }} />
-          <View style={{ position: 'absolute', right: 16, top: 24, alignItems: 'flex-end' }}>
-            <Tagline size={23} color={colors.onImage} style={{ textAlign: 'right' }}>Discipline{'\n'}today.</Tagline>
-            <Tagline size={19} color={colors.primarySoft} style={{ textAlign: 'right', marginTop: 4 }}>A bigger you{'\n'}tomorrow.</Tagline>
+        <PressScale onPress={() => router.push('/explore')} style={styles.world} scaleTo={0.985} accessibilityRole="button" accessibilityLabel={`${city.campus}, your world. Open the map`}>
+          <CampusScene frame="horizon" style={StyleSheet.absoluteFill} />
+          <LinearGradient colors={['rgba(5,5,7,0)', 'rgba(5,5,7,0.88)']} style={styles.worldScrim} pointerEvents="none" />
+          <View style={{ position: 'absolute', left: 16, bottom: 16, right: 16 }}>
+            <OverlayKicker>{city.campus} · your world</OverlayKicker>
+            <Tagline size={24} color={colors.onImage} style={{ marginTop: 6 }}>The campus is awake.</Tagline>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 20 }}>
+              <Text style={styles.worldCta}>Open the map</Text>
+              <Icon name="arrow-right" size={16} color={colors.primary} />
+            </View>
           </View>
-        </SceneImage>
+        </PressScale>
       </FadeIn>
 
       {/* Leaderboard — top squirrels today, from the campus backend */}
@@ -241,6 +247,9 @@ function RingStat({ progress, color, color2, icon, value, label }: { progress: n
 }
 
 const styles = StyleSheet.create({
+  world: { height: 176, marginTop: 22, borderRadius: radius.xl, overflow: 'hidden', borderWidth: 1, borderColor: colors.line, backgroundColor: '#07060C' },
+  worldScrim: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 130 },
+  worldCta: { color: colors.primary, fontFamily: fonts.labelBold, fontSize: 14, letterSpacing: 1.2, textTransform: 'uppercase' },
   exRow: { flexDirection: 'row', alignItems: 'center', marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.line },
   exIcon: { width: 42, height: 42, borderRadius: 13, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
   exGo: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.primary, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 8, marginLeft: 8 },
@@ -249,7 +258,7 @@ const styles = StyleSheet.create({
   zoneKicker: { color: colors.primary, fontFamily: fonts.monoBold, fontSize: 10, letterSpacing: 1.4 },
   zonePct: { color: colors.primary, fontFamily: fonts.labelBold, fontSize: 18 },
   zoneInfo: { color: colors.dim, fontFamily: fonts.mono, fontSize: 10, marginTop: 6 },
-  battle: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)', padding: 14 },
+  battle: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: alpha(colors.text, 0.5), padding: 14 },
   hello: { color: colors.sub, fontFamily: fonts.semibold, fontSize: 15, flexShrink: 1 },
   cardTitle: { color: colors.text, fontFamily: fonts.bold, fontSize: 15 },
   link: { color: colors.primary, fontFamily: fonts.semibold, fontSize: 13 },
@@ -260,7 +269,7 @@ const styles = StyleSheet.create({
   playBtn: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', shadowColor: colors.primary, shadowOpacity: 0.8, shadowRadius: 14, shadowOffset: { width: 0, height: 0 } },
   hint: { color: colors.mute, fontSize: 12, textAlign: 'center', marginTop: 8, fontFamily: fonts.regular },
   leader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 4 },
-  leaderMe: { backgroundColor: 'rgba(215,255,31,0.08)', borderRadius: radius.md, marginHorizontal: -6, paddingHorizontal: 10 },
+  leaderMe: { backgroundColor: alpha(colors.primary, 0.08), borderRadius: radius.md, marginHorizontal: -6, paddingHorizontal: 10 },
   rank: { color: colors.dim, fontFamily: fonts.display, fontSize: 18, width: 34 },
   leaderName: { color: colors.text, fontFamily: fonts.bold, fontSize: 14 },
   leaderSub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 11 },

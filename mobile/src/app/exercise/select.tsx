@@ -8,7 +8,7 @@ import { Button, Display, Icon, tap } from '@/components/ui';
 import { EXERCISE_LIBRARY, estimateKcal, PLAN_BOUNDS, workSeconds, type LibraryExercise } from '@/data/exercises';
 import { invalidateExercise, useExerciseCatalog, useExerciseSkill, useExerciseUser } from '@/hooks/useExercise';
 import { useApp } from '@/state/AppState';
-import { colors, fonts, radius } from '@/theme';
+import { alpha, colors, fonts, radius } from '@/theme';
 
 /**
  * EXERCISE SELECTION: the exercises come from the Exercise backend (GET /api/exercises).
@@ -143,7 +143,7 @@ export default function SelectExercise() {
             const blocked = !!activeExercise || (!!starting && !busy);
             return (
               <View key={ex.key} style={[styles.row, !enabled && { opacity: 0.55 }]}>
-                <View style={[styles.iconBox, enabled && { backgroundColor: 'rgba(215,255,31,0.12)', borderColor: 'rgba(215,255,31,0.4)' }]}>
+                <View style={[styles.iconBox, enabled && { backgroundColor: alpha(colors.primary, 0.12), borderColor: alpha(colors.primary, 0.4) }]}>
                   <Icon name={ex.icon} size={24} color={enabled ? colors.primary : colors.mute} />
                 </View>
                 <View style={{ flex: 1, marginHorizontal: 12 }}>
@@ -157,6 +157,16 @@ export default function SelectExercise() {
                     <Text style={styles.meta}>Coming soon</Text>
                   )}
                 </View>
+                {enabled && ex.measure === 'reps' && (
+                  <Pressable
+                    onPress={() => { tap(); router.replace({ pathname: '/workout/new', params: { exercise: ex.key } }); }}
+                    disabled={blocked || busy}
+                    style={[styles.partner, (blocked || busy) && { opacity: 0.45 }]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Workout with a partner: ${ex.name}`}>
+                    <Icon name="account-multiple-plus" size={18} color={colors.secondary} />
+                  </Pressable>
+                )}
                 {enabled ? (
                   <Pressable
                     onPress={() => start(ex)}
@@ -174,6 +184,7 @@ export default function SelectExercise() {
             );
           })}
           <Text style={[styles.sub, { textAlign: 'center', marginTop: 2 }]}>
+            <Text style={{ color: colors.secondary }}>Tap the pink icon to work out with a partner. </Text>
             Default plan: {PLAN_BOUNDS.sets.value} sets · {PLAN_BOUNDS.rest.value}s rest. Calories are estimates.{' '}
             <Text style={{ color: colors.primary }} onPress={() => router.replace('/exercise')}>
               Customise in Form Coach →
@@ -182,7 +193,7 @@ export default function SelectExercise() {
         </ScrollView>
       )}
       {error && (
-        <View style={[styles.note, { borderColor: 'rgba(255,92,122,0.5)', marginTop: 10 }]}>
+        <View style={[styles.note, { borderColor: alpha(colors.coral, 0.5), marginTop: 10 }]}>
           <Icon name="alert-circle-outline" size={18} color={colors.coral} />
           <Text style={[styles.sub, { flex: 1, color: colors.text }]}>{error}</Text>
         </View>
@@ -210,7 +221,8 @@ const styles = StyleSheet.create({
   name: { color: colors.text, fontFamily: fonts.bold, fontSize: 15 },
   blurb: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, marginTop: 1 },
   meta: { color: colors.sub, fontFamily: fonts.label, fontSize: 12, letterSpacing: 0.6, textTransform: 'uppercase', marginTop: 5 },
-  start: { backgroundColor: colors.primary, borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 9, minWidth: 70, alignItems: 'center' },
+  start: { backgroundColor: colors.primaryFill, borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 9, minWidth: 70, alignItems: 'center' },
+  partner: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: alpha(colors.secondary, 0.55), backgroundColor: alpha(colors.secondary, 0.08), marginRight: 8 },
   startText: { color: colors.onPrimary, fontFamily: fonts.labelBold, fontSize: 14, letterSpacing: 1, textTransform: 'uppercase' },
   active: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.primary, borderRadius: radius.md, padding: 10, marginTop: 12 },
   activeText: { color: colors.onPrimary, fontFamily: fonts.labelBold, fontSize: 14, letterSpacing: 0.6, textTransform: 'uppercase' },

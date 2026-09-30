@@ -4,13 +4,14 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { campusApi, CAMPUS_SOURCE, type ActiveNow, type ChallengeInvite, type SquirrelBoard } from '@/api/campus';
 import { EventRow } from '@/components/campus/EventRow';
+import { isStudyBreak, StudyBreakCard } from '@/components/events/StudyBreak';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
 import { EmptyNote, ErrorState, LoadingRows } from '@/components/campus/States';
 import { relationOf, UNDER_ATTACK } from '@/components/campus/territoryUi';
 import { Card, Display, Icon, PressScale, Pulse, RowSub, RowTitle, SectionHeader } from '@/components/ui';
 import { useCampus, useMe, useRealtime, useRefreshOnFocus, useTerritorySync, useZones } from '@/hooks/useCampus';
 import { useAllTerritories } from '@/state/territoryStore';
-import { colors, fonts, radius } from '@/theme';
+import { alpha, colors, fonts, radius } from '@/theme';
 
 /** Shown instead of the campus sections when there's no campus backend at all. */
 export function CampusNotLive() {
@@ -156,6 +157,7 @@ export function HomeLeaderboard({ campusName }: { campusName: string }) {
 export function HomeEvents() {
   const r = useCampus('events:upcoming', () => campusApi.events({ scope: 'upcoming' }));
   useRefreshOnFocus(r.reload);
+  const nextBreak = r.data?.items.find(isStudyBreak) ?? null;
   return (
     <>
       <SectionHeader kicker="04 — Meetups" title="Happening on campus" action="All events" onAction={() => router.push('/events')} />
@@ -167,9 +169,14 @@ export function HomeEvents() {
         <EmptyNote icon="calendar-blank-outline" title="Nothing scheduled yet" />
       ) : (
         <View style={{ gap: 10 }}>
-          {r.data.items.slice(0, 3).map((e) => (
-            <EventRow key={e.id} event={e} />
-          ))}
+          {/* A quick campus reset leads when there's one coming up */}
+          {nextBreak && <StudyBreakCard event={nextBreak} />}
+          {r.data.items
+            .filter((e) => e.id !== nextBreak?.id)
+            .slice(0, nextBreak ? 2 : 3)
+            .map((e) => (
+              <EventRow key={e.id} event={e} />
+            ))}
         </View>
       )}
     </>
@@ -180,14 +187,14 @@ const styles = StyleSheet.create({
   zone: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 2, borderColor: colors.primary, padding: 14, transform: [{ rotate: '-0.6deg' }], shadowColor: colors.primary, shadowOpacity: 0.25, shadowRadius: 14, shadowOffset: { width: 0, height: 0 } },
   zoneKicker: { color: colors.primary, fontFamily: fonts.monoBold, fontSize: 10, letterSpacing: 1.4 },
   zoneInfo: { color: colors.dim, fontFamily: fonts.mono, fontSize: 10, marginTop: 6 },
-  active: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14, backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: 'rgba(61,240,160,0.35)', padding: 12 },
+  active: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14, backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: alpha(colors.green, 0.35), padding: 12 },
   short: { flex: 1, backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, padding: 12, gap: 2 },
   shortTitle: { fontFamily: fonts.labelBold, fontSize: 16, letterSpacing: 0.8, textTransform: 'uppercase', marginTop: 4 },
   shortSub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 11 },
   badge: { position: 'absolute', top: 8, right: 8, minWidth: 20, height: 20, borderRadius: 10, backgroundColor: colors.secondary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
   badgeText: { color: colors.onSecondary, fontFamily: fonts.bold, fontSize: 11 },
   leader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 4 },
-  leaderMe: { backgroundColor: 'rgba(215,255,31,0.08)', borderRadius: radius.md, marginHorizontal: -6, paddingHorizontal: 10 },
+  leaderMe: { backgroundColor: alpha(colors.primary, 0.08), borderRadius: radius.md, marginHorizontal: -6, paddingHorizontal: 10 },
   rank: { color: colors.dim, fontFamily: fonts.display, fontSize: 18, width: 34 },
   leaderName: { color: colors.text, fontFamily: fonts.bold, fontSize: 14 },
   leaderSub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 11 },

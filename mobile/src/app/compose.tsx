@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { StickerArt } from '@/art/Sticker';
 import { Avatar } from '@/components/Avatar';
 import { SceneImage } from '@/components/cards';
 import { Button, Header, Label, Screen, tap } from '@/components/ui';
+import { PhotoUpload, type ApprovedPhoto } from '@/components/media/PhotoUpload';
 import type { Activity, Post } from '@/data/posts';
 import { useApp } from '@/state/AppState';
 import type { SceneKind, StickerKind } from '@/types';
@@ -20,10 +21,12 @@ export default function Compose() {
   const [scene, setScene] = useState<SceneKind>(km ? 'run' : 'city-sunset');
   const [sticker, setSticker] = useState<Post['sticker']>(km ? 'one-more-km' : undefined);
   const [caption, setCaption] = useState(km ? `Just one more km turned into ${km}. 🏃‍♀️` : '');
+  const [photo, setPhoto] = useState<ApprovedPhoto | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const activity: Activity | undefined = km ? { type: 'run', km: +km, minutes: +(min ?? 0), pace: pace ?? '' } : undefined;
 
   const post = () => {
-    addPost({ caption: caption.trim() || 'Moving with the crew 💪', scene, seed: Date.now() % 97, activity, sticker });
+    addPost({ caption: caption.trim() || 'Moving with the crew 💪', scene, seed: Date.now() % 97, activity, sticker, photo: photo ? { uri: photo.uri, mediaId: photo.mediaId } : undefined });
     router.replace('/social');
   };
 
@@ -36,6 +39,7 @@ export default function Compose() {
       </View>
 
       <SceneImage kind={scene} seed={7} aspect={1.2} style={{ marginTop: 14 }} scrim={false}>
+        {photo && <Image source={{ uri: photo.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" accessibilityLabel="Your approved photo" />}
         {activity && (
           <View style={styles.actChip}>
             <Text style={styles.actText}>🏃 {activity.km} km · {activity.minutes} min · {activity.pace}/km</Text>
@@ -44,7 +48,16 @@ export default function Compose() {
         {sticker && <StickerArt kind={sticker} size={90} style={{ position: 'absolute', right: 12, top: 12, transform: [{ rotate: '8deg' }] }} />}
       </SceneImage>
 
-      <Label style={{ marginTop: 18, marginBottom: 8 }}>Backdrop</Label>
+      <Label style={{ marginTop: 18, marginBottom: 8 }}>Photo</Label>
+      <PhotoUpload
+        purpose="post"
+        onChange={(p, busy) => {
+          setPhoto(p);
+          setPhotoBusy(busy);
+        }}
+      />
+
+      <Label style={{ marginTop: 18, marginBottom: 8 }}>{photo ? 'Backdrop (behind your photo)' : 'Backdrop'}</Label>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
         {SCENES.map((s) => (
           <Pressable key={s} onPress={() => { tap(); setScene(s); }} style={[styles.thumb, scene === s && { borderColor: colors.primary }]} accessibilityLabel={s}>
@@ -69,7 +82,7 @@ export default function Compose() {
         })}
       </ScrollView>
 
-      <Button label="Post · +20 XP" iconLeft="send" onPress={post} style={{ marginTop: 22 }} />
+      <Button label={photoBusy ? 'Finish the photo first' : 'Post · +20 XP'} iconLeft="send" onPress={post} disabled={photoBusy} style={{ marginTop: 22 }} />
     </Screen>
   );
 }

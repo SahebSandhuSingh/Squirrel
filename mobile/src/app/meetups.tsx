@@ -8,6 +8,7 @@ import { formatEventDate } from '@/data/community';
 import { useCampus, useRefreshOnFocus } from '@/hooks/useCampus';
 import { checkInOpen } from '@/logic/meetups';
 import { colors, fonts, radius } from '@/theme';
+import { isLocked } from '@/data/features';
 
 
 export default function Meetups() {
@@ -44,7 +45,7 @@ export default function Meetups() {
           ) : list.loading ? (
             <LoadingRows rows={3} height={80} />
           ) : (
-            <EmptyNote icon="calendar-blank-outline" title="No meetups coming up" body="RSVP to an event and your meetup appears here." action="Browse events" onAction={() => router.push('/events')} />
+            <EmptyNote icon="calendar-blank-outline" title="No meetups coming up" body="RSVP to an event and your meetup appears here." action={isLocked('events') ? undefined : 'Browse events'} onAction={() => router.push('/events')} />
           )
         }
       />

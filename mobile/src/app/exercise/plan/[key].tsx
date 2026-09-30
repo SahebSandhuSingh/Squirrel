@@ -8,7 +8,7 @@ import { RemoteStatus, Stepper } from '@/components/ExerciseParts';
 import { Button, Card, Display, EmptyState, FadeIn, Header, Icon, Kicker, Screen, Tag, tap } from '@/components/ui';
 import { exerciseByKey, PLAN_BOUNDS } from '@/data/exercises';
 import { invalidateExercise, useExerciseCatalog, useExerciseSkill, useExerciseUser } from '@/hooks/useExercise';
-import { colors, fonts, radius } from '@/theme';
+import { alpha, colors, fonts, radius } from '@/theme';
 
 /** Plan one exercise and save it as a session (POST /api/users/{id}/sessions). */
 export default function PlanExercise() {
@@ -135,7 +135,7 @@ export default function PlanExercise() {
       </View>
 
       {error && (
-        <View style={[styles.notice, { borderColor: 'rgba(255,92,122,0.4)' }]}>
+        <View style={[styles.notice, { borderColor: alpha(colors.coral, 0.4) }]}>
           <Icon name="alert-circle-outline" size={18} color={colors.coral} />
           <Text style={[styles.noticeText, { color: colors.text }]}>{error}</Text>
         </View>

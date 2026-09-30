@@ -7,12 +7,13 @@ import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { campusApi, type ActiveNow, type ActivePerson } from '@/api/campus';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
+import { PokeButton } from '@/components/social/PokeButton';
 import { ModeChip, OpenToMeetToggle, PROXIMITY_TEXT } from '@/components/campus/Social';
 import { EmptyNote, ErrorState, LoadingRows, SignedOutState, SourceBadge } from '@/components/campus/States';
 import { shortTime } from '@/components/campus/territoryUi';
 import { Display, Header, Icon, Kicker, PressScale, Pulse, Screen, SectionHeader } from '@/components/ui';
 import { useCampus, useMe, useRealtime, useRefreshOnFocus } from '@/hooks/useCampus';
-import { colors, fonts, radius } from '@/theme';
+import { alpha, colors, fonts, radius } from '@/theme';
 
 const ACT_ICON: Record<string, React.ComponentProps<typeof Icon>['name']> = { run: 'run-fast', walk: 'walk', workout: 'arm-flex', event: 'calendar-star' };
 
@@ -94,13 +95,9 @@ function PersonRow({ a }: { a: ActivePerson }) {
           {a.activity ? `${a.activity.type} · started ${shortTime(a.activity.started_at)}` : 'Not moving right now'}
           {shared.length ? ` · shared: ${shared.join(', ')}` : ''}
         </Text>
+        {a.proximity && <Text style={[styles.meta, { color: colors.primary }]}>{PROXIMITY_TEXT[a.proximity]}</Text>}
       </View>
-      {a.proximity && (
-        <View style={styles.prox}>
-          <Icon name="map-marker-radius" size={12} color={colors.primary} />
-          <Text style={styles.proxText}>{PROXIMITY_TEXT[a.proximity]}</Text>
-        </View>
-      )}
+      <PokeButton user={p} size="sm" />
     </PressScale>
   );
 }
@@ -112,7 +109,7 @@ const styles = StyleSheet.create({
   actBadge: { position: 'absolute', right: -3, bottom: -3, width: 20, height: 20, borderRadius: 10, backgroundColor: colors.green, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.card },
   name: { color: colors.text, fontFamily: fonts.bold, fontSize: 15, flexShrink: 1 },
   meta: { color: colors.dim, fontFamily: fonts.mono, fontSize: 11, marginTop: 2 },
-  prox: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: 'rgba(215,255,31,0.4)', borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
+  prox: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: alpha(colors.primary, 0.4), borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
   proxText: { color: colors.primary, fontFamily: fonts.label, fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase' },
   fine: { color: colors.mute, fontFamily: fonts.mono, fontSize: 10, textAlign: 'center', marginTop: 16 },
 });

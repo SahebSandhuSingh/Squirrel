@@ -7,7 +7,7 @@ import { SocialPost } from '@/components/cards';
 import { EmptyState, Header, IconButton, Screen } from '@/components/ui';
 import { userById } from '@/data/users';
 import { useApp } from '@/state/AppState';
-import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
+import { alpha, colors, fonts, MAX_WIDTH, radius } from '@/theme';
 
 const SEED_COMMENTS = [
   { u: 'u_meera', t: 'That sunset though 😍', ago: '1h' },
@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
   comment: { flexDirection: 'row', marginBottom: 14 },
   cText: { color: colors.sub, fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
   ago: { color: colors.mute, fontFamily: fonts.regular, fontSize: 11, marginTop: 2 },
-  inputBar: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: 10, paddingHorizontal: 16, backgroundColor: 'rgba(17,17,19,0.98)', borderTopWidth: 1, borderTopColor: colors.line },
+  inputBar: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: 10, paddingHorizontal: 16, backgroundColor: alpha(colors.panel, 0.98), borderTopWidth: 1, borderTopColor: colors.line },
   inputInner: { flexDirection: 'row', alignItems: 'center', gap: 10, width: '100%', maxWidth: MAX_WIDTH - 32, alignSelf: 'center' },
   input: { flex: 1, color: colors.text, fontFamily: fonts.regular, fontSize: 14, backgroundColor: colors.card, borderRadius: radius.pill, paddingHorizontal: 14, height: 42, borderWidth: 1, borderColor: colors.line },
 });

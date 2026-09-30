@@ -11,7 +11,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, AppState as RNAppState, Easing, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { Scene } from '@/art/Scene';
@@ -28,14 +28,23 @@ import { DEMO_SPEED, demoPosition } from '@/logic/demoRoute';
 import { addFix, emptyTrack, localVerdict, MAX_ACCURACY_M, type TrackState, type Verdict } from '@/logic/track';
 import { useApp, type FinishRunResult } from '@/state/AppState';
 import { StatusBar } from 'expo-status-bar';
-import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
+import { alpha, colors, fonts, MAX_WIDTH, radius, statusBarStyle } from '@/theme';
 
 const two = (n: number) => String(Math.floor(n)).padStart(2, '0');
 const fmtPace = (secPerKm: number) => (Number.isFinite(secPerKm) && secPerKm > 0 ? `${Math.floor(secPerKm / 60)}'${two(secPerKm % 60)}"` : `--'--"`);
 const fmtClock = (s: number) => (s >= 3600 ? `${Math.floor(s / 3600)}:${two((s % 3600) / 60)}:${two(s % 60)}` : `${two(s / 60)}:${two(s % 60)}`);
 
 type Phase = 'setup' | 'countdown' | 'running' | 'paused' | 'uploading' | 'done';
-type Perm = 'checking' | 'undetermined' | 'granted' | 'denied' | 'blocked' | 'services_off' | 'web';
+type Perm = 'checking' | 'undetermined' | 'granted' | 'denied' | 'blocked' | 'approximate' | 'services_off' | 'web';
+/** The demo route always starts from zero: 0.00 km, 0:00. */
+const DEMO_START = 0;
+
+/** Approximate (coarse / reduced-accuracy) location can't record a reliable route or claim territory. */
+function isApproximate(p: Location.LocationPermissionResponse) {
+  if (Platform.OS === 'android') return p.android?.accuracy != null && p.android.accuracy !== 'fine';
+  if (Platform.OS === 'ios') return p.ios?.accuracy === 'reduced';
+  return false;
+}
 type Outcome = Verdict | 'processing';
 type Source = 'gps' | 'demo';
 const STAGE_TEXT = { uploading: 'Uploading your route…', finishing: 'Closing it out…', polling: 'Verifying your activity…' } as const;
@@ -123,7 +132,8 @@ export default function Run() {
       try {
         const p = await Location.getForegroundPermissionsAsync();
         if (cancelled) return;
-        if (p.status === 'granted') {
+        if (p.status === 'granted' && isApproximate(p)) setPerm('approximate');
+        else if (p.status === 'granted') {
           const sub = await startWatch();
           if (cancelled) sub?.remove();
           else watchRef.current = sub ?? null;
@@ -140,9 +150,10 @@ export default function Run() {
 
   const askPermission = async () => {
     tap();
-    if (perm === 'blocked') return Linking.openSettings();
+    if (perm === 'blocked' || perm === 'approximate') return Linking.openSettings();
     const p = await Location.requestForegroundPermissionsAsync();
-    if (p.status === 'granted') {
+    if (p.status === 'granted' && isApproximate(p)) setPerm('approximate');
+    else if (p.status === 'granted') {
       watchRef.current?.remove();
       watchRef.current = (await startWatch()) ?? null;
     } else setPerm(p.canAskAgain ? 'denied' : 'blocked');
@@ -220,11 +231,13 @@ export default function Run() {
   }, [km, progress]);
 
   const start = (src: Source) => {
+    // A real activity needs precise location permission — never start one without it.
+    if (src === 'gps' && perm !== 'granted') return;
     tap('impact');
     setSource(src);
     setTrack(emptyTrack());
-    setSec(0);
-    demoMeters.current = 0;
+    setSec(src === 'demo' ? DEMO_START : 0);
+    demoMeters.current = DEMO_START;
     lastKmMarker.current = 0;
     setNotice(null);
     setCount(3);
@@ -352,6 +365,7 @@ export default function Run() {
     setPhase('done');
   };
 
+  const discardConfirmed = useRef(false);
   const discard = () => {
     if (!confirmDiscard) {
       tap();
@@ -359,8 +373,21 @@ export default function Run() {
       return;
     }
     tap('impact');
+    discardConfirmed.current = true;
     router.back();
   };
+  // Back gesture / hardware back during an activity asks first — a run is never dropped silently.
+  const navigation = useNavigation();
+  useEffect(
+    () =>
+      navigation.addListener('beforeRemove', (e) => {
+        if (discardConfirmed.current || (phaseRef.current !== 'running' && phaseRef.current !== 'paused')) return;
+        e.preventDefault();
+        tap();
+        setConfirmDiscard(true);
+      }),
+    [navigation],
+  );
   const close = () => (phase === 'running' || phase === 'paused' ? discard() : router.back());
 
   // ---- Render
@@ -384,7 +411,7 @@ export default function Run() {
 
   return (
     <View style={styles.root}>
-      <StatusBar style="light" />
+      <StatusBar style={statusBarStyle} />
       <View style={{ height: heroH }}>
         {zoneList.length ? (
           <CampusMap zones={zoneList} meId={meId} route={route} me={here} interactive={false} style={[StyleSheet.absoluteFill, { borderRadius: 0, borderWidth: 0 }]} />
@@ -430,20 +457,34 @@ export default function Run() {
             <View style={styles.permBox}>
               <Icon name={perm === 'services_off' ? 'map-marker-off-outline' : perm === 'web' ? 'monitor' : 'map-marker-alert-outline'} size={26} color={colors.gold} />
               <Text style={styles.permTitle}>
-                {perm === 'web' ? 'GPS tracking needs the phone app' : perm === 'services_off' ? 'Location services are off' : perm === 'blocked' ? 'Location is blocked for Squirrel' : 'Squirrel needs your location'}
+                {perm === 'web'
+                  ? 'GPS tracking needs the phone app'
+                  : perm === 'services_off'
+                    ? 'Location services are off'
+                    : perm === 'approximate'
+                      ? 'Precise location required'
+                      : perm === 'undetermined'
+                        ? 'Squirrel needs your location'
+                        : 'Location required'}
               </Text>
               <Text style={styles.setupText}>
                 {perm === 'web'
                   ? 'The web preview can’t read GPS. You can try a demo route instead — it’s clearly marked and never counts as a real activity.'
                   : perm === 'services_off'
                     ? 'Turn on location in your phone settings, then come back.'
-                    : 'We use it only while you record, to draw your route and check which zones you moved through. Other people never see your location.'}
+                    : perm === 'approximate'
+                      ? 'Approximate location can’t record a reliable route. Switch Squirrel to Precise location in Settings.'
+                      : perm === 'undetermined'
+                        ? 'We use it only while you record, to draw your route and check which zones you moved through. Other people never see your location.'
+                        : 'Turn on location permission to track your run.'}
               </Text>
-              {perm !== 'web' && perm !== 'services_off' && (
-                <Button label={perm === 'blocked' ? 'Open settings' : 'Allow location'} iconLeft="crosshairs-gps" size="md" onPress={askPermission} style={{ alignSelf: 'stretch', marginTop: 10 }} />
+              {perm === 'undetermined' && <Button label="Allow location" iconLeft="crosshairs-gps" size="md" onPress={askPermission} style={{ alignSelf: 'stretch', marginTop: 10 }} />}
+              {(perm === 'denied' || perm === 'blocked' || perm === 'approximate' || perm === 'services_off') && (
+                <Button label="Open settings" iconLeft="cog-outline" size="md" onPress={() => void Linking.openSettings()} style={{ alignSelf: 'stretch', marginTop: 10 }} />
               )}
-              {perm === 'services_off' && <Button label="Open settings" iconLeft="cog-outline" size="md" onPress={() => Linking.openSettings()} style={{ alignSelf: 'stretch', marginTop: 10 }} />}
-              <Button label="Try a demo route" variant="secondary" size="md" onPress={() => start('demo')} style={{ alignSelf: 'stretch', marginTop: 8 }} />
+              {perm === 'denied' && <Button label="Ask again" variant="ghost" size="md" onPress={askPermission} style={{ alignSelf: 'stretch', marginTop: 6 }} />}
+              {/* The labelled demo is only offered where GPS can't exist (the web preview). */}
+              {perm === 'web' && <Button label="Try a demo route" variant="secondary" size="md" onPress={() => start('demo')} style={{ alignSelf: 'stretch', marginTop: 8 }} />}
             </View>
           )}
         </ScrollView>
@@ -574,9 +615,9 @@ const styles = StyleSheet.create({
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: 16, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' },
   col: { paddingHorizontal: 16, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' },
   header: { flexDirection: 'row', alignItems: 'center' },
-  gps: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(10,10,10,0.8)', borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1 },
+  gps: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: alpha(colors.panel, 0.88), borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1 },
   gpsText: { fontFamily: fonts.label, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },
-  notice: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', marginTop: 10, backgroundColor: 'rgba(10,10,10,0.9)', borderRadius: radius.md, borderWidth: 1, borderColor: 'rgba(255,210,31,0.5)', padding: 10 },
+  notice: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', marginTop: 10, backgroundColor: alpha(colors.panel, 0.93), borderRadius: radius.md, borderWidth: 1, borderColor: alpha(colors.gold, 0.5), padding: 10 },
   noticeText: { flex: 1, color: colors.sub, fontFamily: fonts.regular, fontSize: 12, lineHeight: 17 },
   setupText: { color: colors.dim, fontFamily: fonts.regular, fontSize: 13, lineHeight: 19, marginTop: 10, textAlign: 'left' },
   permBox: { marginTop: 16, alignItems: 'center', backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, padding: 16, gap: 4 },
@@ -593,7 +634,7 @@ const styles = StyleSheet.create({
   pauseWrap: { alignItems: 'center', justifyContent: 'center', borderRadius: 56, shadowColor: colors.primary, shadowOpacity: 0.7, shadowRadius: 24, shadowOffset: { width: 0, height: 0 }, elevation: 14 },
   pause: { width: 104, height: 104, borderRadius: 52, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary },
   hint: { color: colors.mute, fontSize: 11, fontFamily: fonts.mono, textAlign: 'center', marginTop: 14 },
-  overlayFull: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(10,10,10,0.92)', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  overlayFull: { ...StyleSheet.absoluteFill, backgroundColor: alpha(colors.panel, 0.94), alignItems: 'center', justifyContent: 'center', padding: 20 },
   countText: { color: colors.primary, fontFamily: fonts.display, fontSize: 150 },
   countSub: { color: colors.onImageSub, fontFamily: fonts.mono, fontSize: 14, letterSpacing: 2, textTransform: 'uppercase' },
   summary: { width: '100%', maxWidth: 440, alignItems: 'center', backgroundColor: colors.bg2, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.line, padding: 16 },

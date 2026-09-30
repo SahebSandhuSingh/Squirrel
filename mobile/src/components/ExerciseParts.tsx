@@ -1,7 +1,7 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { formScoreColor } from '@/api/exercise';
 import { Icon, Ring, tap } from '@/components/ui';
-import { colors, fonts, radius } from '@/theme';
+import { alpha, colors, fonts, radius } from '@/theme';
 
 /** Loading / error row for a remote section. Renders nothing once data is in and fresh. */
 export function RemoteStatus({ loading, error, hasData, onRetry, label }: { loading: boolean; error: string | null; hasData: boolean; onRetry: () => void; label: string }) {
@@ -80,7 +80,7 @@ export function ScoreRing({ score, size = 76, label = 'form' }: { score: number 
 }
 
 const styles = StyleSheet.create({
-  err: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,92,122,0.08)', borderColor: 'rgba(255,92,122,0.35)', borderWidth: 1, borderRadius: radius.md, padding: 10, marginBottom: 10 },
+  err: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: alpha(colors.coral, 0.08), borderColor: alpha(colors.coral, 0.35), borderWidth: 1, borderRadius: radius.md, padding: 10, marginBottom: 10 },
   errText: { flex: 1, color: colors.text, fontFamily: fonts.regular, fontSize: 12, lineHeight: 17 },
   retry: { color: colors.primary, fontFamily: fonts.labelBold, fontSize: 13, letterSpacing: 1, textTransform: 'uppercase' },
   loading: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 14 },

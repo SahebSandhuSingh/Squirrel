@@ -1,4 +1,4 @@
-import type { Territory } from '@/api/campus';
+import type { Territory, TerritoryStatus } from '@/api/campus';
 import type { IconName } from '@/data/icons';
 import { colors } from '@/theme';
 
@@ -51,3 +51,16 @@ export const untilTime = (iso: string | null | undefined) => {
 };
 
 export const km = (m: number | null | undefined, digits = 1) => (m == null ? '—' : `${(m / 1000).toFixed(digits)} km`);
+
+
+/** The backend's territory status; derived from owner/under_challenge only for servers that don't send it. */
+export const displayStatus = (t: Territory | undefined): TerritoryStatus | 'unknown' =>
+  !t ? 'unknown' : t.status ?? (!t.owner ? 'neutral' : t.under_challenge ? 'under_attack' : 'controlled');
+
+export const STATUS_UI: Record<TerritoryStatus | 'unknown', { label: string; color: string; icon: IconName }> = {
+  neutral: { label: 'Neutral', color: colors.mute, icon: 'flag-outline' },
+  controlled: { label: 'Controlled', color: colors.secondary, icon: 'flag-variant' },
+  contested: { label: 'Contested', color: colors.gold, icon: 'sword-cross' },
+  under_attack: { label: 'Under attack', color: colors.orange, icon: 'shield-alert' },
+  unknown: { label: 'Loading', color: colors.lineHi, icon: 'dots-horizontal' },
+};

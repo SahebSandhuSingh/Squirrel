@@ -1,185 +1,263 @@
 /**
- * CAMPUS MAP (the Map tab). Fixed named zones, their owners and territory state, your own
- * territories vs everyone else's, live ownership updates, and zone details on tap.
+ * MAP — Squirrel Social's persistent social world. See the campus, its territories, points of
+ * interest and the Squirrels around you; tap someone → card → POKE 👋. Everything shown (who
+ * appears, where roughly, who holds what, relationship state) comes from the backend.
  */
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { Animated, Easing, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { realtimeMode } from '@/api/campus';
-import { CampusMap } from '@/components/campus/CampusMap';
+import { Mascot } from '@/art/Mascot';
+import type { Heatmap, HeatWindow, MapPlayer, Zone } from '@/api/campus/types';
+import { getHeatmap } from '@/api/campus/discovery';
 import { ErrorState, SourceBadge } from '@/components/campus/States';
-import { RELATION_COLOR, relationOf, UNDER_ATTACK } from '@/components/campus/territoryUi';
-import { ZonePanel } from '@/components/campus/ZonePanel';
-import { Display, Icon, IconButton, Kicker, Pulse, Segmented, TAB_BAR_SPACE, tap } from '@/components/ui';
-import { useMe, useTerritorySync, useZones } from '@/hooks/useCampus';
-import { useAllTerritories, useTerritory } from '@/state/territoryStore';
-import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
+import { relationOf } from '@/components/campus/territoryUi';
+import { EmptyNearby, MapBanner, MapHeader, MapSheet, NearbyUsersSheet, PlayerSheet, PoiSheet, TerritorySheet } from '@/components/map/MapChrome';
+import { inPolygon, makeProjection } from '@/components/map/geometry';
+import { WorldMap, type WorldMapHandle } from '@/components/map/WorldMap';
+import { HeatPanel } from '@/components/map/HeatPanel';
+import { Icon, NATIVE, tap } from '@/components/ui';
+import { useCampus, useConfig, useMe, useRefreshOnFocus, useTerritorySync } from '@/hooks/useCampus';
+import { useMapWorld, useNearbyPlayers } from '@/hooks/useMap';
+import { requestLocation, setPresenceReporting, startLocationWatch, useLocation } from '@/state/locationStore';
+import { useAllTerritories } from '@/state/territoryStore';
+import { useApp } from '@/state/AppState';
+import { alpha, colors, fonts, mapColors, radius } from '@/theme';
 
-const VIEWS = ['Map', 'Zones'] as const;
-type View_ = (typeof VIEWS)[number];
+type Sheet = { kind: 'player'; player: MapPlayer } | { kind: 'zone'; zone: Zone } | { kind: 'poi'; id: string } | { kind: 'list'; players: MapPlayer[]; title: string } | null;
 
-export default function CampusMapScreen() {
+export default function MapScreen() {
   const insets = useSafeAreaInsets();
-  const zones = useZones();
+  const { toast } = useApp();
   const me = useMe();
+  const config = useConfig();
+  const world = useMapWorld();
   const sync = useTerritorySync();
+  const players = useNearbyPlayers();
   const territories = useAllTerritories();
-  const [sel, setSel] = useState<string | null>(null);
-  const [view, setView] = useState<View_>('Map');
+  const mapRef = useRef<WorldMapHandle>(null);
+  const [sheet, setSheet] = useState<Sheet>(null);
+  // Map → Heat: an optional layer; fetched only while it's on.
+  const [heatOn, setHeatOn] = useState(false);
+  const [heatWindow, setHeatWindow] = useState<HeatWindow>('24h');
+  const heat = useCampus<Heatmap>(`map:heat:${heatWindow}`, () => getHeatmap(heatWindow), { enabled: heatOn });
+  useRefreshOnFocus(heat.reload, 60_000);
   const meId = me.data?.user_id ?? null;
-  // Bring the zone panel into view once per selection (it renders below the map).
-  const scrollRef = useRef<ScrollView>(null);
-  const scrolledFor = useRef<string | null>(null);
 
-  const counts = useMemo(() => {
-    let mine = 0;
-    let held = 0;
-    let attacked = 0;
-    for (const t of territories) {
-      const r = relationOf(t, meId);
-      if (r === 'mine') mine++;
-      if (t.owner) held++;
-      if (r === 'mine' && t.under_challenge) attacked++;
-    }
-    return { mine, held, attacked };
-  }, [territories, meId]);
-  const select = useCallback((id: string) => setSel((cur) => (cur === id ? null : id)), []);
-  const zoneList = zones.data ?? [];
-  const live = realtimeMode();
-
-  return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <ScrollView ref={scrollRef} contentContainerStyle={[styles.col, { paddingTop: insets.top + 10, paddingBottom: TAB_BAR_SPACE + insets.bottom + 10 }]} showsVerticalScrollIndicator={false}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Kicker>Campus map</Kicker>
-              <SourceBadge />
-            </View>
-            <Display size={34} style={{ marginTop: 2 }}>Own <Text style={{ color: colors.primary }}>your</Text> campus</Display>
-          </View>
-          <IconButton icon="trophy-outline" onPress={() => router.push('/leaderboard')} label="Leaderboards" />
-        </View>
-
-        <View style={styles.stats}>
-          <Stat v={String(counts.mine)} l="Yours" c={colors.primary} />
-          <Stat v={`${counts.held}/${zoneList.length || '—'}`} l="Zones held" />
-          <Stat v={String(counts.attacked)} l="Under attack" c={counts.attacked ? UNDER_ATTACK : undefined} />
-          <View style={styles.live} accessibilityLabel={live === 'focus' ? 'Refreshes when you open the map' : 'Live updates on'}>
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: live === 'focus' ? colors.dim : colors.green }}>{live !== 'focus' && <Pulse size={8} color={colors.green} />}</View>
-            <Text style={styles.liveText}>{live === 'focus' ? 'Auto-refresh' : 'Live'}</Text>
-          </View>
-        </View>
-
-        <Segmented items={VIEWS} value={view} onChange={setView} style={{ marginTop: 10 }} />
-
-        {zones.error && !zones.data ? (
-          <ErrorState cause={zones.cause} onRetry={zones.reload} />
-        ) : view === 'Map' ? (
-          <>
-            {zoneList.length ? (
-              <CampusMap zones={zoneList} meId={meId} selectedId={sel} onSelect={select} style={styles.map} />
-            ) : (
-              <View style={[styles.map, styles.mapLoading]}>
-                <Text style={styles.meta}>Loading campus zones…</Text>
-              </View>
-            )}
-            <View style={styles.legend}>
-              {[
-                ['Yours', RELATION_COLOR.mine, false],
-                ['Held by others', RELATION_COLOR.other, false],
-                ['Unclaimed', RELATION_COLOR.unclaimed, true],
-                ['Under attack', UNDER_ATTACK, true],
-              ].map(([l, c, dashed]) => (
-                <View key={String(l)} style={styles.legendItem}>
-                  <View style={[styles.swatch, { borderColor: String(c), borderStyle: dashed ? 'dashed' : 'solid' }]} />
-                  <Text style={styles.legendText}>{l}</Text>
-                </View>
-              ))}
-            </View>
-            {!!sync.error && <ErrorState cause={sync.error} onRetry={sync.reload} compact title="Territories didn’t load" />}
-          </>
-        ) : (
-          <View style={{ gap: 8, marginTop: 4 }}>
-            {zoneList.map((z) => (
-              <ZoneRow key={z.id} id={z.id} name={z.name} meId={meId} selected={sel === z.id} onPress={() => select(z.id)} />
-            ))}
-          </View>
-        )}
-
-        {sel ? (
-          <View
-            style={styles.panel}
-            onLayout={(e) => {
-              if (scrolledFor.current === sel) return;
-              scrolledFor.current = sel;
-              scrollRef.current?.scrollTo({ y: Math.max(0, e.nativeEvent.layout.y - 12), animated: true });
-            }}>
-            <Pressable onPress={() => { tap(); setSel(null); }} style={styles.close} accessibilityRole="button" accessibilityLabel="Close zone">
-              <Icon name="close" size={18} color={colors.dim} />
-            </Pressable>
-            <ZonePanel key={sel} zoneId={sel} meId={meId} showOpen />
-          </View>
-        ) : (
-          <Pressable onPress={() => router.push('/run')} style={styles.hint} accessibilityRole="button" accessibilityLabel="Start a run">
-            <Icon name="gesture-tap" size={18} color={colors.primary} />
-            <Text style={styles.hintText}>Tap a zone to see who holds it. Run or walk through a zone to become eligible to claim it — crossing it alone never claims it.</Text>
-            <Icon name="run-fast" size={20} color={colors.primary} />
-          </Pressable>
-        )}
-      </ScrollView>
-    </View>
+  // Your location: watched only while the Map is on screen; presence reported (throttled) for discovery.
+  useFocusEffect(
+    useCallback(() => {
+      const stop = startLocationWatch();
+      setPresenceReporting(true);
+      return () => {
+        setPresenceReporting(false);
+        stop();
+      };
+    }, []),
   );
-}
 
-function Stat({ v, l, c }: { v: string; l: string; c?: string }) {
-  return (
-    <View style={{ flex: 1 }}>
-      <Text style={[styles.statV, c ? { color: c } : null]}>{v}</Text>
-      <Text style={styles.statL}>{l}</Text>
-    </View>
+  const zones = useMemo(() => world.data?.zones ?? [], [world.data]);
+  const features = world.data?.features ?? null;
+  const list = useMemo(() => players.data?.players ?? [], [players.data]);
+  const zonesHeld = useMemo(() => territories.filter((t) => relationOf(t, meId) === 'mine').length, [territories, meId]);
+
+  const onPlayer = useCallback(
+    (id: string) => {
+      const p = players.data?.players.find((x) => x.user_id === id);
+      if (p) setSheet({ kind: 'player', player: p });
+    },
+    [players.data],
   );
-}
+  const onZone = useCallback(
+    (id: string) => {
+      const z = world.data?.zones.find((x) => x.id === id);
+      if (z) setSheet({ kind: 'zone', zone: z });
+    },
+    [world.data],
+  );
+  const onPoi = useCallback((id: string) => setSheet({ kind: 'poi', id }), []);
+  const onCluster = useCallback((ps: MapPlayer[]) => setSheet({ kind: 'list', players: ps, title: `${ps.length} Squirrels here` }), []);
 
-function ZoneRow({ id, name, meId, selected, onPress }: { id: string; name: string; meId: string | null; selected: boolean; onPress: () => void }) {
-  const t = useTerritory(id);
-  const rel = relationOf(t, meId);
-  const c = t?.under_challenge ? UNDER_ATTACK : RELATION_COLOR[rel];
+  const tabH = 64 + Math.max(insets.bottom, 10);
+  const headerTop = insets.top + 8;
+  const loaded = !!players.data;
+  const showEmpty = loaded && list.length === 0 && !sheet && !heatOn;
+  const showHeat = heatOn && !sheet;
+  const poi = sheet?.kind === 'poi' ? features?.pois.find((p) => p.id === sheet.id) : undefined;
+
   return (
-    <Pressable onPress={() => { tap(); onPress(); }} style={[styles.zoneRow, selected && { borderColor: c }]} accessibilityRole="button" accessibilityLabel={`${name}: ${rel}`}>
-      <View style={[styles.zoneDot, { backgroundColor: c }]} />
-      <View style={{ flex: 1 }}>
-        <Text style={styles.zoneName}>{name}</Text>
-        <Text style={styles.meta}>
-          {rel === 'mine' ? 'Your territory' : rel === 'other' ? `Held by ${t?.owner?.display_name}` : rel === 'unclaimed' ? 'Unclaimed' : '…'}
-          {t?.under_challenge ? ' · under attack' : ''}
-        </Text>
+    <View style={{ flex: 1, backgroundColor: mapColors.bg }}>
+      {world.data ? (
+        <WorldMap
+          ref={mapRef}
+          zones={zones}
+          features={features}
+          meId={meId}
+          me="watch"
+          players={list}
+          pois={features?.pois}
+          selectedZoneId={sheet?.kind === 'zone' ? sheet.zone.id : null}
+          selectedPlayerId={sheet?.kind === 'player' ? sheet.player.user_id : null}
+          onSelectPlayer={onPlayer}
+          onSelectZone={onZone}
+          onSelectPoi={onPoi}
+          onSelectCluster={onCluster}
+          heat={heatOn && heat.data?.available ? heat.data.cells : null}
+          controlsInset={{ bottom: tabH + 56 + (showEmpty ? 84 : 0) + (showHeat ? 118 : 0) }}
+          style={styles.map}
+        />
+      ) : world.error ? (
+        <View style={[styles.center, { paddingTop: headerTop + 80 }]}>
+          <ErrorState cause={world.cause} onRetry={world.reload} title="The map didn’t load" />
+        </View>
+      ) : (
+        <MapLoading />
+      )}
+
+      <LiveHeader zones={zones} campus={config.data?.campus.name ?? 'Your campus'} zonesHeld={zonesHeld} top={headerTop} />
+
+      {/* Status banners: they never block or wipe the map */}
+      <View style={[styles.banners, { top: headerTop + 64 }]} pointerEvents="box-none">
+        <SourceBadge style={{ alignSelf: 'center' }} />
+        {/* One banner at a time, most important first, so the map stays visible. */}
+        {players.error ? (
+          <MapBanner icon="wifi-off" tone="error" text={loaded ? 'Couldn’t refresh nearby Squirrels. Showing the last update.' : 'Couldn’t load nearby Squirrels.'} action="Retry" onAction={players.reload} />
+        ) : sync.error ? (
+          <MapBanner icon="flag-remove-outline" tone="error" text="Territories didn’t refresh." action="Retry" onAction={sync.reload} />
+        ) : (
+          <LocationBanner
+            fallback={
+              players.data && !players.data.visible && !!players.data.hidden_reason ? (
+                <MapBanner icon="eye-off-outline" tone="info" text={players.data.hidden_reason} action="Settings" onAction={() => router.push('/active')} />
+              ) : null
+            }
+          />
+        )}
       </View>
-      <Icon name="chevron-right" size={20} color={colors.dim} />
-    </Pressable>
+
+      {world.data && (
+        <View style={[styles.controls, { bottom: tabH + 12 }]} pointerEvents="box-none">
+          <Pressable
+            onPress={() => {
+              tap();
+              setSheet({ kind: 'list', players: list, title: `${list.length} Squirrels nearby` });
+            }}
+            style={styles.nearby}
+            accessibilityRole="button"
+            accessibilityLabel={`${list.length} Squirrels nearby. Open list`}>
+            <Text style={styles.nearbyEmoji} accessibilityElementsHidden>🐿️</Text>
+            <Text style={styles.nearbyText}>{loaded ? `${list.length} nearby` : 'Finding…'}</Text>
+          </Pressable>
+          <View style={{ flex: 1 }} />
+          <Pressable
+            onPress={() => {
+              tap();
+              setHeatOn((v) => !v);
+            }}
+            style={[styles.recenter, { marginRight: 8 }, heatOn && { borderColor: colors.secondary, backgroundColor: alpha(colors.secondary, 0.12) }]}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: heatOn }}
+            accessibilityLabel="Activity heatmap">
+            <Icon name="fire" size={20} color={heatOn ? colors.secondary : colors.text} />
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              tap();
+              if (!mapRef.current?.recenter()) toast('No location yet — allow location to recenter', 'crosshairs-question', colors.gold);
+            }}
+            style={styles.recenter}
+            accessibilityRole="button"
+            accessibilityLabel="Recenter on me">
+            <Icon name="crosshairs-gps" size={20} color={colors.primary} />
+          </Pressable>
+        </View>
+      )}
+
+      {showHeat && (
+        <View style={[styles.emptyWrap, { bottom: tabH + 64 }]}>
+          <HeatPanel window={heatWindow} onWindow={setHeatWindow} data={heat.data} loading={heat.loading} error={heat.error ? heat.cause : null} onRetry={heat.reload} onClose={() => setHeatOn(false)} />
+        </View>
+      )}
+
+      {showEmpty && (
+        <View style={[styles.emptyWrap, { bottom: tabH + 64 }]}>
+          <EmptyNearby onWalk={() => router.push({ pathname: '/run', params: { type: 'walk' } })} />
+        </View>
+      )}
+
+      {sheet && (
+        <MapSheet
+          key={sheet.kind === 'player' ? sheet.player.user_id : sheet.kind === 'zone' ? sheet.zone.id : sheet.kind === 'poi' ? sheet.id : 'list'}
+          bottom={tabH + 4}
+          onClose={() => setSheet(null)}
+          label={sheet.kind === 'player' ? `${sheet.player.display_name} card` : sheet.kind === 'zone' ? `${sheet.zone.name} territory` : sheet.kind === 'poi' ? 'Point of interest' : 'Nearby Squirrels'}>
+          {sheet.kind === 'player' && <PlayerSheet player={sheet.player} />}
+          {sheet.kind === 'zone' && <TerritorySheet zone={sheet.zone} meId={meId} />}
+          {sheet.kind === 'poi' && poi && <PoiSheet poi={poi} zones={zones} />}
+          {sheet.kind === 'list' && <NearbyUsersSheet players={sheet.players} title={sheet.title} />}
+        </MapSheet>
+      )}
+    </View>
+  );
+}
+
+/** The header subscribes to your location itself, so GPS updates don't re-render the screen. */
+function LiveHeader({ zones, campus, zonesHeld, top }: { zones: Zone[]; campus: string; zonesHeld: number; top: number }) {
+  const loc = useLocation();
+  const proj = useMemo(() => makeProjection(zones), [zones]);
+  const where = useMemo(() => {
+    if (!loc.position || !proj) return null;
+    const p = proj.project(loc.position);
+    const z = zones.find((zz) => inPolygon(p, zz.polygon.map((q) => proj.project(q))));
+    return z ? `Near ${z.name}` : 'On campus';
+  }, [loc.position, proj, zones]);
+  return <MapHeader campus={campus} where={loc.simulated && where ? `${where} · demo location` : where} zonesHeld={zonesHeld} top={top} />;
+}
+
+function LocationBanner({ fallback }: { fallback: React.ReactNode }) {
+  const loc = useLocation();
+  if (loc.permission === 'granted' || loc.permission === 'checking') return <>{fallback}</>;
+  // The header already says "demo location"; an actionable banner wins over this note.
+  if (loc.simulated) return fallback ? <>{fallback}</> : <MapBanner icon="map-marker-question-outline" tone="info" text="No GPS here — showing a demo location. On your phone, allow location to see who’s around you." />;
+  const text =
+    loc.permission === 'services_off'
+      ? 'Location services are off. Nearby discovery needs your location.'
+      : loc.permission === 'unsupported'
+        ? 'Nearby discovery needs the phone app’s GPS.'
+        : 'Location permission is needed for nearby discovery. Others only ever see an approximate area.';
+  const action = loc.permission === 'blocked' || loc.permission === 'services_off' ? 'Settings' : loc.permission === 'unsupported' ? undefined : 'Allow';
+  return <MapBanner icon="map-marker-off-outline" tone="warn" text={text} action={action} onAction={action === 'Settings' ? () => void Linking.openSettings() : () => void requestLocation()} />;
+}
+
+/** Loading: the world "develops" while the wingman scouts. */
+function MapLoading() {
+  const [v] = useState(() => new Animated.Value(0));
+  useFocusEffect(
+    useCallback(() => {
+      const loop = Animated.loop(Animated.timing(v, { toValue: 1, duration: 1600, easing: Easing.inOut(Easing.quad), useNativeDriver: NATIVE }));
+      loop.start();
+      return () => loop.stop();
+    }, [v]),
+  );
+  return (
+    <View style={[StyleSheet.absoluteFill, styles.center]} accessibilityLabel="Loading the map" accessibilityRole="progressbar">
+      <Animated.View style={[styles.scan, { opacity: v.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 0.6, 0] }), transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [-240, 240] }) }] }]} />
+      <Mascot pose="run" size={110} animated />
+      <Text style={styles.loadingText}>Loading your world…</Text>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  col: { paddingHorizontal: 16, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' },
-  stats: { flexDirection: 'row', alignItems: 'center', marginTop: 12, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.line, paddingVertical: 10 },
-  statV: { color: colors.text, fontFamily: fonts.labelBold, fontSize: 22 },
-  statL: { color: colors.dim, fontFamily: fonts.mono, fontSize: 10, letterSpacing: 0.8, textTransform: 'uppercase' },
-  live: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: colors.line, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
-  liveText: { color: colors.sub, fontFamily: fonts.label, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' },
-  map: { height: 420, marginTop: 10 },
-  mapLoading: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line },
-  legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 10 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  swatch: { width: 16, height: 10, borderWidth: 2 },
-  legendText: { color: colors.sub, fontFamily: fonts.label, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },
-  panel: { marginTop: 14, backgroundColor: colors.bg2, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.line, padding: 16 },
-  close: { position: 'absolute', right: 10, top: 10, zIndex: 2, width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card },
-  hint: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, borderStyle: 'dashed', padding: 12 },
-  hintText: { flex: 1, color: colors.dim, fontFamily: fonts.regular, fontSize: 12, lineHeight: 17 },
-  meta: { color: colors.dim, fontFamily: fonts.mono, fontSize: 11 },
-  zoneRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, padding: 12 },
-  zoneDot: { width: 12, height: 12, borderRadius: 6 },
-  zoneName: { color: colors.text, fontFamily: fonts.label, fontSize: 15, letterSpacing: 0.6, textTransform: 'uppercase' },
+  map: { ...StyleSheet.absoluteFill, borderRadius: 0, borderWidth: 0 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
+  banners: { position: 'absolute', left: 12, right: 12, gap: 6 },
+  controls: { position: 'absolute', left: 12, right: 12, flexDirection: 'row', alignItems: 'center' },
+  nearby: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: alpha(colors.panel, 0.93), borderRadius: radius.pill, borderWidth: 1, borderColor: alpha(colors.primary, 0.4), paddingHorizontal: 14, paddingVertical: 9 },
+  nearbyEmoji: { fontSize: 15 },
+  nearbyText: { color: colors.text, fontFamily: fonts.labelBold, fontSize: 14, letterSpacing: 0.8, textTransform: 'uppercase' },
+  recenter: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: alpha(colors.panel, 0.94), borderWidth: 1, borderColor: colors.lineHi },
+  emptyWrap: { position: 'absolute', left: 12, right: 12 },
+  scan: { position: 'absolute', left: 0, right: 0, height: 90, backgroundColor: alpha(colors.primary, 0.06) },
+  loadingText: { color: colors.dim, fontFamily: fonts.label, fontSize: 14, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 10 },
 });

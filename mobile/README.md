@@ -38,9 +38,9 @@ Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-h
 | `/welcome` | **Live at IISER Kolkata**: IISER-only messaging, `.ac.in` CTA, live user / zone / crew counters (from the backend), campus map visual, Founding Squirrel |
 | `/avatar` | **Make It You**: body, hair, outfit, shoes, accessories, gear, emotes and pet mascot |
 | `/home` *(tab)* | Top bar, greeting, activity rings, Start Exercise, Start Run, missions, **your territory** (under-attack alerts), **Active now**, Friend Mode / Challenges shortcuts, today's top squirrels, campus events, crew activity |
-| `/explore` *(Map tab)* | **Campus map**: fixed zones from their polygons, coloured by territory (yours / held / unclaimed / under attack), pinch/zoom, live updates, list view, zone panel with actions |
+| `/explore` *(Map tab)* | **Squirrel Social Map**: full-screen game world (terrain, roads, buildings, POIs), territories by status (neutral / controlled / contested / under attack), your avatar marker, nearby Squirrels with clustering, player / territory / POI sheets, nearby list with search, Poke from any card |
 | **＋** *(tab)* | Create menu: start run, post, log workout; log water, log a meal and find an event are locked (coming soon) |
-| `/social` *(tab)* | Stories, For You / Following / Nearby feed, suggested people, crews teaser |
+| `/social` *(tab)* | Stories, For You / Following / Nearby feed, **Squirrels near you** (with Poke), suggested people, crews teaser |
 | `/profile` *(tab)* | **Campus profile**: photo, name, bio, connection mode, Founding Squirrel, Open to Meet toggle, activity stats (distance, month, zones, defended, stolen, crews, events, streak), territory, crews, badges, activity history, verification. (The offline demo profile when the campus backend is off.) |
 | `/edit-profile` | Name, bio, connection mode, hostel |
 | `/run` | **Run / Walk**: pick activity, permission handling, live GPS route on the campus map, distance/duration/pace, pause, finish or discard; summary with route, **zones interacted with / eligible**, and the backend-allowed claim action. Upload retry on network failure |
@@ -62,7 +62,9 @@ Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-h
 | `/highlight/[id]` | Full-screen story viewer for profile highlights |
 | `/user/[id]` | Anyone's campus profile: shared context, icebreakers, Challenge |
 | `/city` | City picker |
-| `/notifications` | Activity notifications |
+| `/shared`, `/shared/[id]` | **Shared zones**: everyone you share ground with; “You’ve both been here” with one person (zone-level only) |
+| `/ambassador` | **Become a Squirrel ambassador**: backend-defined form, then application status |
+| `/notifications` | **Pokes & friends** (Poke Back inline) and campus notifications from the backend; demo list when the campus backend is off |
 
 ## Not launched yet (locked)
 
@@ -70,7 +72,12 @@ Everything ships in Expo Go (`react-native-svg`, `expo-linear-gradient`, `expo-h
 - `LOCKED.mealWater`: Log water / Log a meal (Create sheet), the water and meal daily missions, and the Hydro Homie badge.
 - `LOCKED.stories`: story bubbles on Social show a "Coming soon" toast and open the profile. Posting your own story via the composer still works.
 - `LOCKED.partnerHunt`: the Social tab card and every `/partner-hunt` route (the layout renders the locked preview). The future flow and model (preferences by campus, interests, activities, availability and goals; buddy profile; connection status) are in `data/partnerHunt.ts`. There is no matching logic and no buddy data yet.
-- `LOCKED.events` is now **off**: events launched with the campus backend (RSVPs are server-side).
+- `LOCKED.events` is **on** (not launching yet):
+  - `/events` and `/event/[id]` render the Coming Soon screen, deep links included.
+  - Home hides "Happening on campus" and its Study Break Walk card.
+  - Event rows (Crew, Home, Events) and event notifications show the "Events are coming soon" toast.
+  - `StudyBreakCard` renders nothing while locked, so JOIN WALK can't be pressed anywhere.
+  - Meetups doesn't offer "Browse events". The Create sheet's "Find an event" was already gated.
 
 Locked missions are listed last and left out of the done/XP counters and claimable rewards. Set a flag to `false` at launch.
 
@@ -110,19 +117,172 @@ WS   realtime_url  →  territory.updated · stats.updated · invite.updated · 
 
 **Live updates and performance.** `state/territoryStore.ts` keeps one territory per zone (highest `version` wins). Each map polygon subscribes to its own zone, so one ownership change repaints one polygon. Pan/zoom is an `Animated` transform (no SVG re-render). Updates arrive over the WebSocket when configured; otherwise screens refresh on focus (at most once a minute) — no tight polling.
 
-**Privacy.** The app never shows another person's location or route: Active Now uses coarse proximity buckets from the backend, and only your own route is drawn. Nearby people are shown only while you're Open to Meet. No secrets in `EXPO_PUBLIC_*`.
+**Privacy.** The app never shows another person's exact location or route: the Map draws only the approximate, backend-snapped positions it is given, Active Now uses coarse proximity buckets, and only your own route is drawn. Nearby people are shown only while you're Open to Meet. No secrets in `EXPO_PUBLIC_*`.
 
 **Sign-in.** `.ac.in` emails get a one-time code (`POST {AUTH_URL}/email/start`, `/email/verify` → `{ access_token }` — an assumption until the account service exists). In the dev mock the code is `246810`.
 
 **Date Mode** unlocks only when `GET /v1/config` reports `features.date_mode.available`; the requirements list comes from the backend.
 
-## Look & feel: website palette + GTA-style type
+## Map & Poke → Poke Back → Friends
+
+The Map is the main way to discover people: see who's around → tap them → **POKE 👋**. When they poke back you're **FRIENDS 🎉**. The backend decides everything that matters: who appears on the map and roughly where, whether a poke is allowed, reciprocity, friendship and territory ownership. The app only displays it.
+
+**Routes** (added to `http.ts`; mocked in `mock/server.ts`):
+
+```
+GET  /v1/map/features               roads, paths, buildings, terrain, POIs (static base map)
+GET  /v1/map/players                → { players[], as_of, visible, hidden_reason }  approximate positions only
+GET  /v1/zones/{id}/players         GET /v1/people/search?q=
+PUT  /v1/map/presence               { lat, lng, accuracy_m }  your own location, throttled (≥ 60 s or ≥ 40 m)
+GET  /v1/pokes/status/{user_id}     → { state: none | poked | poked_you | friends, can_poke, reason }
+POST /v1/pokes                      { to_user_id, idempotency_key, reply? }  → { relationship, friendship_created, friend }
+GET  /v1/pokes/incoming             GET /v1/friends/status/{user_id}
+GET  /v1/notifications              POST /v1/notifications/read { ids }
+WS   poke.received · relationship.updated · friendship.created · notification.created · players.updated
+```
+
+Service functions: `api/campus/map.ts` (getMapData, getNearbyUsers, getTerritories, getUserLocation…) and `api/campus/poke.ts` (getPokeStatus, sendPoke, pokeBack, getIncomingPokes, getFriendshipStatus, notifications).
+
+**State.** It uses the same `useSyncExternalStore` pattern as the territory store, with no new state library:
+- `state/socialStore.ts` holds one relationship per user, so a poke re-renders one button, not the map. It also holds the celebration queue and the unread count.
+- `state/locationStore.ts` runs one ref-counted GPS watch (only while the Map is focused) and reports presence on a throttle.
+
+**Poke rules in the UI:**
+- **POKE** is optimistic (it shows POKED at once) and rolls back if the request fails.
+- **POKE BACK** waits for the backend.
+- **FRIENDS** and the celebration appear only when the backend confirms it, through `friendship_created`, a realtime `friendship.created`, or a later players list that reports the change.
+- A list response never undoes a poke you made while that request was in flight.
+
+**Map rendering** (`components/map/`):
+- The base layer is a memoised SVG. Pan and zoom run as a native-driver `Animated` transform, and markers counter-scale so they stay the same size on screen.
+- Players are clustered on a screen-space grid, recalculated when a gesture ends. Tapping a cluster zooms in; at maximum zoom it lists the people in it.
+- Location updates re-render only the "you" marker and the header.
+
+**Reusable components:**
+- `PokeButton`, `NearbyUserCard`, `PokeNotificationCard` and `NearbySquirrels` (in `components/social/`).
+- `SocialHost`, mounted in the root layout, routes realtime events and shows the "You're friends" celebration.
+
+**States:**
+- Loading shows the mascot and a scan line.
+- An empty map shows “Nobody nearby yet. Your next Squirrel might be closer than you think.”
+- If location is off, denied or unavailable, a banner offers Allow or Settings.
+- A network failure keeps the last map and markers, with a Retry banner.
+- Only one banner is shown at a time, the most important first.
+
+In the web dev mock with no GPS, the map uses a demo location on campus, labelled as such.
+
+**Dev mock:**
+- Rhea, Zoya and Meera poke back 10 s after you poke them.
+- Aarav and Kabir have already poked you.
+- Dev pokes you 30 s after the app opens.
+- `EXPO_PUBLIC_MOCK_FAIL_RATE=0.3` makes writes (pokes, claims) fail at random, to exercise rollback and error toasts.
+
+## Light & dark themes
+
+- **Two complete palettes** live in `src/theme.ts`:
+  - **Dark** is the original night-campus identity.
+  - **Light** is its daytime twin: warm paper canvas, white cards, near-black ink, and deeper lime and pink for text and icons so they stay readable. Filled CTAs keep the neon lime (`primaryFill`) with an ink outline.
+- **Theme-aware tokens:** `panel`, `backdrop` and `mapColors` (the campus map's base layer), plus `alpha(color, a)` for tints and `statusBarStyle`.
+- **Artwork stays as it is** (scenes, the title screen, the camera and story views), and so does text drawn over it (`onImage`).
+- **Switching**, two ways, one switch (`components/ThemeToggle.tsx`):
+  - the **sun/moon icon** in the Home, Map, Social and Profile headers (`<ThemeIconButton>`): Dark shows a gold sun (tap for Light), Light shows a violet moon (tap for Dark); the glyph turns and cross-fades before the switch;
+  - Profile → More → **Appearance** (Dark / Light).
+  - The choice is saved on the device: SecureStore on phones (read synchronously at start-up), localStorage on web.
+  - The app then reloads once (`reloadAppAsync`, or `location.reload` on web), so every screen, sheet and module-level style is rebuilt with the new palette. On web you return to the screen you tapped from, with no second launch splash; on phones the app restarts at Home.
+- **No hardcoded colours:** every colour in `app/` and `components/` goes through tokens, except imagery-bound overlays, which are dark on purpose.
+
+## Launch splash
+
+- `components/LaunchSplash.tsx`, overlaid on the root layout (not a route: it can't be navigated back to, and deep links mount underneath it).
+- Logo (the official logo, framed as an app-icon tile) → **SQUIRREL SOCIAL** → "Backed by Split Labs VC", then a fade into whatever start-up picked.
+- It lifts only when **both** at least 3 s (`SPLASH_MIN_MS`) have passed since launch **and** the app is ready (fonts loaded, saved session restored). Reduce Motion skips the animation, not the content.
+- Once per launch, themed (Dark / Light), and skipped after a theme-switch reload.
+
+## Profile building (onboarding → About you)
+
+- **Step 1 of the existing onboarding** collects the profile details:
+  - **Required:** full name, personal email, college email (must match the campus domain from `/v1/config`), phone (+91, normalised to E.164), gender, age (16–99) and course (from `campus.courses` if the backend sends them, otherwise common programmes, plus "Other").
+  - **Optional:** CGPA (0–10, up to 2 decimals).
+- **Blocking and errors:** Continue is blocked until every required field is valid. Errors show inline once a field is left, or after Continue is tried. Each field uses the right keyboard.
+- **Rules:** they live in `logic/profileValidation.ts`, unit-tested in `logic/profileValidation.test.mjs` (`npm test`).
+- **Saving:** the details are sent as `profile_details` on the existing `PATCH /v1/me` (a frontend contract; the backend should validate again). They stay private and never appear on the public profile.
+- **Not live yet:** the `profile_details` field has no backend (capability `profileDetails`). While it's unavailable, step 1 shows "Profile details · Not live yet" instead of collecting details it can't store. Finish still saves mode, hostel and onboarding (the rest of `PATCH /v1/me` is live) and says the details weren't saved. If the backend is opted in but answers 404 `no_route`/501, the save retries without `profile_details` and says so. Real errors (401, 422, 5xx, offline) are shown as errors.
+
+## Workout with partner (shared rep workout)
+
+- **Flow:** Start Exercise → pick an exercise → **Start** (solo) or the pink **partner** icon → `/workout/new` → create the session → share the invite link (native share sheet or Copy) → partner opens it (`squirrelsocial://workout/join/{code}`, or `/w/{code}` on web) → waiting room → both tap **I'm ready** → shared countdown → rep race (your reps, their reps, progress, connection status, pause, undo, finish, exit) → completion screen.
+- **Contract:** `SharedWorkoutSession` / `WorkoutParticipant` in `api/campus/types.ts`, the service in `api/sharedWorkout.ts` and state in `hooks/useSharedWorkout.ts`.
+  - The countdown uses the server's `starts_at` and `server_time`, so both phones start together.
+  - Your reps are counted on your phone (tap each rep, the same as solo) and reported, throttled to one report every 0.5 s. Your partner's reps only ever come from the backend (`workout.reps.updated` on the realtime socket, or a 2 s poll without one).
+- **Edge states covered:** partner leaves (before or during), you leave, invite expired, session full, not found, already finished, reconnecting, and connection lost.
+- **Not built (backend):** the routes listed at the top of `api/sharedWorkout.ts`. Until they exist (capability `sharedWorkout` in `api/availability.ts`) every call rejects with `EndpointUnavailableError`, and every build shows "Shared workouts aren't live yet". Even when opted in, it only calls a **live** campus API. There is no simulated partner, sync or realtime, and the dev mock doesn't fake one.
+- **Design preview:** `/workout/preview` (dev builds only) renders every state from static props for design review. It is clearly labelled and is not a session.
+
+## Map engine
+
+The campus map is Squirrel Social's own renderer: react-native-svg with a pan/zoom transform. It uses no Mapbox, no API key and no tile server. It draws both themes from `mapColors`. MapLibre isn't used today; switching the engine is a separate decision (it needs a development build and a tile source).
+
+## Campus loop features: shared zones, heat, walks, dates, ratings, photos, ambassadors
+
+Everything below is frontend. The backend work belongs to Dev A and Dev B, and none of it is claimed as done here.
+
+- Screens import feature adapters in `api/campus/`: `discovery.ts`, `community.ts` and `media.ts`. They never call `fetch` directly.
+- **Availability is per endpoint, not per service** (`api/availability.ts`, wired in `api/campus/index.ts`). The seven campus endpoints with no backend yet are gated in *every* mode (live, dev mock, off): shared zones, heatmap, Squirrel Dates, media, meetup rating, ambassador, and `profile_details` on `PATCH /v1/me`. A gated call rejects with `EndpointUnavailableError` (`code: <capability>_unavailable`). All other campus calls go straight through, so one missing endpoint never fails another.
+- **Four states, kept distinct:** data, empty (`[]` — "nothing yet"), **unavailable** ("<Feature> · Not live yet", layout kept, only the dependent action disabled, no retry) and **error** (401/403/400/422/5xx/offline — shown as errors with retry or sign-in). `featureUnavailable()` is true only for `EndpointUnavailableError`, campus off, 404 `no_route`/no code, 501, or 503 `*_unavailable`.
+- **No fake success anywhere:** the dev mock no longer implements these seven — no invented heat cells, date suggestions, uploads, ratings, ambassador forms, stored profile details or related notifications.
+- **When a backend ships:** set it to `true` in `BUILT` in `api/availability.ts`, or opt it in without a code change with `EXPO_PUBLIC_LIVE_ENDPOINTS=heatmap,ambassador` (comma-separated capability names: `sharedZones, heatmap, dateSuggestions, media, meetupRating, ambassador, ambassadorWaitlist, profileDetails, sharedWorkout`). Tests: `src/api/availability.test.mjs` (`npm test`).
+
+| Feature | Where | API (status) |
+|---|---|---|
+| **Shared Zones** | Profile → People & places → Shared zones (`/shared`), someone's profile → shared-zones row (`/shared/[id]`), notifications | `GET /v1/users/{id}/context` (existing overlap API, Dev B; optional `activity_count` per zone), `GET /v1/me/shared-zones` (**expected, Dev B**) |
+| **Activity Heatmap** | Map → 🔥 toggle; window 1h / 24h / 7d, legend in words, privacy line | `GET /v1/map/heatmap?window=` → aggregated cells `{center, radius_m, intensity, level}` (**expected, Dev B**). The app only draws them |
+| **Study-Break Walk** | Home (leads "Happening on campus"), Events (featured on Upcoming), event page (JOIN WALK / YOU'RE IN) | Existing Events API. Optional fields `template: 'study_break_walk'`, `duration_min`, `meeting_point` (**expected, Dev A**) |
+| **Squirrel Dates** | Social tab section, someone's profile (only when there's a suggestion) | `GET /v1/dates/suggestions[?user_id=]`, `POST …/{id}/dismiss`, `POST …/{id}/invite` (**expected, Dev B**) |
+| **Post-meetup rating** | Meetup page, after it ends; notification reminder | `GET /v1/meetups/{id}/rating` (eligibility, rateable people excluding you, optional dimensions, trust score), `POST /v1/meetups/{id}/ratings` (**expected, Dev A**) |
+| **Photo upload** | New Post, Meetup page (`<PhotoUpload purpose=…>`) | Social service's presigned flow: `POST /v1/media/uploads` → PUT → `POST /v1/media/{id}/complete`, plus `GET /v1/media/{id}` with `moderation` (**expected, Dev A**) |
+| **Campus Ambassador waitlist** | Profile → More → Campus Ambassador (`/ambassador`) | `POST /v1/ambassador/waitlist` (`api/campus/ambassadorWaitlist.ts`): full name, personal + college email, phone (E.164), college, `campus_id`, course, year of study, optional motivation and Instagram. 201 → on the list, 409 → already on the list (**expected**). The reviewed application (`GET/POST /v1/ambassador/application`) stays in the API layer for later |
+
+**Rules the UI keeps:**
+- Shared zones and heat are zone-level or aggregated only, and the copy says so.
+- A photo isn't shown on a post until the backend reports `status: ready` and `moderation: approved`. Photos are resized on the device to ≤ 1600 px JPEG, with a 480 px preview.
+- You can't rate yourself, and ratings are private. A trust score appears only if the API returns one.
+- The ambassador form renders only the fields the backend sends, and the status replaces the form once you've applied.
+- Squirrel Dates are optional and dismissible ("Maybe later"). The copy makes no romantic assumptions.
+
+**What each one shows until its backend ships:**
+
+| Endpoint | UI while unavailable |
+|---|---|
+| Shared zones (`GET /v1/me/shared-zones`) | `/shared` keeps its header; the list is "Shared zones · Not live yet". The per-person overlap (`/v1/users/{id}/context`) is live and unaffected. |
+| Heatmap | The Heat panel opens and says "Heatmap · Not live yet"; the 1h/24h/7d picker is disabled. The map, players and zones keep working. |
+| Squirrel Dates | The Social section stays in place with "Squirrel Dates · Not live yet"; no Invite/Maybe later actions. The per-profile card stays hidden. |
+| Media | The photo tile reads "Photo uploads · Not live yet" and can't be tapped; posting without a photo still works. |
+| Meetup rating | The meetup page works (check-in etc.); the rating block reads "Meetup ratings · Not live yet". |
+| Ambassador waitlist | Profile row reads "Waitlist · Not live yet". `/ambassador` shows the full form (pre-filled from your name, sign-in email and campus; inline validation works) with an "Ambassador waitlist · Not live yet" card, and **Join** is disabled: nothing is sent or saved. Opted in but the server answers 404/405/501 → the same state, answers kept. Real errors (offline, 401 → Sign in, 422, 5xx) show as errors with Try again. |
+| Profile details | See "Profile building" above. |
+
+**Dev-mock switch:** `EXPO_PUBLIC_MOCK_FAIL_RATE=1` exercises error states on the live-able endpoints.
+
+**Runs:**
+- `logic/track.ts` is the verified `saheb` version with the GPS noise gate, byte for byte. A phone left stationary for about 2 minutes stays at 0.00 m. The tests are in `logic/track.test.mjs`: `node --experimental-strip-types --test src/logic/track.test.mjs`.
+- The demo route starts at `DEMO_START = 0` (0.00 km, 0:00) and is offered only where GPS can't exist (the web preview).
+- Denied location shows **Location required**, "Turn on location permission to track your run." and **Open settings**. Approximate location is blocked too.
+- A real run never starts without precise permission.
+- Leaving mid-run (close, back gesture, hardware back) asks before discarding.
+
+## Look & feel: a cinematic campus world
+
+The goal is a GTA-inspired campus world, not a GTA clone: no GTA assets, logos, characters or layouts. Someone opening the app should feel they've entered their campus, not opened another fitness app.
+
 
 - **Colours:** from the Squirrel Social website (www.squirrelsocial.in):
   - **Canvas:** near-black `#060606`, with graphite panels (`#111113` / `#17171A`) and `#27272B` lines.
-  - **Lime `#D7FF1F`:** every action and everything that's "yours".
-  - **Pink `#FF2D9B`:** the second voice.
-  - **Variety:** purple `#A855F7`, orange `#FF8A1F` and yellow `#FFD21F`.
+  - **Neon is a signal, not a surface.** Large areas stay dark; selected tabs and filters are a raised dark surface with an accent underline or outline, not a lime block.
+  - **Lime `#D7FF1F`:** primary action, progress, ownership and confirmation (claimed zones, FRIENDS).
+  - **Pink `#FF2D9B`:** social, interaction and challenge (POKE, POKE BACK, challenges).
+  - **Purple `#A855F7`:** game systems and secondary states (level chips).
+  - **Orange / sunset:** atmosphere only (skies and street light in the art).
+  - **Yellow `#FFD21F`:** coins and defend.
   - **Text:** muted text is `#A9A9AE`.
 - **Type (GTA VI style):**
   - **Anton:** heavy condensed headlines and big numbers, slanted −6° like GTA title cards.
@@ -130,6 +290,15 @@ WS   realtime_url  →  territory.updated · stats.updated · invite.updated · 
   - **Inter:** body text.
   - GTA VI's own typeface is proprietary; these are the closest free Google Fonts.
 - **Art:** the illustrations use the website palette (neon lime and pink city).
+  - `art/CampusScene.tsx` is the campus at dusk: hostel blocks with lit windows, the lecture hall, a floodlit sports ground and a lamp-lit path.
+  - It's the title-screen backdrop and the Home "your world" card that opens the Map.
+- **The squirrel is scarce on purpose.** It appears on the title screen, onboarding, level-ups, missions, run results, meetup check-in, locked features and empty states. It doesn't appear on everyday surfaces such as Home, the Create sheet or your profile header.
+- **First impression:** the title screen reads SQUIRREL SOCIAL → YOUR CAMPUS. YOUR GAME. → the campus with the squirrel → ENTER IISER KOLKATA / EXPLORE DEMO. One live line ("23 moving right now") shows the world is active; it's hidden when the backend isn't reachable.
+- **Game feel, kept subtle:**
+  - Map markers spring in the first time they appear.
+  - A claim, steal or defend confirmed by the backend shows a short "ZONE CLAIMED" stamp that clears itself (`components/game/CaptureMoment.tsx`).
+  - Poke has a ripple and haptics; friendship has its celebration.
+  - Claiming mission rewards opens the reward screen.
 
 All UI tokens live in `src/theme.ts`; illustration colours live in `src/art/palette.ts`.
 

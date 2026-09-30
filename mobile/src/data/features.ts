@@ -9,8 +9,8 @@
 export const LOCKED = {
   /** Meal + water logging (Create actions, the water/meal daily missions). */
   mealWater: true,
-  /** Events: /events, /event/[id], event cards, joining. Launched with the campus backend (RSVP is server-side). */
-  events: false,
+  /** Events: /events, /event/[id], event cards, study-break walks, joining. Not launching yet. */
+  events: true,
   /** Partner Hunt: find a workout buddy. Every /partner-hunt route shows the locked screen. */
   partnerHunt: true,
   /** Story viewer (story bubbles on Social). Posting your own story via the composer still works. */

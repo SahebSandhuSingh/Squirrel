@@ -9,6 +9,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Mascot } from '@/art/Mascot';
 import { campusApi, errorText, type CheckInResult, type Meetup } from '@/api/campus';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
+import { PhotoUpload } from '@/components/media/PhotoUpload';
+import { MeetupRating } from '@/components/meetup/MeetupRating';
 import { ErrorState, LoadingRows, SourceBadge } from '@/components/campus/States';
 import { Button, Card, Display, Header, Icon, Kicker, Screen, SectionHeader, tap } from '@/components/ui';
 import { formatEventDate } from '@/data/community';
@@ -29,6 +31,7 @@ export default function MeetupScreen() {
   const me = useMe();
   const config = useConfig();
   const [notify, setNotify] = useState(true);
+  const [openedAt] = useState(() => Date.now());
   const check = useAction((n: boolean) => campusApi.checkIn(id, n));
   const m = r.data;
   const safetyOn = !!config.data?.features.meetup_safety_notifications;
@@ -68,7 +71,7 @@ export default function MeetupScreen() {
       {checkedIn ? (
         <Card style={styles.done}>
           <Mascot pose="celebrate" size={96} animated />
-          <Text style={styles.doneTitle}>You’re checked in</Text>
+          <Text style={styles.doneTitle}>{openedAt > Date.parse(m.check_in_closes_at) ? 'You checked in' : 'You’re checked in'}</Text>
           <Text style={styles.body}>{new Date(check.data?.checked_in_at ?? m.my_check_in_at!).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} · have fun, move safe.</Text>
           {check.data && (
             <View style={[styles.safety, { borderColor: check.data.safety_notification.status === 'sent' ? colors.green : check.data.safety_notification.status === 'failed' ? colors.coral : colors.line }]}>
@@ -107,6 +110,16 @@ export default function MeetupScreen() {
           {check.status === 'error' && <Text style={styles.err}>{errorText(check.error)}</Text>}
           {done === undefined && !open && <Text style={styles.small}>Check-in closes {formatEventDate(m.check_in_closes_at)}.</Text>}
         </Card>
+      )}
+
+      {/* After it's over: rate the people you met (the backend decides when that's possible) */}
+      <MeetupRating meetupId={m.id} meId={me.data?.user_id ?? null} />
+
+      {checkedIn && (
+        <>
+          <SectionHeader title="Meetup photo" />
+          <PhotoUpload purpose="meetup" context={{ meetup_id: m.id }} label="Share a photo" />
+        </>
       )}
 
       <SectionHeader title={`Who’s coming · ${m.attendees.length}`} />

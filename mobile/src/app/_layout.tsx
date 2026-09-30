@@ -13,9 +13,11 @@ import {
 } from '@expo-google-fonts/barlow-condensed';
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_900Black } from '@expo-google-fonts/inter';
 import { AppStateProvider } from '@/state/AppState';
-import { AuthProvider } from '@/auth/AuthProvider';
+import { AuthProvider, useAuth } from '@/auth/AuthProvider';
+import { LaunchSplash } from '@/components/LaunchSplash';
 import { ToastHost } from '@/components/Toast';
-import { colors } from '@/theme';
+import { SocialHost } from '@/components/social/SocialHost';
+import { colors, statusBarStyle } from '@/theme';
 
 const sheet = { presentation: 'transparentModal', animation: 'fade', contentStyle: { backgroundColor: 'transparent' } } as const;
 
@@ -34,13 +36,15 @@ export default function RootLayout() {
     Inter_900Black,
   });
 
-  if (!loaded) return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
-
+  // Auth restores the saved session while the fonts load and the launch splash plays; the
+  // splash lifts only when both are ready (and at least SPLASH_MIN_MS have passed).
   return (
     <SafeAreaProvider>
       <AuthProvider>
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      {loaded && (
       <AppStateProvider>
-        <StatusBar style="light" />
+        <StatusBar style={statusBarStyle} />
         <View style={{ flex: 1, backgroundColor: colors.bg }}>
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg }, animation: 'slide_from_right' }}>
             <Stack.Screen name="index" />
@@ -56,11 +60,22 @@ export default function RootLayout() {
             <Stack.Screen name="city" options={sheet} />
             <Stack.Screen name="item/[id]" options={sheet} />
             <Stack.Screen name="compose" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="ambassador" options={{ animation: 'slide_from_bottom' }} />
           </Stack>
+          <SocialHost />
           <ToastHost />
         </View>
       </AppStateProvider>
+      )}
+      <Splash fontsLoaded={loaded} />
+      </View>
       </AuthProvider>
     </SafeAreaProvider>
   );
+}
+
+/** The launch splash, ready once fonts are loaded and the saved session has been restored. */
+function Splash({ fontsLoaded }: { fontsLoaded: boolean }) {
+  const { mode } = useAuth();
+  return <LaunchSplash ready={fontsLoaded && mode !== 'loading'} />;
 }

@@ -5,7 +5,12 @@
  *   live  → REST (api/campus/http.ts) against CAMPUS_API_URL
  *   mock  → in-memory dev mock (api/campus/mock/server.ts), dev builds only
  *   off   → every call rejects with "not live yet"; screens show that state, never fake data
+ *
+ * On top of the source, availability is decided PER ENDPOINT (api/availability.ts): the seven
+ * campus endpoints with no backend yet reject with EndpointUnavailableError in every mode, while
+ * the rest of the service keeps working. One missing endpoint never takes down another.
  */
+import { EndpointUnavailableError, gateEndpoints, isEndpointUnavailable } from '@/api/availability';
 import { ApiError, getApiToken } from '@/api/client';
 import { CAMPUS_API_CONFIGURED, CAMPUS_MOCKS_ENABLED, REALTIME_URL } from '@/api/config';
 import { httpCampusApi } from '@/api/campus/http';
@@ -22,7 +27,28 @@ const offApi: CampusApi = new Proxy({} as CampusApi, {
   get: () => () => Promise.reject(new ApiError(0, 'Campus features aren’t live yet', { code: NOT_LIVE, detail: 'Campus features aren’t live yet' })),
 });
 
-export const campusApi: CampusApi = CAMPUS_SOURCE === 'mock' ? mockCampusApi : CAMPUS_SOURCE === 'live' ? httpCampusApi : offApi;
+const sourceApi: CampusApi = CAMPUS_SOURCE === 'mock' ? mockCampusApi : CAMPUS_SOURCE === 'live' ? httpCampusApi : offApi;
+
+/** Method → capability for every endpoint that isn't built yet. Everything unlisted passes through. */
+export const campusApi: CampusApi = gateEndpoints(sourceApi, {
+  sharedZones: { capability: 'sharedZones' },
+  heatmap: { capability: 'heatmap' },
+  dateSuggestions: { capability: 'dateSuggestions' },
+  dismissDateSuggestion: { capability: 'dateSuggestions' },
+  inviteFromSuggestion: { capability: 'dateSuggestions' },
+  createUpload: { capability: 'media' },
+  completeUpload: { capability: 'media' },
+  media: { capability: 'media' },
+  meetupRating: { capability: 'meetupRating' },
+  rateMeetup: { capability: 'meetupRating' },
+  ambassador: { capability: 'ambassador' },
+  applyAmbassador: { capability: 'ambassador' },
+  // PATCH /v1/me itself is live; only the profile_details field has no backend yet.
+  updateMe: { capability: 'profileDetails', when: (patch) => patch.profile_details !== undefined },
+});
+
+export { EndpointUnavailableError, isEndpointUnavailable };
+export { CAPABILITY_LABEL, endpointAvailability, isEndpointAvailable, type Capability } from '@/api/availability';
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -31,6 +57,7 @@ export const campusApi: CampusApi = CAMPUS_SOURCE === 'mock' ? mockCampusApi : C
 export type ErrorKind = 'offline' | 'unauthorized' | 'forbidden' | 'not_found' | 'conflict' | 'invalid' | 'not_live' | 'server';
 
 export function errorKind(e: unknown): ErrorKind {
+  if (isEndpointUnavailable(e)) return 'not_live';
   if (!(e instanceof ApiError)) return 'server';
   const code = errorCode(e);
   if (code === NOT_LIVE) return 'not_live';
@@ -48,6 +75,21 @@ export function errorCode(e: unknown): string | null {
   return typeof b?.code === 'string' ? b.code : null;
 }
 
+/**
+ * A feature whose backend isn't there yet: campus off, the route not deployed (404 without a
+ * resource code), 501, or 503 with an "unavailable" code. Screens show an unavailable state
+ * for these instead of an error — and never pretend the feature works.
+ */
+export function featureUnavailable(e: unknown): boolean {
+  const kind = errorKind(e);
+  if (kind === 'not_live') return true;
+  if (!(e instanceof ApiError)) return false;
+  const code = errorCode(e);
+  if (e.status === 404) return code == null || code === 'no_route';
+  if (e.status === 501) return true;
+  return e.status === 503 && !!code && code.endsWith('unavailable');
+}
+
 export function errorText(e: unknown): string {
   switch (errorKind(e)) {
     case 'offline':
@@ -55,7 +97,7 @@ export function errorText(e: unknown): string {
     case 'unauthorized':
       return 'Your session expired. Sign in again.';
     case 'not_live':
-      return 'Campus features aren’t live yet.';
+      return isEndpointUnavailable(e) ? `${e.message}.` : 'Campus features aren’t live yet.';
     default:
       return e instanceof Error && e.message ? e.message : 'Something went wrong.';
   }

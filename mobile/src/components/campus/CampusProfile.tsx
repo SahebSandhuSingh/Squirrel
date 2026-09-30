@@ -9,11 +9,18 @@ import { Scene } from '@/art/Scene';
 import { campusApi, type Me, type Profile, type SharedContext } from '@/api/campus';
 import { useAuth } from '@/auth/AuthProvider';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
+import { PokeButton } from '@/components/social/PokeButton';
+import { ThemeIconButton, ThemeToggle } from '@/components/ThemeToggle';
+import { ProfileDateSuggestion } from '@/components/social/SquirrelDates';
+import { SharedZonesEntry } from '@/components/discovery/SharedZones';
+import { ambassadorWaitlistLive } from '@/api/campus/ambassadorWaitlist';
+import { getAmbassador } from '@/api/campus/community';
+import type { AmbassadorState } from '@/api/campus/types';
 import { BadgeRow, Icebreakers, ModeChip, OpenToMeetToggle } from '@/components/campus/Social';
 import { ErrorState, LoadingRows, SignedOutState, SourceBadge } from '@/components/campus/States';
 import { km, shortTime } from '@/components/campus/territoryUi';
 import { Button, Card, Display, Icon, IconButton, PressScale, Scrim, SectionHeader, TAB_BAR_SPACE, tap } from '@/components/ui';
-import { useCampus, useMe } from '@/hooks/useCampus';
+import { useCampus, useMe, useRefreshOnFocus } from '@/hooks/useCampus';
 import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
 
 export function CampusProfileView({ userId, isMe }: { userId?: string; isMe: boolean }) {
@@ -21,6 +28,10 @@ export function CampusProfileView({ userId, isMe }: { userId?: string; isMe: boo
   const other = useCampus<Profile>(`profile:${userId}`, () => campusApi.profile(userId!), { enabled: !isMe && !!userId });
   const ctx = useCampus<SharedContext>(`context:${userId}`, () => campusApi.sharedContext(userId!), { enabled: !isMe && !!userId });
   const r = isMe ? mine : other;
+  const amb = useCampus<AmbassadorState>('ambassador', () => getAmbassador(), { enabled: isMe });
+  // Cheap and user-visible: re-read on every return, so a fresh application shows at once.
+  useRefreshOnFocus(amb.reload, 0);
+  const ambStatus = amb.data?.application?.status;
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { signOut } = useAuth();
@@ -50,6 +61,7 @@ export function CampusProfileView({ userId, isMe }: { userId?: string; isMe: boo
         <View style={[styles.topBar, { top: insets.top + 8 }]}>
           {isMe ? <SourceBadge /> : <IconButton icon="chevron-left" size={26} onPress={back} label="Back" />}
           <View style={{ flexDirection: 'row', gap: 8 }}>
+            {isMe && <ThemeIconButton />}
             {isMe && <IconButton icon="bell-outline" onPress={() => router.push('/invites')} label="Challenge invites" />}
             {isMe && <IconButton icon="pencil-outline" onPress={() => router.push('/edit-profile')} label="Edit profile" />}
           </View>
@@ -85,8 +97,8 @@ export function CampusProfileView({ userId, isMe }: { userId?: string; isMe: boo
 
         {!isMe && (
           <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
-            <Button label="Challenge" iconLeft="sword-cross" size="md" onPress={() => router.push({ pathname: '/invite/new', params: { userId: p.user_id } })} style={{ flex: 1 }} />
-            <Button label="Invite to crew" variant="secondary" size="md" iconLeft="account-group" onPress={() => router.push('/crews')} style={{ flex: 1 }} />
+            <PokeButton user={p} style={{ flex: 1 }} />
+            <Button label="Challenge" variant="secondary" size="md" iconLeft="sword-cross" onPress={() => router.push({ pathname: '/invite/new', params: { userId: p.user_id } })} style={{ flex: 1 }} />
           </View>
         )}
 
@@ -112,6 +124,13 @@ export function CampusProfileView({ userId, isMe }: { userId?: string; isMe: boo
             <Icebreakers items={shared.icebreakers} targetUserId={p.user_id} max={4} />
           </Card>
         )}
+
+        {!isMe && userId && ctx.data && (
+          <View style={{ marginTop: 10 }}>
+            <SharedZonesEntry userId={userId} zones={ctx.data.shared_zones} />
+          </View>
+        )}
+        {!isMe && userId && <ProfileDateSuggestion userId={userId} />}
 
         {/* Stats */}
         <SectionHeader title="Activity stats" />
@@ -161,6 +180,17 @@ export function CampusProfileView({ userId, isMe }: { userId?: string; isMe: boo
           <Text style={styles.empty}>{isMe ? 'Not in a crew yet.' : 'No crews yet.'}</Text>
         )}
 
+        {isMe && (
+          <>
+            <SectionHeader title="People & places" />
+            <View style={{ gap: 8 }}>
+              <LinkRow icon="account-heart-outline" label="Friends" onPress={() => router.push('/friends')} />
+              <LinkRow icon="map-marker-radius" label="Shared zones" detail="Who’s been where you have" onPress={() => router.push('/shared')} />
+              <LinkRow icon="shield-account-outline" label="Safety & visibility" detail={p.open_to_meet ? 'Open to Meet is on' : 'Open to Meet is off'} onPress={() => router.push('/active')} />
+            </View>
+          </>
+        )}
+
         {/* Badges */}
         <SectionHeader title="Badges" action={isMe ? 'All badges' : undefined} onAction={isMe ? () => router.push('/badges') : undefined} />
         {p.badges.length ? <BadgeRow badges={p.badges} /> : <Text style={styles.empty}>No badges yet.</Text>}
@@ -199,6 +229,14 @@ export function CampusProfileView({ userId, isMe }: { userId?: string; isMe: boo
           <>
             <SectionHeader title="More" />
             <View style={{ gap: 8 }}>
+              <ThemeToggle />
+              <LinkRow
+                icon="star-four-points-outline"
+                label={ambStatus ? 'Ambassador application' : 'Campus Ambassador'}
+                detail={ambStatus ? AMB_STATUS[ambStatus] : ambassadorWaitlistLive() ? 'Join the waitlist' : 'Waitlist · Not live yet'}
+                detailColor={ambStatus === 'approved' ? colors.primary : ambStatus === 'rejected' ? colors.dim : colors.violet}
+                onPress={() => router.push('/ambassador')}
+              />
               <LinkRow icon="calendar-check" label="Meetups & check-in" onPress={() => router.push('/meetups')} />
               <LinkRow icon="sword-cross" label="Challenge invites" onPress={() => router.push('/invites')} />
               <LinkRow icon="heart-multiple-outline" label="Date Mode" onPress={() => router.push('/date')} />
@@ -240,11 +278,16 @@ function Check({ ok, label }: { ok: boolean; label: string }) {
   );
 }
 
-function LinkRow({ icon, label, onPress }: { icon: React.ComponentProps<typeof Icon>['name']; label: string; onPress: () => void }) {
+const AMB_STATUS: Record<string, string> = { pending: 'In the nest · pending', under_review: 'Under review', approved: 'Approved', rejected: 'Not this time' };
+
+function LinkRow({ icon, label, detail, detailColor = colors.dim, onPress }: { icon: React.ComponentProps<typeof Icon>['name']; label: string; detail?: string; detailColor?: string; onPress: () => void }) {
   return (
-    <PressScale onPress={onPress} style={styles.row} scaleTo={0.98} accessibilityRole="button" accessibilityLabel={label}>
+    <PressScale onPress={onPress} style={styles.row} scaleTo={0.98} accessibilityRole="button" accessibilityLabel={detail ? `${label}. ${detail}` : label}>
       <Icon name={icon} size={18} color={colors.primary} />
-      <Text style={[styles.rowTitle, { flex: 1 }]}>{label}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.rowTitle}>{label}</Text>
+        {!!detail && <Text style={[styles.rowDetail, { color: detailColor }]} numberOfLines={1}>{detail}</Text>}
+      </View>
       <Icon name="chevron-right" size={18} color={colors.dim} />
     </PressScale>
   );
@@ -265,6 +308,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, padding: 12 },
   dot: { width: 10, height: 10, borderRadius: 5 },
   rowTitle: { color: colors.text, fontFamily: fonts.semibold, fontSize: 14 },
+  rowDetail: { fontFamily: fonts.regular, fontSize: 12, marginTop: 1 },
   status: { fontFamily: fonts.label, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },
   crew: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1.5, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: colors.card },
   crewText: { color: colors.text, fontFamily: fonts.semibold, fontSize: 13 },

@@ -9,7 +9,7 @@ import { Card, EmptyState, FadeIn, Header, Icon, IconButton, Kicker, PressScale,
 import { EXERCISE_LIBRARY, type LibraryExercise } from '@/data/exercises';
 import { invalidateExercise, useExerciseCatalog, useExerciseProgress, useExerciseSessions, useExerciseSkill, useExerciseUser, useReloadOnFocus } from '@/hooks/useExercise';
 import { useApp } from '@/state/AppState';
-import { colors, fonts, radius } from '@/theme';
+import { alpha, colors, fonts, radius } from '@/theme';
 
 const SKILL_LABELS: Record<SkillLevel, string> = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced' };
 
@@ -175,7 +175,7 @@ function LibraryRow({ ex, avail }: { ex: LibraryExercise; avail?: ExerciseAvaila
       style={[styles.row, !enabled && { opacity: 0.55 }]}
       scaleTo={0.98}
       accessibilityLabel={`${ex.name}, ${state}`}>
-      <View style={[styles.rowIcon, enabled && { backgroundColor: 'rgba(215,255,31,0.1)' }]}>
+      <View style={[styles.rowIcon, enabled && { backgroundColor: alpha(colors.primary, 0.1) }]}>
         <Icon name={ex.icon} size={22} color={enabled ? colors.primary : colors.dim} />
       </View>
       <View style={{ flex: 1, marginLeft: 12 }}>

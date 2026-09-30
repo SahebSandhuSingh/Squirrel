@@ -20,7 +20,7 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
-import { colors, DISPLAY_SKEW, fonts, gradients, MAX_WIDTH, radius } from '@/theme';
+import { alpha, colors, DISPLAY_SKEW, fonts, gradients, isLightTheme, MAX_WIDTH, radius } from '@/theme';
 import type { IconName } from '@/data/icons';
 
 export const Icon = MaterialCommunityIcons;
@@ -132,7 +132,7 @@ export function Tagline({ children, size = 20, color = colors.text, rotate = -6,
       style={[
         { fontFamily: fonts.script, fontSize: size, lineHeight: size * 1.18, color, transform: [{ rotate: `${rotate}deg` }] },
         { textTransform: 'uppercase' },
-        glow && { textShadowColor: 'rgba(215,255,31,0.6)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
+        glow && { textShadowColor: alpha(colors.primary, 0.6), textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
         style,
       ]}>
       {children}
@@ -202,8 +202,9 @@ export function Button({ label, onPress, icon, iconLeft, variant = 'primary', si
   const pad = size === 'lg' ? 16 : size === 'md' ? 12 : 8;
   const fs = size === 'lg' ? 17 : size === 'md' ? 15 : 12;
   const filled = variant === 'primary' || variant === 'accent' || variant === 'gold';
-  const fill = variant === 'accent' ? colors.secondary : variant === 'gold' ? colors.gold : colors.primary;
-  const fg = filled ? colors.onPrimary : colors.text;
+  // Filled lime is always the neon (primaryFill); in light mode it gets an ink outline so it doesn't wash out.
+  const fill = variant === 'accent' ? colors.secondary : variant === 'gold' ? gradients.gold[1] : colors.primaryFill;
+  const fg = !filled ? colors.text : variant === 'accent' ? colors.onSecondary : colors.onPrimary;
   const content = (
     <>
       {iconLeft && <Icon name={iconLeft} size={fs + 2} color={fg} style={{ marginRight: 8 }} />}
@@ -224,7 +225,7 @@ export function Button({ label, onPress, icon, iconLeft, variant = 'primary', si
         style,
       ]}>
       {filled ? (
-        <View style={[styles.btn, { paddingVertical: pad, backgroundColor: fill }]}>{content}</View>
+        <View style={[styles.btn, { paddingVertical: pad, backgroundColor: fill }, isLightTheme && variant === 'primary' && { borderWidth: 1.5, borderColor: colors.text, paddingVertical: pad - 1.5 }]}>{content}</View>
       ) : (
         <View style={[styles.btn, { paddingVertical: pad - 1.5 }, variant === 'secondary' ? styles.btnSecondary : styles.btnGhost]}>{content}</View>
       )}
@@ -278,8 +279,8 @@ export function Chips<T extends string>({ items, value, onChange, icons, style }
         const ic = icons?.[i];
         return (
           <PressScale key={i} onPress={() => { tap(); onChange(i); }} accessibilityLabel={i} accessibilityRole="button" accessibilityState={{ selected: on }} style={[styles.chip, on && styles.chipOn]}>
-            {ic && <Icon name={ic} size={15} color={on ? colors.onSecondary : colors.dim} style={{ marginRight: 5 }} />}
-            <Text style={[styles.chipText, on && { color: colors.onSecondary }]}>{i}</Text>
+            {ic && <Icon name={ic} size={15} color={on ? colors.primary : colors.dim} style={{ marginRight: 5 }} />}
+            <Text style={[styles.chipText, on && { color: colors.primary }]}>{i}</Text>
           </PressScale>
         );
       })}
@@ -299,14 +300,16 @@ export function Segmented<T extends string>({ items, value, onChange, accent = '
     <View style={[styles.seg, style]} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
       {seg > 0 && (
         <Animated.View style={[styles.segThumb, { width: seg, transform: [{ translateX: x.interpolate({ inputRange: [0, Math.max(1, items.length - 1)], outputRange: [0, seg * Math.max(1, items.length - 1)] }) }] }]}>
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: accent === 'secondary' ? colors.secondary : colors.primary }]} />
+          {/* Neon is a signal, not a surface: a raised tab with an accent underline */}
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.cardHi, borderWidth: 1, borderColor: colors.lineHi, borderRadius: radius.pill }]} />
+          <View style={[styles.segBar, { backgroundColor: accent === 'secondary' ? colors.secondary : colors.primary }]} />
         </Animated.View>
       )}
       {items.map((i) => {
         const on = i === value;
         return (
           <PressScale key={i} onPress={() => { tap(); onChange(i); }} accessibilityLabel={i} accessibilityRole="button" accessibilityState={{ selected: on }} style={styles.segItem}>
-            <Text numberOfLines={1} style={[styles.segText, on && { color: colors.onPrimary }]}>{labels?.[i] ?? i}</Text>
+            <Text numberOfLines={1} style={[styles.segText, on && { color: colors.text, fontFamily: fonts.labelBold }]}>{labels?.[i] ?? i}</Text>
           </PressScale>
         );
       })}
@@ -503,10 +506,11 @@ const styles = StyleSheet.create({
   search: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.glass, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, paddingLeft: 14, paddingRight: 6, height: 48 },
   searchInput: { flex: 1, color: colors.text, marginLeft: 8, fontFamily: fonts.regular, fontSize: 14, height: '100%' },
   chip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 8, borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line },
-  chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipOn: { backgroundColor: alpha(colors.primary, 0.08), borderColor: colors.primary },
   chipText: { color: colors.sub, fontFamily: fonts.label, fontSize: 13, letterSpacing: 0.8, textTransform: 'uppercase' },
   seg: { flexDirection: 'row', backgroundColor: colors.card, borderRadius: radius.pill, padding: 4, borderWidth: 1, borderColor: colors.line, marginVertical: 12 },
   segThumb: { position: 'absolute', top: 4, bottom: 4, left: 4, borderRadius: radius.pill, overflow: 'hidden' },
+  segBar: { position: 'absolute', left: '30%', right: '30%', bottom: 3, height: 2.5, borderRadius: 2 },
   segItem: { flex: 1, alignItems: 'center', paddingVertical: 10 },
   segText: { color: colors.sub, fontFamily: fonts.label, fontSize: 14, letterSpacing: 0.8, textTransform: 'uppercase' },
   card: { backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, padding: 14 },

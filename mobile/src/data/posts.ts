@@ -21,6 +21,8 @@ export type Post = {
   activity?: Activity;
   sticker?: 'one-more-km' | 'fire' | 'good-vibes' | 'neon-heart' | 'squirrel-flex' | 'hydrate';
   crewName?: string;
+  /** Only set once the backend has stored AND approved the photo. */
+  photo?: { uri: string; mediaId: string };
 };
 
 export const seedPosts: Post[] = [

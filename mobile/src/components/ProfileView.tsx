@@ -16,7 +16,8 @@ import type { User } from '@/data/users';
 import { useApp, XP_PER_LEVEL } from '@/state/AppState';
 import { useAuth } from '@/auth/AuthProvider';
 import type { SceneKind } from '@/types';
-import { colors, fonts, MAX_WIDTH as MAXW, radius } from '@/theme';
+import { alpha, colors, fonts, MAX_WIDTH as MAXW, radius } from '@/theme';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 const GRID_TABS = [
   { id: 'posts', icon: 'view-grid' },
@@ -138,7 +139,6 @@ export function ProfileView({ user, isMe }: { user: User; isMe: boolean }) {
                 <Text style={styles.levelTitle}>Level {lvl} · {lvl >= 20 ? 'City Legend' : lvl >= 13 ? 'Neon Runner' : 'Rising Squirrel'}</Text>
                 <XPBar value={isMe ? levelXp : 1200} max={XP_PER_LEVEL} style={{ marginTop: 6 }} />
               </View>
-              {isMe && <Mascot pose="cheer" size={64} />}
             </View>
             {isMe && nextReward && (
               <Pressable onPress={() => router.push('/rewards')} style={styles.next}>
@@ -162,6 +162,11 @@ export function ProfileView({ user, isMe }: { user: User; isMe: boolean }) {
 
         {/* Account (backend connection) */}
         {isMe && <AccountRow />}
+        {isMe && (
+          <View style={{ marginTop: 10 }}>
+            <ThemeToggle />
+          </View>
+        )}
 
         {/* Badges */}
         <Pressable onPress={() => router.push('/rewards')} style={styles.badgeRow}>
@@ -261,7 +266,7 @@ function AccountRow() {
         if (live) await signOut();
         router.push('/sign-in');
       }}
-      style={[styles.badgeRow, { marginTop: 16, borderColor: live ? 'rgba(215,255,31,0.4)' : colors.line }]}
+      style={[styles.badgeRow, { marginTop: 16, borderColor: live ? alpha(colors.primary, 0.4) : colors.line }]}
       accessibilityLabel={live ? 'Sign out' : 'Sign in to sync'}>
       <Icon name={live ? 'cloud-check-outline' : 'cloud-off-outline'} size={22} color={live ? colors.primary : colors.dim} />
       <View style={{ flex: 1, marginLeft: 10 }}>

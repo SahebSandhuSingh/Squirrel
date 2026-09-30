@@ -11,7 +11,7 @@ import { Button, Icon, tap } from '@/components/ui';
 import { untilTime } from '@/components/campus/territoryUi';
 import { actionKey, invalidateCampus, useAction } from '@/hooks/useCampus';
 import { upsertTerritory } from '@/state/territoryStore';
-import { useApp } from '@/state/AppState';
+import { showCapture } from '@/components/game/CaptureMoment';
 import { colors, fonts, radius } from '@/theme';
 
 const COPY: Record<TerritoryAction, { label: string; icon: React.ComponentProps<typeof Icon>['name']; done: string; variant: 'primary' | 'accent' | 'gold' }> = {
@@ -38,7 +38,6 @@ export function TerritoryActionButton({
   /** Called after a failed attempt so the parent re-reads the zone (ownership may have moved). */
   onFailed?: () => void;
 }) {
-  const { toast } = useApp();
   const [confirming, setConfirming] = useState(false);
   const act = useAction((key: string) => campusApi.territoryAction(zoneId, action, key));
   const copy = COPY[action];
@@ -65,7 +64,7 @@ export function TerritoryActionButton({
       invalidateCampus('me');
       invalidateCampus('board');
       tap('success');
-      toast(`${copy.done}: ${zoneName}`, copy.icon, action === 'steal' ? colors.secondary : action === 'defend' ? colors.gold : colors.primary);
+      showCapture(action, zoneName); // short game moment, only after the backend confirms
       onDone?.(r);
     } else {
       onFailed?.();

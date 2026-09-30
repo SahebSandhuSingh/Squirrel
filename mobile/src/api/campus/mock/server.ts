@@ -15,9 +15,10 @@
  * unless EXPO_PUBLIC_DEV_MOCKS=1 is set explicitly.
  */
 import { ApiError } from '@/api/client';
+import { EndpointUnavailableError, type Capability } from '@/api/availability';
 import { users as demoUsers } from '@/data/users';
 import type * as T from '@/api/campus/types';
-import { MOCK_ZONES, pointInZone, toXY } from '@/api/campus/mock/geo';
+import { MOCK_FEATURES, MOCK_ZONES, pointInZone, toLatLng, toXY } from '@/api/campus/mock/geo';
 
 const ME = 'u_aanya';
 const MIN = 60_000;
@@ -27,6 +28,7 @@ const iso = (t: number) => new Date(t).toISOString();
 const clone = <X,>(x: X): X => JSON.parse(JSON.stringify(x)) as X;
 const delay = () => new Promise<void>((r) => setTimeout(r, 180 + Math.random() * 320));
 const FAIL_RATE = Number(process.env.EXPO_PUBLIC_MOCK_FAIL_RATE ?? 0) || 0;
+const unavailable = (c: Capability) => Promise.reject(new EndpointUnavailableError(c));
 const fail = (status: number, code: string, detail: string) => new ApiError(status, detail, { code, detail });
 /** Writes can be made flaky to exercise error states: EXPO_PUBLIC_MOCK_FAIL_RATE=0.3 */
 const maybeFail = () => {
@@ -130,6 +132,15 @@ const seedOwner: Record<string, { owner: string | null; crew?: string; hoursAgo:
   gate: { owner: null, hoursAgo: 0 },
   lake: { owner: 'u_isha', crew: 'crew-lake-walkers', hoursAgo: 12 },
 };
+const SEED_CONTROL: Record<string, number> = { narmada: 0.62, tapti: 0.74, mess: 0.52, library: 0.66, lhc: 0.58, sports: 0.81, admin: 0.9, lake: 0.47 };
+const SEED_XP: Record<string, number> = { narmada: 9120, tapti: 12840, mess: 6300, library: 10450, lhc: 7210, sports: 15600, admin: 4380, lake: 5120 };
+/** Zones where two sides are close enough to count as contested (the backend's call). */
+const contested = new Set<string>(['mess']);
+function statusOf(t: T.Territory): T.TerritoryStatus {
+  if (!t.owner) return 'neutral';
+  if (t.under_challenge) return 'under_attack';
+  return contested.has(t.zone_id) ? 'contested' : 'controlled';
+}
 const crewLite = (id?: string | null): T.CrewLite | null => {
   const c = id ? crews.find((x) => x.id === id) : null;
   return c ? { id: c.id, name: c.name, color: c.color, icon: c.icon } : null;
@@ -149,7 +160,10 @@ for (const z of MOCK_ZONES) {
     shield_until: owner && s.hoursAgo < 2 ? iso(at + 2 * HOUR) : null,
     version: 1,
     updated_at: iso(at),
+    control: owner ? SEED_CONTROL[z.id] ?? 0.6 : null,
+    xp: owner ? SEED_XP[z.id] ?? 4000 : null,
   };
+  territories[z.id].status = statusOf(territories[z.id]);
   history[z.id] = owner ? [{ id: `h-${z.id}-0`, type: 'claimed', actor: lite(owner), previous_owner: null, at: iso(at) }] : [];
 }
 
@@ -199,7 +213,8 @@ const events = [
   ev({ id: 'ev-chill', title: 'Sunday Evening Chill Run', type: 'run', starts_at: iso(nextDow(0, 17, 30)), ends_at: iso(nextDow(0, 18, 30)), location: { name: 'Lake Walk', zone_id: 'lake' }, host: { type: 'crew', id: 'crew-lake-walkers', name: 'Lake Walk & Talk' }, capacity: null, territory_challenge: null, description: 'Conversational pace round the lake. Walkers welcome.', meetup_id: 'mt-chill', going: [ME, 'u_isha', 'u_tara'], extra: 14 }),
   ev({ id: 'ev-hostel-battle', title: 'Hostel Territory Battle', type: 'territory_battle', starts_at: iso(nextDow(5, 18)), ends_at: iso(nextDow(5, 20)), location: { name: 'Narmada · Tapti · Godavari', zone_id: null }, host: { type: 'squirrel', id: 'squirrel', name: 'Squirrel Social' }, capacity: null, territory_challenge: { zone_ids: ['narmada', 'tapti', 'godavari'], summary: 'Two hours. Three hostels. Most zones held at 8 PM wins.', reward_xp: 300 }, description: 'Every claim, steal and defence counts for your hostel.', meetup_id: null, going: ['u_kabir', 'u_zoya', 'u_aarav', 'u_meera'], extra: 58 }),
   ev({ id: 'ev-weekend-war', title: 'Weekend War', type: 'weekend_war', starts_at: iso(nextDow(6, 0)), ends_at: iso(nextDow(0, 23, 59)), location: { name: 'All campus zones', zone_id: null }, host: { type: 'squirrel', id: 'squirrel', name: 'Squirrel Social' }, capacity: null, territory_challenge: { zone_ids: MOCK_ZONES.map((z) => z.id), summary: 'All weekend, every zone is live. Crew with the most territory on Sunday night takes the crown.', reward_xp: 500 }, description: 'Steal shields are halved all weekend.', meetup_id: null, going: ['u_rhea', 'u_maya', 'u_zoya'], extra: 96 }),
-  ev({ id: 'ev-library-walk', title: 'Library Lap Walk', type: 'walk', starts_at: iso(now() + 26 * HOUR), ends_at: null, location: { name: 'Library', zone_id: 'library' }, host: { type: 'user', id: 'u_dev', name: 'Dev P.' }, capacity: 12, territory_challenge: null, description: 'A 20-minute reset between study blocks.', meetup_id: null, going: ['u_dev'], extra: 4 }),
+  ev({ id: 'ev-library-walk', title: 'Study Break Walk', type: 'study_break_walk', template: 'study_break_walk', duration_min: 20, meeting_point: 'Library steps', starts_at: iso(now() + 40 * MIN), ends_at: iso(now() + 60 * MIN), location: { name: 'Library', zone_id: 'library' }, host: { type: 'user', id: 'u_dev', name: 'Dev P.' }, capacity: 10, territory_challenge: null, description: 'Need a break? Grab a few squirrels and take a quick walk.', meetup_id: null, going: ['u_dev', 'u_isha'], extra: 3 }),
+  ev({ id: 'ev-sbw-lhc', title: 'Study Break Walk', type: 'study_break_walk', template: 'study_break_walk', duration_min: 20, meeting_point: 'LHC front steps', starts_at: iso(nextDow((new Date().getDay() + 1) % 7, 16, 0)), ends_at: null, location: { name: 'LHC', zone_id: 'lhc' }, host: { type: 'user', id: 'u_tara', name: 'Tara V.' }, capacity: 8, territory_challenge: null, description: 'Twenty minutes, one loop, back to the books.', meetup_id: null, going: ['u_tara'], extra: 1 }),
 ];
 const refreshEvent = (e: (typeof events)[number]) => {
   e.participants = e.going.map((id) => person(id)).filter((p): p is MockPerson => !!p).map(lite);
@@ -210,9 +225,10 @@ const refreshEvent = (e: (typeof events)[number]) => {
 
 type MockMeetup = T.Meetup;
 const meetups: MockMeetup[] = [
+  { id: 'mt-lake', title: 'Lake walk with Isha & Tara', starts_at: iso(now() - 3 * HOUR), location: { name: 'Lake Walk', zone_id: 'lake' }, event_id: null, attendees: [], my_check_in_at: iso(now() - 3 * HOUR + 4 * MIN), check_in_opens_at: iso(now() - 3 * HOUR - 30 * MIN), check_in_closes_at: iso(now() - 2 * HOUR) },
   { id: 'mt-coffee', title: 'Coffee walk with Rhea', starts_at: iso(now() + 25 * MIN), location: { name: 'Main Gate Boulevard', zone_id: 'gate' }, event_id: null, attendees: [], my_check_in_at: null, check_in_opens_at: iso(now() - 5 * MIN), check_in_closes_at: iso(now() + 90 * MIN) },
 ];
-const meetupPeople: Record<string, { id: string; checked: boolean }[]> = { 'mt-coffee': [{ id: ME, checked: false }, { id: 'u_rhea', checked: true }] };
+const meetupPeople: Record<string, { id: string; checked: boolean }[]> = { 'mt-coffee': [{ id: ME, checked: false }, { id: 'u_rhea', checked: true }], 'mt-lake': [{ id: ME, checked: true }, { id: 'u_isha', checked: true }, { id: 'u_tara', checked: true }] };
 
 const TYPES: T.ChallengeTypeInfo[] = [
   { id: 'territory', label: 'Territory challenge', description: 'Whoever logs more distance inside the zone takes it.', requires_zone: true, targets: ['user', 'crew'] },
@@ -263,6 +279,8 @@ function simulateRival() {
     if (t && rival) {
       const prev = t.owner;
       t.owner = lite(rival);
+      t.control = null;
+      t.xp = 0;
       t.crew = crewLite(rival.crews[0]);
       t.claimed_at = iso(now());
       t.shield_until = iso(now() + 2 * HOUR);
@@ -283,6 +301,10 @@ export const mockRealtime = {
   subscribe(l: Listener) {
     listeners.add(l);
     if (!simTimer) simTimer = setInterval(simulateRival, 40_000);
+    if (!surprisePokeScheduled) {
+      surprisePokeScheduled = true;
+      setTimeout(() => receivePoke('u_dev'), 30_000); // someone nearby pokes you
+    }
     return () => {
       listeners.delete(l);
       if (!listeners.size && simTimer) {
@@ -305,6 +327,14 @@ const zoneById = (id: string) => {
 const bump = (t: MockTerritory) => {
   t.version += 1;
   t.updated_at = iso(now());
+  if (!t.owner) {
+    t.control = null;
+    t.xp = null;
+  } else if (t.control == null) {
+    t.control = 0.35;
+    t.xp = t.xp ?? 0;
+  }
+  t.status = statusOf(t);
 };
 const ok = (expires: number | null = null): T.ActionAvailability => ({ allowed: true, code: null, reason: null, expires_at: expires ? iso(expires) : null });
 const no = (code: string, reason: string, expires: number | null = null): T.ActionAvailability => ({ allowed: false, code, reason, expires_at: expires ? iso(expires) : null });
@@ -363,7 +393,7 @@ function sharedWith(other: MockPerson): T.SharedContext {
       shared_zones.push({ zone_id: z.id, zone_name: z.name, relation: 'you_own_they_ran' });
       icebreakers.push({ id: `ib-${other.user_id}-mine-${z.id}`, text: `They’ve been running through your ${z.name}.`, kind: 'shared_zone', zone_id: z.id });
     } else if (iRan && theyRan) {
-      shared_zones.push({ zone_id: z.id, zone_name: z.name, relation: 'both_ran' });
+      shared_zones.push({ zone_id: z.id, zone_name: z.name, relation: 'both_ran', activity_count: 2 + ((z.id.length + other.user_id.length) % 5) });
       icebreakers.push({ id: `ib-${other.user_id}-ran-${z.id}`, text: `You’ve both run the ${z.name}.`, kind: 'shared_route', zone_id: z.id });
     }
   }
@@ -457,6 +487,141 @@ function allMeetups(): MockMeetup[] {
 // The API
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Map world + Poke → Poke back → Friends (the mock backend's rules)
+// ---------------------------------------------------------------------------
+
+/** Extra campus people so clustering has something to do. Initial-only avatars (no photos). */
+const CROWD_NAMES = ['Riya M.', 'Arjun P.', 'Sneha K.', 'Rohan D.', 'Ananya B.', 'Vikram S.', 'Pooja R.', 'Kunal T.', 'Diya G.', 'Ishaan C.', 'Meghna L.', 'Aditya V.', 'Nisha H.', 'Sahil J.', 'Tanvi A.', 'Harsh N.', 'Kavya E.', 'Yash W.', 'Aisha Q.', 'Dhruv O.', 'Shreya U.', 'Parth I.', 'Ira Z.', 'Neel X.', 'Mira Y.', 'Om F.', 'Zara B.', 'Ved K.'];
+/** Where people hang out (local metres) — crowds cluster near hostels, the mess and the track. */
+const HOTSPOTS: [number, number][] = [[150, 360], [300, 330], [-10, 380], [140, 232], [-390, 70], [280, 110], [55, -210], [-60, 90]];
+const snap = (v: number, cell = 40) => Math.round(v / cell) * cell; // the backend's approximation grid
+type PlayerSeed = { id: string; name: string; hostel: string; xp: number; at: [number, number]; activity: T.MapPlayer['activity']; proximity: T.Proximity | null; open: boolean };
+const PLAYER_XP: Record<string, number> = { u_rhea: 4820, u_aarav: 2430, u_meera: 6120, u_kabir: 3310, u_zoya: 5210, u_dev: 1980, u_isha: 2750, u_neil: 640, u_tara: 3890, u_sam: 7020, u_maya: 4410 };
+const levelOf = (xp: number) => 1 + Math.floor(xp / 300);
+const seededPlayers: PlayerSeed[] = [
+  ...people
+    .filter((p) => p.user_id !== ME)
+    .map((p, i) => ({ id: p.user_id, name: p.display_name, hostel: p.hostel ?? 'Narmada', xp: PLAYER_XP[p.user_id] ?? 1500, at: HOTSPOTS[i % HOTSPOTS.length], activity: p.active?.type ?? null, proximity: p.proximity, open: p.open || i % 2 === 0 })),
+  ...CROWD_NAMES.map((name, i) => ({ id: `u_crowd_${i}`, name, hostel: ['Narmada', 'Tapti', 'Godavari'][i % 3], xp: 300 + ((i * 733) % 5200), at: HOTSPOTS[(i * 3) % HOTSPOTS.length], activity: (i % 5 === 0 ? 'run' : i % 7 === 0 ? 'walk' : null) as T.MapPlayer['activity'], proximity: (i % 4 === 0 ? 'nearby' : 'on_campus') as T.Proximity, open: true })),
+];
+/** People who blocked you or hid from the map never appear (privacy is the backend's job). */
+const BLOCKED = new Set<string>(['u_neil']);
+const playerLite = (s: PlayerSeed) => ({ user_id: s.id, display_name: s.name, avatar_url: null, hostel: s.hostel, level: levelOf(s.xp), xp: s.xp });
+const seedById = (id: string) => seededPlayers.find((s) => s.id === id);
+
+type Rel = { state: T.RelationshipState; poked_at: string | null; friends_since: string | null };
+const rels: Record<string, Rel> = {
+  u_kabir: { state: 'poked_you', poked_at: iso(t0 - 25 * MIN), friends_since: null },
+  u_aarav: { state: 'poked_you', poked_at: iso(t0 - 2 * MIN), friends_since: null },
+  u_isha: { state: 'friends', poked_at: iso(t0 - 3 * 24 * HOUR), friends_since: iso(t0 - 3 * 24 * HOUR) },
+  u_crowd_0: { state: 'friends', poked_at: iso(t0 - 18 * MIN), friends_since: iso(t0 - 18 * MIN) },
+  u_maya: { state: 'poked', poked_at: iso(t0 - 5 * HOUR), friends_since: null },
+};
+/** In the mock these people poke back ~10 s after you poke them (so the flow can be tested alone). */
+const AUTO_POKE_BACK = new Set<string>(['u_rhea', 'u_zoya', 'u_crowd_3', 'u_crowd_8', 'u_meera']);
+const relOf = (id: string): Rel => rels[id] ?? { state: 'none', poked_at: null, friends_since: null };
+function relationship(id: string): T.Relationship {
+  const r = relOf(id);
+  const reason = r.state === 'poked' ? 'Poked — waiting for them to poke back.' : r.state === 'friends' ? 'You’re already friends.' : null;
+  return { user_id: id, state: r.state, can_poke: r.state === 'none' || r.state === 'poked_you', reason, poked_at: r.poked_at, friends_since: r.friends_since };
+}
+const incoming: T.IncomingPoke[] = [
+  { id: 'pk-aarav', from: playerLite(seedById('u_aarav')!), created_at: iso(t0 - 2 * MIN), status: 'pending' },
+  { id: 'pk-kabir', from: playerLite(seedById('u_kabir')!), created_at: iso(t0 - 25 * MIN), status: 'pending' },
+];
+const notes: T.AppNotification[] = [
+  { id: 'n-aarav', type: 'poke', actor: playerLite(seedById('u_aarav')!), text: 'Aarav M. poked you', created_at: iso(t0 - 2 * MIN), read: false, data: { user_id: 'u_aarav', poke_id: 'pk-aarav' } },
+  { id: 'n-riya', type: 'friendship', actor: playerLite(seedById('u_crowd_0')!), text: 'You and Riya M. are now friends', created_at: iso(t0 - 18 * MIN), read: false, data: { user_id: 'u_crowd_0' } },
+  { id: 'n-kabir', type: 'poke', actor: playerLite(seedById('u_kabir')!), text: 'Kabir R. poked you', created_at: iso(t0 - 25 * MIN), read: true, data: { user_id: 'u_kabir', poke_id: 'pk-kabir' } },
+  { id: 'n-terr', type: 'territory', actor: playerLite(seedById('u_kabir')!), text: 'Narmada Hostel is under attack', created_at: iso(t0 - 40 * MIN), read: true, data: { zone_id: 'narmada' } },
+  { id: 'n-sbw', type: 'study_break', actor: null, text: 'Study Break Walk starts in 40 min at the Library steps', created_at: iso(t0 - 5 * MIN), read: false, data: { event_id: 'ev-library-walk' } },
+  { id: 'n-inv', type: 'invite', actor: playerLite(seedById('u_kabir')!), text: 'Kabir R. challenged you for Narmada Hostel', created_at: iso(t0 - 2 * HOUR), read: true, data: { invite_id: 'inv-1' } },
+];
+const pokeIdem: Record<string, T.PokeResult> = {};
+let presence: T.PresenceUpdate | null = null;
+let surprisePokeScheduled = false;
+
+function addNote(n: Omit<T.AppNotification, 'id' | 'created_at' | 'read'>) {
+  const note: T.AppNotification = { ...n, id: `n-${now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`, created_at: iso(now()), read: false };
+  notes.unshift(note);
+  emit({ type: 'notification.created', data: note });
+}
+
+function becomeFriends(id: string) {
+  rels[id] = { state: 'friends', poked_at: relOf(id).poked_at, friends_since: iso(now()) };
+  incoming.forEach((p) => {
+    if (p.from.user_id === id && p.status === 'pending') p.status = 'poked_back';
+  });
+}
+
+function receivePoke(id: string) {
+  const s = seedById(id);
+  if (!s || BLOCKED.has(id)) return;
+  const r = relOf(id);
+  if (r.state === 'poked') {
+    // They poked back → mutual → friends (decided here, on the "server").
+    becomeFriends(id);
+    const friend = playerLite(s);
+    emit({ type: 'friendship.created', data: { friend, relationship: relationship(id) } });
+    addNote({ type: 'friendship', actor: friend, text: `You and ${s.name} are now friends`, data: { user_id: id } });
+    return;
+  }
+  if (r.state !== 'none') return;
+  rels[id] = { state: 'poked_you', poked_at: iso(now()), friends_since: null };
+  const poke: T.IncomingPoke = { id: `pk-${now().toString(36)}`, from: playerLite(s), created_at: iso(now()), status: 'pending' };
+  incoming.unshift(poke);
+  emit({ type: 'poke.received', data: poke });
+  emit({ type: 'relationship.updated', data: relationship(id) });
+  addNote({ type: 'poke', actor: playerLite(s), text: `${s.name} poked you`, data: { user_id: id, poke_id: poke.id } });
+}
+
+function doPoke(id: string, key: string, reply: boolean): T.PokeResult {
+  if (pokeIdem[key]) return pokeIdem[key];
+  const s = seedById(id);
+  if (id === ME) throw fail(422, 'invalid_target', 'You can’t poke yourself');
+  if (!s || BLOCKED.has(id)) throw fail(404, 'not_found', 'This Squirrel isn’t available');
+  const r = relOf(id);
+  if (r.state === 'friends') throw fail(409, 'already_friends', 'You’re already friends');
+  if (r.state === 'poked') throw fail(409, 'already_poked', 'Already poked — wait for them to poke back');
+  if (reply && r.state !== 'poked_you') throw fail(409, 'nothing_to_poke_back', 'They haven’t poked you');
+  let result: T.PokeResult;
+  if (r.state === 'poked_you') {
+    becomeFriends(id);
+    result = { relationship: relationship(id), friendship_created: true, friend: playerLite(s) };
+    addNote({ type: 'friendship', actor: playerLite(s), text: `You and ${s.name} are now friends`, data: { user_id: id } });
+  } else {
+    rels[id] = { state: 'poked', poked_at: iso(now()), friends_since: null };
+    result = { relationship: relationship(id), friendship_created: false, friend: null };
+    if (AUTO_POKE_BACK.has(id)) setTimeout(() => receivePoke(id), 10_000);
+  }
+  pokeIdem[key] = result;
+  return clone(result);
+}
+
+function visiblePlayers(): T.MapPlayer[] {
+  return seededPlayers
+    .filter((s) => s.open && !BLOCKED.has(s.id))
+    .map((s, i) => {
+      // Spread people around their hotspot, then snap to the approximation grid.
+      const a = (i * 137.5 * Math.PI) / 180;
+      const r = 18 + ((i * 29) % 70);
+      const [x, y] = [snap(s.at[0] + Math.cos(a) * r), snap(s.at[1] + Math.sin(a) * r)];
+      return { ...playerLite(s), position: toLatLng(x, y), precision_m: 40, proximity: s.proximity, activity: s.activity, last_seen_at: iso(now() - ((i * 3) % 20) * MIN), relationship: relOf(s.id).state };
+    });
+}
+
+/** Campus people beyond the demo cast (mock crowd), shaped like the demo people for profiles. */
+function crowdPerson(id: string): MockPerson | undefined {
+  const s = seedById(id);
+  if (!s || person(id)) return undefined;
+  return { user_id: s.id, display_name: s.name, avatar_url: null, hostel: s.hostel, bio: 'IISER K · here for the runs and the people', mode: 'friends', crews: [], ranZones: ['sports', 'mess'], open: s.open, active: s.activity ? { type: s.activity, minutesAgo: 6 } : null, proximity: s.proximity, xpToday: 80, distance30: 20000, runs30: 8, usual: 'evening' };
+}
+
+function summary(s: PlayerSeed): T.PersonSummary {
+  return { ...playerLite(s), proximity: s.proximity, relationship: relOf(s.id).state };
+}
+
 const DATE_MODE_ON = process.env.EXPO_PUBLIC_MOCK_DATE_MODE === 'on';
 
 export const mockCampusApi: T.CampusApi = {
@@ -510,6 +675,7 @@ export const mockCampusApi: T.CampusApi = {
       if (!patch.display_name.trim()) throw fail(422, 'invalid_name', 'Name can’t be empty');
       me.display_name = patch.display_name.trim();
     }
+    if (patch.profile_details !== undefined) throw new EndpointUnavailableError('profileDetails');
     if (patch.bio !== undefined) me.bio = patch.bio.slice(0, 160);
     if (patch.connection_mode !== undefined) me.connection_mode = patch.connection_mode;
     if (patch.hostel_zone_id !== undefined) {
@@ -533,13 +699,14 @@ export const mockCampusApi: T.CampusApi = {
   },
   async profile(userId) {
     await delay();
-    const p = person(userId);
+    if (BLOCKED.has(userId)) throw fail(404, 'not_found', 'Squirrel not found');
+    const p = person(userId) ?? crowdPerson(userId);
     if (!p) throw fail(404, 'not_found', 'Squirrel not found');
     return profileOf(p);
   },
   async sharedContext(userId) {
     await delay();
-    const p = person(userId);
+    const p = person(userId) ?? crowdPerson(userId);
     if (!p) throw fail(404, 'not_found', 'Squirrel not found');
     return userId === ME ? { shared_zones: [], shared_crews: [], shared_events: [], icebreakers: [] } : sharedWith(p);
   },
@@ -580,6 +747,7 @@ export const mockCampusApi: T.CampusApi = {
     let event: T.TerritoryEvent;
     if (action === 'defend') {
       t.under_challenge = false;
+      t.control = Math.min(1, (t.control ?? 0.5) + 0.15);
       t.defended_count += 1;
       t.last_defended_at = iso(now());
       t.shield_until = iso(now() + 2 * HOUR);
@@ -588,6 +756,9 @@ export const mockCampusApi: T.CampusApi = {
     } else {
       const prev = t.owner;
       t.owner = mePerson;
+      t.control = null;
+      t.xp = 0;
+      contested.delete(zoneId);
       t.crew = crewLite(person(ME)!.crews[0]);
       t.claimed_at = iso(now());
       t.shield_until = iso(now() + 2 * HOUR);
@@ -864,6 +1035,89 @@ export const mockCampusApi: T.CampusApi = {
     return { period, entries: rows, my_hostel_id: (person(ME)!.hostel ?? '').toLowerCase() || null, updated_at: iso(now()) };
   },
 
+  async mapFeatures() {
+    await delay();
+    return clone(MOCK_FEATURES);
+  },
+  async nearbyPlayers() {
+    await delay();
+    // You appear to others only while Open to Meet AND sharing your location.
+    const visible = me.open_to_meet && presence != null;
+    const hidden_reason = !me.open_to_meet ? 'You’re hidden. Turn on Open to Meet to appear to others.' : !presence ? 'Share your location to appear on the map.' : null;
+    return { players: visiblePlayers(), as_of: iso(now()), visible, hidden_reason };
+  },
+  async zonePlayers(zoneId) {
+    await delay();
+    const z = zoneById(zoneId);
+    return visiblePlayers()
+      .filter((p) => pointInZone(p.position, z))
+      .map((p) => summary(seedById(p.user_id)!));
+  },
+  async updatePresence(p) {
+    await delay();
+    presence = p;
+    return { accepted: true };
+  },
+  async searchPeople(q) {
+    await delay();
+    const term = q.trim().toLowerCase();
+    if (term.length < 2) return [];
+    return seededPlayers.filter((s) => !BLOCKED.has(s.id) && s.name.toLowerCase().includes(term)).slice(0, 20).map(summary);
+  },
+
+  async pokeStatus(userId) {
+    await delay();
+    if (!seedById(userId) || BLOCKED.has(userId)) throw fail(404, 'not_found', 'This Squirrel isn’t available');
+    return relationship(userId);
+  },
+  async sendPoke(userId, key) {
+    await delay();
+    maybeFail();
+    return doPoke(userId, key, false);
+  },
+  async pokeBack(userId, key) {
+    await delay();
+    maybeFail();
+    return doPoke(userId, key, true);
+  },
+  async incomingPokes() {
+    await delay();
+    return clone(incoming);
+  },
+  async friendshipStatus(userId) {
+    await delay();
+    const r = relOf(userId);
+    return { user_id: userId, friends: r.state === 'friends', since: r.friends_since };
+  },
+  async notifications() {
+    await delay();
+    return { items: clone(notes), unread: notes.filter((n) => !n.read).length };
+  },
+  async markNotificationsRead(ids) {
+    await delay();
+    notes.forEach((n) => {
+      if (ids.includes(n.id)) n.read = true;
+    });
+    return { unread: notes.filter((n) => !n.read).length };
+  },
+
+  // ---- The seven endpoints with no backend yet (shared zones, heatmap, Squirrel Dates, media,
+  // meetup ratings, ambassadors; profile_details is gated on PATCH /v1/me). The dev mock does NOT
+  // fake them: they reject as unavailable, exactly like the live build, so the UI shows
+  // "Not live yet" instead of invented data. api/campus/index.ts gates them before they get here.
+  sharedZones: () => unavailable('sharedZones'),
+  heatmap: () => unavailable('heatmap'),
+  dateSuggestions: () => unavailable('dateSuggestions'),
+  dismissDateSuggestion: () => unavailable('dateSuggestions'),
+  inviteFromSuggestion: () => unavailable('dateSuggestions'),
+  createUpload: () => unavailable('media'),
+  completeUpload: () => unavailable('media'),
+  media: () => unavailable('media'),
+  meetupRating: () => unavailable('meetupRating'),
+  rateMeetup: () => unavailable('meetupRating'),
+  ambassador: () => unavailable('ambassador'),
+  applyAmbassador: () => unavailable('ambassador'),
+
   async meetups() {
     await delay();
     return allMeetups().map(meetupView);
@@ -896,7 +1150,7 @@ export const mockCampusApi: T.CampusApi = {
 
 function summaryOf(e: (typeof events)[number]): T.EventSummary {
   refreshEvent(e);
-  return { id: e.id, title: e.title, type: e.type, starts_at: e.starts_at, ends_at: e.ends_at, location: e.location, host: e.host, participants_count: e.participants_count, capacity: e.capacity, my_rsvp: e.my_rsvp, territory_challenge: e.territory_challenge };
+  return { id: e.id, title: e.title, type: e.type, starts_at: e.starts_at, ends_at: e.ends_at, location: e.location, host: e.host, participants_count: e.participants_count, capacity: e.capacity, my_rsvp: e.my_rsvp, territory_challenge: e.territory_challenge, template: e.template ?? null, duration_min: e.duration_min ?? null, meeting_point: e.meeting_point ?? null };
 }
 function detailOf(e: (typeof events)[number]): T.EventDetail {
   const { going: _g, extra: _x, ...rest } = e;

@@ -2,7 +2,6 @@ import { useLocks } from '@/components/Locked';
 import { isLocked, type Feature } from '@/data/features';
 import { StyleSheet, Text, View } from 'react-native';
 import { router, type Href } from 'expo-router';
-import { Mascot } from '@/art/Mascot';
 import { Sheet } from '@/components/Sheet';
 import { Display, Icon, PressScale, tap } from '@/components/ui';
 import type { IconName } from '@/data/icons';
@@ -33,7 +32,6 @@ export default function Create() {
           <Display size={32}>Let's move</Display>
           <Text style={styles.sub}>What are you up to?</Text>
         </View>
-        <Mascot pose="cheer" size={86} />
       </View>
       <View style={styles.grid}>
         {ACTIONS.map((a) => (

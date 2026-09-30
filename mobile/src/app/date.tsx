@@ -13,7 +13,7 @@ import { PersonCardView } from '@/components/campus/Social';
 import { EmptyNote, ErrorState, LoadingRows, SignedOutState, SourceBadge } from '@/components/campus/States';
 import { Card, Display, Header, Icon, Kicker, Screen, SectionHeader, tap } from '@/components/ui';
 import { invalidateCampus, useAction, useCampus, useConfig, useMe } from '@/hooks/useCampus';
-import { colors, fonts, radius } from '@/theme';
+import { alpha, colors, fonts, radius } from '@/theme';
 
 export default function DateMode() {
   const config = useConfig();
@@ -92,7 +92,7 @@ export default function DateMode() {
           <Text style={styles.reqTitle}>Date Mode · {toggle.status === 'loading' ? 'saving…' : enabled ? 'ON' : 'OFF'}</Text>
           <Text style={styles.reqBody}>Only other verified students in Date Mode can see you here. First meetups are suggested in busy campus zones.</Text>
         </View>
-        <Switch value={enabled} onValueChange={flip} disabled={toggle.status === 'loading'} trackColor={{ false: colors.lineHi, true: '#8A1D57' }} thumbColor={enabled ? colors.secondary : colors.dim} accessibilityLabel="Date Mode" />
+        <Switch value={enabled} onValueChange={flip} disabled={toggle.status === 'loading'} trackColor={{ false: colors.lineHi, true: alpha(colors.secondary, 0.45) }} thumbColor={enabled ? colors.secondary : colors.dim} accessibilityLabel="Date Mode" />
       </Card>
       {toggle.status === 'error' && <Text style={styles.err}>{errorText(toggle.error)}</Text>}
 

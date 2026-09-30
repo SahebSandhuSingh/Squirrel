@@ -39,6 +39,8 @@ export function useConfig() {
 
 export const useMe = () => useCampus('me', () => campusApi.me());
 export const useZones = () => useCampus('zones', () => campusApi.zones(), { needsAuth: false });
+/** Stylised base map (roads, buildings, terrain, POIs). Public and static — cached for the session. */
+export const useMapFeatures = () => useCampus('map:features', () => campusApi.mapFeatures(), { needsAuth: false });
 
 /** Run `fn` for every realtime message while the component is mounted. */
 export function useRealtime(fn: (m: RealtimeMessage) => void) {

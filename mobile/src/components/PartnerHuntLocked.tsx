@@ -6,7 +6,7 @@ import { SoonPill } from '@/components/Locked';
 import { Button, Display, FadeIn, Header, Icon, Kicker, Screen, Tagline } from '@/components/ui';
 import { MATCH_FACTORS, PARTNER_HUNT_FLOW } from '@/data/partnerHunt';
 import { useApp } from '@/state/AppState';
-import { colors, fonts, radius } from '@/theme';
+import { alpha, colors, fonts, radius } from '@/theme';
 
 /**
  * Partner Hunt while it's locked: what it is, how it'll work and what you'll match on.
@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
   flow: { backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, padding: 14 },
   step: { flexDirection: 'row', gap: 12 },
   stepRail: { alignItems: 'center', width: 36 },
-  stepDot: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(215,255,31,0.1)', borderWidth: 1, borderColor: 'rgba(215,255,31,0.35)' },
+  stepDot: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: alpha(colors.primary, 0.1), borderWidth: 1, borderColor: alpha(colors.primary, 0.35) },
   stepLine: { flex: 1, width: 2, backgroundColor: colors.line, marginTop: 4, borderRadius: 1 },
   stepNo: { color: colors.primary, fontFamily: fonts.labelBold, fontSize: 13 },
   stepTitle: { color: colors.text, fontFamily: fonts.label, fontSize: 16, letterSpacing: 0.8, textTransform: 'uppercase' },

@@ -20,7 +20,7 @@ export function Sheet({ children, onClose }: { children: React.ReactNode; onClos
   };
   return (
     <View style={StyleSheet.absoluteFill}>
-      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(3,2,8,0.72)', opacity: v }]}>
+      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.backdrop, opacity: v }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={close} accessibilityLabel="Close" />
       </Animated.View>
       <Animated.View

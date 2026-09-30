@@ -11,7 +11,7 @@ import { ErrorState, LoadingRows, SourceBadge } from '@/components/campus/States
 import { Button, Header, Icon, PressScale, Screen, Segmented, tap } from '@/components/ui';
 import { invalidateCampus, useAction, useCampus, useZones } from '@/hooks/useCampus';
 import { useApp } from '@/state/AppState';
-import { colors, fonts, radius } from '@/theme';
+import { alpha, colors, fonts, radius } from '@/theme';
 
 /** Next few sensible slots: this evening, tomorrow morning/evening, Saturday morning. */
 function slots(): { label: string; at: Date }[] {
@@ -100,7 +100,7 @@ export default function NewInvite() {
         {typeList.map((t) => {
           const on = type?.id === t.id;
           return (
-            <PressScale key={t.id} onPress={() => { tap(); setTypeId(t.id); }} style={[styles.opt, on && { borderColor: colors.secondary, backgroundColor: 'rgba(255,45,155,0.08)' }]} scaleTo={0.98} accessibilityRole="radio" accessibilityState={{ selected: on }}>
+            <PressScale key={t.id} onPress={() => { tap(); setTypeId(t.id); }} style={[styles.opt, on && { borderColor: colors.secondary, backgroundColor: alpha(colors.secondary, 0.08) }]} scaleTo={0.98} accessibilityRole="radio" accessibilityState={{ selected: on }}>
               <Icon name={on ? 'radiobox-marked' : 'radiobox-blank'} size={20} color={on ? colors.secondary : colors.dim} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.optTitle}>{t.label}</Text>
@@ -153,7 +153,7 @@ export default function NewInvite() {
             {(zones.data ?? []).map((z: Zone) => {
               const on = zoneId === z.id;
               return (
-                <PressScale key={z.id} onPress={() => { tap(); setZoneId(z.id); }} style={[styles.chip, on && { borderColor: colors.primary, backgroundColor: 'rgba(215,255,31,0.08)' }]} scaleTo={0.96} accessibilityRole="radio" accessibilityState={{ selected: on }}>
+                <PressScale key={z.id} onPress={() => { tap(); setZoneId(z.id); }} style={[styles.chip, on && { borderColor: colors.primary, backgroundColor: alpha(colors.primary, 0.08) }]} scaleTo={0.96} accessibilityRole="radio" accessibilityState={{ selected: on }}>
                   <Text style={[styles.chipText, on && { color: colors.primary }]}>{z.short_name ?? z.name}</Text>
                 </PressScale>
               );
@@ -165,7 +165,7 @@ export default function NewInvite() {
       <Text style={styles.label}>When</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {times.map((t, i) => (
-          <PressScale key={t.label} onPress={() => { tap(); setSlot(i); }} style={[styles.chip, slot === i && { borderColor: colors.primary, backgroundColor: 'rgba(215,255,31,0.08)' }]} scaleTo={0.96} accessibilityRole="radio" accessibilityState={{ selected: slot === i }}>
+          <PressScale key={t.label} onPress={() => { tap(); setSlot(i); }} style={[styles.chip, slot === i && { borderColor: colors.primary, backgroundColor: alpha(colors.primary, 0.08) }]} scaleTo={0.96} accessibilityRole="radio" accessibilityState={{ selected: slot === i }}>
             <Text style={[styles.chipText, slot === i && { color: colors.primary }]}>{t.label}</Text>
           </PressScale>
         ))}

@@ -3,11 +3,13 @@ import { router } from 'expo-router';
 import type { EventSummary, EventType } from '@/api/campus';
 import { Icon, PressScale } from '@/components/ui';
 import { formatEventDate } from '@/data/community';
-import { colors, fonts, radius } from '@/theme';
+import { alpha, colors, fonts, radius } from '@/theme';
+import { useLocks } from '@/components/Locked';
 
 export const EVENT_TYPE: Record<string, { label: string; icon: React.ComponentProps<typeof Icon>['name']; color: string }> = {
   run: { label: 'Run', icon: 'run-fast', color: colors.primary },
   walk: { label: 'Walk', icon: 'walk', color: colors.green },
+  study_break_walk: { label: 'Study break walk', icon: 'coffee-outline', color: colors.secondary },
   territory_battle: { label: 'Territory battle', icon: 'sword-cross', color: colors.secondary },
   weekend_war: { label: 'Weekend War', icon: 'flag-variant', color: colors.orange },
   social: { label: 'Social', icon: 'party-popper', color: colors.purple },
@@ -15,9 +17,10 @@ export const EVENT_TYPE: Record<string, { label: string; icon: React.ComponentPr
 export const eventType = (t: EventType) => EVENT_TYPE[t] ?? { label: String(t).replace(/_/g, ' '), icon: 'calendar-star' as const, color: colors.blue };
 
 export function EventRow({ event: e }: { event: EventSummary }) {
+  const locks = useLocks();
   const t = eventType(e.type);
   return (
-    <PressScale onPress={() => router.push({ pathname: '/event/[id]', params: { id: e.id } })} style={[styles.row, e.my_rsvp === 'going' && { borderColor: 'rgba(215,255,31,0.45)' }]} scaleTo={0.985} accessibilityLabel={`${e.title}, ${formatEventDate(e.starts_at)}`}>
+    <PressScale onPress={locks.guard('events', () => router.push({ pathname: '/event/[id]', params: { id: e.id } }))} style={[styles.row, e.my_rsvp === 'going' && { borderColor: alpha(colors.primary, 0.45) }]} scaleTo={0.985} accessibilityLabel={`${e.title}, ${formatEventDate(e.starts_at)}`}>
       <View style={[styles.icon, { borderColor: t.color }]}>
         <Icon name={t.icon} size={22} color={t.color} />
       </View>

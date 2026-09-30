@@ -9,10 +9,11 @@ import { BadgeArt } from '@/art/Badge';
 import { campusApi, errorText, type Badge, type Icebreaker, type PersonCard, type Proximity } from '@/api/campus';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
 import { km } from '@/components/campus/territoryUi';
+import { PokeButton } from '@/components/social/PokeButton';
 import { Card, Icon, PressScale, ProgressBar, tap } from '@/components/ui';
 import { invalidateCampus, useAction } from '@/hooks/useCampus';
 import type { BadgeKind } from '@/types';
-import { colors, fonts, radius } from '@/theme';
+import { alpha, colors, fonts, radius } from '@/theme';
 
 // ---------------------------------------------------------------------------
 // Icebreakers — rendered verbatim from the backend; hidden when there are none.
@@ -33,7 +34,7 @@ export function Icebreakers({ items, targetUserId, max = 3, title = 'Icebreakers
             key={ib.id}
             onPress={() => (challenge ? router.push({ pathname: '/invite/new', params: { userId: targetUserId, zoneId: ib.action?.zone_id ?? '' } }) : tap())}
             scaleTo={0.98}
-            style={[styles.ib, challenge && { borderColor: 'rgba(255,45,155,0.5)' }]}
+            style={[styles.ib, challenge && { borderColor: alpha(colors.secondary, 0.5) }]}
             accessibilityLabel={ib.text}>
             <Text style={styles.ibText}>“{ib.text}”</Text>
             {challenge && (
@@ -234,12 +235,15 @@ export function PersonCardView({ p, extra, onChallenge, showIcebreakers = true }
         </View>
       )}
       {showIcebreakers && <Icebreakers items={p.shared.icebreakers} targetUserId={p.user_id} max={2} />}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <PokeButton user={p} size="sm" />
       {onChallenge && (
         <Pressable onPress={onChallenge} style={styles.challenge} accessibilityRole="button" accessibilityLabel={`Challenge ${p.display_name}`}>
           <Icon name="sword-cross" size={14} color={colors.secondary} />
           <Text style={styles.challengeText}>Challenge invite</Text>
         </Pressable>
       )}
+      </View>
     </Card>
   );
 }
@@ -272,6 +276,6 @@ const styles = StyleSheet.create({
   actText: { color: colors.sub, fontFamily: fonts.medium, fontSize: 12 },
   shared: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: colors.line, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
   sharedText: { color: colors.sub, fontFamily: fonts.medium, fontSize: 11 },
-  challenge: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', borderWidth: 1, borderColor: 'rgba(255,45,155,0.5)', borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 6 },
+  challenge: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', borderWidth: 1, borderColor: alpha(colors.secondary, 0.5), borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 6 },
   challengeText: { color: colors.secondary, fontFamily: fonts.label, fontSize: 12, letterSpacing: 0.8, textTransform: 'uppercase' },
 });

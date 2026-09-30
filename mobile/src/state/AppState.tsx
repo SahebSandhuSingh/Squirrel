@@ -13,6 +13,7 @@ import type { AvatarLook } from '@/types';
 import { districtsForCity, type District } from '@/data/territory';
 import { exerciseXp, runXp, type XpLine } from '@/logic/xp';
 import type { Verdict } from '@/logic/track';
+import { colors } from '@/theme';
 
 export const XP_PER_LEVEL = 2000;
 
@@ -190,7 +191,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         if (!m || m.current >= m.goal) return currentMissions;
         const next = Math.min(m.goal, +(m.current + m.step).toFixed(2));
         const updated = currentMissions.map((x) => (x.id === id ? { ...x, current: next } : x));
-        if (next >= m.goal) toast(`Mission complete: ${m.title}`, 'check-decagram', '#3DF0A0');
+        if (next >= m.goal) toast(`Mission complete: ${m.title}`, 'check-decagram', colors.green);
         return updated;
       });
     },
@@ -257,7 +258,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         return currentCoins - item.price;
       });
       if (result === 'ok') {
-        toast(`Unlocked ${item.name}`, 'lock-open-variant', '#FFD21F');
+        toast(`Unlocked ${item.name}`, 'lock-open-variant', colors.gold);
       }
       return result;
     },
@@ -305,7 +306,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     city,
     setCity: (id) => {
       setCityId(id);
-      toast(`Exploring ${cityById(id).name}`, 'map-marker-radius', '#D7FF1F');
+      toast(`Exploring ${cityById(id).name}`, 'map-marker-radius', colors.primary);
     },
     crews,
     events,
@@ -328,19 +329,19 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     toggleCrew: useCallback((id: string) => {
       setJoinedCrews((s) => {
         const crew = crews.find((c) => c.id === id);
-        if (!s.has(id) && crew) toast(`You joined ${crew.name}`, 'account-group', '#D7FF1F');
+        if (!s.has(id) && crew) toast(`You joined ${crew.name}`, 'account-group', colors.primary);
         return toggled(s, id);
       });
     }, [crews, toast]),
     joinedEvents,
     toggleEvent: useCallback((id: string) => {
       if (isLocked('events')) {
-        toast(COMING_SOON.events, 'lock', '#A9A9AE');
+        toast(COMING_SOON.events, 'lock', colors.dim);
         return;
       }
       const ev = events.find((e) => e.id === id);
       if (!joinedEvents.has(id) && ev) {
-        toast(`You're going to ${ev.title} · +${ev.xp} XP on check-in`, 'calendar-check', '#D7FF1F');
+        toast(`You're going to ${ev.title} · +${ev.xp} XP on check-in`, 'calendar-check', colors.primary);
         setMissions((all) => all.map((m) => (m.id === 'w-event' ? { ...m, current: m.goal } : m)));
       }
       setJoinedEvents((s) => toggled(s, id));
@@ -348,7 +349,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     following,
     toggleFollow: useCallback((id: string) => {
       setFollowing((s) => {
-        if (!s.has(id)) toast(`Following @${users.find((u) => u.id === id)?.handle ?? ''}`, 'account-check', '#D7FF1F');
+        if (!s.has(id)) toast(`Following @${users.find((u) => u.id === id)?.handle ?? ''}`, 'account-check', colors.primary);
         return toggled(s, id);
       });
     }, [toast]),
@@ -357,7 +358,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     saved,
     toggleSave: useCallback((id: string) => {
       setSaved((s) => {
-        if (!s.has(id)) toast('Saved to your collection', 'bookmark', '#FFD21F');
+        if (!s.has(id)) toast('Saved to your collection', 'bookmark', colors.gold);
         return toggled(s, id);
       });
     }, [toast]),
@@ -367,7 +368,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         { ...p, id: `me-${Date.now()}`, authorId: me.id, cityId, area: city.areas[0], minutesAgo: 0, likes: 0, comments: 0 },
         ...all,
       ]);
-      toast('Posted to your feed · +20 XP', 'send', '#D7FF1F');
+      toast('Posted to your feed · +20 XP', 'send', colors.primary);
       setXp((x) => x + 20);
     }, [cityId, city, me.id, toast]),
     finishRun,

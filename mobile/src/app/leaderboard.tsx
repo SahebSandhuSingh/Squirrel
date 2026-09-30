@@ -11,7 +11,7 @@ import { EmptyNote, ErrorState, LoadingRows, SourceBadge } from '@/components/ca
 import { km, shortTime } from '@/components/campus/territoryUi';
 import { Chips, Display, Header, Icon, Kicker, Screen, Segmented } from '@/components/ui';
 import { useCampus, useConfig, useRealtime, useRefreshOnFocus } from '@/hooks/useCampus';
-import { colors, fonts, radius } from '@/theme';
+import { alpha, colors, fonts, radius } from '@/theme';
 
 const BOARDS = ['Squirrels', 'Hostel vs Hostel'] as const;
 const PERIODS = ['Daily', 'Weekly', 'All-time'] as const;
@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
   head: { color: colors.dim, fontFamily: fonts.label, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' },
   colN: { width: 56, textAlign: 'right' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, paddingVertical: 8, paddingHorizontal: 10 },
-  meRow: { borderColor: colors.primary, backgroundColor: 'rgba(215,255,31,0.06)' },
+  meRow: { borderColor: colors.primary, backgroundColor: alpha(colors.primary, 0.06) },
   rank: { color: colors.dim, fontFamily: fonts.display, fontSize: 18, width: 28 },
   name: { color: colors.text, fontFamily: fonts.bold, fontSize: 14 },
   meta: { color: colors.dim, fontFamily: fonts.mono, fontSize: 10 },

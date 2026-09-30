@@ -4,13 +4,23 @@ import { FlatList, View } from 'react-native';
 import { router } from 'expo-router';
 import { campusApi } from '@/api/campus';
 import { EventRow } from '@/components/campus/EventRow';
+import { isStudyBreak, StudyBreakCard } from '@/components/events/StudyBreak';
 import { EmptyNote, ErrorState, LoadingRows, SourceBadge } from '@/components/campus/States';
 import { Header, IconButton, Screen, Segmented } from '@/components/ui';
 import { useCampus, useRealtime, useRefreshOnFocus } from '@/hooks/useCampus';
+import { FeatureGate, SoonScreen } from '@/components/Locked';
 
 const TABS = ['Upcoming', 'Going'] as const;
 
-export default function Events() {
+export default function EventsRoute() {
+  return (
+    <FeatureGate feature="events" fallback={<SoonScreen title="Events" body="Campus events, study-break walks and RSVPs — switching on soon." onBack={() => (router.canGoBack() ? router.back() : router.replace('/home'))} />}>
+      <Events />
+    </FeatureGate>
+  );
+}
+
+function Events() {
   const [tab, setTab] = useState<(typeof TABS)[number]>('Upcoming');
   const scope = tab === 'Going' ? 'mine' : 'upcoming';
   const list = useCampus(`events:${scope}`, () => campusApi.events({ scope }));
@@ -21,7 +31,10 @@ export default function Events() {
     const items = list.data.items.map((e) => (e.id === m.data.event_id ? { ...e, participants_count: m.data.participants_count } : e));
     list.mutate({ ...list.data, items });
   });
-  const items = list.data?.items ?? [];
+  const all = list.data?.items ?? [];
+  // Upcoming leads with the next study-break walk: spontaneous, twenty minutes, no planning.
+  const featured = tab === 'Upcoming' ? (all.find(isStudyBreak) ?? null) : null;
+  const items = featured ? all.filter((e) => e.id !== featured.id) : all;
   return (
     <Screen tabBar={false} scroll={false}>
       <Header back title="Events" right={<><IconButton icon="calendar-check" onPress={() => router.push('/meetups')} label="Meetups and check-in" /><SourceBadge /></>} />
@@ -31,6 +44,7 @@ export default function Events() {
         keyExtractor={(e) => e.id}
         contentContainerStyle={{ gap: 10, paddingBottom: 40 }}
         renderItem={({ item }) => <EventRow event={item} />}
+        ListHeaderComponent={featured ? <StudyBreakCard event={featured} /> : null}
         ListEmptyComponent={
           <View>
             {list.signedOut ? (

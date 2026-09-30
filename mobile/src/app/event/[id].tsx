@@ -5,15 +5,25 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Scene } from '@/art/Scene';
 import { campusApi, errorText, type EventDetail } from '@/api/campus';
 import { eventType } from '@/components/campus/EventRow';
+import { isStudyBreak } from '@/components/events/StudyBreak';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
 import { ErrorState, LoadingRows, SourceBadge } from '@/components/campus/States';
 import { Button, Card, Display, Icon, IconButton, Kicker, Scrim, SectionHeader, tap } from '@/components/ui';
 import { formatEventDate } from '@/data/community';
 import { invalidateCampus, useAction, useCampus } from '@/hooks/useCampus';
 import { useApp } from '@/state/AppState';
-import { colors, fonts, MAX_WIDTH } from '@/theme';
+import { alpha, colors, fonts, MAX_WIDTH } from '@/theme';
+import { FeatureGate, SoonScreen } from '@/components/Locked';
 
-export default function EventScreen() {
+export default function EventRoute() {
+  return (
+    <FeatureGate feature="events" fallback={<SoonScreen title="Events" body="Campus events, study-break walks and RSVPs — switching on soon." onBack={() => (router.canGoBack() ? router.back() : router.replace('/home'))} />}>
+      <EventScreen />
+    </FeatureGate>
+  );
+}
+
+function EventScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -31,7 +41,8 @@ export default function EventScreen() {
       </View>
     );
   }
-  const t = eventType(e.type);
+  const t = eventType(isStudyBreak(e) ? 'study_break_walk' : e.type);
+  const walk = isStudyBreak(e);
   const going = e.my_rsvp === 'going';
   const full = e.capacity != null && e.participants_count >= e.capacity && !going;
   const toggle = async () => {
@@ -41,14 +52,14 @@ export default function EventScreen() {
       r.mutate(next); // the server's answer, not a guess
       invalidateCampus('events');
       invalidateCampus('meetups');
-      toast(next.my_rsvp ? `You’re going to ${next.title}` : 'RSVP cancelled', next.my_rsvp ? 'calendar-check' : 'calendar-remove', next.my_rsvp ? colors.primary : colors.dim);
+      toast(next.my_rsvp ? (walk ? 'You’re in. See you there 👟' : `You’re going to ${next.title}`) : walk ? 'You left the walk' : 'RSVP cancelled', next.my_rsvp ? 'calendar-check' : 'calendar-remove', next.my_rsvp ? colors.primary : colors.dim);
     }
   };
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ paddingBottom: insets.bottom + 30 }}>
       <View style={{ height: 220 + insets.top }}>
-        <Scene kind={e.type === 'walk' ? 'lake' : e.type === 'social' ? 'crew' : 'stadium'} seed={e.title.length} aspect={Math.min(width, MAX_WIDTH) / (220 + insets.top)} style={StyleSheet.absoluteFill} />
+        <Scene kind={walk || e.type === 'walk' ? 'lake' : e.type === 'social' ? 'crew' : 'stadium'} seed={e.title.length} aspect={Math.min(width, MAX_WIDTH) / (220 + insets.top)} style={StyleSheet.absoluteFill} />
         <Scrim strong />
         <View style={[styles.top, { top: insets.top + 8 }]}>
           <IconButton icon="chevron-left" size={26} onPress={back} label="Back" />
@@ -64,16 +75,17 @@ export default function EventScreen() {
       <View style={styles.col}>
         <Card style={{ gap: 10 }}>
           <Line icon="calendar-clock" text={formatEventDate(e.starts_at) + (e.ends_at ? ` → ${new Date(e.ends_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : '')} />
+          {walk && <Line icon="timer-outline" text={`${e.duration_min ?? 20} min campus reset`} />}
           <Line
             icon="map-marker"
-            text={e.location.name}
+            text={walk && e.meeting_point ? `${e.meeting_point} · ${e.location.name}` : e.location.name}
             onPress={e.location.zone_id ? () => router.push({ pathname: '/zone/[id]', params: { id: e.location.zone_id! } }) : undefined}
           />
           <Line icon="account-group" text={`${e.participants_count} going${e.capacity != null ? ` · ${Math.max(0, e.capacity - e.participants_count)} spots left` : ''}`} />
         </Card>
 
         {e.territory_challenge && (
-          <Card style={{ marginTop: 12, borderColor: 'rgba(255,45,155,0.5)', gap: 6 }}>
+          <Card style={{ marginTop: 12, borderColor: alpha(colors.secondary, 0.5), gap: 6 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Icon name="sword-cross" size={18} color={colors.secondary} />
               <Text style={styles.chTitle}>Territory challenge</Text>
@@ -90,8 +102,8 @@ export default function EventScreen() {
 
         <View style={{ marginTop: 16, gap: 8 }}>
           <Button
-            label={rsvp.status === 'loading' ? (going ? 'Cancelling…' : 'Saving…') : going ? 'Going · Cancel RSVP' : full ? 'Event full' : e.rsvp_open ? 'RSVP · I’m going' : 'RSVPs closed'}
-            iconLeft={going ? 'check' : 'calendar-plus'}
+            label={rsvp.status === 'loading' ? (going ? 'Cancelling…' : 'Saving…') : walk ? (going ? 'You’re in · Leave walk' : full ? 'Walk full' : e.rsvp_open ? 'Join walk' : 'Walk closed') : going ? 'Going · Cancel RSVP' : full ? 'Event full' : e.rsvp_open ? 'RSVP · I’m going' : 'RSVPs closed'}
+            iconLeft={going ? 'check' : walk ? 'walk' : 'calendar-plus'}
             variant={going ? 'secondary' : 'primary'}
             disabled={rsvp.status === 'loading' || (!going && (full || !e.rsvp_open))}
             onPress={toggle}

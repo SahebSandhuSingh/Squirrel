@@ -13,7 +13,7 @@ import { territoryBoard } from '@/data/territory';
 import { liveHeatmap, liveStats } from '@/logic/progressStats';
 import { DAILY_RUN_XP_CAP, XP_PER_LEVEL } from '@/logic/xp';
 import { useApp } from '@/state/AppState';
-import { colors, fonts, radius } from '@/theme';
+import { alpha, colors, fonts, radius } from '@/theme';
 
 /**
  * YOUR PROGRESS: today → progress over time → performance → what to do next.
@@ -41,7 +41,7 @@ const METRIC_LABEL: Record<Metric, string> = { steps: 'Steps', active: 'Active',
 const unit = (m: Metric, p: Period) =>
   m === 'steps' ? (p === 'Year' ? 'k steps' : 'steps') : m === 'kcal' ? (p === 'Year' ? 'k kcal' : 'kcal') : m === 'active' ? (p === 'Year' ? 'h' : 'min') : 'workouts';
 const PREV: Record<Period, string> = { Day: 'yesterday', Week: 'last week', Month: 'last month', Year: 'last year' };
-const HEAT = ['rgba(255,255,255,0.06)', 'rgba(215,255,31,0.25)', 'rgba(215,255,31,0.45)', 'rgba(215,255,31,0.7)', colors.primary];
+const HEAT = [alpha(colors.text, 0.06), alpha(colors.primary, 0.25), alpha(colors.primary, 0.45), alpha(colors.primary, 0.7), colors.primary];
 
 export default function Progress() {
   const app = useApp();
@@ -203,7 +203,7 @@ export default function Progress() {
           {heat.map((row, r) => (
             <View key={r} style={{ flexDirection: 'row', gap: 5 }}>
               {row.map((v, c) => (
-                <View key={c} style={[styles.cell, { backgroundColor: HEAT[v] }, r === heat.length - 1 && { borderWidth: 1, borderColor: 'rgba(215,255,31,0.35)' }]} />
+                <View key={c} style={[styles.cell, { backgroundColor: HEAT[v] }, r === heat.length - 1 && { borderWidth: 1, borderColor: alpha(colors.primary, 0.35) }]} />
               ))}
             </View>
           ))}
@@ -368,7 +368,7 @@ function Bars({ stat, unitLabel }: { stat: Stat; unitLabel: string }) {
                 height: Math.max(v > 0 ? 3 : 0, (v / max) * (H - 6)),
                 borderTopLeftRadius: 4,
                 borderTopRightRadius: 4,
-                backgroundColor: i === sel ? colors.primary : 'rgba(215,255,31,0.38)',
+                backgroundColor: i === sel ? colors.primary : alpha(colors.primary, 0.38),
               }}
             />
           </Pressable>
