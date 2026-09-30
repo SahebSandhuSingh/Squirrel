@@ -23,6 +23,8 @@ import { resolvePoseModelConfig, benchEnabled, wasmFilesFor } from './poseModel'
 // Resolution-independent keypoint space (see frameGeometry.ts) + phone-friendly camera acquisition.
 import { toCanonicalKeypoints, type Keypoint } from './frameGeometry'
 import { acquireCameraStream, isPortraitViewport } from './camera'
+// Low-light preprocessing (denoise + gain on dark frames only) — see lowLight.ts for the evidence.
+import { LowLightPreprocessor, type LightingState } from './lowLight'
 
 // ── PoseLandmarker singleton (load once, reuse for every inference) ───────────────────────
 // The lite model + WASM are fetched and the GPU landmarker is created exactly ONCE per page
@@ -122,6 +124,8 @@ export function usePose({ onFrame, send, poseActive, sendActive, paused }: UsePo
   const [permission, setPermission] = useState<CameraPermission>('required')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [retryNonce, setRetryNonce] = useState(0) // bump to re-attempt camera acquisition
+  // Scene lighting as seen by the detector: 'low' = being enhanced, 'too_dark' = ask for light.
+  const [lighting, setLighting] = useState<LightingState>('ok')
 
   // keep latest callbacks / flags without restarting the detection loop
   const onFrameRef = useRef(onFrame); onFrameRef.current = onFrame
@@ -205,6 +209,10 @@ export function usePose({ onFrame, send, poseActive, sendActive, paused }: UsePo
     // EMA was removed to avoid double-smoothing). Persists across frames; reset on dropout.
     const poseFilter = new PoseFilter()
 
+    // Dark frames from weak cameras are denoised + brightened before detection (same geometry).
+    const lowLight = new LowLightPreprocessor()
+    let lastLighting: LightingState = 'ok'
+
     // Opt-in profiler (?posebench=1): rolling avg/max of detectForVideo, flushed every ~2s.
     const bench = benchEnabled()
     let benchSum = 0, benchMax = 0, benchN = 0, benchFlush = performance.now()
@@ -215,7 +223,10 @@ export function usePose({ onFrame, send, poseActive, sendActive, paused }: UsePo
       if (video && lm && video.currentTime !== lastVideoTimeRef.current) {
         lastVideoTimeRef.current = video.currentTime
         const t0 = bench ? performance.now() : 0
-        const result = lm.detectForVideo(video, performance.now())
+        const now = performance.now()
+        const result = lm.detectForVideo(lowLight.source(video, now), now)
+        const lightingNow = lowLight.policy.lighting
+        if (lightingNow !== lastLighting) { lastLighting = lightingNow; setLighting(lightingNow) }
         if (bench) {
           const dt = performance.now() - t0
           benchSum += dt; benchN += 1; if (dt > benchMax) benchMax = dt
@@ -283,5 +294,5 @@ export function usePose({ onFrame, send, poseActive, sendActive, paused }: UsePo
     }
   }, [poseActive, modelStatus, retryNonce, logicalNow])
 
-  return { videoRef, modelStatus, cameraStatus, permission, errorMsg, retryCamera }
+  return { videoRef, modelStatus, cameraStatus, permission, errorMsg, retryCamera, lighting }
 }
