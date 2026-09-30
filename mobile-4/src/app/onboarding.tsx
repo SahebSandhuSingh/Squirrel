@@ -14,7 +14,7 @@ import { router } from 'expo-router';
 import { Mascot } from '@/art/Mascot';
 import { campusApi, errorKind, errorText, featureUnavailable, isEndpointAvailable, type ConnectionMode, type Me } from '@/api/campus';
 import { OpenToMeetToggle } from '@/components/campus/Social';
-import { DEFAULT_COURSES, ProfileDetailsForm } from '@/components/profile/ProfileDetailsForm';
+import { DEFAULT_COURSES, GENDERS, ProfileDetailsForm } from '@/components/profile/ProfileDetailsForm';
 import { useAuth } from '@/auth/AuthProvider';
 import { isComplete, normalizePhone, validateDetails, type DetailsForm } from '@/logic/profileValidation';
 import { ErrorState, NotLiveYet, SourceBadge } from '@/components/campus/States';
@@ -48,7 +48,7 @@ export default function Onboarding() {
     personal_email: saved?.personal_email ?? '',
     college_email: saved?.college_email ?? auth.email ?? me.data?.email ?? '',
     phone: saved?.phone?.replace(/^\+91/, '') ?? '',
-    gender: saved?.gender ?? '',
+    gender: GENDERS.some((g) => g.id === saved?.gender) ? saved!.gender : '',
     age: saved?.age != null ? String(saved.age) : '',
     course: saved?.course ?? '',
     cgpa: saved?.cgpa != null ? String(saved.cgpa) : '',
