@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import isfinite
-from typing import Callable, Literal
+from typing import Callable, Literal, Mapping
 
 from backend.engine.rep_fsm import RepFSM, RepState, fsm_diagnostics
 from backend.training.timed_contract import LiftClassification, LiftSide
@@ -65,6 +65,7 @@ class HighKneeLiftDetector:
         max_frame_delta_ms: float,
         max_tracking_gap_ms: float | None = None,
         max_lift_ms: float | None = None,
+        frame_cadence: Mapping | None = None,
     ) -> None:
         if side not in {"left", "right"}:
             raise ValueError("lift detector side must be 'left' or 'right'")
@@ -82,6 +83,7 @@ class HighKneeLiftDetector:
             stale_phase_ms=stale_phase_ms,
             max_frame_delta_ms=max_frame_delta_ms,
             max_tracking_gap_ms=max_tracking_gap_ms,
+            frame_cadence=frame_cadence,
         )
         self._reached_gate = reached_gate
         # A high knee is a running movement: a lift slower than this (leaving the standing band to
@@ -194,6 +196,7 @@ def high_knee_lift_detector(
     reached_gate: Callable[[float], bool],
     fsm: dict,
     max_frame_delta_ms: float,
+    frame_cadence: Mapping | None = None,
 ) -> HighKneeLiftDetector:
     """Build one detector from the strict timed FSM document without adding defaults."""
     return HighKneeLiftDetector(
@@ -211,4 +214,5 @@ def high_knee_lift_detector(
         max_frame_delta_ms=max_frame_delta_ms,
         max_tracking_gap_ms=fsm.get("max_tracking_gap_ms"),
         max_lift_ms=fsm.get("max_lift_ms"),
+        frame_cadence=frame_cadence,
     )

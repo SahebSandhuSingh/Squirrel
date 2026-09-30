@@ -85,6 +85,7 @@ class HighKneeAdapter:
             "reached_gate": self._rom.is_full_rom,
             "fsm": config.fsm,
             "max_frame_delta_ms": config.scoring["max_frame_delta_ms"],
+            "frame_cadence": config.scoring.get("frame_cadence"),
         }
         self._detectors = {
             side: high_knee_lift_detector(side, **detector_inputs)

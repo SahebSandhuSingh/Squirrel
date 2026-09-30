@@ -586,6 +586,7 @@ def _fsm_inputs(config: ExerciseConfiguration) -> dict:
     values["max_frame_delta_ms"] = config.scoring["max_frame_delta_ms"]
     values["max_tracking_gap_ms"] = config.fsm.get("max_tracking_gap_ms")
     values.update(rep_outcome.fsm_policy_inputs(config.fsm))
+    values["frame_cadence"] = config.scoring.get("frame_cadence")
     return values
 
 
