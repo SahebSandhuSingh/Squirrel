@@ -23,6 +23,7 @@ import { squirrelDateRoutes } from './shared-zones/date-suggestions.js';
 import { getPool } from './db/pool.js';
 import { registerInboundIdentity } from './identity/inbound.js';
 import { translateOutbound } from './identity/translate.js';
+import { corsOrigins } from './lib/cors.js';
 
 export async function buildApp(opts: { logger?: boolean | object } = {}): Promise<FastifyInstance> {
   const app = Fastify({
@@ -31,7 +32,7 @@ export async function buildApp(opts: { logger?: boolean | object } = {}): Promis
     trustProxy: true,
   });
 
-  await app.register(cors, { origin: config.corsOrigins.length ? config.corsOrigins : false });
+  await app.register(cors, { origin: corsOrigins(config.corsOrigins) });
   await app.register(rateLimit, {
     global: true, max: 300, timeWindow: '1 minute',
     keyGenerator: (req) => (req.user?.id ? `u:${req.user.id}` : `ip:${req.ip}`),

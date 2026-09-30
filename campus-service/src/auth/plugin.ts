@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
-import { verifyBearer, type Principal } from './jwt.js';
-import { errors } from '../lib/errors.js';
+import { AuthUnavailableError, verifyBearer, type Principal } from './jwt.js';
+import { ApiError, errors } from '../lib/errors.js';
 import { ensureUser, type UserRow } from '../users/repo.js';
 
 declare module 'fastify' {
@@ -23,6 +23,11 @@ export const authPlugin = fp(async (app: FastifyInstance) => {
     try {
       req.principal = await verifyBearer(token);
     } catch (e) {
+      if (e instanceof AuthUnavailableError) {
+        // Not the token's fault: the key set (AUTH_JWKS_URL) is unreachable. 503 keeps the app signed in.
+        req.log.warn({ err: String(e.cause) }, 'auth: key set unreachable');
+        throw new ApiError(503, 'auth_unreachable', 'Sign-in can’t be checked right now. Try again in a moment.', { retry_after_s: 30 });
+      }
       req.log.debug({ err: e }, 'bearer rejected');
       throw errors.unauthorized('Your session is invalid or expired. Sign in again.');
     }

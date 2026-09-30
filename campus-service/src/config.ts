@@ -45,6 +45,8 @@ export const config = {
     issuer: str('AUTH_ISSUER') || undefined,
     audience: str('AUTH_AUDIENCE') || undefined,
     devHs256Secret: str('AUTH_DEV_HS256_SECRET'),
+    // How long to wait for AUTH_JWKS_URL. The free Render plan takes ~1 min to wake the Exercise backend.
+    jwksTimeoutMs: num('AUTH_JWKS_TIMEOUT_MS', 15_000),
   },
 
   campus: {

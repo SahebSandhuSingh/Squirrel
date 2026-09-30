@@ -3,7 +3,7 @@ import { config } from './config.js';
 import { closePool } from './db/pool.js';
 import { startRealtimeFanout, stopRealtimeFanout } from './realtime/bus.js';
 import { startWorker } from './verification/worker.js';
-import { authConfigured } from './auth/jwt.js';
+import { authConfigured, warmKeys } from './auth/jwt.js';
 import { migrate } from './db/migrate.js';
 import { seedZones } from './seed/run.js';
 import { bridgeEnabled } from './identity/index.js';
@@ -21,6 +21,7 @@ async function main() {
     app.log.info('hostels and zones seeded');
   }
   app.log.info({ social_bridge: bridgeEnabled() }, bridgeEnabled() ? 'identity bridge to Social is ON' : 'identity bridge to Social is OFF (SOCIAL_API_URL / SOCIAL_INTERNAL_TOKEN unset)');
+  warmKeys(app.log);
   await startRealtimeFanout(app.log);
   const abort = new AbortController();
   if (config.worker.inline) void startWorker(app.log, abort.signal);

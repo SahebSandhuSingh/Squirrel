@@ -196,7 +196,9 @@ token and looks broken while it isn't. Nothing else depends on it: the app uses 
      `AUTH_ISSUER` / `AUTH_AUDIENCE` unset.
    - `SOCIAL_API_URL`: `https://squirrel-social.onrender.com` (names and profile ids come from there,
      with `SOCIAL_INTERNAL_TOKEN` from the group).
-   - `CORS_ORIGINS`: the Vercel address(es).
+   - `CORS_ORIGINS`: the Vercel address, plus previews if you like, comma-separated:
+     `https://squirrel-social.vercel.app,https://squirrel-social-*.vercel.app` (`*` matches one
+     name part: letters, digits, hyphens).
    - `REALTIME_PUBLIC_URL`: `wss://squirrel-campus.onrender.com/v1/realtime`.
 3. First start applies its migrations and seeds the hostels and **placeholder** zones
    (`geometry_source: dev_placeholder`, shown dashed and labelled approximate in the app). Surveyed
@@ -206,6 +208,22 @@ token and looks broken while it isn't. Nothing else depends on it: the app uses 
 5. **Vercel:** add `EXPO_PUBLIC_CAMPUS_SERVICE_URL=https://squirrel-campus.onrender.com` and redeploy.
    Map, zones, territory, presence, heatmap and shared zones then come from campus-service;
    everything else stays on squirrel-social.
+
+**If it doesn't work**, check in this order (each first request may take a minute while a free
+service wakes):
+
+| Open | If you see | Fix |
+|---|---|---|
+| `https://squirrel-exercise.onrender.com/api/auth/jwks.json` | `{"keys":[]}` | RS256 isn't done: §2d first. campus-service accepts RS256 only |
+| `https://squirrel-campus.onrender.com/healthz` | no answer / error page | Service didn't start: Render → squirrel-campus → Logs (usually `AUTH_JWKS_URL` missing, or a build error) |
+| `https://squirrel-campus.onrender.com/readyz` | fails while `/healthz` works | Database: PostGIS off, not the **Session** pooler URL, wrong password, or the `squirrel-shared` group (CA file) not linked |
+| the app, browser console | "CORS" | `CORS_ORIGINS` doesn't match the address in the browser bar |
+| the app | names like "Squirrel a1b2c3" | `SOCIAL_API_URL` wrong, or the group (`SOCIAL_INTERNAL_TOKEN`) not linked |
+| the app | map unchanged | Vercel not redeployed after adding `EXPO_PUBLIC_CAMPUS_SERVICE_URL` |
+
+A sleeping Exercise backend no longer signs anyone out: campus-service fetches its key once at
+start-up, keeps it 12 h, and answers `503 auth_unreachable` ("try again") rather than 401 if the
+key can't be fetched.
 
 Note: with campus-service on, a finished run's GPS is also sent to it (it verifies runs itself to
 decide who may claim a zone), so GPS is stored in two databases. Include that in the privacy review.

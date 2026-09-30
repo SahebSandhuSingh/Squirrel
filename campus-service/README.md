@@ -65,7 +65,8 @@ Users are keyed by the JWT `sub` internally. The Social service owns the public 
 1. `SOCIAL_API_URL` + `SOCIAL_INTERNAL_TOKEN` so ids and names match the Social app (see above).
 2. Replace placeholder zone geometry (docs/GEOGRAPHIC_DATA_REQUIRED.md).
 3. Run ≥ 1 worker process; `WORKER_INLINE=0` on API instances.
-4. `REALTIME_PUBLIC_URL=wss://…/v1/realtime`, `CORS_ORIGINS` for any web origins.
+4. `REALTIME_PUBLIC_URL=wss://…/v1/realtime`, `CORS_ORIGINS` for any web origins (comma-separated; `https://squirrel-*.vercel.app` style patterns allowed, `*` = letters, digits, hyphens).
+   The JWKS is fetched at start-up and kept 12 h (an unknown key id refetches at once). If it can't be fetched (`AUTH_JWKS_TIMEOUT_MS`, default 15000) requests get `503 auth_unreachable`, not 401, so clients keep their session and retry.
 5. TLS termination and WebSocket pass-through at the load balancer; `trustProxy` is on.
 6. Backups; `pg_stat_statements` on; retention job for `presence` (`sweepPresence`) and `idempotency_keys` (> 7 days) — both are trivial `DELETE`s to schedule.
 
