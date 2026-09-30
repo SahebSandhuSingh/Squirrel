@@ -364,7 +364,7 @@ Routes: `GET /api/users/{id}/activity-matching` (status, and exactly what matche
 
 Phones find each other over Bluetooth and the backend decides when two people are really near each
 other. The full design is in [`docs/nearby-discovery.md`](../docs/nearby-discovery.md); the phone
-side is in [`mobile/nearby/`](../mobile/nearby/).
+side is in [`backup/mobile-nearby/nearby/`](../backup/mobile-nearby/nearby/) (not built at the moment).
 
 | Module | Routes |
 |---|---|

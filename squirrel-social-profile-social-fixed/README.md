@@ -2,7 +2,7 @@
 
 | Path | What it is |
 |---|---|
-| `mobile/` | Squirrel Social app (Expo / React Native). See `mobile/README.md` |
+| `mobile/` | Moved to `backup/social-mobile/` at the repository root; the app is `mobile-4/` now |
 | `social-backend/` | Profile + Social service (FastAPI, PostgreSQL, Alembic): profiles, follows, posts, likes, comments, feeds. See `social-backend/README.md` |
 | `Exercise_Mechanics--main/` | Exercise Mechanics / form-coach backend (FastAPI, `/api`) |
 

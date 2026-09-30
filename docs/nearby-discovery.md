@@ -11,9 +11,9 @@ decides when to notify.
 | Auth (register / login / refresh) | `Exercise_Mechanics--main/backend/auth/` |
 | Rotating ids, proximity engine, nearby API, notifications | `Exercise_Mechanics--main/backend/nearby/` |
 | `/join`, `/invite/{token}`, QR, Universal/App Link files | `Exercise_Mechanics--main/backend/deeplinks/` |
-| Android BLE client (Kotlin) | `mobile/nearby/android/` |
-| iOS BLE client (Swift / CoreBluetooth) | `mobile/nearby/ios/` |
-| Mobile integration guide | [`mobile/nearby/README.md`](../mobile/nearby/README.md) |
+| Android BLE client (Kotlin) | `backup/mobile-nearby/nearby/android/` |
+| iOS BLE client (Swift / CoreBluetooth) | `backup/mobile-nearby/nearby/ios/` |
+| Mobile integration guide | [`backup/mobile-nearby/nearby/README.md`](../backup/mobile-nearby/nearby/README.md) |
 
 ---
 

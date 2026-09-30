@@ -55,9 +55,7 @@ run-module/
 │   └── decisions/          # Architecture Decision Records (ADRs)
 ├── infra/
 │   └── docker-compose.yml  # Local dev: Postgres + Redis
-└── mobile/
-    ├── ios/                # Native Swift (future)
-    └── android/            # Native Kotlin (future)
+└── (mobile/ native Swift/Kotlin stubs now live in backup/run-module-mobile/ at the repo root)
 ```
 
 ---

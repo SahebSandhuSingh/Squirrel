@@ -1,6 +1,6 @@
-"""Wire constants shared with the mobile clients (mirrored in mobile/nearby/*).
+"""Wire constants shared with the mobile clients (mirrored in backup/mobile-nearby/nearby/*).
 
-BLE layout (see mobile/nearby/README.md):
+BLE layout (see backup/mobile-nearby/nearby/README.md):
     • Advertisement: the Squirrel SERVICE_UUID only. iOS cannot advertise service/manufacturer data,
       so no identifier is ever placed in the advertisement itself.
     • GATT: SERVICE_UUID exposes one read-only characteristic, BLE_ID_CHARACTERISTIC_UUID, whose value
