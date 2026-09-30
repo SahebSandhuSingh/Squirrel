@@ -93,8 +93,17 @@ def _send_resend(to: str, subject: str, text: str) -> None:
     body = json.dumps({"from": _sender(), "to": [to], "subject": subject, "text": text}).encode()
     request = urllib.request.Request(
         _RESEND_URL, data=body, method="POST",
-        headers={"Authorization": f"Bearer {_env('RESEND_API_KEY')}", "Content-Type": "application/json"},
+        headers={
+            "Authorization": f"Bearer {_env('RESEND_API_KEY')}",
+            "Content-Type": "application/json",
+            # Cloudflare fronts Resend and blocks the default Python-urllib agent
+            # from data-centre IPs with 403 / error code 1010. Any real UA passes.
+            "User-Agent": "squirrel-exercise/1.0",
+        },
     )
-    with urllib.request.urlopen(request, timeout=_TIMEOUT_S) as response:
-        if response.status >= 300:
-            raise ValueError(f"Resend answered {response.status}")
+    try:
+        with urllib.request.urlopen(request, timeout=_TIMEOUT_S) as response:
+            if response.status >= 300:
+                raise ValueError(f"Resend answered {response.status}")
+    except urllib.error.HTTPError as exc:
+        raise ValueError(f"Resend answered {exc.code}: {exc.read().decode()[:500]}") from exc
