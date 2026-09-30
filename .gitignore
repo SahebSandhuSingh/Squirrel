@@ -2,3 +2,12 @@
 .env
 deploy/certs/*
 !deploy/certs/.gitkeep
+
+# Dependencies — never commit these
+node_modules/
+**/node_modules/
+
+# Build output
+dist/
+build/
+.expo/
