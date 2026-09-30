@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { isCollegeEmail, isComplete, normalizePhone, REQUIRED_FIELDS, validateDetails } from './profileValidation.ts';
 
-const ok = { full_name: 'Aanya Sharma', personal_email: 'aanya@gmail.com', college_email: 'as21ms001@iiserkol.ac.in', phone: '98765 43210', gender: 'woman', age: '20', course: 'BS-MS', cgpa: '' };
+const ok = { full_name: 'Aanya Sharma', personal_email: 'aanya@gmail.com', college_email: 'as21ms001@iiserkol.ac.in', phone: '98765 43210', gender: 'female', age: '20', course: 'BS-MS', cgpa: '' };
 const DOMAINS = ['iiserkol.ac.in'];
 
 test('a complete form passes; CGPA can be blank', () => {

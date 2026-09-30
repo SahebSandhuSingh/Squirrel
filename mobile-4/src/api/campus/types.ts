@@ -133,7 +133,7 @@ export type Profile = PersonLite & {
 
 /** The signed-in user: the public profile plus private settings. */
 /** Profile-building details (onboarding "About you"). Private to you — never on your public profile. */
-export type Gender = 'woman' | 'man' | 'non_binary' | 'prefer_not_to_say' | (string & {});
+export type Gender = 'female' | 'male' | 'non_binary' | 'undisclosed' | (string & {});
 export type ProfileDetails = {
   full_name: string;
   personal_email: string;

@@ -11,10 +11,10 @@ import type { DetailsErrors, DetailsField, DetailsForm } from '@/logic/profileVa
 import { alpha, colors, fonts, radius } from '@/theme';
 
 export const GENDERS: { id: Gender; label: string }[] = [
-  { id: 'woman', label: 'Woman' },
-  { id: 'man', label: 'Man' },
+  { id: 'female', label: 'Woman' },
+  { id: 'male', label: 'Man' },
   { id: 'non_binary', label: 'Non-binary' },
-  { id: 'prefer_not_to_say', label: 'Prefer not to say' },
+  { id: 'undisclosed', label: 'Prefer not to say' },
 ];
 export const DEFAULT_COURSES = ['BS-MS', 'Integrated PhD', 'PhD', 'MSc', 'BSc', 'BTech'];
 const OTHER = 'Other';
