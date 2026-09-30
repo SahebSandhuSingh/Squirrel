@@ -21,8 +21,9 @@ const BEARER_BACKEND = API_CONFIGURED || CAMPUS_API_CONFIGURED || PROGRESS_API_C
 const DEV_EMAIL_CODE = '246810';
 
 /** Campus sign-up is limited to institutional emails. The backend enforces the exact domains. */
-export const isAcademicEmail = (e: string) => /^[^\s@]+@([a-z0-9-]+\.)*[a-z0-9-]+\.ac\.in$/i.test(e.trim());
-
+export const isAcademicEmail = (e: string) =>
+  /^[^\s@]+@([a-z0-9-]+\.)*[a-z0-9-]+\.ac\.in$/i.test(e.trim()) ||
+  /^[^\s@]+@squirrelsocial\.in$/i.test(e.trim());
 /**
  * Authentication. One Squirrel Social account (Exercise backend, /api/auth) signs in to every
  * backend: the Run Module and the Social service accept the same bearer token, and the Exercise
