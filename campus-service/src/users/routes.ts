@@ -68,7 +68,7 @@ async function meResponse(req: FastifyRequest) {
 
 export async function userRoutes(app: FastifyInstance) {
   app.get('/v1/config', async () => ({
-    campus: { id: config.campus.id, name: config.campus.name, short_name: config.campus.shortName, email_domains: config.campus.emailDomains, center: [config.campus.centerLat, config.campus.centerLng], launched_at: null },
+    campus: { id: config.campus.id, name: config.campus.name, short_name: config.campus.shortName, email_domains: config.campus.emailDomains, center: [config.campus.centerLat, config.campus.centerLng], max_radius_m: config.campus.maxRadiusM, launched_at: null },
     features: { create_crew: true, create_event: false, defend: true, open_to_meet: true, date_mode: { available: false, reason: 'Date Mode opens once the safety features are live on campus.', requirements: [] }, meetup_safety_notifications: true },
     realtime_url: config.realtime.publicUrl,
     rules: { qualification_ttl_hours: config.rules.qualificationTtlHours, claim_shield_hours: config.rules.claimShieldHours, action_cooldown_seconds: config.rules.userActionCooldownSeconds },

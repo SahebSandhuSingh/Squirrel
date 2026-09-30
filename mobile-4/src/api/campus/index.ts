@@ -13,8 +13,8 @@
  */
 import { endpointAvailability as availabilityOf, EndpointUnavailableError, gateEndpoints, isEndpointUnavailable, optedInWith, type Capability } from '@/api/availability';
 import { ApiError, getApiToken } from '@/api/client';
-import { CAMPUS_API_CONFIGURED, CAMPUS_MOCKS_ENABLED, CAMPUS_ON_SOCIAL, CAMPUS_SERVICE_CONFIGURED, CAMPUS_SERVICE_URL, REALTIME_URL } from '@/api/config';
-import { makeHybridCampusApi } from '@/api/campus/campusShapes';
+import { CAMPUS_API_CONFIGURED, CAMPUS_MOCKS_ENABLED, CAMPUS_ON_SOCIAL, CAMPUS_SERVICE_CONFIGURED, CAMPUS_SERVICE_URL, DEDICATED_CAMPUS_API, REALTIME_URL } from '@/api/config';
+import { campusServiceIgnoredReason, makeHybridCampusApi } from '@/api/campus/campusShapes';
 import { makeCampusServiceApi } from '@/api/campus/campusService';
 import { httpCampusApi } from '@/api/campus/http';
 import { socialCampusApi } from '@/api/campus/social';
@@ -38,6 +38,10 @@ const offApi: CampusApi = new Proxy({} as CampusApi, {
  * everything else (api/campus/campusShapes.ts → makeHybridCampusApi). Unset: exactly as before.
  */
 export const CAMPUS_MAP_ON_SERVICE = CAMPUS_SOURCE === 'live' && CAMPUS_ON_SOCIAL && CAMPUS_SERVICE_CONFIGURED;
+
+// Configured but not used is a deploy mistake, not a state to run in silently.
+const ignored = campusServiceIgnoredReason({ serviceConfigured: CAMPUS_SERVICE_CONFIGURED, source: CAMPUS_SOURCE, onSocial: CAMPUS_ON_SOCIAL, dedicatedCampusApi: DEDICATED_CAMPUS_API });
+if (ignored) console.warn(`[campus] EXPO_PUBLIC_CAMPUS_SERVICE_URL is set but not used: ${ignored}. Zones, map and territory stay on the current campus source.`);
 
 /** Live: a dedicated campus backend (EXPO_PUBLIC_CAMPUS_API_URL) speaks the contract itself; the
  *  Social service is adapted to it (api/campus/social.ts), optionally with campus-service's map world. */

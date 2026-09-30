@@ -47,7 +47,11 @@ export const isPlaceholderZone = (z: { geometry_source?: string | null } | null 
 // Wire shapes (only the fields read here; see campus-service/docs/API.md)
 // ---------------------------------------------------------------------------
 
-export type CampusConfig = { features?: { defend?: boolean; open_to_meet?: boolean } | null; realtime_url?: string | null };
+export type CampusConfig = {
+  campus?: { center?: [number, number] | null; max_radius_m?: number | null } | null;
+  features?: { defend?: boolean; open_to_meet?: boolean } | null;
+  realtime_url?: string | null;
+};
 export type CampusStats = { zones_total?: number; zones_claimed?: number };
 
 type CampusPerson = { user_id: string; display_name: string; avatar_url: string | null; hostel: string | null; connection_mode?: T.ConnectionMode | null; bio?: string | null };
@@ -236,4 +240,72 @@ export function makeHybridCampusApi(social: T.CampusApi, campus: CampusServicePa
   out.me = () => withOpenToMeet(social.me());
   out.updateMe = (patch) => withOpenToMeet(social.updateMe(patch));
   return out;
+}
+
+
+// ---------------------------------------------------------------------------
+// GPS upload: honour campus-service's ingest rules (campus-service/src/activities/gps.ts)
+// ---------------------------------------------------------------------------
+
+/**
+ * campus-service rejects a WHOLE upload (422 invalid_gps) for one fix it can't accept: an
+ * "impossible jump" (> 30 m/s between consecutive points), a point outside the campus area, or
+ * timestamps going backwards. The run recorder keeps some fixes like that (it measures speed against
+ * a held reference, not the previous fix), so one noisy fix — or a run that leaves campus — would lose
+ * the zone check for the whole run. Before uploading, drop exactly those fixes; keep everything else.
+ * The server's checks are its anti-cheat and are not relaxed.
+ */
+export const CAMPUS_MAX_POINTS = 20_000;
+const SAFE_SPEED_MS = 25; // the server's hard limit is 30 m/s
+const SAFE_EDGE_M = 50; // stay this far inside the announced radius
+const MAX_ACCURACY_M = 100;
+
+export type IngestArea = { center: [number, number]; maxRadiusM: number } | null;
+
+export function ingestAreaOf(c: CampusConfig | null | undefined): IngestArea {
+  const center = c?.campus?.center;
+  const r = c?.campus?.max_radius_m;
+  return Array.isArray(center) && center.length === 2 && typeof r === 'number' && r > SAFE_EDGE_M ? { center: [center[0], center[1]], maxRadiusM: r } : null;
+}
+
+const distanceM = (aLat: number, aLng: number, bLat: number, bLng: number) => {
+  const rad = Math.PI / 180;
+  const h = Math.sin(((bLat - aLat) * rad) / 2) ** 2 + Math.cos(aLat * rad) * Math.cos(bLat * rad) * Math.sin(((bLng - aLng) * rad) / 2) ** 2;
+  return 2 * 6_371_000 * Math.asin(Math.sqrt(h));
+};
+
+/** The points campus-service will accept, in order, and how many were dropped. */
+export function pointsForCampus(points: readonly T.ActivityPoint[], area: IngestArea): { points: T.ActivityPoint[]; dropped: number } {
+  const kept: T.ActivityPoint[] = [];
+  let lastT = -Infinity;
+  for (const p of points) {
+    const t = Date.parse(p.recorded_at);
+    if (!Number.isFinite(p.lat) || !Number.isFinite(p.lng) || !Number.isFinite(t) || !(p.accuracy_m <= MAX_ACCURACY_M)) continue;
+    if (area && distanceM(area.center[0], area.center[1], p.lat, p.lng) > area.maxRadiusM - SAFE_EDGE_M) continue;
+    if (t <= lastT) continue;
+    const prev = kept[kept.length - 1];
+    if (prev && distanceM(prev.lat, prev.lng, p.lat, p.lng) / ((t - lastT) / 1000) > SAFE_SPEED_MS) continue;
+    kept.push(p);
+    lastT = t;
+  }
+  let out = kept;
+  if (out.length > CAMPUS_MAX_POINTS) {
+    // Evenly thin a very long recording, always keeping the last fix.
+    const step = out.length / CAMPUS_MAX_POINTS;
+    out = Array.from({ length: CAMPUS_MAX_POINTS - 1 }, (_, i) => kept[Math.floor(i * step)]!).concat(kept[kept.length - 1]!);
+  }
+  return { points: out, dropped: points.length - out.length };
+}
+
+/**
+ * Why EXPO_PUBLIC_CAMPUS_SERVICE_URL is set but not used (null when it's used or not set). The hybrid
+ * needs the Social service as the campus source: a dedicated EXPO_PUBLIC_CAMPUS_API_URL serves the
+ * whole contract itself, and the dev mock replaces every backend.
+ */
+export function campusServiceIgnoredReason(s: { serviceConfigured: boolean; source: 'live' | 'mock' | 'off'; onSocial: boolean; dedicatedCampusApi: boolean }): string | null {
+  if (!s.serviceConfigured) return null;
+  if (s.source === 'mock') return 'the dev mock is on (EXPO_PUBLIC_DEV_MOCKS=1, or a dev build with no backend URL)';
+  if (s.dedicatedCampusApi) return 'EXPO_PUBLIC_CAMPUS_API_URL is set: that dedicated campus backend serves the whole campus contract';
+  if (!s.onSocial || s.source !== 'live') return 'EXPO_PUBLIC_SOCIAL_API_URL is not set: campus-service only runs alongside the Social service';
+  return null;
 }

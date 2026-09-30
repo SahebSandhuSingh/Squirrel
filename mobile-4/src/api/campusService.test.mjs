@@ -4,14 +4,18 @@ import { gateEndpoints, isEndpointUnavailable, optedInWith } from './availabilit
 import {
   activeNowFromCampus,
   CAMPUS_SERVICE_METHODS,
+  campusServiceIgnoredReason,
   heatmapFromCampus,
   heatWindowUnavailable,
+  ingestAreaOf,
+  CAMPUS_MAX_POINTS,
   isPlaceholderZone,
   makeHybridCampusApi,
   mapFeaturesFromCampus,
   mergeConfig,
   mergeStats,
   nearbyPlayersFromCampus,
+  pointsForCampus,
   sharedZonesFromCampus,
 } from './campus/campusShapes.ts';
 
@@ -180,4 +184,78 @@ test('nearby players: the hidden_reason code becomes text', () => {
   const r = nearbyPlayersFromCampus({ players: [], as_of: 't', visible: false, hidden_reason: 'open_to_meet_off' });
   assert.match(r.hidden_reason, /Open to Meet/);
   assert.equal(nearbyPlayersFromCampus({ players: [], as_of: 't', visible: true, hidden_reason: null }).hidden_reason, null);
+});
+
+// ---- GPS upload vs campus-service's ingest check (a single refused fix used to 422 the whole run)
+
+const CENTER = [22.9637, 88.5245];
+const AREA = { center: CENTER, maxRadiusM: 4000 };
+const T0 = Date.parse('2026-09-30T06:00:00Z');
+const fix = (i, lat, lng = CENTER[1], accuracy_m = 8) => ({ lat, lng, recorded_at: new Date(T0 + i * 1000).toISOString(), accuracy_m });
+/** A run heading north from the centre at ~2.2 m/s, one fix a second. */
+const run = (n) => Array.from({ length: n }, (_, i) => fix(i, CENTER[0] + i * 0.00002));
+
+test('ingest area comes from /v1/config campus.center + max_radius_m, else no area check', () => {
+  assert.deepEqual(ingestAreaOf({ campus: { center: CENTER, max_radius_m: 4000 } }), AREA);
+  assert.equal(ingestAreaOf({ campus: { center: CENTER } }), null); // older campus-service: server still checks
+  assert.equal(ingestAreaOf(null), null);
+});
+
+test('a clean run is uploaded untouched', () => {
+  const pts = run(60);
+  assert.deepEqual(pointsForCampus(pts, AREA), { points: pts, dropped: 0 });
+});
+
+test('one noisy fix (37 m in 1 s) is dropped, not the run', () => {
+  const pts = run(60);
+  pts[30] = { ...pts[30], lat: pts[30].lat + 0.000315 };
+  const out = pointsForCampus(pts, AREA);
+  assert.equal(out.dropped, 1);
+  assert.ok(!out.points.includes(pts[30]));
+  // What remains never exceeds the server's 30 m/s between consecutive points.
+  for (let i = 1; i < out.points.length; i++) {
+    const a = out.points[i - 1], b = out.points[i];
+    const d = Math.hypot((b.lat - a.lat) * 111_320, (b.lng - a.lng) * 111_320 * Math.cos((a.lat * Math.PI) / 180));
+    assert.ok(d / ((Date.parse(b.recorded_at) - Date.parse(a.recorded_at)) / 1000) < 30);
+  }
+});
+
+test('fixes outside the campus area are dropped; a run that never enters campus leaves nothing', () => {
+  const far = CENTER[0] + 5000 / 111_320;
+  const pts = [...run(40), ...Array.from({ length: 10 }, (_, i) => fix(1000 + i, far + i * 0.00002))];
+  assert.equal(pointsForCampus(pts, AREA).points.length, 40);
+  assert.equal(pointsForCampus(pts.slice(40), AREA).points.length, 0);
+  // No area known: only the jump rule applies, and 5 km in 1000 s is a plausible pace, so all are kept.
+  assert.equal(pointsForCampus(pts, null).points.length, 50);
+});
+
+test('out-of-order or duplicate timestamps and inaccurate fixes are dropped', () => {
+  const pts = run(10);
+  const out = pointsForCampus([...pts.slice(0, 5), pts[3], { ...pts[5], accuracy_m: 150 }, ...pts.slice(6)], AREA);
+  assert.deepEqual(out.points, [...pts.slice(0, 5), ...pts.slice(6)]);
+});
+
+test('very long recordings are thinned to the server limit, keeping the last fix', () => {
+  const pts = Array.from({ length: CAMPUS_MAX_POINTS + 500 }, (_, i) => fix(i, CENTER[0] + i * 0.000001)); // a slow, steady walk
+  const out = pointsForCampus(pts, null);
+  assert.equal(out.points.length, CAMPUS_MAX_POINTS);
+  assert.equal(out.points.at(-1), pts.at(-1));
+});
+
+test('EXPO_PUBLIC_CAMPUS_SERVICE_URL is never ignored silently', () => {
+  const base = { serviceConfigured: true, source: 'live', onSocial: true, dedicatedCampusApi: false };
+  assert.equal(campusServiceIgnoredReason(base), null); // the hybrid: used
+  assert.equal(campusServiceIgnoredReason({ ...base, serviceConfigured: false }), null); // not set: nothing to say
+  assert.match(campusServiceIgnoredReason({ ...base, onSocial: false, source: 'off' }), /EXPO_PUBLIC_SOCIAL_API_URL/);
+  assert.match(campusServiceIgnoredReason({ ...base, onSocial: false, dedicatedCampusApi: true }), /EXPO_PUBLIC_CAMPUS_API_URL/);
+  assert.match(campusServiceIgnoredReason({ ...base, source: 'mock' }), /dev mock/);
+});
+
+test('ambassador applications have no backend: never routed to campus-service, gated as not live', async () => {
+  assert.ok(!CAMPUS_SERVICE_METHODS.includes('ambassador') && !CAMPUS_SERVICE_METHODS.includes('applyAmbassador'));
+  let called = false;
+  const svc = { ambassador: async () => { called = true; return {}; } };
+  const api = gateEndpoints(svc, { ambassador: { capability: 'ambassador' } }, optedInWith(['sharedZones', 'heatmap']));
+  await assert.rejects(api.ambassador(), (e) => isEndpointUnavailable(e) && e.code === 'ambassador_unavailable');
+  assert.equal(called, false);
 });

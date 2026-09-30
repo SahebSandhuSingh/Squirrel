@@ -36,6 +36,8 @@ export const CAMPUS_API_URL = RAW_CAMPUS_URL || SOCIAL_API_URL;
 export const CAMPUS_API_CONFIGURED = CAMPUS_API_URL.length > 0;
 /** True when the campus contract is served by the Social service through the adapter in api/campus/http.ts. */
 export const CAMPUS_ON_SOCIAL = !RAW_CAMPUS_URL && SOCIAL_API_CONFIGURED;
+/** A dedicated full-contract campus backend (EXPO_PUBLIC_CAMPUS_API_URL) is configured. */
+export const DEDICATED_CAMPUS_API = RAW_CAMPUS_URL.length > 0;
 /** campus-service base URL (no trailing slash; the app appends the /v1 paths itself, like the others). */
 export const CAMPUS_SERVICE_URL = trim(process.env.EXPO_PUBLIC_CAMPUS_SERVICE_URL);
 export const CAMPUS_SERVICE_CONFIGURED = CAMPUS_SERVICE_URL.length > 0;

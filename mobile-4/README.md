@@ -121,7 +121,11 @@ differ are adapted in `campusShapes.ts` (map features GeoJSON → `MapFeatures` 
 `zones`; heatmap cells; shared zones by person; Active-now cards; `hidden_reason` codes → text).
 After a GPS run the Run Module upload happens as before; then the same points go one-shot to
 `POST /v1/activities` and the zones panel reads `GET /v1/activities/{id}/zones`, re-checking a few
-times while verification is `processing`. A campus error only shows in the zones panel. Hostel pickers
+times while verification is `processing`. campus-service refuses a whole upload for one fix it can't
+accept (a jump over 30 m/s, a point outside the campus area it announces in `/v1/config`), so those
+fixes are dropped before uploading (`pointsForCampus`); a run that never enters campus says so. A campus
+error only shows in the zones panel. If `EXPO_PUBLIC_CAMPUS_SERVICE_URL` is set but can't be used (no
+Social URL, a dedicated `EXPO_PUBLIC_CAMPUS_API_URL`, or the dev mock) the console says why. Hostel pickers
 use Social's hostel list (the profile lives there). For the web build, allow the app's origin in
 campus-service's `CORS_ORIGINS`. Unset: everything behaves exactly as before.
 

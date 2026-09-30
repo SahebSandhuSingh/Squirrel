@@ -52,9 +52,9 @@ Point       { "seq"?, "lat", "lng", "recorded_at": iso, "accuracy_m", "speed_ms"
 Liveness / readiness (`readyz` pings the database). `{ "ok": true }`.
 
 ### `GET /v1/config` 👤
-Campus constants, feature flags, realtime URL and the active game-rule numbers.
+Campus constants, feature flags, realtime URL and the active game-rule numbers. `campus.center` + `campus.max_radius_m` are the ingest area: a point farther than that from the centre fails `POST /v1/activities` with `invalid_gps` (clients drop such points before uploading).
 ```json
-{ "campus": { "id": "iiser-kolkata", "name": "IISER Kolkata", "short_name": "IISER K", "email_domains": ["iiserkol.ac.in"], "center": [22.9637, 88.5245], "launched_at": null },
+{ "campus": { "id": "iiser-kolkata", "name": "IISER Kolkata", "short_name": "IISER K", "email_domains": ["iiserkol.ac.in"], "center": [22.9637, 88.5245], "max_radius_m": 4000, "launched_at": null },
   "features": { "create_crew": true, "create_event": false, "defend": true, "open_to_meet": true, "date_mode": { "available": false, "reason": "…", "requirements": [] }, "meetup_safety_notifications": true },
   "realtime_url": "wss://…/v1/realtime", "rules": { "qualification_ttl_hours": 24, "claim_shield_hours": 2, "action_cooldown_seconds": 60 }, "auth_configured": true }
 ```
