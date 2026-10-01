@@ -15,7 +15,7 @@
  *   WS   workout.session.updated · workout.reps.updated (the campus realtime channel)
  *
  * There is NO local stand-in: until the backend ships (api/availability.ts, capability
- * 'sharedWorkout') every call rejects with EndpointUnavailableError — dev mock included — so the
+ * 'sharedWorkout') every call rejects with EndpointUnavailableError, so the
  * UI shows "not live yet" instead of pretending two people are connected.
  */
 import { EndpointUnavailableError, isEndpointAvailable } from '@/api/availability';
@@ -25,7 +25,7 @@ import { CAMPUS_SOURCE, realtimeMode, subscribeRealtime } from '@/api/campus';
 import type { SharedWorkoutSession } from '@/api/campus/types';
 
 const base = CAMPUS_API_URL;
-/** Needs a real backend: the capability opted in AND a live campus API. Never the dev mock. */
+/** Needs a real backend: the capability opted in AND a live campus API. */
 const call = <R,>(path: string, init: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown } = {}): Promise<R> =>
   isEndpointAvailable('sharedWorkout') && CAMPUS_SOURCE === 'live'
     ? api<R>(path, { base, method: init.method ?? (init.body !== undefined ? 'POST' : 'GET'), body: init.body })

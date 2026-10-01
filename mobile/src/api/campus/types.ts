@@ -684,7 +684,7 @@ export interface CampusApi {
   zone(zoneId: string): Promise<ZoneDetail>;
   territoryAction(zoneId: string, action: TerritoryAction, idempotencyKey: string): Promise<TerritoryActionResult>;
 
-  /** Used when the Run Module isn't the recorder (dev mock); live runs go through /v1/runs. */
+  /** Not used by the app: runs are recorded by the Run Module (/v1/runs). Kept for the contract. */
   submitActivity(input: ActivitySubmit): Promise<{ activity_id: string }>;
   activityZones(activityId: string): Promise<ActivityZones>;
 

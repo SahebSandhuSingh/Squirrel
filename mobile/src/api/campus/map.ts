@@ -1,6 +1,6 @@
 /**
  * Map service. Screens call these, never fetch directly. Everything except the device
- * location comes from the backend (campusApi → REST or the dev mock).
+ * location comes from the backend (campusApi → the real backends).
  */
 import { Platform } from 'react-native';
 import * as Location from 'expo-location';

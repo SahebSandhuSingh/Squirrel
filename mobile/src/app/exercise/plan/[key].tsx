@@ -87,7 +87,7 @@ export default function PlanExercise() {
         <View style={styles.notice}>
           <Icon name="camera-off" size={18} color={colors.dim} />
           <Text style={styles.noticeText}>
-            The workout screen runs a guided demo on the phone. Scored reps need the camera coach, which streams body-pose data to the server, so
+            On the phone you count your own reps (tap each rep) with a follow-along guide. Scored reps need the camera coach, which streams body-pose data to the server, so
             train in the Exercise Mechanics web coach to get this session’s report.
           </Text>
         </View>

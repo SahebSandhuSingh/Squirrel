@@ -8,7 +8,7 @@
  * waitlist collects contact + campus details first.
  *
  * Gated per endpoint (api/availability.ts, capability 'ambassadorWaitlist'), like shared
- * workouts: it only ever calls a LIVE campus API, never the dev mock. `joinAmbassadorWaitlist`
+ * workouts: it only ever calls a LIVE campus API. `joinAmbassadorWaitlist`
  * never invents a result — it resolves only on a real 2xx (or the server's 409 "already on the
  * list"), rejects with EndpointUnavailableError while the endpoint isn't live (switched off, or
  * 404/405/501 from the server), and rethrows every real error (401, 422, 5xx, offline).

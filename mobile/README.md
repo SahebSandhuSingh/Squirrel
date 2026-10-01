@@ -215,7 +215,7 @@ Without location permission (or on the web) there's no position at all: the app 
 ## Launch splash
 
 - `components/LaunchSplash.tsx`, overlaid on the root layout (not a route: it can't be navigated back to, and deep links mount underneath it).
-- Logo (the official logo, framed as an app-icon tile) → **SQUIRREL SOCIAL** → "Backed by Split Labs VC", then a fade into whatever start-up picked.
+- Logo (the official logo, framed as an app-icon tile) → **SQUIRREL SOCIAL** → "Backed by" with the RISE Foundation and SplitLabs VC logos and names (exact supplied files in `assets/brand/backers/`), then a fade into whatever start-up picked.
 - It lifts only when **both** at least 3 s (`SPLASH_MIN_MS`) have passed since launch **and** the app is ready (fonts loaded, saved session restored). Reduce Motion skips the animation, not the content.
 - Once per launch, themed (Dark / Light), and skipped after a theme-switch reload.
 

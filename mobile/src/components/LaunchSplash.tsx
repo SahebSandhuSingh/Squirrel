@@ -1,9 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Animated, Easing, Image, StyleSheet, Text, View } from 'react-native';
 import { Logo } from '@/components/Brand';
 import { isThemeReload } from '@/components/ThemeToggle';
 import { NATIVE } from '@/components/ui';
 import { colors, DISPLAY_SKEW, fonts } from '@/theme';
+
+/**
+ * The backers, shown under "Backed by". The image files are the exact logos supplied by each
+ * organisation (assets/brand/backers) — displayed as-is, never redrawn or recoloured.
+ */
+const BACKERS = [
+  { name: 'RISE Foundation', logo: require('../../assets/brand/backers/rise-foundation.jpg') },
+  { name: 'SplitLabs VC', logo: require('../../assets/brand/backers/splitlabs-vc.jpg') },
+] as const;
 
 /** Minimum time the splash is on screen from app launch. Initialisation can make it longer, never shorter. */
 export const SPLASH_MIN_MS = 3000;
@@ -15,7 +24,8 @@ let shownThisLaunch = isThemeReload();
 const launchedAt = Date.now();
 
 /**
- * App-launch splash: logo → "Squirrel Social" → "Backed by Split Labs VC", then a fade into
+ * App-launch splash: the Squirrel Social logo (the focus) → "Squirrel Social" → "Backed by" with the
+ * RISE Foundation and SplitLabs VC logos and names, then a fade into
  * whatever the app's own startup flow picked. It's an overlay on the root layout, not a
  * route, so it can't be navigated back to, and routes/deep links mount underneath it.
  *
@@ -78,7 +88,7 @@ export function LaunchSplash({ ready }: { ready: boolean }) {
       pointerEvents={minElapsed && ready ? 'none' : 'auto'}
       accessible
       accessibilityRole="header"
-      accessibilityLabel="Squirrel Social. Backed by Split Labs VC">
+      accessibilityLabel={`Squirrel Social. Backed by ${BACKERS.map((b) => b.name).join(' and ')}`}>
       <Animated.View style={{ opacity: logo, transform: [{ scale: logo.interpolate({ inputRange: [0, 1], outputRange: [0.88, 1] }) }] }}>
         {/* The official logo has its own dark backdrop: frame it as an app-icon tile so it sits right on both themes. */}
         <View style={styles.tile}>
@@ -92,10 +102,22 @@ export function LaunchSplash({ ready }: { ready: boolean }) {
               Squirrel <Text style={{ color: colors.primary }}>Social</Text>
             </Text>
           </Animated.View>
-          <Animated.View style={[styles.backerRow, rise(backer, 8)]}>
-            <View style={styles.rule} />
-            <Text style={styles.backer}>Backed by Split Labs VC</Text>
-            <View style={styles.rule} />
+          <Animated.View style={[styles.backedBy, rise(backer, 8)]}>
+            <View style={styles.backerRow}>
+              <View style={styles.rule} />
+              <Text style={styles.backer}>Backed by</Text>
+              <View style={styles.rule} />
+            </View>
+            <View style={styles.backers}>
+              {BACKERS.map((b) => (
+                <View key={b.name} style={styles.org}>
+                  <View style={styles.orgTile}>
+                    <Image source={b.logo} style={styles.orgLogo} resizeMode="contain" accessibilityIgnoresInvertColors />
+                  </View>
+                  <Text style={styles.orgName}>{b.name}</Text>
+                </View>
+              ))}
+            </View>
           </Animated.View>
         </>
       )}
@@ -107,8 +129,15 @@ const styles = StyleSheet.create({
   root: { backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, zIndex: 1000, elevation: 1000 },
   tile: { width: 124, height: 124, borderRadius: 30, overflow: 'hidden', borderWidth: 1, borderColor: colors.lineHi, backgroundColor: '#0C0C0C' },
   title: { marginTop: 18, color: colors.text, fontFamily: fonts.display, fontSize: 44, lineHeight: 52, letterSpacing: 0.5, textTransform: 'uppercase', transform: [{ skewX: DISPLAY_SKEW }], textAlign: 'center' },
-  backerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 },
+  backedBy: { alignItems: 'center', marginTop: 34 },
+  backerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   rule: { width: 22, height: 1, backgroundColor: colors.lineHi },
-  // Exact wording and case: "Backed by Split Labs VC" (no uppercase transform).
-  backer: { color: colors.dim, fontFamily: fonts.label, fontSize: 15, letterSpacing: 0.8 },
+  // Exact wording and case: "Backed by" (no uppercase transform).
+  backer: { color: colors.dim, fontFamily: fonts.label, fontSize: 14, letterSpacing: 0.8 },
+  backers: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: 28, marginTop: 16 },
+  org: { alignItems: 'center', width: 116 },
+  // A neutral frame so both logos (one on white, one on black) sit cleanly on either theme.
+  orgTile: { width: 76, height: 76, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card },
+  orgLogo: { width: '100%', height: '100%' },
+  orgName: { marginTop: 8, color: colors.sub, fontFamily: fonts.semibold, fontSize: 13, letterSpacing: 0.3, textAlign: 'center' },
 });

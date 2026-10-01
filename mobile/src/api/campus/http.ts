@@ -116,7 +116,7 @@ export const CAMPUS_ROUTES = [
   'GET /v1/zones/{id}',
   'POST /v1/zones/{id}/claim | steal | defend',
   'GET /v1/runs/{id}/zones',
-  'POST /v1/activities (dev/mock recorder only)',
+  'POST /v1/activities (not used by the app; runs go to the Run Module)',
   'GET /v1/crews, GET /v1/crews/{id}, POST /v1/crews, POST /v1/crews/{id}/join | leave',
   'GET /v1/events, GET /v1/events/{id}, POST /v1/events, PUT|DELETE /v1/events/{id}/rsvp',
   'GET /v1/people/suggested?mode=friends|date',
