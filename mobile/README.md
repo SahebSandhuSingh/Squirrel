@@ -39,6 +39,8 @@ Without a backend (or a session), a screen shows one of three honest states, nev
 
 You can **look around first** without an account (welcome → *Look around first*); every screen then shows those states. The one simulation kept on purpose is the Run Module's **demo route** for devices with no GPS (the web preview): it's always labelled "Demo route · simulated, not a real activity" and is never uploaded (`logic/demoRoute.ts`, geometry in `logic/demoLoop.ts`).
 
+**The IISER Kolkata map** (`api/campus/campusBaseMap.ts`) is the one built-in campus layer: hand-placed, approximate outlines of the named zones, roads, buildings and landmarks (no descriptions, no people, no owners). The Map draws it only when the campus backend's own world (`GET /v1/zones` + `/v1/map/features`) isn't live, says "approx. map" in the header, and tapping a zone shows "Territory · Not live yet". Replace it with surveyed / OpenStreetMap geometry when available.
+
 Removed with the sample content: the shop, coins, cosmetics unlocks, rewards road, posts feed, highlights, city picker and the tap-to-log missions (replaced by the server's daily goals).
 
 ## Screens

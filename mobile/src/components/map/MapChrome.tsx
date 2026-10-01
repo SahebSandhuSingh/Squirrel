@@ -2,6 +2,7 @@
  * Everything drawn on top of the world map: header, status banners, the bottom sheet and its
  * contents (player card, territory, point of interest, nearby list with search).
  */
+import { NotLiveYet } from '@/components/campus/States';
 import { ThemeIconButton } from '@/components/ThemeToggle';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Animated, FlatList, PanResponder, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
@@ -128,13 +129,25 @@ export function PlayerSheet({ player }: { player: MapPlayer }) {
   );
 }
 
-export function TerritorySheet({ zone, meId }: { zone: Zone; meId: string | null }) {
+/** `baseMap`: the static IISER map is showing (campus backend not live) — the zone's state is unknown. */
+export function TerritorySheet({ zone, meId, baseMap }: { zone: Zone; meId: string | null; baseMap?: boolean }) {
   const t = useTerritory(zone.id);
   const status = displayStatus(t);
   const ui = STATUS_UI[status];
   const mine = relationOf(t, meId) === 'mine';
   const [showPlayers, setShowPlayers] = useState(false);
   const players = useCampus<PersonSummary[]>(`zone-players:${zone.id}`, () => getZonePlayers(zone.id), { enabled: showPlayers });
+  if (baseMap) {
+    return (
+      <View style={{ gap: 12 }}>
+        <View>
+          <Kicker>Zone · IISER Kolkata</Kicker>
+          <Display size={30} style={{ marginTop: 2 }}>{zone.name}</Display>
+        </View>
+        <NotLiveYet name="Territory" compact body="Who controls this zone, claims, steals and defends switch on with the campus backend. This map is approximate." />
+      </View>
+    );
+  }
   return (
     <View style={{ gap: 12 }}>
       <View>

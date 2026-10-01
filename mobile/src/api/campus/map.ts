@@ -4,15 +4,26 @@
  */
 import { Platform } from 'react-native';
 import * as Location from 'expo-location';
-import { campusApi } from '@/api/campus';
+import { campusApi, featureUnavailable } from '@/api/campus';
+import { IISER_FEATURES, IISER_ZONES } from '@/api/campus/campusBaseMap';
 import type { LatLng, MapFeatures, NearbyPlayers, PresenceUpdate, Territory, Zone } from '@/api/campus/types';
 
-export type MapData = { zones: Zone[]; features: MapFeatures; territories: Territory[] };
+/** `source`: 'live' = the campus backend's world; 'base' = the static IISER base map (no territory state). */
+export type MapData = { zones: Zone[]; features: MapFeatures; territories: Territory[]; source: 'live' | 'base' };
 
-/** The static-ish world (zones + base map) and current territory state in one call. */
+/**
+ * The world (zones + base map) and current territory state in one call. When the campus backend
+ * isn't live (not configured, or the routes aren't deployed), the Map still shows IISER Kolkata:
+ * the static base map, with NO territory state and no people. Real errors stay errors.
+ */
 export async function getMapData(): Promise<MapData> {
-  const [zones, features, t] = await Promise.all([campusApi.zones(), campusApi.mapFeatures(), campusApi.territories()]);
-  return { zones, features, territories: t.territories };
+  try {
+    const [zones, features, t] = await Promise.all([campusApi.zones(), campusApi.mapFeatures(), campusApi.territories()]);
+    return { zones, features, territories: t.territories, source: 'live' };
+  } catch (e) {
+    if (!featureUnavailable(e)) throw e;
+    return { zones: IISER_ZONES, features: IISER_FEATURES, territories: [], source: 'base' };
+  }
 }
 export const getNearbyUsers = (): Promise<NearbyPlayers> => campusApi.nearbyPlayers();
 export const getTerritories = () => campusApi.territories();

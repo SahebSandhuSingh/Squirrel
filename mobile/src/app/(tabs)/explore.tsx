@@ -3,7 +3,7 @@
  * interest and the Squirrels around you; tap someone → card → POKE 👋. Everything shown (who
  * appears, where roughly, who holds what, relationship state) comes from the backend.
  */
-import { CAMPUS_SOURCE, featureUnavailable } from '@/api/campus';
+import { featureUnavailable } from '@/api/campus';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
@@ -115,12 +115,12 @@ export default function MapScreen() {
         <MapLoading />
       )}
 
-      <LiveHeader zones={zones} campus={config.data?.campus.name ?? 'Your campus'} zonesHeld={CAMPUS_SOURCE === 'live' && !sync.error ? zonesHeld : null} top={headerTop} />
+      <LiveHeader zones={zones} campus={world.data?.source === 'base' ? 'IISER Kolkata · approx. map' : config.data?.campus.name ?? 'Your campus'} zonesHeld={world.data?.source === 'live' && !sync.error ? zonesHeld : null} top={headerTop} />
 
       {/* Status banners: they never block or wipe the map */}
       <View style={[styles.banners, { top: headerTop + 64 }]} pointerEvents="box-none">
         {/* One banner at a time, most important first, so the map stays visible. */}
-        {/* "Not live yet" isn't an error: the map body already says so, no red banner. */}
+        {/* "Not live yet" isn't an error: no red banner for it. */}
         {players.error && !featureUnavailable(players.cause) ? (
           <MapBanner icon="wifi-off" tone="error" text={loaded ? 'Couldn’t refresh nearby Squirrels. Showing the last update.' : 'Couldn’t load nearby Squirrels.'} action="Retry" onAction={players.reload} />
         ) : sync.error && !featureUnavailable(sync.error) ? (
@@ -130,6 +130,8 @@ export default function MapScreen() {
             fallback={
               players.data && !players.data.visible && !!players.data.hidden_reason ? (
                 <MapBanner icon="eye-off-outline" tone="info" text={players.data.hidden_reason} action="Settings" onAction={() => router.push('/active')} />
+              ) : world.data?.source === 'base' ? (
+                <MapBanner icon="map-outline" tone="info" text="IISER Kolkata · approximate map. Live zones, owners and people switch on with the campus backend." />
               ) : null
             }
           />
@@ -147,7 +149,7 @@ export default function MapScreen() {
             accessibilityRole="button"
             accessibilityLabel={`${list.length} Squirrels nearby. Open list`}>
             <Text style={styles.nearbyEmoji} accessibilityElementsHidden>🐿️</Text>
-            <Text style={styles.nearbyText}>{loaded ? `${list.length} nearby` : 'Finding…'}</Text>
+            <Text style={styles.nearbyText}>{loaded ? `${list.length} nearby` : players.error && featureUnavailable(players.cause) ? 'Not live yet' : players.error ? 'Offline' : 'Finding…'}</Text>
           </Pressable>
           <View style={{ flex: 1 }} />
           <Pressable
@@ -193,7 +195,7 @@ export default function MapScreen() {
           onClose={() => setSheet(null)}
           label={sheet.kind === 'player' ? `${sheet.player.display_name} card` : sheet.kind === 'zone' ? `${sheet.zone.name} territory` : sheet.kind === 'poi' ? 'Point of interest' : 'Nearby Squirrels'}>
           {sheet.kind === 'player' && <PlayerSheet player={sheet.player} />}
-          {sheet.kind === 'zone' && <TerritorySheet zone={sheet.zone} meId={meId} />}
+          {sheet.kind === 'zone' && <TerritorySheet zone={sheet.zone} meId={meId} baseMap={world.data?.source === 'base'} />}
           {sheet.kind === 'poi' && poi && <PoiSheet poi={poi} zones={zones} />}
           {sheet.kind === 'list' && <NearbyUsersSheet players={sheet.players} title={sheet.title} />}
         </MapSheet>
