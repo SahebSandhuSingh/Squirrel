@@ -193,6 +193,8 @@ saves 120/min, follows 60/min, profile updates 20/min, username checks 60/min, u
 | `GET /internal/v1/blocks/{subject}` | Service token (campus-service): `{ subject, blocked: [subject…], as_of }` — everyone blocked **either way** with that person. Never writes; an unseen subject has none. Callers cache ≤30 s and fail closed (ADR-032) |
 | `POST /internal/v1/blocks/import` | Service token: `{ blocks: [{ blocker, blocked }]≤1000 }` (subjects) → `{ imported, already, skipped }`. One-time copy of another service's own block table; safe to re-run; provisions unseen subjects; removes follows between the two, like an app block |
 
+**Moving existing blocks into Social (once):** `scripts/import_blocks.py` reads campus-service's `blocks` table (`--campus-db`) and/or a copy of the Exercise backend's `data/users/` folder (`--partner-hunt-dir`, Partner Hunt's `partner_blocks.json` files) and sends them to the import route. Dry run by default; `--apply` sends. The service token comes from `SOCIAL_INTERNAL_TOKEN` in the environment, never the command line. Safe to re-run.
+
 Profiles also carry `hostel`, `stats.month_km / month_runs / month_workouts` (verified this month) and
 `crews` (member since, vouches).
 
