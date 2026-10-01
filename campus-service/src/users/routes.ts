@@ -11,6 +11,7 @@ import { getUser, updateUser, type UserRow } from './repo.js';
 import { listNotifications, markRead, toApp } from '../notifications/service.js';
 import { getPeopleLite } from './repo.js';
 import { authConfigured } from '../auth/jwt.js';
+import { isBlockedEitherWay } from '../blocks/service.js';
 import { getProfileDetails, ProfileDetailsInput, saveProfileDetails } from './details.js';
 
 const MePatch = z.object({
@@ -127,6 +128,12 @@ export async function userRoutes(app: FastifyInstance) {
   app.get('/v1/users/:id/context', { preHandler: requireAuth }, async (req) => {
     const me = currentUser(req);
     const { id } = z.object({ id: z.string().min(1).max(128) }).parse(req.params);
+    try {
+      if (await isBlockedEitherWay(me.id, id)) return { shared_zones: [], shared_crews: [], shared_events: [], icebreakers: [], hidden_reason: 'blocked' };
+    } catch (err: any) {
+      if (err.code === 'blocks_unavailable') return { shared_zones: [], shared_crews: [], shared_events: [], icebreakers: [], hidden_reason: 'blocks_unavailable' };
+      throw err;
+    }
     if (!(await getUser(id))) throw errors.notFound('Squirrel');
     const shared = await many<{ zone_id: string; zone_name: string; relation: string }>(
       `WITH mine AS (SELECT DISTINCT zone_id FROM qualification_results WHERE user_id = $1 AND interaction <> 'passed_through' AND evaluated_at > now() - interval '30 days'),
