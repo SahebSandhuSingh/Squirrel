@@ -28,11 +28,13 @@ export const DEMO_PUSHUP_EXERCISE: SessionExercise = {
 
 /* Placeholder anthropometrics. Nothing in the push-up pipeline reads height or weight — the
    baseline is captured per set from the user's own body — but POST /api/users requires a complete
-   profile, so these exist to satisfy that contract, not to describe anyone. */
+   profile, so these exist to satisfy that contract, not to describe anyone. `gender` must be one
+   of the backend's values (backend/profiles/vocab.py GENDERS); 'undisclosed' is "prefer not to
+   say". backend/tests/test_demo_profile.py sends this literal to POST /api/users. */
 export const DEMO_PROFILE = {
   first_name: 'Demo',
   last_name: 'User',
-  gender: 'unspecified',
+  gender: 'undisclosed',
   height_cm: 175,
   weight_kg: 70,
   date_of_birth: '1995-01-01',
