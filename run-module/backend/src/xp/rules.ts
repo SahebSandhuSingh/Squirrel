@@ -66,7 +66,8 @@ export type XpReason =
   | "challenge completed"
   | "territory_claim"
   | "territory_steal"
-  | "territory_defend";
+  | "territory_defend"
+  | "territory_daily_cap";
 
 export interface XpLine {
   reason: XpReason;
@@ -91,6 +92,10 @@ const REASON_ORDER: XpReason[] = [
   "exercise_session",
   "exercise_daily_cap",
   "challenge completed",
+  "territory_claim",
+  "territory_steal",
+  "territory_defend",
+  "territory_daily_cap",
 ];
 
 const count = (value: unknown): number | null =>

@@ -199,6 +199,8 @@ export async function requireAuth(
  */
 export const EXERCISE_SERVICE = "exercise_module";
 
+import { timingSafeEqual } from "crypto";
+
 export async function requireService(
   request: FastifyRequest,
   reply: FastifyReply
@@ -210,9 +212,19 @@ export async function requireService(
     await sendUnauthorized(reply);
     return;
   }
+  
+  const token = parts[1].trim();
+  const internalToken = (process.env["SOCIAL_INTERNAL_TOKEN"] ?? "").trim();
+  
+  if (internalToken.length > 0 && token.length === internalToken.length) {
+    if (timingSafeEqual(Buffer.from(token), Buffer.from(internalToken))) {
+      return; // Authorized via shared secret
+    }
+  }
+
   const config = getConfig();
   try {
-    const { payload } = await jwtVerify(parts[1].trim(), await getKey(config), {
+    const { payload } = await jwtVerify(token, await getKey(config), {
       algorithms: [config.algorithm],
       ...(config.issuer   && { issuer:   config.issuer }),
       ...(config.audience && { audience: config.audience }),

@@ -148,9 +148,9 @@ export const xpRoutes: FastifyPluginAsync = async (fastify) => {
           required: ["subject", "amount", "reason", "source", "idempotency_key"],
           properties: {
             subject: { type: "string" },
-            amount: { type: "integer" },
-            reason: { type: "string" },
-            source: { type: "string" },
+            amount: { type: "integer", minimum: 1, maximum: 100 },
+            reason: { type: "string", enum: ["territory_claim", "territory_steal", "territory_defend"] },
+            source: { type: "string", enum: ["campus"] },
             idempotency_key: { type: "string" }
           }
         },
@@ -162,12 +162,27 @@ export const xpRoutes: FastifyPluginAsync = async (fastify) => {
       if (!UUID_REGEX.test(subject)) return reply.code(400).send({ error: "subject must be a UUID" });
       
       const { pool } = await import("../../db/pool.js");
-      await pool.query(
-        `INSERT INTO external_xp_awards (source, idempotency_key, user_id, amount, reason) 
-         VALUES ($1, $2, $3, $4, $5) 
-         ON CONFLICT (source, idempotency_key) DO NOTHING`,
-        [source, idempotency_key, subject, amount, reason]
+      
+      const existing = await pool.query<{ user_id: string; amount: number; reason: string }>(
+        `SELECT user_id, amount, reason 
+         FROM external_xp_awards 
+         WHERE source = $1 AND idempotency_key = $2`,
+        [source, idempotency_key]
       );
+      
+      if (existing.rows.length > 0) {
+        const row = existing.rows[0]!;
+        if (row.user_id !== subject || row.amount !== amount || row.reason !== reason) {
+          return reply.code(409).send({ error: "idempotency mismatch" });
+        }
+      } else {
+        await pool.query(
+          `INSERT INTO external_xp_awards (source, idempotency_key, user_id, amount, reason) 
+           VALUES ($1, $2, $3, $4, $5) 
+           ON CONFLICT (source, idempotency_key) DO NOTHING`,
+          [source, idempotency_key, subject, amount, reason]
+        );
+      }
       
       const summary = await getUserXp(subject);
       return summary.xp;
@@ -201,13 +216,32 @@ export const xpRoutes: FastifyPluginAsync = async (fastify) => {
       
       const res: Record<string, number> = {};
       
-      // Batch execute in parallel to be fast
-      await Promise.all(
-        subjects.map(async (subject) => {
-          const summary = await getUserXp(subject);
-          res[subject] = summary.xp;
-        })
-      );
+      const CONCURRENCY_LIMIT = 10;
+      let active = 0;
+      let index = 0;
+      
+      await new Promise<void>((resolve, reject) => {
+        if (subjects.length === 0) return resolve();
+        
+        function next() {
+          if (index >= subjects.length) {
+            if (active === 0) resolve();
+            return;
+          }
+          
+          while (active < CONCURRENCY_LIMIT && index < subjects.length) {
+            const subject = subjects[index++]!;
+            active++;
+            getUserXp(subject).then((summary) => {
+              res[subject] = summary.xp;
+              active--;
+              next();
+            }).catch(reject);
+          }
+        }
+        
+        next();
+      });
       
       return res;
     }

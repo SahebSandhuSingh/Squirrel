@@ -30,6 +30,7 @@ const SELECT_EXTERNAL_XP = `
   SELECT amount as xp, reason, created_at
   FROM external_xp_awards
   WHERE user_id = $1
+  ORDER BY created_at ASC
 `;
 
 /** The IANA time zone XP days follow for rows that do not carry their own. An unknown zone falls
@@ -37,6 +38,8 @@ const SELECT_EXTERNAL_XP = `
 export function xpTimeZone(): string {
   return validTimeZone(process.env["XP_TIMEZONE"]?.trim()) ?? DEFAULT_XP_TIMEZONE;
 }
+
+const TERRITORY_DAILY_CAP = 150;
 
 export async function getUserXp(userId: string): Promise<XpSummary> {
   const { rows } = await pool.query<ActivityRow>(SELECT_ACTIVITY, [userId]);
@@ -61,15 +64,26 @@ export async function getUserXp(userId: string): Promise<XpSummary> {
   
   const finalByDay = { ...summary.byDay };
   const externalReasons = new Map<import('./rules.js').XpReason, number>();
+  const territoryUsedToday = new Map<string, number>();
 
-  // Aggregate external awards outside of `computeXp(rows)` so they bypass the daily caps.
-  // Territory actions are rate-limited by their own cooldowns rather than a daily cap.
   for (const row of external.rows) {
-    finalXp += row.xp;
-    if (!finalUpdatedAt || row.created_at > finalUpdatedAt) finalUpdatedAt = row.created_at;
     const day = xpDay(row.created_at, tz);
-    finalByDay[day] = (finalByDay[day] ?? 0) + row.xp;
-    externalReasons.set(row.reason, (externalReasons.get(row.reason) ?? 0) + row.xp);
+    const bucket = day;
+    const used = territoryUsedToday.get(bucket) ?? 0;
+    const raw = row.xp;
+    const awarded = Math.min(raw, Math.max(0, TERRITORY_DAILY_CAP - used));
+    
+    territoryUsedToday.set(bucket, used + awarded);
+    if (awarded > 0) {
+      finalXp += awarded;
+      finalByDay[day] = (finalByDay[day] ?? 0) + awarded;
+      if (!finalUpdatedAt || row.created_at > finalUpdatedAt) finalUpdatedAt = row.created_at;
+    }
+    
+    externalReasons.set(row.reason, (externalReasons.get(row.reason) ?? 0) + raw);
+    if (awarded < raw) {
+      externalReasons.set("territory_daily_cap", (externalReasons.get("territory_daily_cap") ?? 0) - (raw - awarded));
+    }
   }
 
   for (const [reason, xp] of externalReasons) {
@@ -153,14 +167,26 @@ export async function getXpBoard(window: XpBoardWindow, now: Date = new Date()):
   const ext = await pool.query<{ user_id: string; xp: number; created_at: Date }>(
     `SELECT user_id, amount as xp, created_at
      FROM   external_xp_awards
-     WHERE  created_at >= $1`,
+     WHERE  created_at >= $1
+     ORDER BY created_at ASC`,
     [cutoff]
   );
+  
+  const extUsedToday = new Map<string, number>();
+  
   for (const row of ext.rows) {
     const day = xpDay(row.created_at, timeZone);
-    const bd = byUser.get(row.user_id) ?? {};
-    bd[day] = (bd[day] ?? 0) + row.xp;
-    byUser.set(row.user_id, bd);
+    const bucket = `${row.user_id}|${day}`;
+    const used = extUsedToday.get(bucket) ?? 0;
+    const awarded = Math.min(row.xp, Math.max(0, TERRITORY_DAILY_CAP - used));
+    
+    extUsedToday.set(bucket, used + awarded);
+    
+    if (awarded > 0) {
+      const bd = byUser.get(row.user_id) ?? {};
+      bd[day] = (bd[day] ?? 0) + awarded;
+      byUser.set(row.user_id, bd);
+    }
   }
 
   return { window, day: days[0]!, entries: rankXp(byUser, days) };

@@ -175,8 +175,8 @@ describe("XP routes", () => {
     expect(res2.statusCode).toBe(200);
     expect(res2.json<number>()).toBe(25); // same total, no double award
 
-    // Same key, different source
-    const body3 = { subject: u, amount: 40, reason: "territory_steal", source: "other", idempotency_key: "claim-123" };
+    // Same key, different source (not possible anymore as source must be 'campus', so use different key)
+    const body3 = { subject: u, amount: 40, reason: "territory_steal", source: "campus", idempotency_key: "claim-456" };
     const res3 = await fastify.inject({ method: "POST", url: "/internal/v1/xp/award", headers: service, payload: body3 });
     expect(res3.statusCode).toBe(200);
     expect(res3.json<number>()).toBe(65); // 25 + 40
@@ -188,13 +188,12 @@ describe("XP routes", () => {
     expect(me.breakdown).toContainEqual({ reason: "territory_claim", xp: 25 });
     expect(me.breakdown).toContainEqual({ reason: "territory_steal", xp: 40 });
 
-    // Verify it bypasses run daily caps: 
-    // Insert 10 similar awards of 25 = 250 XP. If it was capped to 150, it would be less.
+    // Territory awards have their own 150/day cap, separate from the run and exercise caps.
     for (let i = 0; i < 10; i++) {
       await fastify.inject({ method: "POST", url: "/internal/v1/xp/award", headers: service, payload: { ...body1, idempotency_key: `loop-${i}` } });
     }
     const capRes = await fastify.inject({ method: "GET", url: "/v1/users/me/xp", headers: bearer(await userToken(u)) });
-    expect(capRes.json<MeXp>().xp).toBe(65 + 250);
+    expect(capRes.json<MeXp>().xp).toBe(150);
   });
 
   it("POST /internal/v1/xp/totals handles batches, unknowns, empty subjects, and max 200", async () => {
@@ -202,7 +201,7 @@ describe("XP routes", () => {
     const u2 = newUser();
     const service = bearer(await serviceToken());
 
-    await fastify.inject({ method: "POST", url: "/internal/v1/xp/award", headers: service, payload: { subject: u1, amount: 15, reason: "defend", source: "campus", idempotency_key: "ik-1" } });
+    await fastify.inject({ method: "POST", url: "/internal/v1/xp/award", headers: service, payload: { subject: u1, amount: 15, reason: "territory_defend", source: "campus", idempotency_key: "ik-1" } });
 
     // batch route test (all valid)
     const totalsRes = await fastify.inject({ 
@@ -239,5 +238,40 @@ describe("XP routes", () => {
 
     expect((await fastify.inject({ method: "POST", url: "/internal/v1/xp/totals", payload: { subjects: [u] } })).statusCode).toBe(401);
     expect((await fastify.inject({ method: "POST", url: "/internal/v1/xp/totals", payload: { subjects: [u] }, headers: bearer(await userToken(u)) })).statusCode).toBe(401);
+  });
+
+  it("both routes accept the shared token, accept a valid service JWT, and reject a wrong token and no token", async () => {
+    const u = newUser();
+    const originalToken = process.env["SOCIAL_INTERNAL_TOKEN"];
+    process.env["SOCIAL_INTERNAL_TOKEN"] = "test-token-12345";
+    const internalToken = "test-token-12345";
+    const jwtAuth = bearer(await serviceToken());
+    const sharedAuth = { authorization: `Bearer ${internalToken}` };
+    const wrongAuth = { authorization: `Bearer wrong-token-123` };
+    
+    // Accept valid service JWT
+    expect((await fastify.inject({ method: "POST", url: "/internal/v1/xp/totals", payload: { subjects: [u] }, headers: jwtAuth })).statusCode).toBe(200);
+    
+    // Accept shared token
+    expect((await fastify.inject({ method: "POST", url: "/internal/v1/xp/totals", payload: { subjects: [u] }, headers: sharedAuth })).statusCode).toBe(200);
+    
+    // Reject wrong token
+    expect((await fastify.inject({ method: "POST", url: "/internal/v1/xp/totals", payload: { subjects: [u] }, headers: wrongAuth })).statusCode).toBe(401);
+    
+    // Reject no token
+    expect((await fastify.inject({ method: "POST", url: "/internal/v1/xp/totals", payload: { subjects: [u] } })).statusCode).toBe(401);
+
+    // Same for /award (with valid body to avoid 400 validation error masking 401)
+    const validBody = { subject: u, amount: 15, reason: "territory_claim", source: "campus", idempotency_key: "u1-auth-test" };
+    expect((await fastify.inject({ method: "POST", url: "/internal/v1/xp/award", payload: validBody, headers: jwtAuth })).statusCode).toBe(200);
+    expect((await fastify.inject({ method: "POST", url: "/internal/v1/xp/award", payload: validBody, headers: sharedAuth })).statusCode).toBe(200);
+    expect((await fastify.inject({ method: "POST", url: "/internal/v1/xp/award", payload: validBody, headers: wrongAuth })).statusCode).toBe(401);
+    expect((await fastify.inject({ method: "POST", url: "/internal/v1/xp/award", payload: validBody })).statusCode).toBe(401);
+    
+    if (originalToken === undefined) {
+      delete process.env["SOCIAL_INTERNAL_TOKEN"];
+    } else {
+      process.env["SOCIAL_INTERNAL_TOKEN"] = originalToken;
+    }
   });
 });
