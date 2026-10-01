@@ -27,6 +27,7 @@ app/
   ratelimit.py       per-user sliding-window limits on writes (429 + Retry-After)
   services/
     social.py        visibility, batched serialisation, counters, streaks, badges
+    badges.py        activity badge rules: Early Bird, Night Owl, Park Regular
     run_module.py    read-only Run Module client (caller's token)
     media.py         S3-compatible presigned uploads
   routers/           profiles · follows · feed · posts (likes, saves, comments) · media · internal
@@ -130,6 +131,7 @@ UserSummary + { "city_id", "area", "interests": [≤3], "followed_at": "…"|nul
 | `GET /v1/users/:id/profile` | – | Profile (restricted when private and not followed) |
 | `GET /v1/users/:id/posts` | `cursor`, `limit` | Page<Post> · 403 if private |
 | `GET /v1/users/me/saved` | `cursor`, `limit` | Page<Post> |
+| `GET /v1/users/me/badges` | – | `{ badges: [{ id, name, description, unlocked, unlocked_at, progress: { current, target } \| null }] }` — every catalogue badge in the app's `Badge` shape; progress for the activity badges only |
 | `GET /v1/users/search` | `q` (≥2 chars, `@` optional) | Page<Follower> |
 | `GET /v1/users/suggestions` | `limit` (≤20) | Page<Follower> — not yet followed, same city first |
 | `POST /v1/users/:id/follow` | – | `{ following, followed_by, requested, followers, following_count }` — idempotent · 422 `self_follow` |
@@ -226,6 +228,23 @@ service at start-up. Zone visits come from `run_points` when the Run Module publ
 (`POST /internal/v1/activities`, `source_ref` = run id). If that table isn't there, the run is
 recorded without zones.
 
+### Activity badges (migration `0005_activity_badges`)
+
+Awarded automatically (`app/services/badges.py`) when a verified activity arrives
+(`POST /internal/v1/activities`, or a finalized run shared to the feed), in the same transaction,
+with a `badge` notification. Local times are `SOCIAL_COMMUNITY_TIMEZONE`.
+
+| Badge (`id`) | Rule (defaults) |
+|---|---|
+| Early Bird (`early_bird`) | 5 verified activities that started before 07:00 |
+| Night Owl (`night_owl`) | 5 verified activities that started at or after 21:00 |
+| Park Regular (`park_regular`) | One named zone visited on 5 different days, on verified runs. Reads Squirrel Dates' zone visits, so it needs zones configured and the member opted in, and the days must fall within the 56 days visits are kept |
+
+Unverified activities (manual, flagged runs) and meals don't count. Counts are read from the
+`activities` and `zone_visits` rows, so a re-sent activity counts once; awarding is idempotent. A
+failing rule is logged and skipped, never failing the ingest. The catalogue descriptions state the
+defaults: change them too if you change a threshold.
+
 ### Exercise/Run → Activity → optional Post
 
 1. The Run Module finalises a run (unchanged).
@@ -266,7 +285,10 @@ This matches how the app already uses it, but it must be confirmed against the R
 | `SOCIAL_APP_URL` | for invite links | – | The web app's address; invite links are `…/sign-in?mode=create&invite=CODE` |
 | `SOCIAL_FOUNDING_FIRST`, `SOCIAL_FOUNDING_TOTAL` | no | `15`, `500` | Founding Squirrel / Founding 500 places |
 | `SOCIAL_REFERRALS_TO_SKIP` | no | `3` | Verified friends needed to skip the line |
-| `SOCIAL_COMMUNITY_TIMEZONE` | no | `Asia/Kolkata` | Local day and month for daily stats and "km this month" |
+| `SOCIAL_COMMUNITY_TIMEZONE` | no | `Asia/Kolkata` | Local day and month for daily stats and "km this month"; local time for the activity badges |
+| `SOCIAL_EARLY_BIRD_HOUR`, `SOCIAL_EARLY_BIRD_ACTIVITIES` | no | `7`, `5` | Early Bird: activities started before this hour, and how many |
+| `SOCIAL_NIGHT_OWL_HOUR`, `SOCIAL_NIGHT_OWL_ACTIVITIES` | no | `21`, `5` | Night Owl: activities started at or after this hour, and how many |
+| `SOCIAL_PARK_REGULAR_DAYS` | no | `5` | Park Regular: different days in the same zone |
 | `SOCIAL_PUSH` | no | `on` | `off` stores notifications without sending pushes |
 | `EXPO_ACCESS_TOKEN` | no | – | Only when the Expo project requires an access token for pushes |
 | `SOCIAL_EVENT_REMINDERS`, `SOCIAL_EVENT_REMINDER_MINUTES` | no | `on`, `60` | The in-process reminder loop and how long before the start it reminds |

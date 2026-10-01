@@ -83,6 +83,14 @@ class Settings:
     # Named campus zones for Squirrel Dates (SOCIAL_ZONES_FILE or SOCIAL_ZONES; services/zones.py).
     # Empty: Squirrel Dates says the campus zones aren't set up yet.
     zones: tuple[Zone, ...] = field(default_factory=tuple)
+    # Activity badges (services/badges.py), in community time. Early Bird: this many verified
+    # activities started before early_bird_hour:00; Night Owl: started at or after night_owl_hour:00;
+    # Park Regular: the same named zone on park_regular_days different days.
+    early_bird_hour: int = 7
+    early_bird_activities: int = 5
+    night_owl_hour: int = 21
+    night_owl_activities: int = 5
+    park_regular_days: int = 5
 
     # --- notifications ------------------------------------------------------------------
     push_enabled: bool = True                # send Expo pushes (SOCIAL_PUSH=off to only store them)
@@ -137,6 +145,11 @@ def get_settings() -> Settings:
         referrals_to_skip=_int("SOCIAL_REFERRALS_TO_SKIP", 3),
         community_timezone=os.environ.get("SOCIAL_COMMUNITY_TIMEZONE", "Asia/Kolkata"),
         zones=load_zones(os.environ.get("SOCIAL_ZONES"), _opt("SOCIAL_ZONES_FILE")),
+        early_bird_hour=_int("SOCIAL_EARLY_BIRD_HOUR", 7),
+        early_bird_activities=_int("SOCIAL_EARLY_BIRD_ACTIVITIES", 5),
+        night_owl_hour=_int("SOCIAL_NIGHT_OWL_HOUR", 21),
+        night_owl_activities=_int("SOCIAL_NIGHT_OWL_ACTIVITIES", 5),
+        park_regular_days=_int("SOCIAL_PARK_REGULAR_DAYS", 5),
         push_enabled=os.environ.get("SOCIAL_PUSH", "on").lower() not in ("off", "0", "false"),
         expo_access_token=_opt("EXPO_ACCESS_TOKEN"),
         reminders_enabled=os.environ.get("SOCIAL_EVENT_REMINDERS", "on").lower() not in ("off", "0", "false"),

@@ -135,6 +135,26 @@ class BadgeOut(_Out):
     awarded_at: datetime
 
 
+class BadgeProgress(BaseModel):
+    current: int
+    target: int
+
+
+class BadgeStatus(BaseModel):
+    """One catalogue badge for GET /v1/users/me/badges, in the app's Badge shape."""
+
+    id: str
+    name: str
+    description: str
+    unlocked: bool
+    unlocked_at: datetime | None
+    progress: BadgeProgress | None  # null when the badge has no measurable progress
+
+
+class BadgesResponse(BaseModel):
+    badges: list[BadgeStatus]
+
+
 class FollowStatus(BaseModel):
     following: bool
     followed_by: bool

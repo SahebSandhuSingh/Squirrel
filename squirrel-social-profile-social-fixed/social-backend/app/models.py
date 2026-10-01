@@ -260,6 +260,14 @@ FOUNDING_BADGES: list[dict[str, str]] = [
     {"id": "founding-500", "kind": "founding", "title": "Founding 500", "description": "One of the first 500 members."},
 ]
 
+# Added by migration 0005: awarded by the rules in services/badges.py. The ids are the app's (it picks
+# the art by id); the descriptions state the default thresholds.
+ACTIVITY_BADGES: list[dict[str, str]] = [
+    {"id": "early_bird", "kind": "early-bird", "title": "Early Bird", "description": "Started 5 verified activities before 7 AM."},
+    {"id": "night_owl", "kind": "night-owl", "title": "Night Owl", "description": "Started 5 verified activities after 9 PM."},
+    {"id": "park_regular", "kind": "park-regular", "title": "Park Regular", "description": "Ran through the same campus spot on 5 different days."},
+]
+
 
 # --------------------------------------------------------------------------- community (0002)
 

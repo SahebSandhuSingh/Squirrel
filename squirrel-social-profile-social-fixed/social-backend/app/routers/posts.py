@@ -31,7 +31,7 @@ from app.schemas import (
     RunActivityRef,
     SaveResult,
 )
-from app.services import social
+from app.services import badges, social
 from app.services.run_module import RunModule, RunModuleError
 from app.services.social import bump, insert_ignore
 
@@ -101,6 +101,7 @@ def _activity_from_run(db, viewer: Viewer, ref: RunActivityRef, run_module: RunM
             raise not_found("Run not found.") from None
         return activity
     social.after_activity_recorded(db, activity, settings)
+    badges.after_activity(db, activity, settings)  # a finalized run shared before the Run Module published it
     return activity
 
 

@@ -16,7 +16,8 @@ The Run Module's finish worker (or the Exercise backend) calls this once an acti
 It is idempotent on (source, source_ref): re-sending the same run returns the same activity, with
 its summary (name, distance, duration, calories, metrics) updated to the latest one sent. The
 Exercise backend re-sends a workout after each set, so the profile shows the finished session.
-The activity then shows in the owner's profile and can be shared with
+The activity counts toward the activity badges (services/badges.py), then shows in the owner's
+profile and can be shared with
 POST /v1/posts { activity: { source: "activity", activity_id } }. Never exposed to the app.
 """
 
@@ -55,7 +56,7 @@ from app.schemas_community import (
     InternalPerson,
 )
 from app.services import notify as notifications
-from app.services import dates, reminders, social
+from app.services import badges, dates, reminders, social
 from app.routers.follows import _unfollow
 from app.services.social import insert_ignore
 
@@ -87,6 +88,7 @@ def ingest_activity(
             raise conflict("source_ref already belongs to another user.")
         _update_summary(existing, body)
         dates.record_visits(db, existing, settings, request.app.state.route_points)
+        badges.after_activity(db, existing, settings)  # counts from rows: a re-send never counts twice
         db.commit()
         return InternalActivityOut(activity_id=existing.id, created=False)
     activity = Activity(
@@ -117,6 +119,8 @@ def ingest_activity(
     social.after_activity_recorded(db, activity, settings)
     # Squirrel Dates: which named zones the run passed (opted-in runners only; never fails the ingest).
     dates.record_visits(db, activity, settings, request.app.state.route_points)
+    # Early Bird, Night Owl, Park Regular (after the visits; never fails the ingest either).
+    badges.after_activity(db, activity, settings)
     db.commit()
     response.status_code = status.HTTP_201_CREATED
     return InternalActivityOut(activity_id=activity.id, created=True)

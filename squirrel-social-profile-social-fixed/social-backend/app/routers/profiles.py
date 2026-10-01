@@ -20,6 +20,7 @@ from app.pagination import before, clamp_limit, decode_uuid_cursor, encode_curso
 from app.rules import normalize_username, username_problem
 from app.schemas import (
     BadgeOut,
+    BadgesResponse,
     FeedResponse,
     ProfileResponse,
     ProfileCrew,
@@ -29,6 +30,7 @@ from app.schemas import (
     UsernameAvailability,
     UserPage,
 )
+from app.services import badges as badge_rules
 from app.services import community, social
 from app.services.social import bump
 
@@ -265,6 +267,12 @@ def saved_posts(db: DB, viewer: CurrentViewer, settings: AppSettings, storage: S
     page = rows[:n]
     nxt = encode_cursor(page[-1][4], page[-1][0].id) if len(rows) > n else None
     return FeedResponse(items=social.serialize_posts(db, viewer.id, [r[:4] for r in page], settings, storage), next_cursor=nxt)
+
+
+@router.get("/users/me/badges", response_model=BadgesResponse)
+def my_badges(db: DB, viewer: CurrentViewer, settings: AppSettings):
+    """Every badge, earned or not, with progress toward Early Bird, Night Owl and Park Regular."""
+    return BadgesResponse(badges=badge_rules.statuses(db, viewer.id, settings))
 
 
 @router.get("/users/{user_id}/profile", response_model=ProfileResponse)
