@@ -323,6 +323,35 @@ class InternalPeopleResolveOut(BaseModel):
     people: list[InternalPerson]
 
 
+Subject = Annotated[str, Field(min_length=1, max_length=255)]
+
+
+class InternalBlocksOut(BaseModel):
+    """Everyone `subject` must not be shown to or paired with: blocked by them or blocking them.
+    Callers cache it for at most 30 seconds and fail closed when they can't get a fresh one."""
+
+    subject: str
+    blocked: list[str]  # token subjects, either direction
+    as_of: datetime
+
+
+class InternalBlockPair(_In):
+    blocker: Subject
+    blocked: Subject
+
+
+class InternalBlocksImportIn(_In):
+    """Existing blocks from another service's own table (campus-service, Partner Hunt), by subject."""
+
+    blocks: Annotated[list[InternalBlockPair], Field(max_length=1000)]
+
+
+class InternalBlocksImportOut(BaseModel):
+    imported: int  # new rows
+    already: int  # already blocked in Social
+    skipped: int  # self-blocks
+
+
 # --------------------------------------------------------------------------- boards & stats
 
 

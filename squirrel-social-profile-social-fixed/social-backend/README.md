@@ -190,6 +190,8 @@ saves 120/min, follows 60/min, profile updates 20/min, username checks 60/min, u
 | `POST /internal/v1/notifications` | Service token: the Run Module's territory captured / lost / expired events |
 | `POST /internal/v1/tasks/event-reminders` | Service token: send due event reminders (a cron, while the free plan sleeps) |
 | `POST /internal/v1/people/resolve` | Service token (campus-service): `{ subjects[]≤200, profile_ids[]≤200 }` → `{ people: [{ subject, profile_id, username, display_name, avatar_url, hostel, level }] }`; unseen subjects are provisioned, unknown profile ids omitted, each person once. The only place a subject↔profile mapping leaves Social |
+| `GET /internal/v1/blocks/{subject}` | Service token (campus-service): `{ subject, blocked: [subject…], as_of }` — everyone blocked **either way** with that person. Never writes; an unseen subject has none. Callers cache ≤30 s and fail closed (ADR-032) |
+| `POST /internal/v1/blocks/import` | Service token: `{ blocks: [{ blocker, blocked }]≤1000 }` (subjects) → `{ imported, already, skipped }`. One-time copy of another service's own block table; safe to re-run; provisions unseen subjects; removes follows between the two, like an app block |
 
 Profiles also carry `hostel`, `stats.month_km / month_runs / month_workouts` (verified this month) and
 `crews` (member since, vouches).
@@ -249,7 +251,7 @@ This matches how the app already uses it, but it must be confirmed against the R
 | `SOCIAL_JWT_ISSUER`, `SOCIAL_JWT_AUDIENCE` | no | – | Checked when set |
 | `SOCIAL_RUN_MODULE_URL` | recommended | – | XP sync + run sharing. Unset: XP stays at its last synced value and run sharing returns 503 |
 | `SOCIAL_RUN_MODULE_TIMEOUT_S` | no | `4` | |
-| `SOCIAL_INTERNAL_TOKEN` | for ingestion | – | Service token for `/internal/v1/*` (activities, notifications, event reminders, people resolve); those endpoints 404 when unset |
+| `SOCIAL_INTERNAL_TOKEN` | for ingestion | – | Service token for `/internal/v1/*` (activities, notifications, event reminders, people resolve, blocks); those endpoints 404 when unset |
 | `SOCIAL_XP_PER_LEVEL` | no | `2000` | Must match the app |
 | `SOCIAL_STREAK_TIMEZONE` | no | `Asia/Kolkata` | Day boundary for streaks |
 | `SOCIAL_MEDIA_BUCKET`, `SOCIAL_MEDIA_REGION`, `SOCIAL_MEDIA_ENDPOINT_URL`, `SOCIAL_MEDIA_PUBLIC_BASE_URL`, `SOCIAL_MEDIA_MAX_BYTES` + standard AWS credentials | for photos | – | S3-compatible storage. Unset bucket: uploads return 503 |

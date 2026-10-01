@@ -6,6 +6,9 @@
   POST /internal/v1/people/resolve          token subjects / profile ids → Social names, profile ids,
                                             avatar, hostel, level (campus-service); unseen subjects
                                             are provisioned like a first sign-in
+  GET  /internal/v1/blocks/{subject}        everyone blocked either way with that person, by subject
+                                            (campus-service: Nearby, map, meetups); never writes
+  POST /internal/v1/blocks/import           one-time copy of another service's own blocks into Social
 
 The Run Module's finish worker (or the Exercise backend) calls this once an activity is final.
 It is idempotent on (source, source_ref): re-sending the same run returns the same activity, with
@@ -28,9 +31,12 @@ from app.auth import bearer_token, get_or_create_user
 from app.db import utcnow
 from app.deps import DB, AppSettings, Storage
 from app.errors import ApiError, conflict
-from app.models import Activity, User, UserStats
+from app.models import Activity, User, UserBlock, UserStats
 from app.schemas import InternalActivityOut, InternalActivityIn
 from app.schemas_community import (
+    InternalBlocksImportIn,
+    InternalBlocksImportOut,
+    InternalBlocksOut,
     InternalNotificationIn,
     InternalNotificationOut,
     InternalPeopleResolveIn,
@@ -39,6 +45,8 @@ from app.schemas_community import (
 )
 from app.services import notify as notifications
 from app.services import dates, reminders, social
+from app.routers.follows import _unfollow
+from app.services.social import insert_ignore
 
 router = APIRouter(prefix="/internal/v1", tags=["internal"], include_in_schema=False)
 
@@ -218,3 +226,53 @@ def resolve_people(
             level=social.level_for(xp, settings),
         ))
     return InternalPeopleResolveOut(people=people)
+
+
+@router.get("/blocks/{subject}", response_model=InternalBlocksOut)
+def blocks_for(
+    subject: str,
+    db: DB,
+    settings: AppSettings,
+    authorization: Annotated[str | None, Header()] = None,
+):
+    """Who `subject` blocked plus who blocked them, as subjects. A subject Social has never seen
+    has no blocks (and is not provisioned: this read never writes). Blocking is Social's
+    (ADR-032); the caller caches the answer for at most 30 seconds."""
+    _check_service_token(settings, authorization)
+    as_of = utcnow()
+    me = db.scalar(select(User.id).where(User.auth_subject == subject))
+    others = dates.blocked_either_way(db, me) if me else set()
+    blocked = db.scalars(select(User.auth_subject).where(User.id.in_(others)).order_by(User.auth_subject)).all() if others else []
+    return InternalBlocksOut(subject=subject, blocked=list(blocked), as_of=as_of)
+
+
+@router.post("/blocks/import", response_model=InternalBlocksImportOut)
+def import_blocks(
+    body: InternalBlocksImportIn,
+    db: DB,
+    settings: AppSettings,
+    authorization: Annotated[str | None, Header()] = None,
+):
+    """Copies blocks a service kept in its own table, so Social's list is the whole truth before
+    that table is dropped. Safe to re-run: a pair already blocked is counted, not duplicated.
+    People Social hasn't seen yet get their profile now, as on a first sign-in, so no block is lost.
+    Follows between the two are removed, as when blocking in the app."""
+    _check_service_token(settings, authorization)
+    imported = already = skipped = 0
+    users: dict[str, User] = {}
+    for pair in body.blocks:
+        if pair.blocker == pair.blocked:
+            skipped += 1
+            continue
+        for sub in (pair.blocker, pair.blocked):
+            if sub not in users:
+                users[sub] = get_or_create_user(db, sub)
+        a, b = users[pair.blocker].id, users[pair.blocked].id
+        if insert_ignore(db, UserBlock, {"blocker_id": a, "blocked_id": b, "created_at": utcnow()}):
+            imported += 1
+            _unfollow(db, a, b)
+            _unfollow(db, b, a)
+        else:
+            already += 1
+    db.commit()
+    return InternalBlocksImportOut(imported=imported, already=already, skipped=skipped)

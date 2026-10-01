@@ -54,13 +54,19 @@ together.
 
 - Social exposes a dedicated internal route (not part of `people/resolve`): blocks must be fresh, have
   no side effects, and fail closed, while names may be minutes stale and fail open to a placeholder.
-- Keyed by `sub`, returning `sub`s: the full set of people blocked **in either direction** for one user.
+- `GET /internal/v1/blocks/{sub}` (service token) → `{ subject, blocked: [sub…], as_of }`: the full set of
+  people blocked **in either direction** for one user. It never writes; a `sub` Social hasn't seen has
+  none.
 - Callers cache for at most 30 seconds. When Social can't be reached and no fresh answer is cached, the
   check **fails closed**: lists that filter people (Nearby, Active now, map players, shared zones) are
   returned empty with a reason, and actions between two people (meetup invite, challenge) are refused
   with a retryable 503. Fewer people shown, never a blocked person shown.
 - During migration campus-service honours the union of Social's answer and its own `blocks` table;
-  existing campus and Partner Hunt blocks are copied into Social once, then the local tables are dropped.
+  existing campus and Partner Hunt blocks are copied into Social once with
+  `POST /internal/v1/blocks/import` (`{ blocks: [{ blocker, blocked }] }` by `sub`, safe to re-run),
+  then the local tables are dropped.
+- campus-service checks blocks wherever two people meet: meetups and their notifications, shared zones,
+  Nearby, Active now, map players, a person's context, and territory battles.
 
 ## Order
 
@@ -79,9 +85,14 @@ For each, the owner's side ships first; the consumer's side follows.
    that Exercise lacks. Removal plan if accepted: Exercise adds the missing fields → the app's "About
    you" form talks to Exercise → existing campus rows are copied to Exercise once → campus `/v1/me`
    stops serving them → a later campus migration drops the table.
-2. **Ambassador applications.** The app has the screens and no backend has the routes. By this table
-   it is a community programme (Social: membership, referrals, founding badges); to be agreed before it
-   is built in campus-service.
+2. **Ambassador applications.** The app has the screens and no backend has the routes. Where the app
+   sends them today: `/v1/ambassador/application` goes to `CAMPUS_API_URL`, which in production falls
+   back to Social (`EXPO_PUBLIC_CAMPUS_API_URL` unset); campus-service only receives the methods listed in
+   `CAMPUS_SERVICE_METHODS` (mobile-4 `src/api/campus/campusShapes.ts`). So Social needs no app code
+   change (switch it on with `EXPO_PUBLIC_LIVE_ENDPOINTS=ambassador` or `BUILT`); campus-service needs
+   `ambassador` and `applyAmbassador` added to that list. The same holds for meetups, post-meetup
+   rating and `PATCH /v1/me` profile details, which also reach Social today. To be agreed with the app's
+   owner before it is built.
 3. **Shared workouts.** No backend in this repository implements either `/v1/workout-sessions` (what the
    app calls) or `/v1/shared-workouts`. Exercise is proposed: it already runs live coaching sockets and
    counts reps. If a deployed service serves `/v1/shared-workouts`, its source must be brought into
