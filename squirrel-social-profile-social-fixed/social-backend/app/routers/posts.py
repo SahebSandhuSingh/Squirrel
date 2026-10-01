@@ -31,7 +31,7 @@ from app.schemas import (
     RunActivityRef,
     SaveResult,
 )
-from app.services import badges, social
+from app.services import badges, social, xp_cache
 from app.services.run_module import RunModule, RunModuleError
 from app.services.social import bump, insert_ignore
 
@@ -249,12 +249,13 @@ def unsave(post_id: uuid.UUID, db: DB, viewer: CurrentViewer, limiter: Limiter):
 def _comment_rows_out(db, viewer: Viewer, rows, settings, storage) -> list[CommentOut]:
 
     urls = social.media_urls(db, storage, [u.avatar_media_id for _, u, _ in rows])
+    xp_now = xp_cache.fresh(db, {u.id for _, u, _ in rows})
     mod = viewer.user.role in MODERATOR_ROLES
     return [
         CommentOut(
             id=c.id,
             post_id=c.post_id,
-            author=social.user_summary(u, xp, settings, urls.get(u.avatar_media_id)),
+            author=social.user_summary(u, xp_now.get(u.id, xp), settings, urls.get(u.avatar_media_id)),
             body=c.body,
             created_at=c.created_at,
             can_delete=mod or c.author_id == viewer.id,

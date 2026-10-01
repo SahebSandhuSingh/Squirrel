@@ -21,6 +21,7 @@ from app.db import utcnow
 from app.errors import not_found
 from app.models import Activity, Badge, Follow, Media, Post, PostLike, PostSave, User, UserBadge, UserStats
 from app.schemas import ActivityOut, BackdropOut, FollowListItem, FollowStatus, PostOut, UserSummary
+from app.services import xp_cache
 from app.services.media import MediaStorage
 
 # --------------------------------------------------------------------------- db helpers
@@ -186,12 +187,13 @@ def serialize_posts(
     author_ids = {r[1].id for r in rows}
     follows = dict(db.execute(select(Follow.followee_id, Follow.status).where(Follow.follower_id == viewer_id, Follow.followee_id.in_(author_ids))).all())
     urls = media_urls(db, storage, [r[0].media_id for r in rows] + [r[1].avatar_media_id for r in rows])
+    xp_now = xp_cache.fresh(db, author_ids)
     out = []
     for post, author, xp, activity in rows:
         out.append(
             PostOut(
                 id=post.id,
-                author=user_summary(author, xp, settings, urls.get(author.avatar_media_id)),
+                author=user_summary(author, xp_now.get(author.id, xp), settings, urls.get(author.avatar_media_id)),
                 caption=post.caption,
                 activity=activity_out(activity) if activity else None,
                 city_id=post.city_id,
@@ -235,9 +237,10 @@ def serialize_user_rows(
     ids = [u.id for u, _, _ in rows]
     rel = dict(db.execute(select(Follow.followee_id, Follow.status).where(Follow.follower_id == viewer_id, Follow.followee_id.in_(ids))).all())
     urls = media_urls(db, storage, [u.avatar_media_id for u, _, _ in rows])
+    xp_now = xp_cache.fresh(db, ids)
     items = []
     for u, xp, at in rows:
-        s = user_summary(u, xp, settings, urls.get(u.avatar_media_id))
+        s = user_summary(u, xp_now.get(u.id, xp), settings, urls.get(u.avatar_media_id))
         items.append(
             FollowListItem(
                 **s.model_dump(),

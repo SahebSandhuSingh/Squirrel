@@ -77,7 +77,8 @@ lists without one call per person. A cache is not a second ledger as long as:
 
 1. **It is written only from the Run Module's answer.** An award call returns the new total, which the
    cache stores; nothing increments a cached number locally.
-2. **It refreshes in batches.** `POST /internal/v1/xp/totals { subjects[] ≤200 }` (service token) on the
+2. **It refreshes in batches.** `POST /internal/v1/xp/totals { subjects[] ≤200 }` (the shared
+   `SOCIAL_INTERNAL_TOKEN`, like every service's `/internal` routes: only Exercise can sign service JWTs) on the
    Run Module returns `{ subject: total }`; a service refreshes stale rows in one call while serving a
    list. XP is display only, so when the Run Module is unreachable the last cached value is shown
    (fail open, unlike blocks).

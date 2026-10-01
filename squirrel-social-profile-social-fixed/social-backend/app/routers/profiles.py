@@ -31,7 +31,7 @@ from app.schemas import (
     UserPage,
 )
 from app.services import badges as badge_rules
-from app.services import community, social
+from app.services import community, social, xp_cache
 from app.services.social import bump
 
 router = APIRouter(prefix="/v1", tags=["profiles"])
@@ -278,6 +278,8 @@ def my_badges(db: DB, viewer: CurrentViewer, settings: AppSettings):
 @router.get("/users/{user_id}/profile", response_model=ProfileResponse)
 def get_profile(user_id: uuid.UUID, db: DB, viewer: CurrentViewer, settings: AppSettings, storage: Storage):
     user = social.get_user_or_404(db, user_id)
+    if user.id != viewer.id and xp_cache.fresh(db, [user.id]):
+        db.refresh(user.stats)
     return build_profile(db, viewer, user, settings, storage, is_me=user.id == viewer.id)
 
 

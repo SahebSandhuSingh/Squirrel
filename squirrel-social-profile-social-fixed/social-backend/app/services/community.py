@@ -15,7 +15,7 @@ from app.config import Settings
 from app.db import utcnow
 from app.models import Activity, CrewMember, Follow, User, UserStats
 from app.schemas import UserSummary
-from app.services import social
+from app.services import social, xp_cache
 from app.services.media import MediaStorage
 
 
@@ -33,10 +33,11 @@ def day_start(day: date, settings: Settings) -> datetime:
 
 
 def summaries(db: Session, user_ids: Iterable[uuid.UUID], settings: Settings, storage: MediaStorage) -> dict[uuid.UUID, UserSummary]:
-    """UserSummary for each id, in two queries."""
+    """UserSummary for each id, in two queries (and a batch XP refresh for stale figures)."""
     ids = set(user_ids)
     if not ids:
         return {}
+    xp_cache.fresh(db, ids)
     rows = db.execute(select(User, UserStats.xp).join(UserStats, UserStats.user_id == User.id).where(User.id.in_(ids))).all()
     urls = social.media_urls(db, storage, [u.avatar_media_id for u, _ in rows])
     return {u.id: social.user_summary(u, xp, settings, urls.get(u.avatar_media_id)) for u, xp in rows}

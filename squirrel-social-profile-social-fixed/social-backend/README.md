@@ -10,7 +10,7 @@ It does **not** own runs, XP or authentication:
 |---|---|---|
 | Sign-in / tokens | Account service (RS256 JWT) | Verifies the same bearer token as the Run Module; `sub` identifies the account |
 | Runs, GPS, territory | Run Module | Reads `GET /v1/runs/:id` **with the caller's token** when a run is shared; keeps distance + time only |
-| XP | Run Module | Reads `GET /v1/users/me/xp` with the caller's token; stores a read-only copy for public profiles |
+| XP | Run Module | Your own: `GET /v1/users/me/xp` with your token on every profile read. Everyone else's: a read cache (`user_stats.xp`) refreshed in one `POST /internal/v1/xp/totals` call (service token) when older than `SOCIAL_XP_CACHE_TTL_S`, while a list shows them; never incremented here, and the last figure is shown if the Run Module is down (`app/services/xp_cache.py`, ADR-032) |
 | Form-coach workouts | Exercise backend | Can publish finished sessions via `POST /internal/v1/activities` (service token) |
 
 ## Architecture
@@ -278,6 +278,7 @@ This matches how the app already uses it, but it must be confirmed against the R
 | `SOCIAL_JWT_ISSUER`, `SOCIAL_JWT_AUDIENCE` | no | – | Checked when set |
 | `SOCIAL_RUN_MODULE_URL` | recommended | – | XP sync + run sharing. Unset: XP stays at its last synced value and run sharing returns 503 |
 | `SOCIAL_RUN_MODULE_TIMEOUT_S` | no | `4` | |
+| `SOCIAL_XP_CACHE_TTL_S` | no | `300` | How old other people's cached XP may be before a list asks the Run Module again (needs `SOCIAL_INTERNAL_TOKEN`, which the Run Module must accept on `/internal/v1/xp/totals`) |
 | `SOCIAL_INTERNAL_TOKEN` | for ingestion | – | Service token for `/internal/v1/*` (activities, notifications, event reminders, people resolve, blocks, crews); those endpoints 404 when unset |
 | `SOCIAL_XP_PER_LEVEL` | no | `2000` | Must match the app |
 | `SOCIAL_STREAK_TIMEZONE` | no | `Asia/Kolkata` | Day boundary for streaks |

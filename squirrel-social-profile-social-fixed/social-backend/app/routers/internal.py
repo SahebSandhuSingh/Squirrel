@@ -56,7 +56,7 @@ from app.schemas_community import (
     InternalPerson,
 )
 from app.services import notify as notifications
-from app.services import badges, dates, reminders, social
+from app.services import badges, dates, reminders, social, xp_cache
 from app.routers.follows import _unfollow
 from app.services.social import insert_ignore
 
@@ -231,6 +231,9 @@ def resolve_people(
         rows = load()
 
     urls = social.media_urls(db, storage, [u.avatar_media_id for u, _ in rows])
+    # Provisioning (if any) has committed: nothing here is half done, so the refresh may commit.
+    xp_now = xp_cache.fresh(db, [u.id for u, _ in rows], settled=True)
+    rows = [(u, xp_now.get(u.id, xp)) for u, xp in rows]
     by_subject = {u.auth_subject: (u, xp) for u, xp in rows}
     by_id = {u.id: (u, xp) for u, xp in rows}
     ordered = [by_subject[s] for s in subjects if s in by_subject] + [by_id[i] for i in profile_ids if i in by_id]

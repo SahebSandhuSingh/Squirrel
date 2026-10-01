@@ -9,12 +9,18 @@ from the app; it reads them here:
                        → { window, day, entries[{rank, user_id, xp}], me{rank, user_id, xp} | null }
                          (XP earned in the window, by the account's JWT subject; for the boards)
 
+One call is made with the *service* token instead (SOCIAL_INTERNAL_TOKEN), for other people's XP:
+
+  POST /internal/v1/xp/totals { subjects[] ≤200 } → { subject: xp }   (ADR-032 "XP reads")
+
 ASSUMPTION (matches mobile/src/api/endpoints.ts): GET /v1/runs/:id only returns runs owned by
 the token's user (404 otherwise), which is what makes "this run is yours" provable here.
 """
 
 from __future__ import annotations
 
+import time
+import uuid
 from typing import Protocol
 
 import httpx
@@ -35,12 +41,29 @@ class RunModule(Protocol):
 
     def get_xp_board(self, token: str, window: str, limit: int) -> dict | None: ...
 
+    def get_xp_totals(self, service_token: str, subjects: list[str]) -> dict[str, int] | None: ...
+
+
+TOTALS_BATCH = 200  # the route's limit
+TOTALS_TIMEOUT_S = 2.0  # a list waits on this call, so it is short
+TOTALS_BACKOFF_S = 30.0  # after a failure, lists use the cached figures without asking for this long
+
+
+def is_run_module_subject(subject: str) -> bool:
+    """The Run Module keys people by UUID and rejects a whole batch over one id that isn't."""
+    try:
+        uuid.UUID(subject)
+    except ValueError:
+        return False
+    return True
+
 
 class HttpRunModule:
     def __init__(self, base_url: str | None, timeout_s: float = 4.0):
         self.base_url = base_url
         self.configured = bool(base_url)
         self._client = httpx.Client(base_url=base_url, timeout=timeout_s) if base_url else None
+        self._totals_down_until = 0.0
 
     def _get(self, token: str, path: str) -> dict:
         if not self._client:
@@ -82,3 +105,24 @@ class HttpRunModule:
         except RunModuleError:
             return None
         return body if isinstance(body.get("entries"), list) else None
+
+    def get_xp_totals(self, service_token: str, subjects: list[str]) -> dict[str, int] | None:
+        """Best effort: other people's XP totals, TOTALS_BATCH at a time; None when unavailable (the
+        cached figures are served instead). Only UUID subjects are sent."""
+        if not self._client or not service_token or time.monotonic() < self._totals_down_until:
+            return None
+        wanted = [s for s in dict.fromkeys(subjects) if is_run_module_subject(s)]
+        totals: dict[str, int] = {}
+        for i in range(0, len(wanted), TOTALS_BATCH):
+            try:
+                res = self._client.post("/internal/v1/xp/totals", json={"subjects": wanted[i:i + TOTALS_BATCH]},
+                                        headers={"Authorization": f"Bearer {service_token}", "Accept": "application/json"},
+                                        timeout=TOTALS_TIMEOUT_S)
+                body = res.json() if res.status_code == 200 else None
+            except (httpx.HTTPError, ValueError):
+                body = None
+            if not isinstance(body, dict):
+                self._totals_down_until = time.monotonic() + TOTALS_BACKOFF_S
+                return totals or None
+            totals.update({k: int(v) for k, v in body.items() if isinstance(v, (int, float)) and v >= 0})
+        return totals

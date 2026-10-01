@@ -66,6 +66,9 @@ class FakeRunModule:
         # XP earned in the current board window, by subject (GET /v1/leaderboard/xp).
         self.board_xp: dict[str, int] = {}
         self.board_available = True
+        # POST /internal/v1/xp/totals (other people's XP, service token): False = unreachable.
+        self.totals_available = True
+        self.totals_calls: list[list[str]] = []
 
     @staticmethod
     def _sub(token: str) -> str:
@@ -86,6 +89,13 @@ class FakeRunModule:
         sub = self._sub(token)
         self.calls.append(("xp", sub))
         return self.xp.get(sub)
+
+    def get_xp_totals(self, service_token: str, subjects: list[str]) -> dict[str, int] | None:
+        assert service_token == "svc-secret"
+        self.totals_calls.append(list(subjects))
+        if not self.totals_available:
+            return None
+        return {s: self.xp.get(s, 0) for s in subjects}  # like the Run Module: 0 for no XP yet
 
     def get_xp_board(self, token: str, window: str, limit: int) -> dict | None:
         self.calls.append(("xp_board", window))

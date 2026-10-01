@@ -55,6 +55,9 @@ class Settings:
     run_module_timeout_s: float = 4.0
     # Shared secret for service-to-service activity ingestion (POST /internal/v1/activities).
     internal_token: str | None = None
+    # Other people's XP is a read cache of the Run Module's total, refreshed in one batch call when
+    # older than this (ADR-032 "XP reads").
+    xp_cache_ttl_s: int = 300
 
     # --- progression (mirrors the app: 2,000 XP per level) -------------------------------
     xp_per_level: int = 2000
@@ -127,6 +130,7 @@ def get_settings() -> Settings:
         run_module_url=(_opt("SOCIAL_RUN_MODULE_URL") or "").rstrip("/") or None,
         run_module_timeout_s=float(os.environ.get("SOCIAL_RUN_MODULE_TIMEOUT_S", "4")),
         internal_token=_opt("SOCIAL_INTERNAL_TOKEN"),
+        xp_cache_ttl_s=_int("SOCIAL_XP_CACHE_TTL_S", 300),
         xp_per_level=_int("SOCIAL_XP_PER_LEVEL", 2000),
         streak_timezone=os.environ.get("SOCIAL_STREAK_TIMEZONE", "Asia/Kolkata"),
         media_bucket=_opt("SOCIAL_MEDIA_BUCKET"),
