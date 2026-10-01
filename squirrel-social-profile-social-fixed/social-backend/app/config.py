@@ -84,8 +84,10 @@ class Settings:
     # Empty: Squirrel Dates says the campus zones aren't set up yet.
     zones: tuple[Zone, ...] = field(default_factory=tuple)
     # Activity badges (services/badges.py), in community time. Early Bird: this many verified
-    # activities started before early_bird_hour:00; Night Owl: started at or after night_owl_hour:00;
-    # Park Regular: the same named zone on park_regular_days different days.
+    # activities started from early_bird_from_hour:00 to before early_bird_hour:00; Night Owl: from
+    # night_owl_hour:00 to before early_bird_from_hour:00 (a 1 AM run is a late night, not an early
+    # start); Park Regular: the same named zone on park_regular_days different days.
+    early_bird_from_hour: int = 4
     early_bird_hour: int = 7
     early_bird_activities: int = 5
     night_owl_hour: int = 21
@@ -145,6 +147,7 @@ def get_settings() -> Settings:
         referrals_to_skip=_int("SOCIAL_REFERRALS_TO_SKIP", 3),
         community_timezone=os.environ.get("SOCIAL_COMMUNITY_TIMEZONE", "Asia/Kolkata"),
         zones=load_zones(os.environ.get("SOCIAL_ZONES"), _opt("SOCIAL_ZONES_FILE")),
+        early_bird_from_hour=_int("SOCIAL_EARLY_BIRD_FROM_HOUR", 4),
         early_bird_hour=_int("SOCIAL_EARLY_BIRD_HOUR", 7),
         early_bird_activities=_int("SOCIAL_EARLY_BIRD_ACTIVITIES", 5),
         night_owl_hour=_int("SOCIAL_NIGHT_OWL_HOUR", 21),

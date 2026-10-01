@@ -13,7 +13,7 @@ from datetime import date, datetime, timezone
 
 from backend.profiles import store
 from backend.profiles.store import HistoryUnreadable
-from backend.profiles.vocab import CONSENT_CATEGORIES, MEASUREMENT_FIELDS, PHYSIQUE_MEASUREMENTS
+from backend.profiles.vocab import ABOUT_YOU_AGE, CONSENT_CATEGORIES, MEASUREMENT_FIELDS, PHYSIQUE_MEASUREMENTS
 from backend.auth import store as auth_store
 from backend.users.store import create_user_record, delete_user_record, read_profile, read_skill, write_profile, write_skill
 
@@ -440,8 +440,9 @@ def save_sign_up_details(user_id: str, sections: dict, consents: list[dict], *,
 
 # The app's form, read and written as one object (ADR-032: Exercise is the home of private details).
 # Each field has one source: full_name is first_name + last_name, phone is mobile, gender is gender,
-# age is derived from date_of_birth and college_email is the sign-in address (both read-only here);
-# only personal_email, course and CGPA are stored for this form (store.write_personal_details).
+# date_of_birth is the profile's (age is derived from it, never stored) and college_email is the
+# sign-in address (read-only here); only personal_email, course and CGPA are stored for this form
+# (store.write_personal_details).
 
 def full_name(profile: dict) -> str | None:
     parts = (profile.get("first_name") or "", profile.get("last_name") or "")
@@ -457,8 +458,8 @@ def split_full_name(name: str) -> tuple[str, str]:
 
 def profile_details(user_id: str, *, today: date | None = None) -> dict:
     """The form as saved. Before its first save it is still answered, with what the account already
-    knows and null for the rest (personal_email, course, cgpa; and anything never given, such as age
-    without a date of birth), so the app can prefill the form."""
+    knows and null for the rest (personal_email, course, cgpa; and anything never given, such as a
+    date of birth and so age), so the app can prefill the form."""
     profile = _require_user(user_id)
     saved = store.read_personal_details(user_id) or {}
     dob = parse_date_of_birth(profile.get("date_of_birth"))
@@ -468,6 +469,7 @@ def profile_details(user_id: str, *, today: date | None = None) -> dict:
         "college_email": profile.get("email"),
         "phone": profile.get("mobile"),
         "gender": profile.get("gender"),
+        "date_of_birth": dob.isoformat() if dob else None,
         "age": age_on(dob, today or date.today()) if dob else None,
         "course": saved.get("course"),
         "cgpa": saved.get("cgpa"),
@@ -476,7 +478,8 @@ def profile_details(user_id: str, *, today: date | None = None) -> dict:
 
 def save_profile_details(user_id: str, details: dict, *, today: date | None = None) -> dict:
     """Replace the form (the app always sends all of it). Raises InvalidFields, changing nothing, when
-    the age isn't the one the date of birth gives or the college email isn't the sign-in address."""
+    there is no date of birth (sent or on file), it gives an age outside 16–99, a sent age disagrees
+    with it, or the college email isn't the sign-in address."""
     profile = _require_user(user_id)
     errors = []
     if details["college_email"] != (profile.get("email") or "").lower():
@@ -485,11 +488,15 @@ def save_profile_details(user_id: str, details: dict, *, today: date | None = No
     elif details["personal_email"] == details["college_email"]:
         errors.append(("personal_email", "personal_email_same_as_college",
                        "use a personal address, different from your college email"))
-    dob = parse_date_of_birth(profile.get("date_of_birth"))
-    # Age is never stored. Without a date of birth on file there is nothing to check it against: it
-    # is accepted and not kept, and GET answers null for it until a date of birth is set.
+    # Age is never stored, so it can't go stale: it comes from the date of birth, sent here or on file.
+    dob = parse_date_of_birth(details.get("date_of_birth") or profile.get("date_of_birth"))
     derived_age = age_on(dob, today or date.today()) if dob else None
-    if derived_age is not None and derived_age != details["age"]:
+    if dob is None:
+        errors.append(("date_of_birth", "date_of_birth_required", "enter your date of birth"))
+    elif not ABOUT_YOU_AGE[0] <= derived_age <= ABOUT_YOU_AGE[1]:
+        errors.append(("date_of_birth", "age_out_of_range",
+                       f"you must be {ABOUT_YOU_AGE[0]}–{ABOUT_YOU_AGE[1]} to use Squirrel"))
+    elif details.get("age") is not None and derived_age != details["age"]:
         errors.append(("age", "age_mismatch", f"age comes from your date of birth, which makes you "
                                               f"{derived_age}; change your date of birth to change it"))
     if errors:
@@ -499,6 +506,6 @@ def save_profile_details(user_id: str, details: dict, *, today: date | None = No
     if details["full_name"] == full_name(profile):  # unchanged: keep how the name was split before
         first, last = profile.get("first_name") or "", profile.get("last_name") or ""
     store.write_personal_details(user_id, details)
-    write_profile(user_id, {**profile, "first_name": first, "last_name": last,
-                            "mobile": details["phone"], "gender": details["gender"]})
+    write_profile(user_id, {**profile, "first_name": first, "last_name": last, "mobile": details["phone"],
+                            "gender": details["gender"], "date_of_birth": dob.isoformat()})
     return profile_details(user_id, today=today)

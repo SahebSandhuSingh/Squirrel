@@ -103,9 +103,9 @@ def test_the_first_verified_members_are_founding(client, settings, pushes):
         membership(client, verified(s))
     assert badge_ids(client, auth(unverified)) == []
     first = membership(client, verified(subs[0]))
-    assert first["founding"] == {"badge_id": "founding-squirrel", "title": "Founding Squirrel", "rank": 1}
-    assert badge_ids(client, verified(subs[settings.founding_first - 1])) == ["founding-squirrel"]
-    assert badge_ids(client, verified(subs[settings.founding_first])) == ["founding-500"]
+    assert first["founding"] == {"badge_id": "founding_squirrel", "title": "Founding Squirrel", "rank": 1}
+    assert badge_ids(client, verified(subs[settings.founding_first - 1])) == ["founding_squirrel"]
+    assert badge_ids(client, verified(subs[settings.founding_first])) == ["founding_500"]
     assert membership(client, verified(subs[-1]))["founding"]["rank"] == settings.founding_first + 2
     # the badge came with a notification
     kinds = [n["kind"] for n in client.get("/v1/notifications", headers=verified(subs[0])).json()["items"]]

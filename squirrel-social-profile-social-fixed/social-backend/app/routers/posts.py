@@ -173,7 +173,7 @@ def create_post(body: CreatePostRequest, db: DB, viewer: CurrentViewer, settings
         db.rollback()
         raise conflict("You've already shared this activity.", "already_shared") from None
     bump(db, UserStats, UserStats.user_id == me.id, posts_count=1)
-    social.award_badge(db, me.id, "first-post")
+    social.award_badge(db, me.id, "first_post")
     db.commit()
     row = social.load_visible_post(db, me.id, post.id)
     return social.serialize_posts(db, me.id, [row], settings, storage)[0]
@@ -210,7 +210,7 @@ def like(post_id: uuid.UUID, db: DB, viewer: CurrentViewer, limiter: Limiter):
     if insert_ignore(db, PostLike, {"post_id": post.id, "user_id": viewer.id, "created_at": utcnow()}):
         bump(db, Post, Post.id == post.id, likes_count=1)
         if _likes(db, post.id) >= CROWD_FAVOURITE_LIKES:
-            social.award_badge(db, post.author_id, "crowd-favourite")
+            social.award_badge(db, post.author_id, "crowd_favourite")
     db.commit()
     return LikeResult(liked=True, likes_count=_likes(db, post.id))
 

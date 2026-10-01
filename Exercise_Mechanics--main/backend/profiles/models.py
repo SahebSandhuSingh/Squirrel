@@ -189,9 +189,17 @@ class ProfileDetailsIn(BaseModel):
     college_email: str = Field(max_length=254)
     phone: str = Field(max_length=16)
     gender: Literal[ABOUT_YOU_GENDERS]
-    age: int = Field(ge=ABOUT_YOU_AGE[0], le=ABOUT_YOU_AGE[1])
+    # Age is never stored: it comes from the date of birth, which the form sends when the account has
+    # none yet (code sign-in asks for none) or to correct it. `age`, if sent, must agree with it.
+    date_of_birth: str | None = None
+    age: int | None = Field(default=None, ge=ABOUT_YOU_AGE[0], le=ABOUT_YOU_AGE[1])
     course: str = Field(min_length=1, max_length=60)
     cgpa: float | None = Field(default=None, ge=CGPA[0], le=CGPA[1])
+
+    @field_validator("date_of_birth")
+    @classmethod
+    def _real_date(cls, value: str | None) -> str | None:
+        return None if value is None else check_date_of_birth(value)
 
     @field_validator("full_name")
     @classmethod

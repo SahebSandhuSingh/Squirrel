@@ -96,9 +96,9 @@ def _assign_rank(db: Session, member: Member, settings: Settings) -> None:
 
 def founding_badge_for(rank: int, settings: Settings) -> str | None:
     if rank <= settings.founding_first:
-        return "founding-squirrel"
+        return "founding_squirrel"
     if rank <= settings.founding_total:
-        return "founding-500"
+        return "founding_500"
     return None
 
 

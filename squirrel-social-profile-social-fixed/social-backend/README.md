@@ -108,7 +108,7 @@ validation 422 keeps its `detail: [...]` list). Timestamps are ISO 8601 UTC.
             "interests": [], "visibility": "public|private", "verified", "created_at" },
   "stats": { "xp": 24750, "level": 13, "level_xp": 750, "xp_per_level": 2000, "xp_synced_at": "…"|null,
              "streak_days": 18, "followers": 240, "following": 180, "posts": 34, "activities": 51 },
-  "badges": [ { "id": "first-run", "kind": "first-run", "title": "First Run", "description": "…", "awarded_at": "…" } ],
+  "badges": [ { "id": "first_run", "kind": "first-run", "title": "First Run", "description": "…", "awarded_at": "…" } ],
   "recent_posts": [Post ×≤9], "recent_activities": [Activity ×≤10],
   "is_me": false, "restricted": false,
   "relationship": { "following": true, "followed_by": false, "requested": false } | null,
@@ -236,14 +236,18 @@ with a `badge` notification. Local times are `SOCIAL_COMMUNITY_TIMEZONE`.
 
 | Badge (`id`) | Rule (defaults) |
 |---|---|
-| Early Bird (`early_bird`) | 5 verified activities that started before 07:00 |
-| Night Owl (`night_owl`) | 5 verified activities that started at or after 21:00 |
+| Early Bird (`early_bird`) | 5 verified activities that started from 04:00 to before 07:00 |
+| Night Owl (`night_owl`) | 5 verified activities that started from 21:00 to before 04:00 (a 1 AM run is a late night, not an early start) |
 | Park Regular (`park_regular`) | One named zone visited on 5 different days, on verified runs. Reads Squirrel Dates' zone visits, so it needs zones configured and the member opted in, and the days must fall within the 56 days visits are kept |
 
 Unverified activities (manual, flagged runs) and meals don't count. Counts are read from the
 `activities` and `zone_visits` rows, so a re-sent activity counts once; awarding is idempotent. A
 failing rule is logged and skipped, never failing the ingest. The catalogue descriptions state the
-defaults: change them too if you change a threshold.
+defaults (Park Regular's says it needs Squirrel Dates on): change them too if you change a threshold.
+
+`GET /v1/users/me/badges` lists every badge a member can work towards, with progress; founding
+badges appear only once held. Badge ids are the app's, with underscores (`founding_squirrel`,
+`first_run`…); migration `0006_badge_ids` moved the first, hyphenated ids and their awards.
 
 ### Exercise/Run → Activity → optional Post
 
@@ -286,8 +290,8 @@ This matches how the app already uses it, but it must be confirmed against the R
 | `SOCIAL_FOUNDING_FIRST`, `SOCIAL_FOUNDING_TOTAL` | no | `15`, `500` | Founding Squirrel / Founding 500 places |
 | `SOCIAL_REFERRALS_TO_SKIP` | no | `3` | Verified friends needed to skip the line |
 | `SOCIAL_COMMUNITY_TIMEZONE` | no | `Asia/Kolkata` | Local day and month for daily stats and "km this month"; local time for the activity badges |
-| `SOCIAL_EARLY_BIRD_HOUR`, `SOCIAL_EARLY_BIRD_ACTIVITIES` | no | `7`, `5` | Early Bird: activities started before this hour, and how many |
-| `SOCIAL_NIGHT_OWL_HOUR`, `SOCIAL_NIGHT_OWL_ACTIVITIES` | no | `21`, `5` | Night Owl: activities started at or after this hour, and how many |
+| `SOCIAL_EARLY_BIRD_FROM_HOUR`, `SOCIAL_EARLY_BIRD_HOUR`, `SOCIAL_EARLY_BIRD_ACTIVITIES` | no | `4`, `7`, `5` | Early Bird: activities started from the first hour to before the second, and how many. Night Owl ends where Early Bird begins |
+| `SOCIAL_NIGHT_OWL_HOUR`, `SOCIAL_NIGHT_OWL_ACTIVITIES` | no | `21`, `5` | Night Owl: activities started from this hour to before `SOCIAL_EARLY_BIRD_FROM_HOUR`, and how many |
 | `SOCIAL_PARK_REGULAR_DAYS` | no | `5` | Park Regular: different days in the same zone |
 | `SOCIAL_PUSH` | no | `on` | `off` stores notifications without sending pushes |
 | `EXPO_ACCESS_TOKEN` | no | – | Only when the Expo project requires an access token for pushes |

@@ -19,7 +19,7 @@ def test_share_run_uses_run_module_numbers(api, client, run_module):
     assert ("run", "run-abc") in run_module.calls
     body = json.dumps(post)
     assert "geometry" not in body and "coordinates" not in body and "73.8" not in body  # no GPS leaks
-    assert {b["id"] for b in api.me(sub)["badges"]} >= {"first-run", "first-post"}
+    assert {b["id"] for b in api.me(sub)["badges"]} >= {"first_run", "first_post"}
 
 
 def test_client_cannot_supply_run_numbers(api, client, run_module):
@@ -175,4 +175,4 @@ def test_seven_day_streak_badge(api, client):
     for d in range(7):
         _ingest(client, user_subject=sub, source_ref=f"d{d}", started_at=(now - timedelta(days=d)).isoformat())
     me = api.me(sub)
-    assert me["stats"]["streak_days"] == 7 and "streak-7" in {b["id"] for b in me["badges"]}
+    assert me["stats"]["streak_days"] == 7 and "streak_7" in {b["id"] for b in me["badges"]}

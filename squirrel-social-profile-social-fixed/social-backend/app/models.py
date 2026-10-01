@@ -248,24 +248,24 @@ class UserBadge(Base):
 
 # Seeded by the initial migration (and by tests via metadata.create_all + seed_badges).
 BADGE_CATALOGUE: list[dict[str, str]] = [
-    {"id": "first-run", "kind": "first-run", "title": "First Run", "description": "Shared your first verified run."},
-    {"id": "first-post", "kind": "social", "title": "Say Hi", "description": "Published your first post."},
-    {"id": "streak-7", "kind": "streak", "title": "7-Day Streak", "description": "Logged activity seven days in a row."},
-    {"id": "crowd-favourite", "kind": "social", "title": "Crowd Favourite", "description": "A post of yours reached 50 likes."},
+    {"id": "first_run", "kind": "first-run", "title": "First Run", "description": "Shared your first verified run."},
+    {"id": "first_post", "kind": "social", "title": "Say Hi", "description": "Published your first post."},
+    {"id": "streak_7", "kind": "streak", "title": "7-Day Streak", "description": "Logged activity seven days in a row."},
+    {"id": "crowd_favourite", "kind": "social", "title": "Crowd Favourite", "description": "A post of yours reached 50 likes."},
 ]
 
 # Added by migration 0002 (community): the founding members, by the order they verified their email.
 FOUNDING_BADGES: list[dict[str, str]] = [
-    {"id": "founding-squirrel", "kind": "founding", "title": "Founding Squirrel", "description": "One of the first 15 members."},
-    {"id": "founding-500", "kind": "founding", "title": "Founding 500", "description": "One of the first 500 members."},
+    {"id": "founding_squirrel", "kind": "founding", "title": "Founding Squirrel", "description": "One of the first 15 members."},
+    {"id": "founding_500", "kind": "founding", "title": "Founding 500", "description": "One of the first 500 members."},
 ]
 
 # Added by migration 0005: awarded by the rules in services/badges.py. The ids are the app's (it picks
 # the art by id); the descriptions state the default thresholds.
 ACTIVITY_BADGES: list[dict[str, str]] = [
-    {"id": "early_bird", "kind": "early-bird", "title": "Early Bird", "description": "Started 5 verified activities before 7 AM."},
-    {"id": "night_owl", "kind": "night-owl", "title": "Night Owl", "description": "Started 5 verified activities after 9 PM."},
-    {"id": "park_regular", "kind": "park-regular", "title": "Park Regular", "description": "Ran through the same campus spot on 5 different days."},
+    {"id": "early_bird", "kind": "early-bird", "title": "Early Bird", "description": "Started 5 verified activities between 4 and 7 AM."},
+    {"id": "night_owl", "kind": "night-owl", "title": "Night Owl", "description": "Started 5 verified activities between 9 PM and 4 AM."},
+    {"id": "park_regular", "kind": "park-regular", "title": "Park Regular", "description": "Ran through the same campus spot on 5 different days, with Squirrel Dates on."},
 ]
 
 

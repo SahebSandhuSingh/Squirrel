@@ -175,7 +175,7 @@ def test_public_profile_and_recent_posts(api, client):
     assert p["stats"]["posts"] == 12 and p["stats"]["followers"] == 1
     assert [x["caption"] for x in p["recent_posts"]] == [f"flow {i}" for i in range(11, 2, -1)]  # 9 newest
     assert p["relationship"] == {"following": True, "followed_by": False, "requested": False}
-    assert {b["id"] for b in p["badges"]} == {"first-post"}
+    assert {b["id"] for b in p["badges"]} == {"first_post"}
 
 
 def test_unknown_profile_404(client):

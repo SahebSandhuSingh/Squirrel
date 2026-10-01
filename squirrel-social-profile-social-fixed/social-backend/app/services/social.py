@@ -71,9 +71,9 @@ def award_badge(db: Session, user_id: uuid.UUID, badge_id: str) -> bool:
 
 def after_activity_recorded(db: Session, activity: Activity, settings: Settings) -> None:
     if activity.type == "run" and activity.source == "run_module":
-        award_badge(db, activity.user_id, "first-run")
+        award_badge(db, activity.user_id, "first_run")
     if streak_days(db, activity.user_id, settings) >= 7:
-        award_badge(db, activity.user_id, "streak-7")
+        award_badge(db, activity.user_id, "streak_7")
 
 
 # --------------------------------------------------------------------------- relationships

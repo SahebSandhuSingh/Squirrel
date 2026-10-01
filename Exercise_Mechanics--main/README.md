@@ -277,7 +277,7 @@ Exercise is the one home of a member's private details (ADR-032). The app's "Abo
 `GET /api/me/profile-details` and `PUT /api/me/profile-details`, for the signed-in user only: the
 user is the bearer token's, a token is always required (401 without one, even with sign-in switched
 off), and there is no route by user id. The body is the form as the app sends it:
-`{ full_name, personal_email, college_email, phone, gender, age, course, cgpa }`. Each field has one
+`{ full_name, personal_email, college_email, phone, gender, date_of_birth, age, course, cgpa }`. Each field has one
 source, so nothing is stored twice:
 
 | Field | Source | Rule (the same as campus-service's copy and the app) |
@@ -285,7 +285,8 @@ source, so nothing is stored twice:
 | `full_name` | `first_name` + `last_name` | 2–60 characters with a letter. Saved split on the first space; a one-word name is all first name. An unchanged name keeps its split |
 | `phone` | `mobile` | Indian mobile in E.164, e.g. `+919876543210` |
 | `gender` | `gender` | `female`, `male`, `non_binary` or `undisclosed` |
-| `age` | `date_of_birth` | Never stored. 16–99, and it must be the age the date of birth gives (422 `age_mismatch` otherwise). Without a date of birth it is accepted and not kept: `null` until one is set |
+| `date_of_birth` | `date_of_birth` | `YYYY-MM-DD`. Required when the account has none (code sign-in asks for none): 422 `date_of_birth_required`. It must give an age of 16–99 (422 `age_out_of_range`) |
+| `age` | derived from `date_of_birth` | Never stored, so it can't go stale. Optional on `PUT`; if sent it must be the age the date of birth gives (422 `age_mismatch`) |
 | `college_email` | the sign-in email | Read-only here: 422 `college_email_read_only` if it differs (case and spaces aside) |
 | `personal_email`, `course`, `cgpa` | `user_personal_details` (migration 006), or `personal_details.json` | Valid email, different from the college one; course 1–60 characters; CGPA 0–10, at most 2 decimals, optional |
 

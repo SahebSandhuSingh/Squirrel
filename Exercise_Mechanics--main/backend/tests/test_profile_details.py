@@ -32,7 +32,7 @@ def _age() -> int:
 def _form(**changes) -> dict:
     return {"full_name": "Ana Tester", "personal_email": "ana.personal@gmail.test",
             "college_email": "ana@iiser.ac.in", "phone": "+919876543210", "gender": "non_binary",
-            "age": _age(), "course": "BS-MS", "cgpa": 8.42, **changes}
+            "date_of_birth": DOB, "age": _age(), "course": "BS-MS", "cgpa": 8.42, **changes}
 
 
 @pytest.fixture(autouse=True)
@@ -59,7 +59,8 @@ def test_before_the_first_save_it_answers_with_what_the_account_knows():
     res = call(app, "GET", URL, headers=auth)
     assert res.status == 200, res.body
     assert res.json() == {"full_name": "Ana Tester", "personal_email": None, "college_email": "ana@iiser.ac.in",
-                          "phone": "9990001111", "gender": "female", "age": _age(), "course": None, "cgpa": None}
+                          "phone": "9990001111", "gender": "female", "date_of_birth": DOB, "age": _age(),
+                          "course": None, "cgpa": None}
 
 
 def test_the_form_round_trips_and_lands_on_the_account_fields():
@@ -144,18 +145,27 @@ def test_the_college_email_is_the_sign_in_address_and_cannot_be_changed_here():
     assert call(app, "PUT", URL, json=_form(college_email=" ANA@iiser.ac.in "), headers=auth).status == 200
 
 
-def test_without_a_date_of_birth_the_age_is_accepted_but_never_stored():
+def test_without_a_date_of_birth_on_file_the_form_must_send_one():
     # An app account (code or password sign-in with a name only) has no date of birth, gender or mobile.
     account = call(app, "POST", "/api/auth/register", json={
         "email": "cara@iiser.ac.in", "password": "correct horse", "first_name": "Cara", "last_name": "App"}).json()
     auth = _bearer(account["access_token"])
     assert call(app, "GET", URL, headers=auth).json() == {
         "full_name": "Cara App", "personal_email": None, "college_email": "cara@iiser.ac.in", "phone": None,
-        "gender": None, "age": None, "course": None, "cgpa": None}
-    form = _form(full_name="Cara App", college_email="cara@iiser.ac.in", age=20)
-    saved = call(app, "PUT", URL, json=form, headers=auth)
+        "gender": None, "date_of_birth": None, "age": None, "course": None, "cgpa": None}
+    form = _form(full_name="Cara App", college_email="cara@iiser.ac.in")
+
+    # An age alone is not enough: it would go stale, and it is never stored.
+    missing = call(app, "PUT", URL, json={**form, "date_of_birth": None}, headers=auth)
+    assert missing.status == 422 and missing.json()["detail"][0]["type"] == "date_of_birth_required"
+    too_young = call(app, "PUT", URL, json={**form, "date_of_birth": f"{date.today().year - 10}-01-01", "age": None}, headers=auth)
+    assert too_young.status == 422 and too_young.json()["detail"][0]["type"] == "age_out_of_range"
+    assert call(app, "GET", URL, headers=auth).json()["date_of_birth"] is None  # a refused save changes nothing
+
+    saved = call(app, "PUT", URL, json={**form, "age": None}, headers=auth)
     assert saved.status == 200, saved.body
-    assert saved.json() == {**form, "age": None}
+    assert saved.json() == form  # the age comes back, derived from the date of birth now on file
+    assert _profile(account["user_id"], auth)["date_of_birth"] == DOB
 
 
 def test_another_users_token_reaches_only_their_own_details():

@@ -160,7 +160,7 @@ def test_crowd_favourite_badge(api, client, limiter):
     pid = api.post(author)["id"]
     for _ in range(50):
         client.post(f"/v1/posts/{pid}/like", headers=auth(new_sub()))
-    assert "crowd-favourite" in {b["id"] for b in api.me(author)["badges"]}
+    assert "crowd_favourite" in {b["id"] for b in api.me(author)["badges"]}
 
 
 # --------------------------------------------------------------------------- saves

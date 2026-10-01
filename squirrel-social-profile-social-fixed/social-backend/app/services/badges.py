@@ -1,8 +1,10 @@
 """Activity badges: Early Bird, Night Owl and Park Regular, awarded as activities arrive.
 
 Rules (thresholds are Settings, with SOCIAL_* overrides; times are in the community time zone):
-  early_bird    `early_bird_activities` verified activities that started before `early_bird_hour`:00
-  night_owl     `night_owl_activities` verified activities that started at or after `night_owl_hour`:00
+  early_bird    `early_bird_activities` verified activities that started from `early_bird_from_hour`:00
+                to before `early_bird_hour`:00 (4–7 AM)
+  night_owl     `night_owl_activities` verified activities that started from `night_owl_hour`:00 to
+                before `early_bird_from_hour`:00 (9 PM–4 AM: a 1 AM run is a late night)
   park_regular  one named zone visited on `park_regular_days` different days, on verified runs
 Meals don't count. Park Regular reads Squirrel Dates' zone visits, which exist only for members who
 opted in and only for the last KEEP_DAYS (services/dates.py); with no zones configured it is never
@@ -23,7 +25,8 @@ import logging
 import uuid
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
+from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.orm import Session
 
 from app.config import Settings
@@ -45,8 +48,20 @@ def target(badge_id: str, settings: Settings) -> int:
 
 
 def _in_hours(badge_id: str, hour, settings: Settings):
-    """Whether a local start hour counts for Early Bird / Night Owl: an int, or its SQL expression."""
-    return hour < settings.early_bird_hour if badge_id == EARLY_BIRD else hour >= settings.night_owl_hour
+    """Whether a local start hour counts for Early Bird / Night Owl: an int, or its SQL expression.
+    Night Owl wraps midnight, ending where Early Bird begins."""
+    both, either = (and_, or_) if isinstance(hour, ColumnElement) else (all_of, any_of)
+    if badge_id == EARLY_BIRD:
+        return both(hour >= settings.early_bird_from_hour, hour < settings.early_bird_hour)
+    return either(hour >= settings.night_owl_hour, hour < settings.early_bird_from_hour)
+
+
+def all_of(*conditions: bool) -> bool:
+    return all(conditions)
+
+
+def any_of(*conditions: bool) -> bool:
+    return any(conditions)
 
 
 # --------------------------------------------------------------------------- counting
@@ -131,7 +146,8 @@ def _award_due(db: Session, activity: Activity, settings: Settings) -> list[str]
 
 def statuses(db: Session, user_id: uuid.UUID, settings: Settings) -> list[BadgeStatus]:
     """Every catalogue badge in the app's Badge shape: unlocked or not, and for the rule badges how
-    far along (a held one shows its target reached)."""
+    far along (a held one shows its target reached). Founding badges appear only when held: nobody
+    can work towards one, so a locked one is noise."""
     rows = db.execute(
         select(Badge, UserBadge.awarded_at)
         .outerjoin(UserBadge, (UserBadge.badge_id == Badge.id) & (UserBadge.user_id == user_id))
@@ -139,6 +155,8 @@ def statuses(db: Session, user_id: uuid.UUID, settings: Settings) -> list[BadgeS
     ).all()
     out = []
     for badge, awarded_at in rows:
+        if badge.kind == "founding" and awarded_at is None:
+            continue
         steps = None
         if badge.id in RULE_BADGES:
             goal = target(badge.id, settings)
