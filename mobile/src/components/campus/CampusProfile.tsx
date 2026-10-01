@@ -263,6 +263,7 @@ function ProfileMore({ ambStatus }: { ambStatus?: string }) {
           detailColor={ambStatus === 'approved' ? colors.primary : ambStatus === 'rejected' ? colors.dim : colors.violet}
           onPress={() => router.push('/ambassador')}
         />
+        <LinkRow icon="alarm" label="Movement alarm" detail="No snoozing — move to switch it off" onPress={() => router.push('/alarm')} />
         <LinkRow icon="chart-line" label="Your progress" onPress={() => router.push('/progress')} />
         <LinkRow icon="arm-flex" label="Form coach & coach profile" onPress={() => router.push('/exercise')} />
         <LinkRow icon="calendar-check" label="Meetups & check-in" onPress={() => router.push('/meetups')} />

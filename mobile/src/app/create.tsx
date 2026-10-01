@@ -12,6 +12,7 @@ type Action = { label: string; sub: string; icon: IconName; color: string; go?: 
 const ACTIONS: Action[] = [
   { label: 'Start a run', sub: 'GPS · live stats', icon: 'run-fast', color: colors.primary, go: '/run' },
   { label: 'Start exercise', sub: 'Form-coached reps', icon: 'arm-flex', color: colors.gold, go: '/exercise/select' },
+  { label: 'Movement alarm', sub: 'Move to switch it off', icon: 'alarm', color: colors.secondary, go: '/alarm' },
   { label: 'Post activity', sub: 'Not live yet', icon: 'image-plus', color: colors.violet, go: '/compose' },
   { label: 'Log water', sub: '+250 ml', icon: 'cup-water', color: colors.secondary, locked: 'mealWater' },
   { label: 'Log a meal', sub: 'Healthy plate', icon: 'food-apple', color: colors.green, locked: 'mealWater' },

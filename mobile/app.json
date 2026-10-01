@@ -55,6 +55,12 @@
           "color": "#D7FF1F",
           "defaultChannel": "default"
         }
+      ],
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "Squirrel Social uses motion sensors to check you really moved before a Movement Alarm switches off. Nothing is recorded or uploaded."
+        }
       ]
     ],
     "splash": {

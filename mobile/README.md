@@ -31,7 +31,8 @@ Everything the app shows about you or anyone else comes from a backend. There is
 | progress-service | `EXPO_PUBLIC_PROGRESS_API_URL` | Home's today (steps, active minutes, calories, streak) and Today's goals, Your Progress, Challenges, XP / level |
 | Exercise Mechanics | `EXPO_PUBLIC_EXERCISE_API_URL` | **Accounts** (email code → register, login, refresh), form coach, the "working out now" counter |
 | Social service | `EXPO_PUBLIC_SOCIAL_API_URL` | Profile + badges, waitlist & referrals, crews + vouching, events, meetup check-in, feed + posts + comments, XP / hostel leaderboards, daily stats, notifications + push, photo uploads, duels, friends (follow) |
-| Campus API | `EXPO_PUBLIC_CAMPUS_API_URL` | Zones + territory, map players, open-to-meet, Date Mode, heatmap, meetup ratings (whatever the Social service doesn't cover) |
+| campus-service | `EXPO_PUBLIC_CAMPUS_SERVICE_URL` | When set, takes precedence for the map world — zones + territory (claim / steal / defend), activity → zones, map players + presence, Active now, Open to Meet, shared zones, heatmap (7-day) — and meetups (+ post-meetup rating, gated until its routes ship). See ADR-032 and `api/campus/campusShapes.ts` |
+| Campus API | `EXPO_PUBLIC_CAMPUS_API_URL` | Zones + territory, map players, open-to-meet, Date Mode, heatmap, meetup ratings (whatever campus-service and the Social service don't cover) |
 
 Without a backend (or a session), a screen shows one of three honest states, never invented data:
 - **Not connected** — the backend exists but this build isn't configured for it, or it needs you signed in (with a Sign in button). `NotConnected` in `components/campus/States.tsx`.
@@ -53,6 +54,30 @@ One token works everywhere: the Exercise backend issues it, and the Social servi
 - **Campus features from the Social service.** `api/campus/socialAdapter.ts` answers the campus contract with Social's routes: profile, badges, crews, events + RSVP + create, meetups + check-in, leaderboards, notifications, uploads, challenge invites (as 7-day km / workout duels), people search, and friends (a poke is a follow; mutual follows are friends). Fields Social doesn't track are `null` and hidden — never shown as 0.
 - **New screens:** Waitlist & invites (`/waitlist`: your spot, invite 3 to skip the line, referral code, founding badge), Campus today on Home (`/v1/stats/daily`), the real feed with likes, saves and comments (`/social`, `/post/[id]`, posting from `/compose`), crew vouching (crew page), "tell friends you're here" on meetup check-in (followers + crewmates, max 5), create event (`/event/new`, behind the Events lock), push notifications (Profile → More; needs a development build with an EAS projectId), live counters on Welcome, and the Ambassador programme (`/ambassador-programme`: apply, status, recruit code, recruits).
 - **Waiting on backends** (built in the app, shown as "Not live yet" until the route exists): the ambassador programme (`/v1/ambassador*`, turn on with `ambassador` in `EXPO_PUBLIC_LIVE_ENDPOINTS`), the ambassador waitlist, zones / territory / map players, heatmap, Date Mode, meetup ratings, shared workouts, the all-time board. The XP and hostel boards need the Run Module connected to the Social service.
+
+## Movement Alarm (frontend only)
+
+An alarm that only stops once you move: **Dance** or **Shake it** (keep moving for N seconds) or **Squats** / **Jumps** (N reps). Entry points: Create sheet → *Movement alarm*, Profile → More → *Movement alarm*. Routes: `/alarm` (your alarms), `/alarm/edit` (new / `?id=` edit), `/alarm/ring/[id]` (the full-screen challenge; `id=practice` for a practice round).
+
+| Layer | File | Job |
+|---|---|---|
+| AlarmService | `features/alarm/AlarmService.ts` | Alarms on this device, scheduling, "alarm went off → open the challenge", wake-up history / streak |
+| MovementDetectionService | `features/alarm/MovementDetectionService.ts` | The only code that touches sensors: status, permission, sample stream |
+| Challenge engine | `logic/movementEngine.ts` + `logic/movementChallenges.ts` | Samples → seconds / reps, pause vs reset rules (unit-tested). Add a challenge = one entry in `CHALLENGES` |
+| UI | `app/alarm/*`, `components/alarm/*`, `features/alarm/useMovementChallenge.ts` | Setup, ring flow, permission / failure states, backup challenge |
+
+Rules: no dismiss and no snooze before the challenge is beaten (hardware back is blocked too). Dance pauses when you stop; Shake starts over after 3 s still; reps are never taken away. If movement can't be detected (no sensor, access refused or turned off in Settings, the sensor dies mid-way), the app says why and offers **Allow access / Open Settings / Try again** and a **backup challenge** (catch the hopping squirrel N times) — never a blank screen or a free dismiss.
+
+What's real today:
+- **Motion detection:** real, through the phone's motion sensors (expo-sensors DeviceMotion on iOS / Android; the browser's `devicemotion` on mobile web, with iOS Safari's permission prompt). Desktop browsers have no motion sensor → "Can't feel your moves here" + backup.
+- **Ringing:** iOS / Android schedule a daily local notification (expo-notifications) that rings with the notification sound and opens the challenge when tapped, or straight away if the app is open. Web rings only while the app is open in a tab.
+- **XP:** shown as "Alarm XP · Not live yet" — no server counts alarm XP, so none is invented. The streak is local.
+- **Development simulator:** `__DEV__` builds only, offered on the "can't sense movement" screen and labelled "Simulated movement, not real detection". Production builds never include it as an option.
+
+Native integration points (need a development build + config plugin / native module; marked `NATIVE INTEGRATION POINT` in the code):
+1. **True system alarm** — `AlarmScheduler` in `AlarmService.ts`: Android `AlarmManager.setAlarmClock` + a full-screen-intent notification that launches straight into `/alarm/ring/{id}`; iOS AlarmKit (iOS 26+) or a critical-alert / time-sensitive notification. Today's notification can be swiped away and can't force the app open.
+2. **Camera movement tracking** — `CameraPoseDetector` in `MovementDetectionService.ts`: a pose model (e.g. MediaPipe / ML Kit through a camera frame processor) emitting the same samples or rep events. Not bundled, so it reports "unsupported" and the camera is never used.
+3. **Looping alarm sound in the challenge** — needs an audio module (e.g. expo-audio) on the ring screen; today the phone vibrates in a loop until you start moving.
 
 ## Screens
 
@@ -119,6 +144,8 @@ The IISER-first social layer: **Move → Discover people → Claim territory →
 
 | Source | When | What the screens show |
 |---|---|---|
+| `live` — `campusService.ts` | `EXPO_PUBLIC_CAMPUS_SERVICE_URL` is set | campus-service's map world and meetups (`CAMPUS_SERVICE_METHODS` in `campusShapes.ts`), ahead of everything below |
+| `live` — `socialAdapter.ts` | `EXPO_PUBLIC_SOCIAL_API_URL` is set | The Social service's features (profiles, crews, events + event check-in, feed…), ahead of the campus backend |
 | `live` — `http.ts` | `EXPO_PUBLIC_CAMPUS_API_URL` (or `EXPO_PUBLIC_API_URL`) is set | The backend's data, with the shared bearer token |
 | `off` | No campus URL (any build) | “Not live yet” states — never invented numbers. There is no mock backend |
 

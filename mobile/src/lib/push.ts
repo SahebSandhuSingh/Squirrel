@@ -12,6 +12,7 @@ import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import { isRunningInExpoGo } from 'expo';
 import Constants from 'expo-constants';
+import { AlarmService } from '@/features/alarm/AlarmService';
 import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import { router, type Href } from 'expo-router';
@@ -207,6 +208,9 @@ export function usePushTapRouting(ready = true) {
       const id = response.notification.request.identifier;
       if (handled.current.has(id)) return;
       handled.current.add(id);
+      // Movement alarms open through AlarmService, which won't stack a challenge that's already on screen.
+      const alarmId = AlarmService.alarmIdOf(response.notification.request.content.data);
+      if (alarmId) return AlarmService.fire(alarmId);
       const route = routeOf(response);
       if (!route) return;
       if (readyRef.current) router.push(route as Href);

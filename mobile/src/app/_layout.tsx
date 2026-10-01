@@ -18,6 +18,7 @@ import { LaunchSplash } from '@/components/LaunchSplash';
 import { ToastHost } from '@/components/Toast';
 import { SocialHost } from '@/components/social/SocialHost';
 import { usePushTapRouting } from '@/lib/push';
+import { useAlarmTriggers } from '@/features/alarm/useAlarmTriggers';
 import { colors, statusBarStyle } from '@/theme';
 
 const sheet = { presentation: 'transparentModal', animation: 'fade', contentStyle: { backgroundColor: 'transparent' } } as const;
@@ -38,6 +39,7 @@ export default function RootLayout() {
   });
   // Tapping a push opens its data.route (cold-start taps wait until the navigator is mounted).
   usePushTapRouting(loaded);
+  useAlarmTriggers(loaded);
 
   // Auth restores the saved session while the fonts load and the launch splash plays; the
   // splash lifts only when both are ready (and at least SPLASH_MIN_MS have passed).
@@ -61,6 +63,8 @@ export default function RootLayout() {
             <Stack.Screen name="exercise/train/[key]" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', gestureEnabled: false }} />
             <Stack.Screen name="compose" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="ambassador" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="alarm/ring/[id]" options={{ presentation: 'fullScreenModal', animation: 'fade', gestureEnabled: false }} />
+            <Stack.Screen name="alarm/edit" options={{ animation: 'slide_from_bottom' }} />
           </Stack>
           <SocialHost />
           <ToastHost />
