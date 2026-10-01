@@ -6,7 +6,7 @@ import { currentUser, requireAuth } from '../auth/plugin.js';
 import { errors } from '../lib/errors.js';
 import { isUuid } from '../lib/ids.js';
 import { notify } from '../notifications/service.js';
-import { isBlockedEitherWay } from '../blocks/service.js';
+import { isBlockedEitherWay, getFullBlockSet } from '../blocks/service.js';
 import { getPeopleLite } from '../users/repo.js';
 
 type MeetupStatus = 'proposed' | 'confirmed' | 'cancelled' | 'completed';
@@ -26,6 +26,39 @@ const CreateBody = z.object({
 const IdParams = z.object({ id: z.string().refine(isUuid, 'invalid id') });
 const StatusQuery = z.object({ status: z.enum(['proposed', 'confirmed', 'cancelled', 'completed']).optional() });
 const EmptyBody = z.object({}).strict();
+
+const RATING_DIMENSIONS = [
+  { key: 'friendly', label: 'Friendly & Welcoming' },
+  { key: 'punctual', label: 'On Time' },
+  { key: 'fun', label: 'Fun to be around' },
+  { key: 'helpful', label: 'Helpful' }
+];
+const RATING_DIMENSION_KEYS = new Set(RATING_DIMENSIONS.map((d) => d.key));
+
+const RatingInputBody = z.object({
+  ratings: z.array(z.object({
+    user_id: z.string(),
+    stars: z.number().int().min(1).max(5),
+    tags: z.array(z.string())
+  })),
+  idempotency_key: z.string().min(1)
+}).strict();
+
+type TrustScore = { value: number; label: string };
+async function getTrustScore(userId: string, q: Queryable = getPool()): Promise<TrustScore | null> {
+  const row = await one<{ raters: number; score: number }>(
+    `SELECT count(DISTINCT rater_id)::int AS raters, avg(stars)::float AS score FROM meetup_ratings WHERE ratee_id = $1`, [userId], q
+  );
+  if (!row || row.raters < 3) return null;
+  const value = Math.round(row.score * 10) / 10;
+  let label = 'Good';
+  if (value >= 4.5) label = 'Excellent';
+  else if (value >= 4.0) label = 'Great';
+  else if (value >= 3.0) label = 'Good';
+  else if (value >= 2.0) label = 'Poor';
+  else label = 'Needs Improvement';
+  return { value, label };
+}
 
 function effectiveStatus(row: MeetupRow): MeetupStatus {
   return row.status === 'confirmed' && Date.parse(row.starts_at) <= Date.now() ? 'completed' : row.status;
@@ -204,4 +237,93 @@ export async function meetupRoutes(app: FastifyInstance) {
       return serialize(result.row, result.parts);
     });
   }
+
+  app.get('/v1/meetups/:id/rating', { preHandler: requireAuth }, async (req) => {
+    const viewer = currentUser(req);
+    const { id } = IdParams.parse(req.params);
+    
+    const row = await loadMeetup(id);
+    if (!row) throw errors.notFound('Meetup');
+    const parts = await participants(id);
+    const me = parts.find((p) => p.user_id === viewer.id);
+    if (!me) throw errors.notFound('Meetup');
+    
+    const status = effectiveStatus(row);
+    const trust_score = await getTrustScore(viewer.id, getPool());
+    
+    const already_rated = await one<{ exists: boolean }>(
+      `SELECT EXISTS(SELECT 1 FROM meetup_ratings WHERE meetup_id = $1 AND rater_id = $2) AS exists`, [id, viewer.id]
+    ).then(r => r?.exists ?? false);
+  
+    if (status !== 'completed') {
+      return { meetup_id: id, can_rate: false, reason: 'This meetup has not ended yet.', already_rated, rateable: [], dimensions: RATING_DIMENSIONS, trust_score };
+    }
+    
+    if (me.status !== 'accepted') {
+      return { meetup_id: id, can_rate: false, reason: 'You did not attend this meetup.', already_rated, rateable: [], dimensions: RATING_DIMENSIONS, trust_score };
+    }
+  
+    const blocks = await getFullBlockSet(viewer.id);
+    const rateableIds = parts.filter(p => p.user_id !== viewer.id && p.status === 'accepted' && !blocks.has(p.user_id)).map(p => p.user_id);
+    
+    const rateable = [];
+    if (rateableIds.length > 0) {
+      const people = await getPeopleLite(rateableIds);
+      for (const uid of rateableIds) {
+        const p = people.get(uid);
+        if (p) rateable.push(p);
+      }
+    }
+  
+    return { meetup_id: id, can_rate: true, reason: null, already_rated, rateable, dimensions: RATING_DIMENSIONS, trust_score };
+  });
+
+  app.post('/v1/meetups/:id/ratings', { preHandler: requireAuth }, async (req) => {
+    const viewer = currentUser(req);
+    const { id } = IdParams.parse(req.params);
+    const body = RatingInputBody.parse(req.body);
+  
+    const scope = `meetup-rating:${id}`;
+    const replay = await one<{ response: any; scope: string }>(
+      `SELECT response, scope FROM idempotency_keys WHERE user_id = $1 AND key = $2`, [viewer.id, body.idempotency_key]
+    );
+    if (replay) {
+      if (replay.scope !== scope) throw errors.conflict('idempotency_key_reused', 'Idempotency key reused for a different request.');
+      return replay.response;
+    }
+  
+    return await withTransaction(async (tx) => {
+      const existing = await one<{ exists: boolean }>(`SELECT EXISTS(SELECT 1 FROM meetup_ratings WHERE meetup_id = $1 AND rater_id = $2) AS exists`, [id, viewer.id], tx);
+      if (existing?.exists) throw errors.conflict('already_rated', 'You have already rated this meetup.');
+      
+      const row = await loadMeetup(id, tx, true);
+      if (!row) throw errors.notFound('Meetup');
+      if (effectiveStatus(row) !== 'completed') throw errors.conflict('meetup_not_completed', 'Meetup must be completed to rate.');
+  
+      const parts = await participants(id, tx);
+      const me = parts.find((p) => p.user_id === viewer.id);
+      if (!me || me.status !== 'accepted') throw errors.conflict('meetup_not_participant', 'Only participants can rate.');
+  
+      const blocks = await getFullBlockSet(viewer.id, tx);
+      const validRateeIds = new Set(parts.filter(p => p.user_id !== viewer.id && p.status === 'accepted').map(p => p.user_id));
+  
+      for (const r of body.ratings) {
+        if (r.user_id === viewer.id) throw errors.conflict('self_rating', 'You cannot rate yourself.');
+        if (!validRateeIds.has(r.user_id)) throw errors.conflict('invalid_ratee', 'You can only rate accepted participants of this meetup.');
+        if (blocks.has(r.user_id)) throw errors.conflict('meetup_blocked', 'Cannot rate a blocked user.');
+        
+        const validTags = r.tags.filter(t => RATING_DIMENSION_KEYS.has(t));
+        await query(
+          `INSERT INTO meetup_ratings (meetup_id, rater_id, ratee_id, stars, tags) VALUES ($1, $2, $3, $4, $5)`,
+          [id, viewer.id, r.user_id, r.stars, validTags], tx
+        );
+      }
+  
+      const trust_score = await getTrustScore(viewer.id, tx);
+      const res = { meetup_id: id, submitted_at: new Date().toISOString(), trust_score };
+  
+      await query(`INSERT INTO idempotency_keys (user_id, key, scope, status_code, response) VALUES ($1, $2, $3, 200, $4) ON CONFLICT DO NOTHING`, [viewer.id, body.idempotency_key, scope, res], tx);
+      return res;
+    });
+  });
 }
