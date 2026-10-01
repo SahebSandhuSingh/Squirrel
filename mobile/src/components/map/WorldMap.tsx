@@ -190,9 +190,31 @@ export const WorldMap = forwardRef<WorldMapHandle, WorldMapProps>(function World
         </View>
       )}
       {!interactive && <Text style={styles.north} accessibilityElementsHidden>N ↑</Text>}
+      {interactive && proj && fit && <MapLegend metresPerPx={1 / (fit.k * zoom)} bottom={(controlsInset?.bottom ?? 0) + 12} />}
     </View>
   );
 });
+
+/** Compass + a scale bar that follows the zoom (nice lengths: 10, 20, 50, 100, 200, 500 m). */
+function MapLegend({ metresPerPx, bottom }: { metresPerPx: number; bottom: number }) {
+  const target = 90 * metresPerPx;
+  const metres = [10, 20, 50, 100, 200, 500, 1000].reduce((best, m) => (Math.abs(m - target) < Math.abs(best - target) ? m : best), 100);
+  const px = Math.max(24, Math.min(140, metres / metresPerPx));
+  return (
+    <View style={[styles.legend, { bottom: bottom + 52 }]} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <View style={styles.compass}>
+        <Text style={styles.compassN}>N</Text>
+        <View style={styles.needle} />
+      </View>
+      <View>
+        <View style={[styles.scaleBar, { width: px }]}>
+          <View style={[styles.scaleHalf, { width: px / 2 }]} />
+        </View>
+        <Text style={styles.scaleText}>{metres >= 1000 ? `${metres / 1000} km` : `${metres} m`}</Text>
+      </View>
+    </View>
+  );
+}
 
 function MeLayer({ view, k, inverse }: { view: (p: LatLng) => { x: number; y: number }; k: number; inverse: PanZoom['inverse'] }) {
   const loc = useLocation();
@@ -204,5 +226,12 @@ const styles = StyleSheet.create({
   wrap: { overflow: 'hidden', backgroundColor: mapColors.bg, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line },
   controls: { position: 'absolute', right: 12, gap: 8 },
   btn: { width: 40, height: 40, borderRadius: 20, backgroundColor: alpha(colors.panel, 0.94), borderWidth: 1, borderColor: colors.lineHi, alignItems: 'center', justifyContent: 'center' },
+  legend: { position: 'absolute', left: 12, flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  compass: { width: 34, height: 34, borderRadius: 17, backgroundColor: alpha(colors.panel, 0.9), borderWidth: 1, borderColor: colors.lineHi, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 2 },
+  compassN: { color: mapColors.compass, fontFamily: fonts.labelBold, fontSize: 10, lineHeight: 12 },
+  needle: { width: 0, height: 0, borderLeftWidth: 5, borderRightWidth: 5, borderBottomWidth: 12, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderBottomColor: colors.secondary },
+  scaleBar: { height: 6, borderWidth: 1.5, borderColor: mapColors.compass, borderTopWidth: 0, flexDirection: 'row' },
+  scaleHalf: { height: '100%', backgroundColor: mapColors.compass, opacity: 0.5 },
+  scaleText: { color: mapColors.compass, fontFamily: fonts.label, fontSize: 10, letterSpacing: 0.6, marginTop: 2 },
   north: { position: 'absolute', left: 12, top: 10, color: colors.dim, fontFamily: fonts.label, fontSize: 11, letterSpacing: 1 },
 });

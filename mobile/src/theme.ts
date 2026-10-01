@@ -147,8 +147,28 @@ export const gradients = {
  * (sand ground, pale roads, soft green) — still stylised, never a street-map look.
  */
 export const mapColors = isLightTheme
-  ? { bg: '#E9E5D8', ground: '#F1EEE4', frame: '#DDD8C8', road: '#FFFFFF', roadEdge: '#D2CCBA', path: '#E2DCCB', building: '#DCD6C6', buildingLine: '#C8C1AD', green: '#CFE3B4', water: '#B9D7EC', field: '#DCE8C0', label: '#6E6A5E', labelHalo: '#F1EEE4' }
-  : { bg: '#06070A', ground: '#0A0B10', frame: '#14161C', road: '#1C1F27', roadEdge: '#101218', path: '#171A21', building: '#15171D', buildingLine: '#23262E', green: '#0F1812', water: '#0B1520', field: '#121A10', label: '#6E7280', labelHalo: '#0A0B10' };
+  ? {
+      bg: '#E9E5D8', ground: '#F1EEE4', groundDot: '#E3DECF', frame: '#DDD8C8',
+      road: '#FFFFFF', roadEdge: '#D2CCBA', roadCasing: '#D9D2C0', roadDash: '#E6DFCD', path: '#E2DCCB', pathEdge: '#D6CFBC',
+      building: '#DCD6C6', buildingLine: '#C8C1AD', wall: '#CFC8B5', shadow: 'rgba(80,70,45,0.16)',
+      roofHostel: '#E4D9F2', roofAcademic: '#D6E2EE', roofFood: '#F1DEC9', roofSports: '#D9EBCB', roofHome: '#ECE3D3', roofService: '#E0DCD2',
+      green: '#CFE3B4', greenEdge: '#B9D49A', woods: '#BFD8A0', tree: '#9FC57E', treeDark: '#86B166', treeHi: '#B8D99A',
+      water: '#B9D7EC', waterDeep: '#9CC5E3', waterEdge: '#86B4D6', ripple: 'rgba(255,255,255,0.7)',
+      field: '#CDE3AE', fieldStripe: '#C2DCA0', track: '#E5A688', trackLine: 'rgba(255,255,255,0.85)', court: '#9CC3B4', courtLine: 'rgba(255,255,255,0.9)',
+      plaza: '#E8E2D3', plazaLine: '#DDD6C4', parking: '#DEDACF', parkingLine: '#FFFFFF',
+      label: '#6E6A5E', labelHalo: '#F1EEE4', compass: '#6E6A5E',
+    }
+  : {
+      bg: '#06070A', ground: '#0A0B10', groundDot: '#12141A', frame: '#14161C',
+      road: '#1C1F27', roadEdge: '#101218', roadCasing: '#07080B', roadDash: '#2B2F39', path: '#171A21', pathEdge: '#0D0F13',
+      building: '#15171D', buildingLine: '#23262E', wall: '#0F1116', shadow: 'rgba(0,0,0,0.55)',
+      roofHostel: '#1E1A2B', roofAcademic: '#17202B', roofFood: '#261D16', roofSports: '#17221A', roofHome: '#1C1B1F', roofService: '#18191E',
+      green: '#0F1812', greenEdge: '#15231A', woods: '#0E1A11', tree: '#173020', treeDark: '#0F2116', treeHi: '#1F3D29',
+      water: '#0B1520', waterDeep: '#08111B', waterEdge: '#1D3448', ripple: 'rgba(120,170,220,0.25)',
+      field: '#111B10', fieldStripe: '#142114', track: '#3A1F1A', trackLine: 'rgba(255,255,255,0.22)', court: '#10231F', courtLine: 'rgba(255,255,255,0.28)',
+      plaza: '#13151B', plazaLine: '#1A1D24', parking: '#111318', parkingLine: 'rgba(255,255,255,0.14)',
+      label: '#6E7280', labelHalo: '#0A0B10', compass: '#8A8F9C',
+    };
 
 /** Status bar content over the app's own surfaces. */
 export const statusBarStyle: 'light' | 'dark' = isLightTheme ? 'dark' : 'light';

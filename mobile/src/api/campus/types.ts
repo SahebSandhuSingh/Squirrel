@@ -450,10 +450,14 @@ export type Badge = {
 // ---------------------------------------------------------------------------
 
 /** Stylised base map (drawn by the app — not map tiles). Static; cache aggressively. */
+export type BuildingKind = 'hostel' | 'academic' | 'food' | 'sports' | 'residential' | 'service';
+export type TerrainKind = 'green' | 'water' | 'field' | 'woods' | 'track' | 'court' | 'plaza' | 'parking';
 export type MapFeatures = {
   roads: { id: string; kind: 'road' | 'path'; points: LatLng[] }[];
-  buildings: { id: string; polygon: LatLng[] }[];
-  terrain: { id: string; kind: 'green' | 'water' | 'field'; polygon: LatLng[] }[];
+  /** `kind` tints the roof, `levels` sets how tall it's drawn, `label` is a small map caption — all optional. */
+  buildings: { id: string; polygon: LatLng[]; kind?: BuildingKind | null; levels?: number | null; label?: string | null }[];
+  /** Optional `label` is a small map caption (e.g. "Football ground"). */
+  terrain: { id: string; kind: TerrainKind; polygon: LatLng[]; label?: string | null }[];
   pois: Poi[];
 };
 
