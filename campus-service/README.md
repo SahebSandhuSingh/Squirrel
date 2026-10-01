@@ -50,7 +50,7 @@ TEST_DATABASE_URL=postgres://campus:campus@localhost:5432/campus_test npm run te
 ```
 The test database needs PostGIS available (`CREATE DATABASE campus_test`; the migrations run `CREATE EXTENSION postgis`). Every integration file drops and recreates the `public` schema, so never point `TEST_DATABASE_URL` at a real database.
 
-Integration coverage: verified → qualified → claim; duplicate claim; unverified/pending/insufficient → cannot claim; steal (shield, unqualified, owner, success + notification); defend (owner-only, under-attack-only, spends attackers' eligibility); 4 concurrent claimers → exactly one owner; 5 identical requests → one write; ROUTE zone loop vs cut-through; invalid GPS payloads (malformed, backwards time, teleport, accuracy, off-campus); batch upload + idempotent batches + finish; presence never exposes coordinates, nearby needs mutual open-to-meet; territory-battle lifecycle with server-decided winner; auth/404 behaviour; crews, meetups, shared zones, Squirrel Dates, heatmap, profile details, post-meetup ratings; blocks read from Social (union with the local table, 404 and outage both fail closed, the 30-second cache expiring); the Social identity bridge against a fake Social server (profile ids out and in, Social names, realtime frames, Social down/timeout/401 fallback, bridge off).
+Integration coverage: verified → qualified → claim; duplicate claim; unverified/pending/insufficient → cannot claim; steal (shield, unqualified, owner, success + notification); defend (owner-only, under-attack-only, spends attackers' eligibility); 4 concurrent claimers → exactly one owner; 5 identical requests → one write; ROUTE zone loop vs cut-through; invalid GPS payloads (malformed, backwards time, teleport, accuracy, off-campus); batch upload + idempotent batches + finish; presence never exposes coordinates, nearby needs mutual open-to-meet; territory-battle lifecycle with server-decided winner; auth/404 behaviour; crews, meetups, shared zones, Squirrel Dates, heatmap, post-meetup ratings; blocks read from Social (union with the local table, 404 and outage both fail closed, the 30-second cache expiring); the Social identity bridge against a fake Social server (profile ids out and in, Social names, realtime frames, Social down/timeout/401 fallback, bridge off).
 
 ## Identity bridge to Social
 
@@ -105,7 +105,7 @@ These live here today and are documented as moving:
 |---|---|---|
 | Crews | Social | campus-service will read membership from Social; local crew tables retired |
 | XP (`campus_xp`) | Run Module | claim / steal / defend awards reported to the Run Module's single ledger |
-| Private profile details (`user_profile_details`) | Exercise (proposed) | ADR-032 open item 1, not yet agreed |
+| Private profile details (`user_profile_details`) | Exercise | ADR-032 open item 1, decided — Exercise owns `PUT /api/me/profile-details`; campus-service rejects the field with 422; removal migration is at `migrations/pending/007_drop_profile_details.sql` — move it to `migrations/` and deploy once the production row count is confirmed 0 and this has been live for a release cycle |
 | Badges | Social | `GET /v1/me/badges` returns an empty list here |
 
 "Challenges" in this service are **territory battles** — zone race, territory, weekend war — distinct from Social's **Duels** and the Run Module's **Goals**. The routes and table keep the `challenges` name.

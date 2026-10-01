@@ -65,12 +65,12 @@ Campus constants, feature flags, realtime URL and the active game-rule numbers. 
 ## Me & users
 
 ### `GET /v1/me` 🔒
-Full own profile (public profile + `email`, `hostel_id`, `date_mode_enabled`, `onboarding_completed`, `open_to_meet_until`, `campus_xp`, `level`, `stats`, `territories`, `crews`, `recent_activities`, `profile_details`).
+Full own profile (public profile + `email`, `hostel_id`, `date_mode_enabled`, `onboarding_completed`, `open_to_meet_until`, `campus_xp`, `level`, `stats`, `territories`, `crews`, `recent_activities`).
 
 ### `PATCH /v1/me` 🔒
-Body (all optional): `display_name`, `bio`, `avatar_url`, `connection_mode` (`date|friends|crew|null`), `hostel_id` **or** `hostel_zone_id` (a hostel zone id such as `narmada`), `onboarding_completed`, `date_mode_enabled`, `profile_details`. Returns the same as `GET /v1/me`. 422 `invalid` on unknown hostel or invalid details. The whole patch, including the details, applies in one transaction: if any part is rejected nothing is written.
+Body (all optional): `display_name`, `bio`, `avatar_url`, `connection_mode` (`date|friends|crew|null`), `hostel_id` **or** `hostel_zone_id` (a hostel zone id such as `narmada`), `onboarding_completed`, `date_mode_enabled`. Returns the same as `GET /v1/me`. 422 `invalid` on unknown hostel. The whole patch applies in one transaction: if any part is rejected nothing is written.
 
-**Private profile details.** `profile_details` holds `full_name`, `personal_email`, `college_email`, `phone`, `gender` (`female|male|non_binary|undisclosed`), `age`, `course` and optional `cgpa`. They live in their own table, are returned only by `GET`/`PATCH /v1/me` for the owner, and never appear on a public profile, a leaderboard or the map. ADR-032 open item 1 proposes moving this to the Exercise service; until that is agreed, this is the live home.
+> **`profile_details` has moved.** Sending `profile_details` to this endpoint now returns 422 `invalid`. Private profile details (`full_name`, `personal_email`, `college_email`, `phone`, `gender`, `age`, `course`, `cgpa`) are now owned by the **Exercise service**: `PUT /api/me/profile-details`. (ADR-032 open item 1, decided.) The `user_profile_details` table still exists; the removal migration lives at `migrations/pending/007_drop_profile_details.sql` and will be applied once the production row count is confirmed 0.
 
 ### `PUT /v1/me/open-to-meet` 🔒 (aliases: `PATCH /v1/me/open-to-meet`, `PATCH /v1/users/me/open-to-meet`)
 Body `{ "enabled": true, "hours": 12 }` (hours optional, default 12, max 168). Response `{ "enabled", "updated_at", "visible_until" }`. While enabled you appear in others' *nearby* lists and can see theirs.
