@@ -26,6 +26,12 @@ const SELECT_CHALLENGE_XP = `
     AND c.state = 'resolved'
 `;
 
+const SELECT_EXTERNAL_XP = `
+  SELECT amount as xp, reason, created_at
+  FROM external_xp_awards
+  WHERE user_id = $1
+`;
+
 /** The IANA time zone XP days follow for rows that do not carry their own. An unknown zone falls
  *  back to the default rather than failing every XP read. */
 export function xpTimeZone(): string {
@@ -34,20 +40,48 @@ export function xpTimeZone(): string {
 
 export async function getUserXp(userId: string): Promise<XpSummary> {
   const { rows } = await pool.query<ActivityRow>(SELECT_ACTIVITY, [userId]);
-  const summary = computeXp(rows, xpTimeZone());
+  const tz = xpTimeZone();
+  const summary = computeXp(rows, tz);
   const challenge = await pool.query<{ xp: string | number; updated_at: Date | null }>(SELECT_CHALLENGE_XP, [userId]);
   const challengeXp = Number(challenge.rows[0]?.xp ?? 0);
-  if (challengeXp <= 0) return summary;
+  
+  const external = await pool.query<{ xp: number; reason: import('./rules.js').XpReason; created_at: Date }>(SELECT_EXTERNAL_XP, [userId]);
+  
+  if (challengeXp <= 0 && external.rows.length === 0) return summary;
 
+  let finalXp = summary.xp + challengeXp;
+  let finalUpdatedAt = summary.updated_at;
   const challengeUpdatedAt = challenge.rows[0]?.updated_at ?? null;
+  if (challengeUpdatedAt && (!finalUpdatedAt || challengeUpdatedAt > finalUpdatedAt)) {
+    finalUpdatedAt = challengeUpdatedAt;
+  }
+  
+  const breakdown = [...summary.breakdown];
+  if (challengeXp > 0) breakdown.push({ reason: "challenge completed", xp: challengeXp });
+  
+  const finalByDay = { ...summary.byDay };
+  const externalReasons = new Map<import('./rules.js').XpReason, number>();
+
+  // Aggregate external awards outside of `computeXp(rows)` so they bypass the daily caps.
+  // Territory actions are rate-limited by their own cooldowns rather than a daily cap.
+  for (const row of external.rows) {
+    finalXp += row.xp;
+    if (!finalUpdatedAt || row.created_at > finalUpdatedAt) finalUpdatedAt = row.created_at;
+    const day = xpDay(row.created_at, tz);
+    finalByDay[day] = (finalByDay[day] ?? 0) + row.xp;
+    externalReasons.set(row.reason, (externalReasons.get(row.reason) ?? 0) + row.xp);
+  }
+
+  for (const [reason, xp] of externalReasons) {
+    breakdown.push({ reason, xp });
+  }
+
   return {
     ...summary,
-    xp: summary.xp + challengeXp,
-    updated_at:
-      challengeUpdatedAt && (!summary.updated_at || challengeUpdatedAt > summary.updated_at)
-        ? challengeUpdatedAt
-        : summary.updated_at,
-    breakdown: [...summary.breakdown, { reason: "challenge completed", xp: challengeXp }],
+    xp: finalXp,
+    updated_at: finalUpdatedAt,
+    breakdown,
+    byDay: finalByDay,
   };
 }
 
@@ -98,12 +132,13 @@ export function rankXp(byUser: Map<string, Record<string, number>>, days: string
 export async function getXpBoard(window: XpBoardWindow, now: Date = new Date()): Promise<XpBoard> {
   const timeZone = xpTimeZone();
   const days = windowDays(window, now, timeZone);
+  const cutoff = new Date(now.getTime() - (XP_BOARD_DAYS[window] + 2) * 86_400_000);
   // Two extra days: rows are bucketed by their own time zone, which can be a day off XP_TIMEZONE.
   const { rows } = await pool.query<ActivityRow & { user_id: string }>(
     `SELECT user_id, id, type, source_module, started_at, duration_s, metrics, created_at
      FROM   activity_sessions
      WHERE  started_at >= $1`,
-    [new Date(now.getTime() - (XP_BOARD_DAYS[window] + 2) * 86_400_000)],
+    [cutoff],
   );
   const perUser = new Map<string, ActivityRow[]>();
   for (const row of rows) {
@@ -111,7 +146,22 @@ export async function getXpBoard(window: XpBoardWindow, now: Date = new Date()):
     list.push(row);
     perUser.set(row.user_id, list);
   }
+
   const byUser = new Map<string, Record<string, number>>();
   for (const [userId, userRows] of perUser) byUser.set(userId, computeXp(userRows, timeZone).byDay);
+
+  const ext = await pool.query<{ user_id: string; xp: number; created_at: Date }>(
+    `SELECT user_id, amount as xp, created_at
+     FROM   external_xp_awards
+     WHERE  created_at >= $1`,
+    [cutoff]
+  );
+  for (const row of ext.rows) {
+    const day = xpDay(row.created_at, timeZone);
+    const bd = byUser.get(row.user_id) ?? {};
+    bd[day] = (bd[day] ?? 0) + row.xp;
+    byUser.set(row.user_id, bd);
+  }
+
   return { window, day: days[0]!, entries: rankXp(byUser, days) };
 }

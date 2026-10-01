@@ -63,7 +63,10 @@ export type XpReason =
   | "run_daily_cap"
   | "exercise_session"
   | "exercise_daily_cap"
-  | "challenge completed";
+  | "challenge completed"
+  | "territory_claim"
+  | "territory_steal"
+  | "territory_defend";
 
 export interface XpLine {
   reason: XpReason;

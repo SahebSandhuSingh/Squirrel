@@ -137,4 +137,79 @@ export const xpRoutes: FastifyPluginAsync = async (fastify) => {
       };
     }
   );
+
+  fastify.post<{ Body: { subject: string; amount: number; reason: string; source: string; idempotency_key: string } }>(
+    "/internal/v1/xp/award",
+    {
+      onRequest: [requireService],
+      schema: {
+        body: {
+          type: "object",
+          required: ["subject", "amount", "reason", "source", "idempotency_key"],
+          properties: {
+            subject: { type: "string" },
+            amount: { type: "integer" },
+            reason: { type: "string" },
+            source: { type: "string" },
+            idempotency_key: { type: "string" }
+          }
+        },
+        response: { 200: { type: "integer" } }
+      }
+    },
+    async (request, reply) => {
+      const { subject, amount, reason, source, idempotency_key } = request.body;
+      if (!UUID_REGEX.test(subject)) return reply.code(400).send({ error: "subject must be a UUID" });
+      
+      const { pool } = await import("../../db/pool.js");
+      await pool.query(
+        `INSERT INTO external_xp_awards (source, idempotency_key, user_id, amount, reason) 
+         VALUES ($1, $2, $3, $4, $5) 
+         ON CONFLICT (source, idempotency_key) DO NOTHING`,
+        [source, idempotency_key, subject, amount, reason]
+      );
+      
+      const summary = await getUserXp(subject);
+      return summary.xp;
+    }
+  );
+
+  fastify.post<{ Body: { subjects: string[] } }>(
+    "/internal/v1/xp/totals",
+    {
+      onRequest: [requireService],
+      schema: {
+        body: {
+          type: "object",
+          required: ["subjects"],
+          properties: {
+            subjects: { type: "array", items: { type: "string" }, maxItems: 200 }
+          }
+        }
+      }
+    },
+    async (request, reply) => {
+      const { subjects } = request.body;
+      if (!Array.isArray(subjects) || subjects.length > 200) {
+         return reply.code(400).send({ error: "subjects array required, max 200" });
+      }
+      
+      const bad = subjects.find((s) => !UUID_REGEX.test(s));
+      if (bad) {
+        return reply.code(400).send({ error: `subject must be a UUID: ${bad}` });
+      }
+      
+      const res: Record<string, number> = {};
+      
+      // Batch execute in parallel to be fast
+      await Promise.all(
+        subjects.map(async (subject) => {
+          const summary = await getUserXp(subject);
+          res[subject] = summary.xp;
+        })
+      );
+      
+      return res;
+    }
+  );
 };

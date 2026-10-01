@@ -28,6 +28,7 @@ describe("XP routes", () => {
   });
   afterEach(async () => {
     await pool.query("DELETE FROM activity_sessions WHERE user_id = ANY($1)", [users]);
+    await pool.query("DELETE FROM external_xp_awards WHERE user_id = ANY($1)", [users]);
     users.length = 0;
   });
   afterAll(async () => {
@@ -158,5 +159,85 @@ describe("XP routes", () => {
     expect((await fastify.inject({ method: "GET", url: "/v1/leaderboard/xp" })).statusCode).toBe(401);
     const empty = (await fastify.inject({ method: "GET", url: "/v1/leaderboard/xp", headers: bearer(token) })).json<Board>();
     expect(empty.me).toBeNull();
+  });
+
+  it("POST /internal/v1/xp/award awards XP bypassing daily cap, appears in breakdown and getUserXp, prevents replays", async () => {
+    const u = newUser();
+    const service = bearer(await serviceToken());
+
+    const body1 = { subject: u, amount: 25, reason: "territory_claim", source: "campus", idempotency_key: "claim-123" };
+    const res1 = await fastify.inject({ method: "POST", url: "/internal/v1/xp/award", headers: service, payload: body1 });
+    expect(res1.statusCode).toBe(200);
+    expect(res1.json<number>()).toBe(25);
+
+    // Replay with exact same source and key
+    const res2 = await fastify.inject({ method: "POST", url: "/internal/v1/xp/award", headers: service, payload: body1 });
+    expect(res2.statusCode).toBe(200);
+    expect(res2.json<number>()).toBe(25); // same total, no double award
+
+    // Same key, different source
+    const body3 = { subject: u, amount: 40, reason: "territory_steal", source: "other", idempotency_key: "claim-123" };
+    const res3 = await fastify.inject({ method: "POST", url: "/internal/v1/xp/award", headers: service, payload: body3 });
+    expect(res3.statusCode).toBe(200);
+    expect(res3.json<number>()).toBe(65); // 25 + 40
+
+    // Fetch me xp to verify breakdown
+    const meRes = await fastify.inject({ method: "GET", url: "/v1/users/me/xp", headers: bearer(await userToken(u)) });
+    const me = meRes.json<MeXp>();
+    expect(me.xp).toBe(65);
+    expect(me.breakdown).toContainEqual({ reason: "territory_claim", xp: 25 });
+    expect(me.breakdown).toContainEqual({ reason: "territory_steal", xp: 40 });
+
+    // Verify it bypasses run daily caps: 
+    // Insert 10 similar awards of 25 = 250 XP. If it was capped to 150, it would be less.
+    for (let i = 0; i < 10; i++) {
+      await fastify.inject({ method: "POST", url: "/internal/v1/xp/award", headers: service, payload: { ...body1, idempotency_key: `loop-${i}` } });
+    }
+    const capRes = await fastify.inject({ method: "GET", url: "/v1/users/me/xp", headers: bearer(await userToken(u)) });
+    expect(capRes.json<MeXp>().xp).toBe(65 + 250);
+  });
+
+  it("POST /internal/v1/xp/totals handles batches, unknowns, empty subjects, and max 200", async () => {
+    const u1 = newUser();
+    const u2 = newUser();
+    const service = bearer(await serviceToken());
+
+    await fastify.inject({ method: "POST", url: "/internal/v1/xp/award", headers: service, payload: { subject: u1, amount: 15, reason: "defend", source: "campus", idempotency_key: "ik-1" } });
+
+    // batch route test (all valid)
+    const totalsRes = await fastify.inject({ 
+      method: "POST", url: "/internal/v1/xp/totals", headers: service, 
+      payload: { subjects: [u1, u2, crypto.randomUUID()] }
+    });
+    expect(totalsRes.statusCode).toBe(200);
+    const totals = totalsRes.json<Record<string, number>>();
+    
+    // u1 has 15
+    expect(totals[u1]).toBe(15);
+    // u2 has no XP, returns 0, not an error
+    expect(totals[u2]).toBe(0);
+
+    // a batch containing a non-UUID subject is rejected entirely
+    const badBatchRes = await fastify.inject({ 
+      method: "POST", url: "/internal/v1/xp/totals", headers: service, 
+      payload: { subjects: [u1, "not-a-uuid", u2] }
+    });
+    expect(badBatchRes.statusCode).toBe(400);
+    expect(badBatchRes.json<{error: string}>().error).toMatch(/not-a-uuid/);
+    
+    // > 200 rejected
+    const bigArray = Array(201).fill(u1);
+    const bigRes = await fastify.inject({ method: "POST", url: "/internal/v1/xp/totals", headers: service, payload: { subjects: bigArray } });
+    expect(bigRes.statusCode).toBe(400);
+  });
+
+  it("both internal routes reject without the service token", async () => {
+    const u = newUser();
+    const noAuth = { subject: u, amount: 25, reason: "territory_claim", source: "campus", idempotency_key: "ik-2" };
+    expect((await fastify.inject({ method: "POST", url: "/internal/v1/xp/award", payload: noAuth })).statusCode).toBe(401);
+    expect((await fastify.inject({ method: "POST", url: "/internal/v1/xp/award", payload: noAuth, headers: bearer(await userToken(u)) })).statusCode).toBe(401);
+
+    expect((await fastify.inject({ method: "POST", url: "/internal/v1/xp/totals", payload: { subjects: [u] } })).statusCode).toBe(401);
+    expect((await fastify.inject({ method: "POST", url: "/internal/v1/xp/totals", payload: { subjects: [u] }, headers: bearer(await userToken(u)) })).statusCode).toBe(401);
   });
 });
