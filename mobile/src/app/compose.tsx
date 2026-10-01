@@ -1,38 +1,38 @@
 import { useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { StickerArt } from '@/art/Sticker';
 import { Avatar } from '@/components/Avatar';
 import { SceneImage } from '@/components/cards';
 import { Button, Header, Label, Screen, tap } from '@/components/ui';
 import { PhotoUpload, type ApprovedPhoto } from '@/components/media/PhotoUpload';
-import type { Activity, Post } from '@/data/posts';
+import { NotLiveYet } from '@/components/campus/States';
 import { useApp } from '@/state/AppState';
 import type { SceneKind, StickerKind } from '@/types';
 import { colors, fonts, radius } from '@/theme';
 
 const SCENES: SceneKind[] = ['city-sunset', 'run', 'yoga', 'brunch', 'cafe', 'rooftop', 'lake', 'city-night', 'hiit', 'cycling', 'stadium'];
-const STICKERS: NonNullable<Post['sticker']>[] = ['one-more-km', 'fire', 'good-vibes', 'neon-heart', 'squirrel-flex', 'hydrate'];
+const STICKERS: StickerKind[] = ['one-more-km', 'fire', 'good-vibes', 'neon-heart', 'squirrel-flex', 'hydrate'];
+type RunActivity = { km: number; minutes: number; pace: string };
 
-/** Post composer (also reached after finishing a run with the run prefilled). */
+/**
+ * Post composer (also reached after finishing a run, with that run's real numbers prefilled).
+ * Posting has no backend on this build, so it says "Posts · Not live yet" and Post is disabled:
+ * nothing is saved locally or shown in a feed as if it had been posted.
+ */
 export default function Compose() {
   const { km, min, pace } = useLocalSearchParams<{ km?: string; min?: string; pace?: string }>();
-  const { me, addPost, owned } = useApp();
+  const { me } = useApp();
   const [scene, setScene] = useState<SceneKind>(km ? 'run' : 'city-sunset');
-  const [sticker, setSticker] = useState<Post['sticker']>(km ? 'one-more-km' : undefined);
+  const [sticker, setSticker] = useState<StickerKind | undefined>(km ? 'one-more-km' : undefined);
   const [caption, setCaption] = useState(km ? `Just one more km turned into ${km}. 🏃‍♀️` : '');
   const [photo, setPhoto] = useState<ApprovedPhoto | null>(null);
-  const [photoBusy, setPhotoBusy] = useState(false);
-  const activity: Activity | undefined = km ? { type: 'run', km: +km, minutes: +(min ?? 0), pace: pace ?? '' } : undefined;
-
-  const post = () => {
-    addPost({ caption: caption.trim() || 'Moving with the crew 💪', scene, seed: Date.now() % 97, activity, sticker, photo: photo ? { uri: photo.uri, mediaId: photo.mediaId } : undefined });
-    router.replace('/social');
-  };
+  const activity: RunActivity | undefined = km ? { km: +km, minutes: +(min ?? 0), pace: pace ?? '' } : undefined;
 
   return (
     <Screen tabBar={false}>
-      <Header back title="New Post" />
+      <Header back title={activity ? 'Share your run' : 'New Post'} />
+      <NotLiveYet name="Posts" compact body="Sharing posts switches on once the feed backend is connected. Your run is already saved by the Run Module." />
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginTop: 10 }}>
         <Avatar user={me} size={44} link={false} />
         <TextInput value={caption} onChangeText={setCaption} placeholder="What did you move today?" placeholderTextColor={colors.dim} multiline style={styles.input} maxLength={280} />
@@ -51,10 +51,7 @@ export default function Compose() {
       <Label style={{ marginTop: 18, marginBottom: 8 }}>Photo</Label>
       <PhotoUpload
         purpose="post"
-        onChange={(p, busy) => {
-          setPhoto(p);
-          setPhotoBusy(busy);
-        }}
+        onChange={(p) => setPhoto(p)}
       />
 
       <Label style={{ marginTop: 18, marginBottom: 8 }}>{photo ? 'Backdrop (behind your photo)' : 'Backdrop'}</Label>
@@ -72,17 +69,15 @@ export default function Compose() {
           <Text style={{ color: colors.dim, fontFamily: fonts.semibold }}>None</Text>
         </Pressable>
         {STICKERS.map((k) => {
-          const id = { 'one-more-km': 'st-km', fire: 'st-fire', 'good-vibes': 'st-vibes', 'neon-heart': 'st-heart', 'squirrel-flex': 'st-flex', hydrate: 'st-hydrate' }[k];
-          const has = owned.has(id) || k === 'neon-heart' || k === 'one-more-km';
           return (
-            <Pressable key={k} disabled={!has} onPress={() => { tap(); setSticker(k); }} style={[styles.sticker, sticker === k && { borderColor: colors.primary }, !has && { opacity: 0.35 }]}>
-              <StickerArt kind={k as StickerKind} size={56} />
+            <Pressable key={k} onPress={() => { tap(); setSticker(k); }} style={[styles.sticker, sticker === k && { borderColor: colors.primary }]} accessibilityLabel={k}>
+              <StickerArt kind={k} size={56} />
             </Pressable>
           );
         })}
       </ScrollView>
 
-      <Button label={photoBusy ? 'Finish the photo first' : 'Post · +20 XP'} iconLeft="send" onPress={post} disabled={photoBusy} style={{ marginTop: 22 }} />
+      <Button label="Posting · Not live yet" iconLeft="lock-outline" onPress={() => {}} disabled style={{ marginTop: 22 }} accessibilityLabel="Post. Not live yet, nothing is sent." />
     </Screen>
   );
 }

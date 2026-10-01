@@ -1,60 +1,57 @@
 import { EXERCISE_LIBRARY } from '@/data/exercises';
 import { useExerciseCatalog } from '@/hooks/useExercise';
-import { LOCKED_MISSIONS } from '@/data/features';
 import { useLocks } from '@/components/Locked';
-import { activityLine, selectFeed, timeAgo } from '@/data/posts';
-import { useEffect, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CampusScene } from '@/art/CampusScene';
-import { Avatar } from '@/components/Avatar';
-import { MissionCard, SceneImage } from '@/components/cards';
+import { GoalCard, SceneImage } from '@/components/cards';
 import { CAMPUS_SOURCE } from '@/api/campus';
 import { ActiveNowStrip, CampusNotLive, CampusTerritoryCard, HomeEvents, HomeLeaderboard, SocialShortcuts } from '@/components/campus/HomeSections';
-import { CityChip, TopBar } from '@/components/TopBar';
-import { Button, Card, Display, FadeIn, Icon, OverlayKicker, OverlaySub, PressScale, Ring, RowSub, RowTitle, Screen, SectionHeader, Tagline } from '@/components/ui';
-import { today } from '@/data/stats';
-import { userById } from '@/data/users';
+import { ErrorState, LoadingRows, NotConnected } from '@/components/campus/States';
+import { TopBar } from '@/components/TopBar';
+import { Card, Display, FadeIn, Icon, OverlayKicker, OverlaySub, PressScale, Ring, RowSub, RowTitle, Screen, SectionHeader, Tagline } from '@/components/ui';
 import { useAuth } from '@/auth/AuthProvider';
 import { Tape } from '@/components/Brand';
 import { PROGRESS_API_CONFIGURED } from '@/api/config';
 import { xpApi } from '@/api/endpoints';
+import { useConfig } from '@/hooks/useCampus';
+import { useDailyProgress } from '@/hooks/useDailyProgress';
+import { goalTargets } from '@/logic/progressStats';
 import { useApp } from '@/state/AppState';
+import { useEffect } from 'react';
 import { alpha, colors, fonts, radius } from '@/theme';
 
+/**
+ * HOME. Every number here comes from a backend: today's steps / active minutes / calories /
+ * streak and goals from the progress-service, territory / people / leaderboard from the campus
+ * API, XP from the progress-service or the Run Module. Without a backend a section says so
+ * ("Not connected" / "Not live yet"); there is no sample content.
+ */
 const greeting = () => {
   const h = new Date().getHours();
   return h < 5 ? 'Late night' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
 };
 
 export default function Home() {
-  const { me, missions, logMission, claimed, claimable, claimRewards, city } = useApp();
+  const { me, syncServerXp, exerciseToday } = useApp();
   const { mode } = useAuth();
-  const { syncServerXp, exerciseToday, posts, following } = useApp();
+  const config = useConfig();
+  const campus = config.data?.campus.name ?? null;
+  const daily = useDailyProgress();
   const locks = useLocks();
   const eventsLocked = locks.locked('events');
-  // Crew Activity: the Social "Following" feed (same shared posts + selector), latest 4.
-  const crewActivity = useMemo(() => selectFeed(posts, 'Following', { following, meId: me.id, cityId: city.id }).slice(0, 4), [posts, following, me.id, city.id]);
-  // Today's rings add what you logged with the form coach.
-  const activeMin = today.active.value + exerciseToday.minutes;
-  const kcalToday = today.kcal.value + exerciseToday.kcal;
-  // Signed in: the server's XP total (derived from real activity) replaces the demo figure.
-  // With the progress-service configured, AppState syncs XP from it instead (it is the XP authority).
+  // Signed in without the progress-service: the Run Module's XP total (AppState syncs XP from the
+  // progress-service itself when that's configured — it's the XP authority).
   useEffect(() => {
     if (mode !== 'live' || PROGRESS_API_CONFIGURED) return;
     xpApi.me().then((r) => syncServerXp(r.xp)).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
-  // Locked (not-yet-launched) missions stay visible at the end but don't count.
-  const daily = missions.filter((m) => m.tab === 'Daily').sort((a, b) => Number(LOCKED_MISSIONS.has(a.id)) - Number(LOCKED_MISSIONS.has(b.id)));
-  const activeDaily = daily.filter((m) => !LOCKED_MISSIONS.has(m.id));
-  const doneCount = activeDaily.filter((m) => m.current >= m.goal).length;
-
-  const onClaim = () => {
-    const r = claimRewards();
-    router.push({ pathname: '/level-up', params: { gained: String(r.xp), coins: String(r.coins), leveledUp: r.leveledUp ? '1' : '0' } });
-  };
+  const d = daily.data;
+  const goals = d?.goals ?? [];
+  const targets = goalTargets(goals);
+  const goalsDone = goals.filter((g) => g.completed || g.current >= g.target).length;
 
   return (
     <Screen>
@@ -62,14 +59,11 @@ export default function Home() {
 
       {/* Greeting */}
       <FadeIn style={{ marginTop: 18 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text style={styles.hello}>{greeting()}, {me.name.split(' ')[0]} 👋</Text>
-          <CityChip />
-        </View>
+        <Text style={styles.hello}>{greeting()}{me.name ? `, ${me.name}` : ''} 👋</Text>
         <Display size={44} style={{ marginTop: 2 }}>Ready to <Text style={{ color: colors.primary }}>move?</Text></Display>
       </FadeIn>
 
-      {/* Today's progress */}
+      {/* Today's progress (progress-service) */}
       <FadeIn index={1}>
         <Card style={{ marginTop: 14, paddingVertical: 16 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -79,12 +73,23 @@ export default function Home() {
               <Icon name="chevron-right" size={16} color={colors.primary} />
             </Pressable>
           </View>
-          <View style={styles.rings}>
-            <RingStat progress={today.steps.value / today.steps.goal} color={colors.green} color2={colors.secondary} icon="shoe-print" value={today.steps.value.toLocaleString('en-IN')} label="Steps" />
-            <RingStat progress={activeMin / today.active.goal} color={colors.secondary} color2={colors.blue} icon="timer-outline" value={`${activeMin}m`} label="Active" />
-            <RingStat progress={kcalToday / today.kcal.goal} color={colors.orange} color2={colors.gold} icon="fire" value={String(kcalToday)} label="kcal" />
-            <RingStat progress={Math.min(1, today.streak / 14)} color={colors.violet} color2={colors.primary} icon="lightning-bolt" value={`${today.streak}d`} label="Streak" />
-          </View>
+          {daily.state !== 'ready' ? (
+            <Text style={styles.note}>{daily.state === 'signed_out' ? 'Sign in to see your steps, active minutes, calories and streak.' : 'Steps, active minutes, calories and streak come from the progress service, which isn’t connected to this build yet.'}</Text>
+          ) : daily.error && !d ? (
+            <ErrorState cause={daily.cause} onRetry={daily.reload} compact title="Couldn’t load today" />
+          ) : !d ? (
+            <LoadingRows rows={1} height={92} />
+          ) : (
+            <View style={styles.rings}>
+              <RingStat progress={targets.steps ? d.steps / targets.steps : 0} color={colors.green} color2={colors.secondary} icon="shoe-print" value={d.steps.toLocaleString('en-IN')} label="Steps" />
+              <RingStat progress={targets.active ? d.activeMinutes / targets.active : 0} color={colors.secondary} color2={colors.blue} icon="timer-outline" value={`${Math.round(d.activeMinutes)}m`} label="Active" />
+              <RingStat progress={0} color={colors.orange} color2={colors.gold} icon="fire" value={String(Math.round(d.calories))} label="kcal" />
+              <RingStat progress={Math.min(1, d.streak.current / 14)} color={colors.violet} color2={colors.primary} icon="lightning-bolt" value={`${d.streak.current}d`} label="Streak" />
+            </View>
+          )}
+          {exerciseToday.sessions > 0 && daily.state !== 'ready' && (
+            <Text style={[styles.note, { marginTop: 8 }]}>On this phone today: {exerciseToday.sessions} workout{exerciseToday.sessions > 1 ? 's' : ''} · {exerciseToday.minutes} min</Text>
+          )}
           <StartExercise />
         </Card>
       </FadeIn>
@@ -95,9 +100,9 @@ export default function Home() {
           <SceneImage kind="run" seed={4} height={132} scrim="strong">
             <View style={styles.runCta}>
               <View style={{ flex: 1 }}>
-                <OverlayKicker>{city.venues?.runs?.[0] ?? 'City Loop'} · 2.4 km loop</OverlayKicker>
+                <OverlayKicker>Run or walk</OverlayKicker>
                 <Display size={30} color={colors.onImage}>Start a run</Display>
-                <OverlaySub>Run or walk · your route unlocks zones to claim</OverlaySub>
+                <OverlaySub>Your route unlocks zones to claim</OverlaySub>
               </View>
               <View style={styles.playBtn}>
                 <Icon name="play" size={30} color={colors.onPrimary} />
@@ -107,23 +112,25 @@ export default function Home() {
         </PressScale>
       </FadeIn>
 
-      {/* Missions */}
-      <SectionHeader kicker="01 — Today" title="Today's Missions" action={`${doneCount}/${activeDaily.length} done`} onAction={() => router.push('/missions')} />
-      <View style={{ gap: 10 }}>
-        {daily.map((m, i) => (
-          <FadeIn key={m.id} index={i}>
-            <MissionCard mission={m} claimed={claimed.has(m.id)} onLog={() => logMission(m.id)} />
-          </FadeIn>
-        ))}
-      </View>
-      <Button
-        label={claimable.count ? `Claim rewards · +${claimable.xp} XP` : 'Claim rewards'}
-        iconLeft="gift"
-        disabled={!claimable.count}
-        onPress={onClaim}
-        style={{ marginTop: 14 }}
-      />
-      {!claimable.count && <Text style={styles.hint}>Tap + on a mission to log progress. Complete one to claim XP & coins.</Text>}
+      {/* Today's goals (progress-service) */}
+      <SectionHeader kicker="01 — Today" title="Today's Goals" action={d ? `${goalsDone}/${goals.length} done` : 'Open'} onAction={() => router.push('/missions')} />
+      {daily.state !== 'ready' ? (
+        <NotConnected compact name="Today’s goals" reason={daily.state} body={daily.state === 'signed_out' ? 'Your daily goals come from your account.' : 'Daily goals come from the progress service, which isn’t connected to this build yet.'} />
+      ) : !d ? (
+        daily.error ? null : <LoadingRows rows={2} height={72} />
+      ) : goals.length === 0 ? (
+        <Card>
+          <Text style={styles.note}>No goals set for today.</Text>
+        </Card>
+      ) : (
+        <View style={{ gap: 10 }}>
+          {goals.slice(0, 3).map((g, i) => (
+            <FadeIn key={g.id} index={i}>
+              <GoalCard goal={g} />
+            </FadeIn>
+          ))}
+        </View>
+      )}
 
       <Tape items={['Touch grass (literally)', 'Every run leaves a mark', 'Claim your block', 'No pressure, all vibes']} color={colors.secondary} rotate={2} style={{ marginTop: 26, marginBottom: -6 }} />
 
@@ -145,13 +152,13 @@ export default function Home() {
         </View>
       </PressScale>
 
-      {/* The campus is alive: a window onto the world that opens the Map */}
+      {/* A window onto the campus that opens the Map (artwork, no data) */}
       <FadeIn>
-        <PressScale onPress={() => router.push('/explore')} style={styles.world} scaleTo={0.985} accessibilityRole="button" accessibilityLabel={`${city.campus}, your world. Open the map`}>
+        <PressScale onPress={() => router.push('/explore')} style={styles.world} scaleTo={0.985} accessibilityRole="button" accessibilityLabel={`${campus ?? 'Your campus'}. Open the map`}>
           <CampusScene frame="horizon" style={StyleSheet.absoluteFill} />
           <LinearGradient colors={['rgba(5,5,7,0)', 'rgba(5,5,7,0.88)']} style={styles.worldScrim} pointerEvents="none" />
           <View style={{ position: 'absolute', left: 16, bottom: 16, right: 16 }}>
-            <OverlayKicker>{city.campus} · your world</OverlayKicker>
+            <OverlayKicker>{campus ?? 'Your campus'} · your world</OverlayKicker>
             <Tagline size={24} color={colors.onImage} style={{ marginTop: 6 }}>The campus is awake.</Tagline>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 20 }}>
               <Text style={styles.worldCta}>Open the map</Text>
@@ -162,40 +169,10 @@ export default function Home() {
       </FadeIn>
 
       {/* Leaderboard — top squirrels today, from the campus backend */}
-      {CAMPUS_SOURCE !== 'off' && <HomeLeaderboard campusName={city.campus} />}
+      {CAMPUS_SOURCE !== 'off' && <HomeLeaderboard campusName={campus ?? 'your campus'} />}
 
       {/* Events — campus events (RSVP state lives on the server) */}
       {CAMPUS_SOURCE !== 'off' && !eventsLocked && <HomeEvents />}
-
-      {/* Friends activity */}
-      <SectionHeader kicker="05 — Right now" title="Crew Activity" action="Feed" onAction={() => router.push('/social')} />
-      {crewActivity.length === 0 ? (
-        <Card>
-          <Text style={styles.hint}>Nothing yet. Follow people on Social and their runs and workouts show up here.</Text>
-        </Card>
-      ) : (
-        <View style={{ gap: 10 }}>
-          {crewActivity.map((p, i) => {
-            const u = p.authorId === me.id ? me : userById(p.authorId);
-            const line = activityLine(p);
-            return (
-              <FadeIn key={p.id} index={i}>
-                <PressScale onPress={() => router.push({ pathname: '/post/[id]', params: { id: p.id } })} style={styles.activity} scaleTo={0.985} accessibilityLabel={`${u.name} ${line.text}`}>
-                  <Avatar user={u} size={38} />
-                  <Text style={styles.activityText} numberOfLines={2}>
-                    <Text style={{ fontFamily: fonts.bold, color: colors.text }}>{p.authorId === me.id ? 'You' : u.name.split(' ')[0]} </Text>
-                    {line.text}
-                  </Text>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Icon name={line.icon} size={18} color={colors.primary} />
-                    <Text style={styles.leaderSub}>{timeAgo(p.minutesAgo)}</Text>
-                  </View>
-                </PressScale>
-              </FadeIn>
-            );
-          })}
-        </View>
-      )}
     </Screen>
   );
 }
@@ -268,6 +245,7 @@ const styles = StyleSheet.create({
   runCta: { position: 'absolute', left: 16, right: 16, bottom: 14, flexDirection: 'row', alignItems: 'flex-end' },
   playBtn: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', shadowColor: colors.primary, shadowOpacity: 0.8, shadowRadius: 14, shadowOffset: { width: 0, height: 0 } },
   hint: { color: colors.mute, fontSize: 12, textAlign: 'center', marginTop: 8, fontFamily: fonts.regular },
+  note: { color: colors.dim, fontFamily: fonts.regular, fontSize: 13, lineHeight: 19 },
   leader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 4 },
   leaderMe: { backgroundColor: alpha(colors.primary, 0.08), borderRadius: radius.md, marginHorizontal: -6, paddingHorizontal: 10 },
   rank: { color: colors.dim, fontFamily: fonts.display, fontSize: 18, width: 34 },

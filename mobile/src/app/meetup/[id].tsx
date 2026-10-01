@@ -11,9 +11,9 @@ import { campusApi, errorText, type CheckInResult, type Meetup } from '@/api/cam
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
 import { PhotoUpload } from '@/components/media/PhotoUpload';
 import { MeetupRating } from '@/components/meetup/MeetupRating';
-import { ErrorState, LoadingRows, SourceBadge } from '@/components/campus/States';
+import { ErrorState, LoadingRows } from '@/components/campus/States';
 import { Button, Card, Display, Header, Icon, Kicker, Screen, SectionHeader, tap } from '@/components/ui';
-import { formatEventDate } from '@/data/community';
+import { formatEventDate } from '@/logic/format';
 import { invalidateCampus, useAction, useCampus, useConfig, useMe } from '@/hooks/useCampus';
 import { colors, fonts, radius } from '@/theme';
 import { checkInOpen } from '@/logic/meetups';
@@ -59,7 +59,7 @@ export default function MeetupScreen() {
 
   return (
     <Screen tabBar={false}>
-      <Header back title="Meetup" right={<SourceBadge />} />
+      <Header back title="Meetup" />
       <Kicker>{formatEventDate(m.starts_at)}</Kicker>
       <Display size={34} style={{ marginTop: 4 }}>{m.title}</Display>
       <Text

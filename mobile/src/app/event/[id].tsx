@@ -7,9 +7,9 @@ import { campusApi, errorText, type EventDetail } from '@/api/campus';
 import { eventType } from '@/components/campus/EventRow';
 import { isStudyBreak } from '@/components/events/StudyBreak';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
-import { ErrorState, LoadingRows, SourceBadge } from '@/components/campus/States';
+import { ErrorState, LoadingRows } from '@/components/campus/States';
 import { Button, Card, Display, Icon, IconButton, Kicker, Scrim, SectionHeader, tap } from '@/components/ui';
-import { formatEventDate } from '@/data/community';
+import { formatEventDate } from '@/logic/format';
 import { invalidateCampus, useAction, useCampus } from '@/hooks/useCampus';
 import { useApp } from '@/state/AppState';
 import { alpha, colors, fonts, MAX_WIDTH } from '@/theme';
@@ -63,7 +63,7 @@ function EventScreen() {
         <Scrim strong />
         <View style={[styles.top, { top: insets.top + 8 }]}>
           <IconButton icon="chevron-left" size={26} onPress={back} label="Back" />
-          <SourceBadge />
+          
         </View>
         <View style={styles.heroText}>
           <Kicker color={t.color}>{t.label}</Kicker>

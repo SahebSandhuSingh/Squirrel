@@ -92,7 +92,7 @@ export function PhotoUpload({ purpose, context, onChange, label = 'Add photo', a
       <Pressable disabled style={[styles.add, styles.addOff]} accessibilityRole="button" accessibilityState={{ disabled: true }} accessibilityLabel={`${label}. Photo uploads are not live yet.`}>
         <Icon name="camera-off-outline" size={26} color={colors.violet} />
         <Text style={[styles.addText, { color: colors.violet }]}>Photo uploads · Not live yet</Text>
-        <Text style={styles.addSub}>Coming soon. You can still post without a photo.</Text>
+        <Text style={styles.addSub}>Coming soon — photos switch on once uploads are live.</Text>
       </Pressable>
     );
   }

@@ -3,8 +3,23 @@
  * Pure functions; every number comes from the server (nothing is estimated here).
  */
 import type { DailyGoal, DayRow, ProgressHistory, Streak, WeeklyProgress } from '@/api/progress';
-import type { Period, Stat } from '@/data/stats';
+import type { IconName } from '@/data/icons';
 import { colors } from '@/theme';
+
+export type Period = 'Day' | 'Week' | 'Month' | 'Year';
+export type StatSeries = { labels: string[]; values: number[] };
+export type Stat = {
+  id: 'steps' | 'active' | 'kcal' | 'workouts' | 'streak';
+  label: string;
+  value: string;
+  unit?: string;
+  icon: IconName;
+  color: string;
+  /** 0..1 progress towards the period goal, when there is one. */
+  progress?: number;
+  delta?: string;
+  series: StatSeries;
+};
 
 const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const MONTHS = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];

@@ -1,7 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { CampusMap } from '@/components/campus/CampusMap';
-import { SourceBadge } from '@/components/campus/States';
 import { ZonePanel } from '@/components/campus/ZonePanel';
 import { Header, Screen } from '@/components/ui';
 import { useMe, useTerritorySync, useZones } from '@/hooks/useCampus';
@@ -14,7 +13,7 @@ export default function ZoneScreen() {
   useTerritorySync();
   return (
     <Screen tabBar={false}>
-      <Header back title="Zone" right={<SourceBadge />} />
+      <Header back title="Zone" />
       {!!zones.data?.length && <CampusMap zones={zones.data} meId={me.data?.user_id ?? null} selectedId={id} interactive={false} style={styles.map} />}
       <View style={{ marginTop: 14 }}>
         <ZonePanel zoneId={id} meId={me.data?.user_id ?? null} />

@@ -5,7 +5,7 @@ import { router } from 'expo-router';
 import { campusApi } from '@/api/campus';
 import { EventRow } from '@/components/campus/EventRow';
 import { isStudyBreak, StudyBreakCard } from '@/components/events/StudyBreak';
-import { EmptyNote, ErrorState, LoadingRows, SourceBadge } from '@/components/campus/States';
+import { EmptyNote, ErrorState, LoadingRows } from '@/components/campus/States';
 import { Header, IconButton, Screen, Segmented } from '@/components/ui';
 import { useCampus, useRealtime, useRefreshOnFocus } from '@/hooks/useCampus';
 import { FeatureGate, SoonScreen } from '@/components/Locked';
@@ -37,7 +37,7 @@ function Events() {
   const items = featured ? all.filter((e) => e.id !== featured.id) : all;
   return (
     <Screen tabBar={false} scroll={false}>
-      <Header back title="Events" right={<><IconButton icon="calendar-check" onPress={() => router.push('/meetups')} label="Meetups and check-in" /><SourceBadge /></>} />
+      <Header back title="Events" right={<><IconButton icon="calendar-check" onPress={() => router.push('/meetups')} label="Meetups and check-in" /></>} />
       <Segmented items={TABS} value={tab} onChange={setTab} />
       <FlatList
         data={items}

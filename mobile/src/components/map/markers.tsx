@@ -26,7 +26,7 @@ function usePopIn() {
 const at = (p: Pos, size: number) => ({ left: p.x - size / 2, top: p.y - size / 2, width: size, height: size });
 
 /** You: your avatar, a gentle breathing pulse, a small accuracy disc (scales with the map). */
-export const CurrentUserMarker = memo(function CurrentUserMarker({ pos, accuracyPx, inverse, simulated }: { pos: Pos; accuracyPx: number; inverse: Animated.AnimatedInterpolation<number> | Animated.AnimatedDivision<number>; simulated: boolean }) {
+export const CurrentUserMarker = memo(function CurrentUserMarker({ pos, accuracyPx, inverse }: { pos: Pos; accuracyPx: number; inverse: Animated.AnimatedInterpolation<number> | Animated.AnimatedDivision<number> }) {
   const { me } = useApp();
   const [breath] = useState(() => new Animated.Value(0));
   useEffect(() => {
@@ -50,7 +50,7 @@ export const CurrentUserMarker = memo(function CurrentUserMarker({ pos, accuracy
           <Avatar user={me} size={S} ring={colors.primary} link={false} />
         </Animated.View>
         <View style={styles.you}>
-          <Text style={styles.youText}>{simulated ? 'YOU · DEMO' : 'YOU'}</Text>
+          <Text style={styles.youText}>YOU</Text>
         </View>
       </Animated.View>
     </>

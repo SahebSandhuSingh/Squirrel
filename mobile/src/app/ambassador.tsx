@@ -18,7 +18,7 @@ import { Mascot } from '@/art/Mascot';
 import { errorKind, errorText, featureUnavailable } from '@/api/campus';
 import { ambassadorWaitlistLive, joinAmbassadorWaitlist, YEARS_OF_STUDY, type YearOfStudy } from '@/api/campus/ambassadorWaitlist';
 import type { Me } from '@/api/campus/types';
-import { NotLiveYet, SourceBadge } from '@/components/campus/States';
+import { NotLiveYet } from '@/components/campus/States';
 import { Button, Display, FadeIn, Header, Icon, Kicker, Label, tap } from '@/components/ui';
 import { useConfig, useMe } from '@/hooks/useCampus';
 import { isCollegeEmail, isEmail, normalizePhone } from '@/logic/profileValidation';
@@ -106,7 +106,7 @@ export default function Ambassador() {
   if ((!me.data && !me.error) || (!config.data && !config.error)) {
     return (
       <Shell>
-        <Header back title="" right={<SourceBadge />} />
+        <Header back title="" />
         <View style={{ gap: 12, marginTop: 12 }}>
           <View style={[styles.skeleton, { height: 90 }]} />
           <View style={[styles.skeleton, { height: 260 }]} />
@@ -219,7 +219,7 @@ function Waitlist({ me, campusName, campusId, domains }: { me: Me | undefined; c
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <LinearGradient colors={gradients.screen} style={StyleSheet.absoluteFill} />
       <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.col, { paddingTop: insets.top + 8, paddingBottom: 24 }]} showsVerticalScrollIndicator={false}>
-        <Header back title="" right={<SourceBadge />} />
+        <Header back title="" />
         <Kicker color={colors.violet}>Campus Ambassador</Kicker>
         <Display size={36} style={{ marginTop: 4 }}>
           Rep your{'\n'}
@@ -245,7 +245,7 @@ function Waitlist({ me, campusName, campusId, domains }: { me: Me | undefined; c
           <Text style={{ color: colors.primary }}>*</Text> Required
         </Text>
 
-        {field('full_name', { autoComplete: 'name', textContentType: 'name', autoCapitalize: 'words', maxLength: FULL_NAME_MAX, placeholder: 'e.g. Aanya Sharma', nextKey: 'personal_email' })}
+        {field('full_name', { autoComplete: 'name', textContentType: 'name', autoCapitalize: 'words', maxLength: FULL_NAME_MAX, placeholder: 'As on your college ID', nextKey: 'personal_email' })}
         {field('personal_email', { keyboardType: 'email-address', autoComplete: 'email', textContentType: 'emailAddress', autoCapitalize: 'none', autoCorrect: false, maxLength: 254, placeholder: 'you@gmail.com', nextKey: 'college_email' })}
         {field('college_email', { keyboardType: 'email-address', autoCapitalize: 'none', autoCorrect: false, maxLength: 254, placeholder: domains[0] ? `you@${domains[0]}` : 'you@college.ac.in', hint: 'The address your college gave you.', nextKey: 'phone' })}
         {field('phone', { keyboardType: 'phone-pad', autoComplete: 'tel', textContentType: 'telephoneNumber', maxLength: 16, placeholder: '98765 43210', hint: 'Indian mobile, +91 added for you.', nextKey: 'college' })}

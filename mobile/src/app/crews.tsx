@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { campusApi, type Crew } from '@/api/campus';
-import { EmptyNote, ErrorState, LoadingRows, SourceBadge } from '@/components/campus/States';
+import { EmptyNote, ErrorState, LoadingRows } from '@/components/campus/States';
 import { CrewJoinButton } from '@/components/campus/CrewJoin';
 import { Header, Icon, IconButton, PressScale, Screen, SearchBar, Segmented } from '@/components/ui';
 import { useCampus, useConfig, useRefreshOnFocus } from '@/hooks/useCampus';
@@ -28,7 +28,7 @@ export default function Crews() {
 
   return (
     <Screen tabBar={false} scroll={false}>
-      <Header back title="Crews" right={<>{canCreate && <IconButton icon="plus" onPress={() => router.push('/crew/new')} label="Create crew" />}<SourceBadge /></>} />
+      <Header back title="Crews" right={<>{canCreate && <IconButton icon="plus" onPress={() => router.push('/crew/new')} label="Create crew" />}</>} />
       <View style={{ marginTop: 6 }}>
         <SearchBar placeholder="Search crews (running, night, hostel…)" value={q} onChangeText={setQ} />
       </View>

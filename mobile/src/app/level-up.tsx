@@ -5,10 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, Path, RadialGradient, Stop, Circle, Rect } from 'react-native-svg';
 import { Scene } from '@/art/Scene';
 import { Mascot } from '@/art/Mascot';
-import { RewardArt } from '@/art/Reward';
-import { RewardCard } from '@/components/cards';
 import { Button, Display, IconButton, NATIVE, Scrim, Tagline, XPBar, Icon, tap } from '@/components/ui';
-import { levelRewards } from '@/data/rewards';
 import { useApp, XP_PER_LEVEL } from '@/state/AppState';
 import { StatusBar } from 'expo-status-bar';
 import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
@@ -97,14 +94,16 @@ function Confetti({ visible }: { visible: boolean }) {
   );
 }
 
-/** LEVEL UP — RPG-style progression / reward reveal. */
+/**
+ * LEVEL UP — shown after a run that crossed a level on the server's XP total. The level and XP
+ * are the server's; there are no invented rewards or coins.
+ */
 export default function LevelUp() {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const { level, levelXp } = useApp();
-  const { gained, coins, leveledUp } = useLocalSearchParams<{ gained?: string; coins?: string; leveledUp?: string }>();
+  const { gained, leveledUp } = useLocalSearchParams<{ gained?: string; leveledUp?: string }>();
   const title = useRef(new Animated.Value(0)).current;
-  const cards = useRef([0, 1, 2].map(() => new Animated.Value(0))).current;
   const showConfetti = useRef(false);
   const isLevelUp = leveledUp === '1' || !gained;
 
@@ -116,14 +115,9 @@ export default function LevelUp() {
       setTimeout(() => tap('success'), 200);
       showConfetti.current = true;
     }
-    Animated.sequence([
-      Animated.spring(title, { toValue: 1, useNativeDriver: NATIVE, speed: 8, bounciness: 14 }),
-      Animated.stagger(140, cards.map((c) => Animated.spring(c, { toValue: 1, useNativeDriver: NATIVE, speed: 10, bounciness: 10 }))),
-    ]).start();
-  }, [title, cards, isLevelUp]);
+    Animated.spring(title, { toValue: 1, useNativeDriver: NATIVE, speed: 8, bounciness: 14 }).start();
+  }, [title, isLevelUp]);
 
-  const current = levelRewards.filter((r) => r.level === 13).slice(0, 3);
-  const next = levelRewards.find((r) => r.level > level && r.kind === 'trail') ?? levelRewards.find((r) => r.level > level);
   const heroSize = Math.min(width, MAX_WIDTH) * 0.62;
 
   return (
@@ -137,19 +131,13 @@ export default function LevelUp() {
 
         <Animated.View style={{ alignItems: 'center', opacity: title, transform: [{ scale: title.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }] }}>
           <Tagline size={Math.min(64, width * 0.15)} color={colors.primarySoft} rotate={-6}>{isLevelUp ? 'Level Up!' : 'Nice work!'}</Tagline>
-          <Display size={30} color={colors.onImage} style={{ marginTop: -2, transform: [{ rotate: '-4deg' }] }}>Level {level}</Display>
+          {level != null && <Display size={30} color={colors.onImage} style={{ marginTop: -2, transform: [{ rotate: '-4deg' }] }}>Level {level}</Display>}
           {!!gained && (
             <View style={styles.gains}>
               <View style={styles.gain}>
                 <Icon name="star-four-points" size={14} color={colors.primary} />
                 <Text style={styles.gainText}>+{gained} XP</Text>
               </View>
-              {!!coins && (
-                <View style={styles.gain}>
-                  <Icon name="circle-multiple" size={14} color={colors.gold} />
-                  <Text style={[styles.gainText, { color: colors.gold }]}>+{coins} coins</Text>
-                </View>
-              )}
             </View>
           )}
         </Animated.View>
@@ -159,28 +147,14 @@ export default function LevelUp() {
           <Mascot pose="celebrate" accessory="crown" size={heroSize} animated />
         </View>
 
-        <XPBar value={levelXp} max={XP_PER_LEVEL} onImage />
-
-        <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
-          {current.map((r, i) => (
-            <Animated.View key={r.title} style={{ flex: 1, opacity: cards[i], transform: [{ translateY: cards[i].interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) }, { scale: cards[i].interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) }] }}>
-              <RewardCard kind={r.kind} title={r.title} subtitle={r.subtitle} />
-            </Animated.View>
-          ))}
-        </View>
-
-        {next && (
-          <View style={styles.next}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.nextKicker}>Next unlock</Text>
-              <Text style={styles.nextTitle}>{next.title}</Text>
-              <Text style={styles.nextSub}>at Level {next.level} · {((next.level - level) * XP_PER_LEVEL - levelXp).toLocaleString('en-IN')} XP to go</Text>
-            </View>
-            <RewardArt kind={next.kind} size={78} />
-          </View>
+        {levelXp != null && level != null && (
+          <>
+            <XPBar value={levelXp} max={XP_PER_LEVEL} onImage />
+            <Text style={styles.nextSub}>{(XP_PER_LEVEL - levelXp).toLocaleString('en-IN')} XP to Level {level + 1} · from your account</Text>
+          </>
         )}
 
-        <Button label="View all rewards" icon="arrow-right" onPress={() => router.replace('/rewards')} />
+        <Button label="Continue" icon="arrow-right" onPress={() => router.replace('/explore')} style={{ marginTop: 16 }} />
       </View>
     </View>
   );
@@ -192,8 +166,5 @@ const styles = StyleSheet.create({
   gains: { flexDirection: 'row', gap: 8, marginTop: 10 },
   gain: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(10,10,10,0.7)', borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: colors.line },
   gainText: { color: colors.primary, fontFamily: fonts.bold, fontSize: 13 },
-  next: { flexDirection: 'row', alignItems: 'center', marginVertical: 14, backgroundColor: 'rgba(17,17,19,0.97)', borderRadius: radius.lg, borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)', padding: 14 },
-  nextKicker: { color: colors.violet, fontFamily: fonts.bold, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' },
-  nextTitle: { color: colors.text, fontFamily: fonts.display, fontSize: 22, marginTop: 2 },
-  nextSub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12 },
+  nextSub: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, marginTop: 6, textAlign: 'center' },
 });

@@ -9,7 +9,7 @@ import { campusApi, type ActiveNow, type ActivePerson } from '@/api/campus';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
 import { PokeButton } from '@/components/social/PokeButton';
 import { ModeChip, OpenToMeetToggle, PROXIMITY_TEXT } from '@/components/campus/Social';
-import { EmptyNote, ErrorState, LoadingRows, SignedOutState, SourceBadge } from '@/components/campus/States';
+import { EmptyNote, ErrorState, LoadingRows, SignedOutState } from '@/components/campus/States';
 import { shortTime } from '@/components/campus/territoryUi';
 import { Display, Header, Icon, Kicker, PressScale, Pulse, Screen, SectionHeader } from '@/components/ui';
 import { useCampus, useMe, useRealtime, useRefreshOnFocus } from '@/hooks/useCampus';
@@ -27,7 +27,7 @@ export default function Active() {
   const d = r.data;
   return (
     <Screen tabBar={false}>
-      <Header back title="" right={<SourceBadge />} />
+      <Header back title="" />
       <Kicker>Right now</Kicker>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 }}>
         <Display size={40}>Active <Text style={{ color: colors.primary }}>now</Text></Display>

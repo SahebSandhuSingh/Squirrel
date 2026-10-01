@@ -7,7 +7,7 @@ import { campusApi, type CrewDetail } from '@/api/campus';
 import { CrewJoinButton } from '@/components/campus/CrewJoin';
 import { EventRow } from '@/components/campus/EventRow';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
-import { ErrorState, LoadingRows, SourceBadge } from '@/components/campus/States';
+import { ErrorState, LoadingRows } from '@/components/campus/States';
 import { shortTime } from '@/components/campus/territoryUi';
 import { Display, Icon, IconButton, PressScale, Scrim, SectionHeader, Tag } from '@/components/ui';
 import { useCampus } from '@/hooks/useCampus';
@@ -39,7 +39,7 @@ export default function CrewScreen() {
         <Scrim strong />
         <View style={[styles.top, { top: insets.top + 8 }]}>
           <IconButton icon="chevron-left" size={26} onPress={back} label="Back" />
-          <SourceBadge />
+          
         </View>
         <View style={styles.heroText}>
           <View style={[styles.badge, { backgroundColor: c }]}>

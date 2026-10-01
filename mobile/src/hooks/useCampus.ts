@@ -9,14 +9,11 @@ import { invalidateRemote, useRemote } from '@/api/useRemote';
 import { useAuth } from '@/auth/AuthProvider';
 import { hydrateTerritories, territoriesLoadedAt, upsertTerritory } from '@/state/territoryStore';
 
-/**
- * The campus backend needs a signed-in user, except in the dev mock (which serves the demo
- * user) and for public endpoints (config, stats, zones).
- */
+/** The campus backend needs a signed-in user, except for public endpoints (config, stats, zones). */
 export function useCampusSession() {
   const { mode } = useAuth();
   // 'off': let requests run so they fail with "not live yet" (more honest than "sign in").
-  const signedIn = CAMPUS_SOURCE === 'mock' ? mode !== 'loading' : CAMPUS_SOURCE === 'off' ? true : mode === 'live';
+  const signedIn = CAMPUS_SOURCE === 'off' ? true : mode === 'live';
   return { source: CAMPUS_SOURCE, signedIn };
 }
 

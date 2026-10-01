@@ -2,7 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import type { EventSummary, EventType } from '@/api/campus';
 import { Icon, PressScale } from '@/components/ui';
-import { formatEventDate } from '@/data/community';
+import { formatEventDate } from '@/logic/format';
 import { alpha, colors, fonts, radius } from '@/theme';
 import { useLocks } from '@/components/Locked';
 

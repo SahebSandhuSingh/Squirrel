@@ -32,7 +32,6 @@ export default function SignIn() {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [codeSent, setCodeSent] = useState(false);
-  const [devCode, setDevCode] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [token, setToken] = useState('');
   const [showMore, setShowMore] = useState(false);
@@ -76,7 +75,6 @@ export default function SignIn() {
             onChangeText={(v) => {
               setEmail(v);
               setCodeSent(false);
-              setDevCode(null);
             }}
             placeholder="you@iiserkol.ac.in"
             placeholderTextColor={colors.mute}
@@ -93,15 +91,14 @@ export default function SignIn() {
               disabled={busy || !emailOk}
               onPress={() =>
                 run(async () => {
-                  const r = await auth.requestEmailCode(email);
-                  setDevCode(r.devCode ?? null);
+                  await auth.requestEmailCode(email);
                   setCodeSent(true);
                 }, false)
               }
             />
           ) : (
             <>
-              <Text style={styles.sent}>Code sent to {email.trim()}{devCode ? ` · dev code ${devCode}` : ''}</Text>
+              <Text style={styles.sent}>Code sent to {email.trim()}</Text>
               <TextInput style={[styles.input, styles.code]} value={code} onChangeText={setCode} placeholder="6-digit code" placeholderTextColor={colors.mute} keyboardType="number-pad" maxLength={8} autoComplete="one-time-code" accessibilityLabel="Sign-in code" />
               <Button label={busy ? 'Checking…' : joining ? 'Join' : 'Sign in'} icon="arrow-right" disabled={busy || code.trim().length < 4} onPress={() => run(() => auth.verifyEmailCode(email, code))} />
               <Text style={styles.link} onPress={() => { setCodeSent(false); setCode(''); }}>Use a different email</Text>
@@ -116,7 +113,7 @@ export default function SignIn() {
           <View style={styles.rule} />
         </View>
         <Button
-          label="Explore the demo"
+          label="Look around first"
           variant="secondary"
           size="md"
           onPress={() => {

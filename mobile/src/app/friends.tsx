@@ -7,7 +7,7 @@ import { router } from 'expo-router';
 import { Mascot } from '@/art/Mascot';
 import { campusApi } from '@/api/campus';
 import { PersonCardView } from '@/components/campus/Social';
-import { EmptyNote, ErrorState, LoadingRows, SourceBadge } from '@/components/campus/States';
+import { EmptyNote, ErrorState, LoadingRows } from '@/components/campus/States';
 import { Display, Header, IconButton, Kicker, Screen } from '@/components/ui';
 import { useCampus, useRefreshOnFocus } from '@/hooks/useCampus';
 import { colors, fonts } from '@/theme';
@@ -18,7 +18,7 @@ export default function FriendMode() {
   const people = list.data ?? [];
   return (
     <Screen tabBar={false} scroll={false}>
-      <Header back title="" right={<><IconButton icon="radar" onPress={() => router.push('/active')} label="Active now" /><SourceBadge /></>} />
+      <Header back title="" right={<><IconButton icon="radar" onPress={() => router.push('/active')} label="Active now" /></>} />
       <FlatList
         data={people}
         keyExtractor={(p) => p.user_id}

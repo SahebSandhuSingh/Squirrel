@@ -6,7 +6,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { campusApi, type Profile, type SharedContext } from '@/api/campus';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
-import { ErrorState, LoadingRows, SourceBadge } from '@/components/campus/States';
+import { ErrorState, LoadingRows } from '@/components/campus/States';
 import { PRIVACY_LINE, SharedZoneRow } from '@/components/discovery/SharedZones';
 import { PokeButton } from '@/components/social/PokeButton';
 import { Button, Card, Display, Header, Icon, Kicker, Screen } from '@/components/ui';
@@ -25,7 +25,7 @@ export default function SharedWith() {
 
   return (
     <Screen tabBar={false}>
-      <Header back title="" right={<SourceBadge />} />
+      <Header back title="" />
       <Kicker color={colors.secondary}>Shared zones</Kicker>
       <Display size={38} style={{ marginTop: 4 }}>
         You’ve both{'\n'}

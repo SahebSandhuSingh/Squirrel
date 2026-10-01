@@ -57,3 +57,12 @@ test('opting an endpoint in (backend shipped) passes calls through, per endpoint
   assert.equal(endpointAvailability('heatmap', parseLiveEndpoints('heatmap')).status, 'available');
   assert.equal(endpointAvailability('sharedWorkout', none).status, 'unavailable');
 });
+
+test('works on a Proxy-backed service with no own properties (the "campus off" API)', async () => {
+  // Every call on the off API rejects as not live; the gate must still expose every method.
+  const off = new Proxy({}, { get: () => () => Promise.reject(Object.assign(new Error('not live'), { status: 0 })) });
+  const api = gateEndpoints(off, rules, none);
+  assert.equal(typeof api.config, 'function');
+  await assert.rejects(api.config(), (e) => e.message === 'not live');
+  await assert.rejects(api.heatmap(), (e) => isEndpointUnavailable(e) && e.capability === 'heatmap');
+});

@@ -27,13 +27,3 @@ export const COMING_SOON: Record<Feature, string> = {
   partnerHunt: 'Partner Hunt is coming soon',
   stories: 'Stories are coming soon',
 };
-
-/** Missions that belong to a not-yet-launched feature. */
-const MISSION_FEATURE: Record<string, Feature> = {
-  'm-water': 'mealWater',
-  'm-meal': 'mealWater',
-  'w-event': 'events',
-};
-
-/** Missions whose feature is currently locked (derived from LOCKED; no second list to keep in sync). */
-export const LOCKED_MISSIONS = new Set<string>(Object.keys(MISSION_FEATURE).filter((id) => isLocked(MISSION_FEATURE[id])));

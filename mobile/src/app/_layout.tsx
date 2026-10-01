@@ -53,12 +53,9 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
             <Stack.Screen name="run" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="level-up" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
-            <Stack.Screen name="highlight/[id]" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
             <Stack.Screen name="create" options={sheet} />
             <Stack.Screen name="exercise/select" options={sheet} />
             <Stack.Screen name="exercise/train/[key]" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', gestureEnabled: false }} />
-            <Stack.Screen name="city" options={sheet} />
-            <Stack.Screen name="item/[id]" options={sheet} />
             <Stack.Screen name="compose" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="ambassador" options={{ animation: 'slide_from_bottom' }} />
           </Stack>

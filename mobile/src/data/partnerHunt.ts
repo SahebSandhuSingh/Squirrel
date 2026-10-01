@@ -1,7 +1,6 @@
-import type { Crew } from '@/data/community';
 import type { LibraryExercise } from '@/data/exercises';
 import type { IconName } from '@/data/icons';
-import type { User } from '@/data/users';
+import type { AvatarLook } from '@/types';
 
 /**
  * PARTNER HUNT: find a workout buddy. Locked (see LOCKED.partnerHunt); this file holds
@@ -38,14 +37,14 @@ export type FitnessGoal = 'consistency' | 'strength' | 'endurance' | 'weight' | 
 /** The user's Partner Hunt preferences (future: stored on the user profile). */
 export type PartnerPreferences = {
   campus: string; // City.campus
-  interests: Crew['interest'][];
+  interests: ('running' | 'yoga' | 'nutrition' | 'cycling' | 'hiit' | 'walking' | 'climbing')[];
   activities: ('run' | LibraryExercise['slug'])[];
   availability: Availability[];
   goals?: FitnessGoal[];
 };
 
 /** A buddy card, built from an existing user profile plus their preferences. */
-export type BuddyProfile = Pick<User, 'id' | 'name' | 'handle' | 'look' | 'level' | 'area' | 'tags'> & {
+export type BuddyProfile = { id: string; name: string; look: AvatarLook | null; level: number | null; tags: string[] } & {
   preferences: PartnerPreferences;
   /** 0..1, from the future matching service. */
   match?: number;

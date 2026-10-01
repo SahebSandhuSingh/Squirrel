@@ -1,23 +1,12 @@
 import type { AccessoryStyle, AvatarLook, BottomStyle, HairStyle, TopStyle } from '@/types';
 import { hairColors, skinTones } from '@/art/palette';
 import type { IconName } from '@/data/icons';
-import { shopItems, type ShopItem } from '@/data/shop';
 
 /**
- * Data-driven avatar catalogs. `shopItems` (src/data/shop.ts) is the single
- * source of truth for anything ownable — it already carries id / name /
- * category / rarity / levelRequired ("unlockCondition") / art (asset) /
- * description, so these are thin, typed selectors over it rather than a
- * duplicate catalog. Swapping this for a backend later just means pointing
- * these selectors at an API response shaped the same way.
+ * The avatar look editor's options: styles and colours for your own illustrated avatar. These are
+ * editor choices, not content. There's no shop, currency or unlockable items (no backend for them).
  */
-export const outfitSets = (): ShopItem[] => shopItems.filter((i) => i.tab === 'Outfits' && i.category === 'Sets');
-export const shoeCatalog = (): ShopItem[] => shopItems.filter((i) => i.tab === 'Outfits' && i.category === 'Shoes');
-export const gearCatalog = (): ShopItem[] => shopItems.filter((i) => i.tab === 'Gear');
-export const accessoryExtras = (): ShopItem[] => shopItems.filter((i) => i.tab === 'Accessories');
-export const petCatalog = (): ShopItem[] => shopItems.filter((i) => i.tab === 'Pets');
-
-export type AvatarCategory = 'Body' | 'Hair' | 'Outfit' | 'Shoes' | 'Accessories' | 'Gear' | 'Emotes' | 'Pets';
+export type AvatarCategory = 'Body' | 'Hair' | 'Outfit' | 'Shoes' | 'Accessories' | 'Emotes';
 
 export const avatarCategories: { id: AvatarCategory; icon: IconName }[] = [
   { id: 'Body', icon: 'face-woman-shimmer' },
@@ -25,9 +14,7 @@ export const avatarCategories: { id: AvatarCategory; icon: IconName }[] = [
   { id: 'Outfit', icon: 'tshirt-crew' },
   { id: 'Shoes', icon: 'shoe-sneaker' },
   { id: 'Accessories', icon: 'sunglasses' },
-  { id: 'Gear', icon: 'headphones' },
   { id: 'Emotes', icon: 'emoticon-happy' },
-  { id: 'Pets', icon: 'paw' },
 ];
 
 export const hairStyles: HairStyle[] = ['bun', 'ponytail', 'long', 'bob', 'curly', 'afro', 'short', 'buzz'];
@@ -47,13 +34,6 @@ export const emotes: { id: string; label: string; pose: 'wave' | 'flex' | 'run' 
   { id: 'e-stand', label: 'Chill', pose: 'stand' },
 ];
 
-export const pets: { id: string; label: string; pose: 'idle' | 'sit' | 'wave' | 'cheer' }[] = [
-  { id: 'pet-none', label: 'None', pose: 'idle' },
-  { id: 'pet-nutty', label: 'Nutty', pose: 'sit' },
-  { id: 'pet-scout', label: 'Scout', pose: 'wave' },
-  { id: 'pet-hype', label: 'Hype', pose: 'cheer' },
-];
-
 /** Starter presets shown as the thumbnail row. */
 export const presetLooks: AvatarLook[] = [
   { body: 'female', skin: skinTones[2], hair: 'bun', hairColor: hairColors[0], top: 'crop', topColor: '#16101E', bottom: 'joggers', bottomColor: '#1B1524', shoeColor: '#FFFFFF', accessory: 'none' },
@@ -64,8 +44,3 @@ export const presetLooks: AvatarLook[] = [
   { body: 'male', skin: skinTones[5], hair: 'buzz', hairColor: hairColors[0], top: 'hoodie', topColor: '#D7FF1F', bottom: 'joggers', bottomColor: '#16101E', shoeColor: '#FFFFFF', accessory: 'headphones' },
 ];
 
-/**
- * Named roster for the character rail — reuses the 10-look `demoLooks` set
- * already drawn in art/Character.tsx (was unused elsewhere). Index-matched.
- */
-export const characterNames = ['Nova', 'Blaze', 'Coco', 'Ace', 'Rook', 'Storm', 'Juno', 'Kato', 'Mira', 'Dex'];

@@ -7,7 +7,7 @@ import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { campusApi, errorText, type ChallengeTypeInfo, type Crew, type PersonCard, type Zone } from '@/api/campus';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
-import { ErrorState, LoadingRows, SourceBadge } from '@/components/campus/States';
+import { ErrorState, LoadingRows } from '@/components/campus/States';
 import { Button, Header, Icon, PressScale, Screen, Segmented, tap } from '@/components/ui';
 import { invalidateCampus, useAction, useCampus, useZones } from '@/hooks/useCampus';
 import { useApp } from '@/state/AppState';
@@ -93,7 +93,7 @@ export default function NewInvite() {
 
   return (
     <Screen tabBar={false}>
-      <Header back title="New challenge" right={<SourceBadge />} />
+      <Header back title="New challenge" />
 
       <Text style={styles.label}>Type</Text>
       <View style={{ gap: 8 }}>

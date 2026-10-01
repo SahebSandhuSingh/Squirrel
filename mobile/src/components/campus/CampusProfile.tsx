@@ -17,7 +17,7 @@ import { ambassadorWaitlistLive } from '@/api/campus/ambassadorWaitlist';
 import { getAmbassador } from '@/api/campus/community';
 import type { AmbassadorState } from '@/api/campus/types';
 import { BadgeRow, Icebreakers, ModeChip, OpenToMeetToggle } from '@/components/campus/Social';
-import { ErrorState, LoadingRows, SignedOutState, SourceBadge } from '@/components/campus/States';
+import { ErrorState, LoadingRows, SignedOutState } from '@/components/campus/States';
 import { km, shortTime } from '@/components/campus/territoryUi';
 import { Button, Card, Display, Icon, IconButton, PressScale, Scrim, SectionHeader, TAB_BAR_SPACE, tap } from '@/components/ui';
 import { useCampus, useMe, useRefreshOnFocus } from '@/hooks/useCampus';
@@ -34,7 +34,6 @@ export function CampusProfileView({ userId, isMe }: { userId?: string; isMe: boo
   const ambStatus = amb.data?.application?.status;
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { signOut } = useAuth();
   const colW = Math.min(width, MAX_WIDTH);
   const p = r.data as (Profile & Partial<Me>) | undefined;
 
@@ -43,9 +42,12 @@ export function CampusProfileView({ userId, isMe }: { userId?: string; isMe: boo
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top + 10, paddingHorizontal: 16 }}>
         {!isMe && <IconButton icon="chevron-left" size={26} onPress={back} label="Back" />}
-        <View style={{ marginTop: 16, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' }}>
-          {r.signedOut ? <SignedOutState what="your profile" /> : r.error ? <ErrorState cause={r.cause} onRetry={r.reload} /> : <LoadingRows rows={4} height={90} />}
-        </View>
+        <ScrollView contentContainerStyle={{ paddingBottom: (isMe ? TAB_BAR_SPACE : 30) + insets.bottom }} showsVerticalScrollIndicator={false}>
+          <View style={{ marginTop: 16, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' }}>
+            {r.signedOut ? <SignedOutState what="your profile" /> : r.error ? <ErrorState cause={r.cause} onRetry={r.reload} feature="Your campus profile" /> : <LoadingRows rows={4} height={90} />}
+            {isMe && (r.signedOut || !!r.error) && <ProfileMore ambStatus={ambStatus} />}
+          </View>
+        </ScrollView>
       </View>
     );
   }
@@ -59,7 +61,7 @@ export function CampusProfileView({ userId, isMe }: { userId?: string; isMe: boo
         <Scene kind={isMe ? 'city-sunset' : 'city-night'} seed={p.user_id.length * 3} aspect={colW / (170 + insets.top)} style={StyleSheet.absoluteFill} />
         <Scrim />
         <View style={[styles.topBar, { top: insets.top + 8 }]}>
-          {isMe ? <SourceBadge /> : <IconButton icon="chevron-left" size={26} onPress={back} label="Back" />}
+          {!isMe ? <IconButton icon="chevron-left" size={26} onPress={back} label="Back" /> : <View />}
           <View style={{ flexDirection: 'row', gap: 8 }}>
             {isMe && <ThemeIconButton />}
             {isMe && <IconButton icon="bell-outline" onPress={() => router.push('/invites')} label="Challenge invites" />}
@@ -225,36 +227,48 @@ export function CampusProfileView({ userId, isMe }: { userId?: string; isMe: boo
           <Check ok={v.selfie_verified} label="Selfie check" />
         </Card>
 
-        {isMe && (
-          <>
-            <SectionHeader title="More" />
-            <View style={{ gap: 8 }}>
-              <ThemeToggle />
-              <LinkRow
-                icon="star-four-points-outline"
-                label={ambStatus ? 'Ambassador application' : 'Campus Ambassador'}
-                detail={ambStatus ? AMB_STATUS[ambStatus] : ambassadorWaitlistLive() ? 'Join the waitlist' : 'Waitlist · Not live yet'}
-                detailColor={ambStatus === 'approved' ? colors.primary : ambStatus === 'rejected' ? colors.dim : colors.violet}
-                onPress={() => router.push('/ambassador')}
-              />
-              <LinkRow icon="calendar-check" label="Meetups & check-in" onPress={() => router.push('/meetups')} />
-              <LinkRow icon="sword-cross" label="Challenge invites" onPress={() => router.push('/invites')} />
-              <LinkRow icon="heart-multiple-outline" label="Date Mode" onPress={() => router.push('/date')} />
-              <LinkRow icon="tshirt-crew-outline" label="Avatar & shop" onPress={() => router.push({ pathname: '/avatar', params: { from: 'profile' } })} />
-              <LinkRow
-                icon="logout"
-                label="Sign out"
-                onPress={async () => {
-                  tap();
-                  await signOut();
-                  router.replace('/welcome');
-                }}
-              />
-            </View>
-          </>
-        )}
+        {isMe && <ProfileMore ambStatus={ambStatus} />}
       </View>
     </ScrollView>
+  );
+}
+
+/** Your settings and shortcuts. Shown even when the campus profile itself isn't available. */
+function ProfileMore({ ambStatus }: { ambStatus?: string }) {
+  const { signOut, mode } = useAuth();
+  return (
+    <>
+      <SectionHeader title="More" />
+      <View style={{ gap: 8 }}>
+        <ThemeToggle />
+        <LinkRow
+          icon="star-four-points-outline"
+          label={ambStatus ? 'Ambassador application' : 'Campus Ambassador'}
+          detail={ambStatus ? AMB_STATUS[ambStatus] : ambassadorWaitlistLive() ? 'Join the waitlist' : 'Waitlist · Not live yet'}
+          detailColor={ambStatus === 'approved' ? colors.primary : ambStatus === 'rejected' ? colors.dim : colors.violet}
+          onPress={() => router.push('/ambassador')}
+        />
+        <LinkRow icon="chart-line" label="Your progress" onPress={() => router.push('/progress')} />
+        <LinkRow icon="arm-flex" label="Form coach & coach profile" onPress={() => router.push('/exercise')} />
+        <LinkRow icon="calendar-check" label="Meetups & check-in" onPress={() => router.push('/meetups')} />
+        <LinkRow icon="sword-cross" label="Challenge invites" onPress={() => router.push('/invites')} />
+        <LinkRow icon="heart-multiple-outline" label="Date Mode" onPress={() => router.push('/date')} />
+        <LinkRow icon="tshirt-crew-outline" label="Your avatar" onPress={() => router.push({ pathname: '/avatar', params: { from: 'profile' } })} />
+        {mode === 'live' ? (
+          <LinkRow
+            icon="logout"
+            label="Sign out"
+            onPress={async () => {
+              tap();
+              await signOut();
+              router.replace('/welcome');
+            }}
+          />
+        ) : (
+          <LinkRow icon="login" label="Sign in" onPress={() => router.push('/sign-in')} />
+        )}
+      </View>
+    </>
   );
 }
 

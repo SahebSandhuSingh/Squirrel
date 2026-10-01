@@ -24,7 +24,8 @@ import { alpha, colors, fonts, MAX_WIDTH, radius } from '@/theme';
 // Header
 // ---------------------------------------------------------------------------
 
-export function MapHeader({ campus, where, zonesHeld, top }: { campus: string; where: string | null; zonesHeld: number; top: number }) {
+/** `where` / `zonesHeld` / level are shown only when known — never a placeholder value. */
+export function MapHeader({ campus, where, zonesHeld, top }: { campus: string; where: string | null; zonesHeld: number | null; top: number }) {
   const { me, level, xp } = useApp();
   const unread = useUnread();
   return (
@@ -35,13 +36,15 @@ export function MapHeader({ campus, where, zonesHeld, top }: { campus: string; w
       <View style={{ flex: 1 }}>
         <Text style={styles.campus} numberOfLines={1}>{campus}</Text>
         <Text style={styles.where} numberOfLines={1}>
-          <Icon name="map-marker" size={11} color={colors.secondary} /> {where ?? 'Somewhere on campus'}
+          <Icon name="map-marker" size={11} color={colors.secondary} /> {where ?? 'Location off'}
         </Text>
       </View>
-      <View style={styles.pill} accessibilityLabel={`Level ${level}, ${xp} XP, ${zonesHeld} zones held`}>
-        <Text style={styles.pillLv}>LV {level}</Text>
-        <Text style={styles.pillSub}>{zonesHeld} zones</Text>
-      </View>
+      {(level != null || zonesHeld != null) && (
+        <View style={styles.pill} accessibilityLabel={[level != null ? `Level ${level}, ${xp} XP` : null, zonesHeld != null ? `${zonesHeld} zones held` : null].filter(Boolean).join(', ')}>
+          {level != null && <Text style={styles.pillLv}>LV {level}</Text>}
+          {zonesHeld != null && <Text style={styles.pillSub}>{zonesHeld} zones</Text>}
+        </View>
+      )}
       <ThemeIconButton size={18} style={styles.theme} />
       <Pressable onPress={() => { tap(); router.push('/notifications'); }} style={styles.bell} accessibilityRole="button" accessibilityLabel={`Notifications${unread ? `, ${unread} unread` : ''}`}>
         <Icon name="bell-outline" size={20} color={colors.text} />

@@ -32,11 +32,19 @@ import { withRetry } from '@/api/endpoints';
 // Types
 // ---------------------------------------------------------------------------
 
+/**
+ * The backend's closed gender vocabulary (backend/profiles/vocab.py GENDERS). Anything else is a
+ * 422 literal_error on body.gender — e.g. "unspecified"; "prefer not to say" is `undisclosed`.
+ */
+export const EXERCISE_GENDERS = ['female', 'male', 'non_binary', 'other', 'undisclosed'] as const;
+export type ExerciseGender = (typeof EXERCISE_GENDERS)[number];
+export const EXERCISE_GENDER_LABELS: Record<ExerciseGender, string> = { female: 'Female', male: 'Male', non_binary: 'Non-binary', other: 'Other', undisclosed: 'Prefer not to say' };
+
 /** POST /api/users body. Field names match the backend UserProfile model one-to-one. */
 export type ExerciseProfileInput = {
   first_name: string; // 1–80 chars
   last_name: string; // 1–80 chars
-  gender: string;
+  gender: ExerciseGender;
   height_cm: number; // 0 < h < 300
   weight_kg: number; // 0 < w < 500
   date_of_birth: string; // YYYY-MM-DD

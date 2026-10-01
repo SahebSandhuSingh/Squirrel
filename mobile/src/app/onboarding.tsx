@@ -17,7 +17,7 @@ import { OpenToMeetToggle } from '@/components/campus/Social';
 import { DEFAULT_COURSES, ProfileDetailsForm } from '@/components/profile/ProfileDetailsForm';
 import { useAuth } from '@/auth/AuthProvider';
 import { isComplete, normalizePhone, validateDetails, type DetailsForm } from '@/logic/profileValidation';
-import { ErrorState, NotLiveYet, SourceBadge } from '@/components/campus/States';
+import { ErrorState, NotLiveYet } from '@/components/campus/States';
 import { Button, Display, FadeIn, Header, Icon, Kicker, PressScale, ProgressBar, Screen, Tagline, tap } from '@/components/ui';
 import { invalidateCampus, useAction, useConfig, useMe, useZones } from '@/hooks/useCampus';
 import { alpha, colors, fonts, radius } from '@/theme';
@@ -108,7 +108,7 @@ export default function Onboarding() {
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <Screen tabBar={false}>
-      <Header back={step > 0} title="" right={<SourceBadge />} />
+      <Header back={step > 0} title="" />
       <ProgressBar progress={(step + 1) / STEPS} color={colors.primary} height={5} />
 
       {step === 0 && (

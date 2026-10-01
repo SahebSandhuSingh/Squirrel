@@ -3,8 +3,8 @@
  * call fetch themselves.
  *
  *   live  → REST (api/campus/http.ts) against CAMPUS_API_URL
- *   mock  → in-memory dev mock (api/campus/mock/server.ts), dev builds only
- *   off   → every call rejects with "not live yet"; screens show that state, never fake data
+ *   off   → no campus backend configured: every call rejects with "not live yet"; screens show
+ *           that state, never fake data. There is no mock or simulated backend in any build.
  *
  * On top of the source, availability is decided PER ENDPOINT (api/availability.ts): the seven
  * campus endpoints with no backend yet reject with EndpointUnavailableError in every mode, while
@@ -12,14 +12,17 @@
  */
 import { EndpointUnavailableError, gateEndpoints, isEndpointUnavailable } from '@/api/availability';
 import { ApiError, getApiToken } from '@/api/client';
-import { CAMPUS_API_CONFIGURED, CAMPUS_MOCKS_ENABLED, REALTIME_URL } from '@/api/config';
+import { CAMPUS_API_CONFIGURED, REALTIME_URL } from '@/api/config';
 import { httpCampusApi } from '@/api/campus/http';
-import { mockCampusApi, mockRealtime } from '@/api/campus/mock/server';
 import type { CampusApi, RealtimeMessage } from '@/api/campus/types';
 
+/**
+ * 'mock' is never produced any more (the dev mock was removed); it stays in the type only so the
+ * Run Module's existing `CAMPUS_SOURCE === 'mock'` check keeps compiling unchanged (it's always false).
+ */
 export type CampusSource = 'live' | 'mock' | 'off';
 
-export const CAMPUS_SOURCE: CampusSource = CAMPUS_MOCKS_ENABLED ? 'mock' : CAMPUS_API_CONFIGURED ? 'live' : 'off';
+export const CAMPUS_SOURCE: CampusSource = CAMPUS_API_CONFIGURED ? 'live' : 'off';
 
 export const NOT_LIVE = 'not_live';
 
@@ -27,7 +30,7 @@ const offApi: CampusApi = new Proxy({} as CampusApi, {
   get: () => () => Promise.reject(new ApiError(0, 'Campus features aren’t live yet', { code: NOT_LIVE, detail: 'Campus features aren’t live yet' })),
 });
 
-const sourceApi: CampusApi = CAMPUS_SOURCE === 'mock' ? mockCampusApi : CAMPUS_SOURCE === 'live' ? httpCampusApi : offApi;
+const sourceApi: CampusApi = CAMPUS_SOURCE === 'live' ? httpCampusApi : offApi;
 
 /** Method → capability for every endpoint that isn't built yet. Everything unlisted passes through. */
 export const campusApi: CampusApi = gateEndpoints(sourceApi, {
@@ -113,11 +116,9 @@ let socket: WebSocket | null = null;
 let socketUrl: string | null = REALTIME_URL || null;
 let retry = 0;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
-let unsubMock: (() => void) | null = null;
 
-/** How live updates arrive: a socket, the dev mock, or refresh-on-focus (no push channel). */
-export function realtimeMode(): 'socket' | 'mock' | 'focus' {
-  if (CAMPUS_SOURCE === 'mock') return 'mock';
+/** How live updates arrive: a socket, or refresh-on-focus (no push channel). */
+export function realtimeMode(): 'socket' | 'focus' {
   return socketUrl ? 'socket' : 'focus';
 }
 
@@ -131,10 +132,6 @@ export function setRealtimeUrl(url: string | null) {
 const dispatch = (m: RealtimeMessage) => handlers.forEach((h) => h(m));
 
 function connect() {
-  if (CAMPUS_SOURCE === 'mock') {
-    if (!unsubMock) unsubMock = mockRealtime.subscribe(dispatch);
-    return;
-  }
   if (!socketUrl || socket || CAMPUS_SOURCE !== 'live') return;
   try {
     const ws = new WebSocket(socketUrl);
@@ -170,8 +167,6 @@ function connect() {
 function disconnect() {
   if (retryTimer) clearTimeout(retryTimer);
   retryTimer = null;
-  unsubMock?.();
-  unsubMock = null;
   socket?.close();
   socket = null;
 }

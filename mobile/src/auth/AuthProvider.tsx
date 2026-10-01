@@ -4,13 +4,10 @@ import * as SecureStore from 'expo-secure-store';
 import { setApiToken } from '@/api/client';
 import type { ExerciseUser } from '@/api/exercise';
 import { jwtSubject } from '@/auth/jwt';
-import { API_CONFIGURED, AUTH_CONFIGURED, AUTH_URL, CAMPUS_API_CONFIGURED, CAMPUS_MOCKS_ENABLED, PROGRESS_API_CONFIGURED } from '@/api/config';
+import { API_CONFIGURED, AUTH_CONFIGURED, AUTH_URL, CAMPUS_API_CONFIGURED, PROGRESS_API_CONFIGURED } from '@/api/config';
 
 /** Some backend that authenticates the bearer token is configured (Run Module, campus and/or progress-service). */
 const BEARER_BACKEND = API_CONFIGURED || CAMPUS_API_CONFIGURED || PROGRESS_API_CONFIGURED;
-
-/** Dev-mock sign-in code (only when there's no account service and the campus dev mock is on). */
-const DEV_EMAIL_CODE = '246810';
 
 /** Campus sign-up is limited to institutional emails. The backend enforces the exact domains. */
 export const isAcademicEmail = (e: string) => /^[^\s@]+@([a-z0-9-]+\.)*[a-z0-9-]+\.ac\.in$/i.test(e.trim());
@@ -21,7 +18,8 @@ export const isAcademicEmail = (e: string) => /^[^\s@]+@([a-z0-9-]+\.)*[a-z0-9-]
  *  - with EXPO_PUBLIC_AUTH_URL set, sign-in POSTs email/password to `${AUTH_URL}/token`
  *    and expects `{ access_token }` — adjust to the real service's contract;
  *  - a developer can paste a token issued by hand (useful for testing against the backend);
- *  - otherwise the app runs in demo mode.
+ *  - otherwise you can look around signed out ('demo' mode): every screen shows real backend
+ *    data only, so without a session it shows sign-in / not-connected states — never sample data.
  */
 type Mode = 'loading' | 'signed-out' | 'demo' | 'live';
 
@@ -35,9 +33,9 @@ type AuthState = {
   signIn: (email: string, password: string) => Promise<void>;
   /**
    * Email-code sign-in for .ac.in addresses: start sends a code, verify exchanges it for a token.
-   * Returns `devCode` only in the dev mock (no account service configured).
+   * Needs the account service; there is no simulated code.
    */
-  requestEmailCode: (email: string) => Promise<{ devCode?: string }>;
+  requestEmailCode: (email: string) => Promise<void>;
   verifyEmailCode: (email: string, code: string) => Promise<void>;
   signInWithToken: (token: string) => Promise<void>;
   continueDemo: () => void;
@@ -99,7 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = useCallback(
     async (em: string, password: string) => {
-      if (!AUTH_CONFIGURED) throw new Error('No account service is configured yet. Continue in demo mode, or paste a developer token.');
+      if (!AUTH_CONFIGURED) throw new Error('No account service is connected yet. Paste a developer token, or look around without signing in.');
       const res = await fetch(`${AUTH_URL}/token`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: em, password }) });
       if (!res.ok) throw new Error(res.status === 401 ? 'Wrong email or password.' : `Sign-in failed (${res.status}).`);
       const { access_token } = (await res.json()) as { access_token?: string };
@@ -119,10 +117,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch(`${AUTH_URL}/email/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: em.trim() }) });
       if (res.status === 403 || res.status === 422) throw new Error('That email isn’t on the campus list yet.');
       if (!res.ok) throw new Error(`Couldn’t send the code (${res.status}).`);
-      return {};
+      return;
     }
-    if (CAMPUS_MOCKS_ENABLED) return { devCode: DEV_EMAIL_CODE };
-    throw new Error('No account service is connected yet. Explore the demo for now.');
+    throw new Error('No account service is connected yet, so sign-in codes can’t be sent.');
   }, []);
 
   const verifyEmailCode = useCallback(
@@ -136,12 +133,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await store.set(EMAIL_KEY, em.trim());
         setEmail(em.trim());
         await signInWithToken(access_token);
-        return;
-      }
-      if (CAMPUS_MOCKS_ENABLED) {
-        if (code.trim() !== DEV_EMAIL_CODE) throw new Error('That code didn’t work. (Dev code: 246810)');
-        setEmail(em.trim());
-        setMode('demo'); // dev mock session: no real token exists
         return;
       }
       throw new Error('No account service is connected yet.');

@@ -7,7 +7,7 @@ import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { campusApi, type HostelBoard, type LeaderboardPeriod, type SquirrelBoard, type SquirrelRow } from '@/api/campus';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
-import { EmptyNote, ErrorState, LoadingRows, SourceBadge } from '@/components/campus/States';
+import { EmptyNote, ErrorState, LoadingRows } from '@/components/campus/States';
 import { km, shortTime } from '@/components/campus/territoryUi';
 import { Chips, Display, Header, Icon, Kicker, Screen, Segmented } from '@/components/ui';
 import { useCampus, useConfig, useRealtime, useRefreshOnFocus } from '@/hooks/useCampus';
@@ -37,7 +37,7 @@ export default function Leaderboard() {
 
   return (
     <Screen tabBar={false}>
-      <Header back title="" right={<SourceBadge />} />
+      <Header back title="" />
       <Kicker>Leaderboards · {config.data?.campus.short_name ?? 'Campus'}</Kicker>
       <Display size={40} style={{ marginTop: 4 }}>Who runs <Text style={{ color: colors.primary }}>campus</Text></Display>
       <Segmented items={BOARDS} value={board} onChange={setBoard} style={{ marginTop: 10 }} />

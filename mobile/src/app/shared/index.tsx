@@ -7,7 +7,7 @@ import { router } from 'expo-router';
 import { getSharedZonesIndex } from '@/api/campus/discovery';
 import type { SharedZonesIndex, SharedZonesPerson } from '@/api/campus/types';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
-import { EmptyNote, ErrorState, LoadingRows, SourceBadge } from '@/components/campus/States';
+import { EmptyNote, ErrorState, LoadingRows } from '@/components/campus/States';
 import { PRIVACY_LINE } from '@/components/discovery/SharedZones';
 import { Display, Header, Icon, Kicker, PressScale, Screen } from '@/components/ui';
 import { useCampus, useRefreshOnFocus } from '@/hooks/useCampus';
@@ -20,7 +20,7 @@ export default function SharedZonesIndexScreen() {
 
   const head = (
     <>
-      <Header back title="" right={<SourceBadge />} />
+      <Header back title="" />
       <Kicker color={colors.secondary}>Shared zones</Kicker>
       <Display size={38} style={{ marginTop: 4 }}>
         Same ground,{'\n'}

@@ -2,9 +2,9 @@
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { campusApi, type Meetup } from '@/api/campus';
-import { EmptyNote, ErrorState, LoadingRows, SourceBadge } from '@/components/campus/States';
+import { EmptyNote, ErrorState, LoadingRows } from '@/components/campus/States';
 import { Header, Icon, PressScale, Screen } from '@/components/ui';
-import { formatEventDate } from '@/data/community';
+import { formatEventDate } from '@/logic/format';
 import { useCampus, useRefreshOnFocus } from '@/hooks/useCampus';
 import { checkInOpen } from '@/logic/meetups';
 import { colors, fonts, radius } from '@/theme';
@@ -16,7 +16,7 @@ export default function Meetups() {
   useRefreshOnFocus(list.reload, 30_000);
   return (
     <Screen tabBar={false} scroll={false}>
-      <Header back title="Meetups" right={<SourceBadge />} />
+      <Header back title="Meetups" />
       <FlatList
         data={list.data ?? []}
         keyExtractor={(m) => m.id}

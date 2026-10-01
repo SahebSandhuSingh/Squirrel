@@ -4,7 +4,7 @@
  * to a live backend as a real run.
  */
 import type { LatLng } from '@/api/campus/types';
-import { DEMO_ROUTE_XY, toLatLng } from '@/api/campus/mock/geo';
+import { DEMO_ROUTE_XY, toLatLng } from '@/logic/demoLoop';
 
 const PATH: [number, number][] = DEMO_ROUTE_XY;
 const SEGS = PATH.slice(1).map((p, i) => Math.hypot(p[0] - PATH[i][0], p[1] - PATH[i][1]));

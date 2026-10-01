@@ -3,9 +3,12 @@ import { Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-nat
 import { router } from 'expo-router';
 import { Portrait } from '@/art/Character';
 import { colors, fonts } from '@/theme';
-import { CURRENT_USER_ID, type User } from '@/data/users';
 import type { AvatarLook } from '@/types';
 import { tap } from '@/components/ui';
+
+/** Someone with an illustrated look: you (your Avatar setting), or anyone the backend gives one. */
+export type AvatarPerson = { id: string; name?: string | null; look: AvatarLook };
+const ME_ID = 'me';
 
 /** Portrait with optional level chip / online dot; tapping opens the user's profile. */
 export function Avatar({
@@ -18,7 +21,7 @@ export function Avatar({
   link = true,
   style,
 }: {
-  user?: User;
+  user?: AvatarPerson;
   look?: AvatarLook;
   size?: number;
   ring?: string | false;
@@ -43,10 +46,10 @@ export function Avatar({
   if (!link || !user) return body;
   return (
     <Pressable
-      accessibilityLabel={`Open ${user.name}'s profile`}
+      accessibilityLabel={`Open ${user.name ?? 'their'} profile`}
       onPress={() => {
         tap();
-        router.push(user.id === CURRENT_USER_ID ? '/profile' : { pathname: '/user/[id]', params: { id: user.id } });
+        router.push(user.id === ME_ID ? '/profile' : { pathname: '/user/[id]', params: { id: user.id } });
       }}>
       {body}
     </Pressable>
@@ -54,7 +57,7 @@ export function Avatar({
 }
 
 /** Overlapping avatar stack with "+N". */
-export function AvatarStack({ users, extra, size = 26 }: { users: User[]; extra?: number; size?: number }) {
+export function AvatarStack({ users, extra, size = 26 }: { users: AvatarPerson[]; extra?: number; size?: number }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
       {users.slice(0, 4).map((u, i) => (

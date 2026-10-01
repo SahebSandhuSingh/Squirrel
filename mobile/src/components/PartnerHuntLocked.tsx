@@ -5,7 +5,7 @@ import { SceneImage } from '@/components/cards';
 import { SoonPill } from '@/components/Locked';
 import { Button, Display, FadeIn, Header, Icon, Kicker, Screen, Tagline } from '@/components/ui';
 import { MATCH_FACTORS, PARTNER_HUNT_FLOW } from '@/data/partnerHunt';
-import { useApp } from '@/state/AppState';
+import { useConfig } from '@/hooks/useCampus';
 import { alpha, colors, fonts, radius } from '@/theme';
 
 /**
@@ -13,7 +13,7 @@ import { alpha, colors, fonts, radius } from '@/theme';
  * No buddies and no matching, just a preview of the flow.
  */
 export function PartnerHuntLocked() {
-  const { city } = useApp();
+  const campus = useConfig().data?.campus.name ?? 'your campus';
   const back = () => (router.canGoBack() ? router.back() : router.replace('/social'));
 
   return (
@@ -35,7 +35,7 @@ export function PartnerHuntLocked() {
       </FadeIn>
 
       <Text style={styles.lead}>
-        Match with people on <Text style={{ color: colors.text, fontFamily: fonts.semibold }}>{city.campus}</Text> who train like you do, then hit the next session together. We&apos;re putting the finishing touches on it.
+        Match with people on <Text style={{ color: colors.text, fontFamily: fonts.semibold }}>{campus}</Text> who train like you do, then hit the next session together. We&apos;re putting the finishing touches on it.
       </Text>
 
       {/* How it'll work */}
@@ -69,7 +69,7 @@ export function PartnerHuntLocked() {
         {MATCH_FACTORS.map((f) => (
           <View key={f.id} style={styles.factor}>
             <Icon name={f.icon} size={15} color={colors.primary} />
-            <Text style={styles.factorText}>{f.id === 'campus' ? city.campus : f.label}</Text>
+            <Text style={styles.factorText}>{f.id === 'campus' ? campus : f.label}</Text>
           </View>
         ))}
       </View>

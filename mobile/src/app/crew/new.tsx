@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { campusApi, errorText } from '@/api/campus';
-import { EmptyNote, LoadingRows } from '@/components/campus/States';
+import { EmptyNote, ErrorState, LoadingRows } from '@/components/campus/States';
 import { Button, Header, Icon, PressScale, Screen, tap } from '@/components/ui';
 import { invalidateCampus, useAction, useConfig } from '@/hooks/useCampus';
 import { useApp } from '@/state/AppState';
@@ -25,7 +25,7 @@ export default function NewCrew() {
     return (
       <Screen tabBar={false}>
         <Header back title="New crew" />
-        <LoadingRows rows={3} />
+        {config.error ? <ErrorState cause={config.cause} onRetry={config.reload} feature="Creating crews" /> : <LoadingRows rows={3} />}
       </Screen>
     );
   }

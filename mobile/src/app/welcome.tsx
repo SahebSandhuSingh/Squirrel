@@ -15,7 +15,6 @@ import { Mascot } from '@/art/Mascot';
 import { campusApi, type LaunchStats } from '@/api/campus';
 import { useAuth } from '@/auth/AuthProvider';
 import { Wordmark } from '@/components/Brand';
-import { SourceBadge } from '@/components/campus/States';
 import { Button, Display, FadeIn, Pulse } from '@/components/ui';
 import { useCampus, useConfig, useRealtime } from '@/hooks/useCampus';
 import { colors, fonts, MAX_WIDTH } from '@/theme';
@@ -47,7 +46,7 @@ export default function Welcome() {
       <View style={[styles.content, { paddingTop: insets.top + 14, paddingBottom: insets.bottom + 18 }]}>
         <View style={styles.top}>
           <Wordmark size={22} color={colors.onImage} />
-          <SourceBadge />
+          
         </View>
 
         <FadeIn from={24} style={{ marginTop: height * 0.04 }}>
@@ -76,7 +75,7 @@ export default function Welcome() {
           </View>
           <Button label={`Enter ${campusName}`} icon="arrow-right" onPress={() => router.push({ pathname: '/sign-in', params: { mode: 'join' } })} />
           <Button
-            label="Explore demo"
+            label="Look around first"
             variant="secondary"
             size="md"
             onPress={() => {

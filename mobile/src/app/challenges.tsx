@@ -6,10 +6,11 @@ import { useRemote } from '@/api/useRemote';
 import { useAuth } from '@/auth/AuthProvider';
 import { Avatar } from '@/components/Avatar';
 import { Button, Card, Display, EmptyState, FadeIn, Header, Icon, Kicker, ProgressBar, Screen, Segmented, Tagline, tap } from '@/components/ui';
-import { challenges as demoChallenges, fmtEnds, fmtMetric, type Challenge, type ChallengeKind } from '@/data/challenges';
+import { fmtEnds, fmtMetric, type Challenge, type ChallengeKind } from '@/logic/challenges';
 import type { IconName } from '@/data/icons';
-import { users } from '@/data/users';
 import { useApp } from '@/state/AppState';
+import { PROGRESS_API_CONFIGURED } from '@/api/config';
+import { NotConnected } from '@/components/campus/States';
 import { colors, fonts, radius } from '@/theme';
 
 const TABS = ['Daily', 'Head-to-head', 'Group', 'Special'] as const;
@@ -75,7 +76,7 @@ export default function Challenges() {
   const { toast } = useApp();
   const live = progressLive(mode);
   const remote = useRemote(live ? 'progress:challenges' : null, () => progressApi.challenges('current'));
-  const all = useMemo(() => (live ? (remote.data?.challenges ?? []).map(fromServer) : demoChallenges), [live, remote.data]);
+  const all = useMemo(() => (remote.data?.challenges ?? []).map(fromServer), [remote.data]);
   // "Special" only exists on the server; the tab shows up when there is something in it.
   const tabs = useMemo(() => TABS.filter((t) => t !== 'Special' || all.some((c) => c.kind === 'special')), [all]);
   const [picked, setTab] = useState<Tab>('Daily');
@@ -108,7 +109,7 @@ export default function Challenges() {
   const unauthorized = remote.error != null && /401|sign in|token/i.test(remote.error);
   return (
     <Screen tabBar={false}>
-      <Header back title="" right={<Text style={styles.link} onPress={() => router.push('/missions')}>Missions →</Text>} />
+      <Header back title="" right={<Text style={styles.link} onPress={() => router.push('/missions')}>Today’s goals →</Text>} />
       <Kicker>Challenges</Kicker>
       <Display size={48} style={{ marginTop: 6, lineHeight: 50 }}>
         Choose your{'\n'}
@@ -116,7 +117,9 @@ export default function Challenges() {
       </Display>
       <Tagline size={16} rotate={-2} style={{ marginTop: 6 }}>Progress counts itself. Just move.</Tagline>
       <Segmented items={tabs} value={tab} onChange={setTab} />
-      {live && !remote.data && remote.loading ? (
+      {!live ? (
+        <NotConnected name="Challenges" reason={PROGRESS_API_CONFIGURED ? 'signed_out' : 'not_configured'} body={PROGRESS_API_CONFIGURED ? 'Challenges come from your account. Sign in to see and join them.' : 'Challenges come from the progress service, which isn’t connected to this build yet.'} />
+      ) : !remote.data && remote.loading ? (
         <View style={{ gap: 12 }}>
           {[0, 1].map((i) => (
             <Card key={i} style={{ opacity: 0.5 }}>
@@ -146,7 +149,7 @@ export default function Challenges() {
       {live && remote.data && remote.error && <Text style={[styles.meta, { marginTop: 10, color: colors.coral }]}>Showing the last update · {remote.error}</Text>}
       <View style={styles.note}>
         <Icon name="information-outline" size={16} color={colors.dim} />
-        <Text style={styles.noteText}>Challenges read your real runs and steps, and XP lands automatically when they resolve. Missions are the tap-to-log goals on Home.</Text>
+        <Text style={styles.noteText}>Challenges read your real runs and steps, and XP lands automatically when they resolve. Today’s goals are on Home.</Text>
       </View>
     </Screen>
   );
@@ -239,9 +242,8 @@ function ChallengeCard({ c, busy = false, onAct }: { c: Challenge; busy?: boolea
   );
 
   if (c.kind === 'head-to-head' && c.opponent) {
-    // Known demo people keep their portrait; anyone else gets an initial (never someone else's face).
-    const opp = users.find((u) => u.id === c.opponent!.userId);
-    const oppName = c.opponent.name ?? opp?.name ?? 'Opponent';
+    // The opponent gets an initial (the server sends no portrait; never someone else's face).
+    const oppName = c.opponent.name ?? 'Opponent';
     const total = c.mine + c.opponent.value || 1;
     const leading = c.mine >= c.opponent.value;
     return (
@@ -255,13 +257,9 @@ function ChallengeCard({ c, busy = false, onAct }: { c: Challenge; busy?: boolea
           </View>
           <Text style={styles.vsText}>VS</Text>
           <View style={{ alignItems: 'center', flex: 1 }}>
-            {opp ? (
-              <Avatar user={opp} size={48} ring={!leading ? colors.secondary : colors.lineHi} />
-            ) : (
-              <View style={[styles.initial, { borderColor: !leading ? colors.secondary : colors.lineHi }]}>
-                <Text style={styles.initialText}>{oppName.slice(0, 1).toUpperCase()}</Text>
-              </View>
-            )}
+            <View style={[styles.initial, { borderColor: !leading ? colors.secondary : colors.lineHi }]}>
+              <Text style={styles.initialText}>{oppName.slice(0, 1).toUpperCase()}</Text>
+            </View>
             <Text style={styles.vsVal}>{fmtMetric(c.opponent.value, c.metric)}</Text>
             <Text style={styles.meta}>{oppName.split(' ')[0]}</Text>
           </View>

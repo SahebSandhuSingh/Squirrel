@@ -3,6 +3,7 @@
  * interest and the Squirrels around you; tap someone → card → POKE 👋. Everything shown (who
  * appears, where roughly, who holds what, relationship state) comes from the backend.
  */
+import { CAMPUS_SOURCE, featureUnavailable } from '@/api/campus';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
@@ -10,7 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Mascot } from '@/art/Mascot';
 import type { Heatmap, HeatWindow, MapPlayer, Zone } from '@/api/campus/types';
 import { getHeatmap } from '@/api/campus/discovery';
-import { ErrorState, SourceBadge } from '@/components/campus/States';
+import { ErrorState } from '@/components/campus/States';
 import { relationOf } from '@/components/campus/territoryUi';
 import { EmptyNearby, MapBanner, MapHeader, MapSheet, NearbyUsersSheet, PlayerSheet, PoiSheet, TerritorySheet } from '@/components/map/MapChrome';
 import { inPolygon, makeProjection } from '@/components/map/geometry';
@@ -114,15 +115,15 @@ export default function MapScreen() {
         <MapLoading />
       )}
 
-      <LiveHeader zones={zones} campus={config.data?.campus.name ?? 'Your campus'} zonesHeld={zonesHeld} top={headerTop} />
+      <LiveHeader zones={zones} campus={config.data?.campus.name ?? 'Your campus'} zonesHeld={CAMPUS_SOURCE === 'live' && !sync.error ? zonesHeld : null} top={headerTop} />
 
       {/* Status banners: they never block or wipe the map */}
       <View style={[styles.banners, { top: headerTop + 64 }]} pointerEvents="box-none">
-        <SourceBadge style={{ alignSelf: 'center' }} />
         {/* One banner at a time, most important first, so the map stays visible. */}
-        {players.error ? (
+        {/* "Not live yet" isn't an error: the map body already says so, no red banner. */}
+        {players.error && !featureUnavailable(players.cause) ? (
           <MapBanner icon="wifi-off" tone="error" text={loaded ? 'Couldn’t refresh nearby Squirrels. Showing the last update.' : 'Couldn’t load nearby Squirrels.'} action="Retry" onAction={players.reload} />
-        ) : sync.error ? (
+        ) : sync.error && !featureUnavailable(sync.error) ? (
           <MapBanner icon="flag-remove-outline" tone="error" text="Territories didn’t refresh." action="Retry" onAction={sync.reload} />
         ) : (
           <LocationBanner
@@ -202,7 +203,7 @@ export default function MapScreen() {
 }
 
 /** The header subscribes to your location itself, so GPS updates don't re-render the screen. */
-function LiveHeader({ zones, campus, zonesHeld, top }: { zones: Zone[]; campus: string; zonesHeld: number; top: number }) {
+function LiveHeader({ zones, campus, zonesHeld, top }: { zones: Zone[]; campus: string; zonesHeld: number | null; top: number }) {
   const loc = useLocation();
   const proj = useMemo(() => makeProjection(zones), [zones]);
   const where = useMemo(() => {
@@ -211,14 +212,14 @@ function LiveHeader({ zones, campus, zonesHeld, top }: { zones: Zone[]; campus: 
     const z = zones.find((zz) => inPolygon(p, zz.polygon.map((q) => proj.project(q))));
     return z ? `Near ${z.name}` : 'On campus';
   }, [loc.position, proj, zones]);
-  return <MapHeader campus={campus} where={loc.simulated && where ? `${where} · demo location` : where} zonesHeld={zonesHeld} top={top} />;
+  // Location known but no campus geometry to place it in: just "On campus?" would be a guess.
+  const place = where ?? (loc.position ? 'Location on' : loc.permission === 'checking' ? 'Finding you…' : null);
+  return <MapHeader campus={campus} where={place} zonesHeld={zonesHeld} top={top} />;
 }
 
 function LocationBanner({ fallback }: { fallback: React.ReactNode }) {
   const loc = useLocation();
   if (loc.permission === 'granted' || loc.permission === 'checking') return <>{fallback}</>;
-  // The header already says "demo location"; an actionable banner wins over this note.
-  if (loc.simulated) return fallback ? <>{fallback}</> : <MapBanner icon="map-marker-question-outline" tone="info" text="No GPS here — showing a demo location. On your phone, allow location to see who’s around you." />;
   const text =
     loc.permission === 'services_off'
       ? 'Location services are off. Nearby discovery needs your location.'

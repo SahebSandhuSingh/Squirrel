@@ -5,25 +5,23 @@ import { router, type Href } from 'expo-router';
 import { Sheet } from '@/components/Sheet';
 import { Display, Icon, PressScale, tap } from '@/components/ui';
 import type { IconName } from '@/data/icons';
-import { useApp } from '@/state/AppState';
 import { colors, fonts, radius } from '@/theme';
 
-type Action = { label: string; sub: string; icon: IconName; color: string; go?: Href; mission?: string; locked?: Feature };
+type Action = { label: string; sub: string; icon: IconName; color: string; go?: Href; locked?: Feature };
 
 const ACTIONS: Action[] = [
   { label: 'Start a run', sub: 'GPS · live stats', icon: 'run-fast', color: colors.primary, go: '/run' },
-  { label: 'Post activity', sub: 'Photo or run', icon: 'image-plus', color: colors.violet, go: '/compose' },
-  { label: 'Log water', sub: '+250 ml', icon: 'cup-water', color: colors.secondary, mission: 'm-water', locked: 'mealWater' },
-  { label: 'Log workout', sub: '+1 squat set', icon: 'arm-flex', color: colors.gold, mission: 'm-squats' },
-  { label: 'Log a meal', sub: 'Healthy plate', icon: 'food-apple', color: colors.green, mission: 'm-meal', locked: 'mealWater' },
+  { label: 'Start exercise', sub: 'Form-coached reps', icon: 'arm-flex', color: colors.gold, go: '/exercise/select' },
+  { label: 'Post activity', sub: 'Not live yet', icon: 'image-plus', color: colors.violet, go: '/compose' },
+  { label: 'Log water', sub: '+250 ml', icon: 'cup-water', color: colors.secondary, locked: 'mealWater' },
+  { label: 'Log a meal', sub: 'Healthy plate', icon: 'food-apple', color: colors.green, locked: 'mealWater' },
   { label: 'Find an event', sub: 'Join the crew', icon: 'calendar-star', color: colors.orange, go: '/events', locked: 'events' },
 ];
 
 const lockedAction = (a: Action) => !!a.locked && isLocked(a.locked);
 
-/** Central CREATE action sheet. */
+/** Central CREATE action sheet. Every action opens a real flow; nothing here logs fake progress. */
 export default function Create() {
-  const { logMission, toast, missions } = useApp();
   const locks = useLocks();
   return (
     <Sheet>
@@ -44,16 +42,8 @@ export default function Create() {
                 locks.notify(a.locked!);
                 return;
               }
-              if (a.mission) {
-                const m = missions.find((x) => x.id === a.mission);
-                if (m && m.current >= m.goal) toast(`${m.title} already done today`, 'check-circle', colors.green);
-                else {
-                  tap('success');
-                  logMission(a.mission);
-                  if (m) toast(`${a.label} logged · ${m.title}`, a.icon, a.color);
-                }
-                router.back();
-              } else if (a.go) {
+              if (a.go) {
+                tap();
                 router.back();
                 router.push(a.go);
               }

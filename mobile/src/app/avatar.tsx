@@ -1,34 +1,24 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Character, Portrait, demoLooks } from '@/art/Character';
-import { Mascot } from '@/art/Mascot';
 import { ProductArt } from '@/art/Product';
-import { ShopItemCard } from '@/components/cards';
 import { Button, FadeIn, Icon, IconButton, Label, Tagline, tap } from '@/components/ui';
 import {
-  accessoryExtras,
   accessoryStyles,
   avatarCategories,
   bottomStyles,
-  characterNames,
   emotes,
-  gearCatalog,
   hairColors,
   hairStyles,
   outfitColors,
-  outfitSets,
-  petCatalog,
-  pets,
-  shoeCatalog,
   shoeColors,
   skinTones,
   topStyles,
   type AvatarCategory,
 } from '@/data/avatarOptions';
-import { type ShopItem } from '@/data/shop';
 import { useApp } from '@/state/AppState';
 import type { AvatarLook, CharacterPose, ProductKind } from '@/types';
 import { alpha, colors, fonts, MAX_WIDTH, radius } from '@/theme';
@@ -36,11 +26,11 @@ import { alpha, colors, fonts, MAX_WIDTH, radius } from '@/theme';
 const topProduct: Record<AvatarLook['top'], ProductKind> = { hoodie: 'hoodie', tee: 'tee', crop: 'tank', tank: 'tank', jacket: 'jacket' };
 const accProduct: Record<AvatarLook['accessory'], ProductKind | null> = { none: null, shades: 'sunglasses', cap: 'cap', headband: 'headband', headphones: 'earbuds' };
 
-/** MAKE IT YOU — persistent, data-driven avatar builder. */
+/** MAKE IT YOU — your own avatar look (styles and colours). No shop, coins or unlocks. */
 export default function AvatarScreen() {
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
-  const { look, setLook, pet, setPet, gear, setGear, owned, level, equipped, toggleEquip, toast } = useApp();
+  const { look, setLook, toast } = useApp();
   const { from } = useLocalSearchParams<{ from?: string }>();
   const editing = from === 'profile';
   const [cat, setCat] = useState<AvatarCategory>('Outfit');
@@ -52,35 +42,9 @@ export default function AvatarScreen() {
   // Stage takes whatever the header, option panel (~150) and CTA (~90) leave.
   const stageH = Math.max(250, Math.min(height - insets.top - insets.bottom - 330, 520));
 
-  const freePet = pets.find((p) => p.id === pet);
-  const shopPet = petCatalog().find((p) => p.id === pet);
-  const petVisual = freePet
-    ? { pose: freePet.pose, accessory: undefined }
-    : shopPet && shopPet.art.type === 'pet'
-      ? { pose: shopPet.art.pose, accessory: shopPet.art.accessory }
-      : undefined;
-
-  const gearItem = gearCatalog().find((g) => g.id === gear);
-
   const selectedCharIndex = demoLooks.findIndex(
     (l) => l.body === look.body && l.skin === look.skin && l.hair === look.hair && l.top === look.top && l.topColor === look.topColor,
   );
-
-  const outfitSetsMemo = useMemo(() => outfitSets(), []);
-  const shoeCatalogMemo = useMemo(() => shoeCatalog(), []);
-  const gearCatalogMemo = useMemo(() => gearCatalog(), []);
-  const accessoryExtrasMemo = useMemo(() => accessoryExtras(), []);
-  const petCatalogMemo = useMemo(() => petCatalog(), []);
-
-  /** Owned catalog items apply instantly; locked ones open the shop sheet to unlock. */
-  const tapCatalog = (item: ShopItem, apply: () => void) => {
-    if (owned.has(item.id)) {
-      tap();
-      apply();
-    } else {
-      router.push({ pathname: '/item/[id]', params: { id: item.id } });
-    }
-  };
 
   return (
     <View style={styles.root}>
@@ -104,8 +68,6 @@ export default function AvatarScreen() {
               onPress={() => {
                 const r = <T,>(a: readonly T[]) => a[Math.floor(Math.random() * a.length)];
                 set({ skin: r(skinTones), hair: r(hairStyles), hairColor: r(hairColors), top: r(topStyles), topColor: r(outfitColors), bottom: r(bottomStyles), shoeColor: r(shoeColors), accessory: r(accessoryStyles) });
-                setPet(r([...pets, ...petCatalogMemo].map(p => p.id)));
-                setGear(r(['none', ...gearCatalogMemo.map(g => g.id)]));
               }}
             />
           </View>
@@ -117,7 +79,7 @@ export default function AvatarScreen() {
             {demoLooks.map((p, i) => {
               const on = i === selectedCharIndex;
               return (
-                <Pressable key={i} onPress={() => set(p)} accessibilityLabel={characterNames[i] ?? `Character ${i + 1}`}>
+                <Pressable key={i} onPress={() => set(p)} accessibilityLabel={`Starting look ${i + 1}`}>
                   <Portrait look={p} size={50} ring={on ? colors.primary : colors.lineHi} />
                 </Pressable>
               );
@@ -130,14 +92,6 @@ export default function AvatarScreen() {
             <FadeIn key={pose} from={6}>
               <Character look={look} pose={pose} height={stageH * 0.92} />
             </FadeIn>
-            {petVisual && pet !== 'pet-none' && (
-              <Mascot pose={petVisual.pose} accessory={petVisual.accessory} size={stageH * 0.3} animated style={{ position: 'absolute', right: -6, bottom: 0 }} />
-            )}
-            {gearItem && (
-              <View style={styles.gearBadge} accessibilityLabel={`Holding ${gearItem.name}`}>
-                <ProductArt kind={gearItem.art.type === 'product' ? gearItem.art.kind : 'bottle'} size={stageH * 0.16} />
-              </View>
-            )}
           </View>
 
           <ScrollView style={styles.railCol} contentContainerStyle={{ gap: 8, paddingVertical: 6 }} showsVerticalScrollIndicator={false}>
@@ -179,9 +133,6 @@ export default function AvatarScreen() {
             )}
             {cat === 'Outfit' && (
               <>
-                {outfitSetsMemo.map((item) => (
-                  <CatalogCard key={item.id} item={item} owned={owned.has(item.id)} level={level} onPress={() => tapCatalog(item, () => setLook({ ...look, ...item.lookPatch }))} />
-                ))}
                 {topStyles.map((t) => (
                   <OptionCard key={t} on={look.top === t} onPress={() => set({ top: t })} label={t}>
                     <ProductArt kind={topProduct[t]} color={look.topColor} size={56} />
@@ -197,9 +148,6 @@ export default function AvatarScreen() {
             )}
             {cat === 'Shoes' && (
               <>
-                {shoeCatalogMemo.map((item) => (
-                  <CatalogCard key={item.id} item={item} owned={owned.has(item.id)} level={level} onPress={() => tapCatalog(item, () => setLook({ ...look, ...item.lookPatch }))} />
-                ))}
                 {shoeColors.map((c) => (
                   <OptionCard key={c} on={look.shoeColor === c} onPress={() => set({ shoeColor: c })} label="Runner">
                     <ProductArt kind="shoes" color={c} size={56} />
@@ -214,38 +162,13 @@ export default function AvatarScreen() {
                     {accProduct[a] ? <ProductArt kind={accProduct[a]!} size={56} /> : <Icon name="cancel" size={30} color={colors.dim} />}
                   </OptionCard>
                 ))}
-                {accessoryExtrasMemo.map((item) => (
-                  <CatalogCard key={item.id} item={item} owned={owned.has(item.id)} level={level} equipped={equipped.has(item.id)} onPress={() => tapCatalog(item, () => toggleEquip(item.id))} />
-                ))}
               </>
             )}
-            {cat === 'Gear' && gearCatalogMemo.map((item) => (
-              <CatalogCard
-                key={item.id}
-                item={item}
-                owned={owned.has(item.id)}
-                level={level}
-                equipped={gear === item.id}
-                onPress={() => tapCatalog(item, () => setGear(gear === item.id ? 'none' : item.id))}
-              />
-            ))}
             {cat === 'Emotes' && emotes.map((e) => (
               <OptionCard key={e.id} on={pose === e.pose} onPress={() => { tap(); setPose(e.pose); }} label={e.label}>
                 <Character look={look} pose={e.pose} height={62} />
               </OptionCard>
             ))}
-            {cat === 'Pets' && (
-              <>
-                {pets.map((p) => (
-                  <OptionCard key={p.id} on={pet === p.id} onPress={() => { tap(); setPet(p.id); }} label={p.label}>
-                    {p.id === 'pet-none' ? <Icon name="cancel" size={30} color={colors.dim} /> : <Mascot pose={p.pose} size={58} />}
-                  </OptionCard>
-                ))}
-                {petCatalogMemo.map((item) => (
-                  <CatalogCard key={item.id} item={item} owned={owned.has(item.id)} level={level} equipped={pet === item.id} onPress={() => tapCatalog(item, () => setPet(item.id))} />
-                ))}
-              </>
-            )}
           </ScrollView>
         </View>
 
@@ -277,12 +200,6 @@ function OptionCard({ children, on, onPress, label, locked }: { children: React.
   );
 }
 
-/** A shop-backed catalog item (outfit set, shoe, gear piece, extra, pet) — owned ones equip instantly, locked ones open the unlock sheet. */
-function CatalogCard({ item, owned, level, equipped, onPress }: { item: ShopItem; owned: boolean; level: number; equipped?: boolean; onPress: () => void }) {
-  const locked = !owned && level < item.levelRequired;
-  return <ShopItemCard item={item} owned={owned} locked={locked} equipped={equipped} onPress={onPress} style={{ width: 104 }} />;
-}
-
 function Swatch({ color, on, onPress }: { color: string; on: boolean; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={[styles.swatchWrap, on && { borderColor: colors.primary }]} accessibilityLabel={`Colour ${color}`}>
@@ -302,7 +219,6 @@ const styles = StyleSheet.create({
   railCol: { flexGrow: 0, width: 64 },
   spot: { position: 'absolute', bottom: 10, width: 230, height: 230, borderRadius: 115, backgroundColor: colors.purple, opacity: 0.22 },
   platform: { position: 'absolute', bottom: 0, width: 170, height: 26, borderRadius: 85, backgroundColor: alpha(colors.primary, 0.18), borderWidth: 1.5, borderColor: alpha(colors.primary, 0.5) },
-  gearBadge: { position: 'absolute', left: -4, bottom: 6, width: 52, height: 52, borderRadius: 26, backgroundColor: colors.glass, borderWidth: 1.5, borderColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
   rail: { width: 62, height: 56, borderRadius: radius.md, backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center', gap: 2 },
   railOn: { borderColor: colors.primary, backgroundColor: alpha(colors.primary, 0.12) },
   railText: { color: colors.sub, fontSize: 10, fontFamily: fonts.semibold },

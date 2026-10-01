@@ -85,15 +85,22 @@ export const isEndpointUnavailable = (e: unknown): e is EndpointUnavailableError
  */
 export type GateRule<A> = { capability: Capability; when?: (...args: A extends (...a: infer P) => unknown ? P : never) => boolean };
 export function gateEndpoints<S extends object>(service: S, rules: { [K in keyof S]?: GateRule<S[K]> }, opted?: Set<Capability>): S {
-  const out = { ...service } as S;
-  for (const key of Object.keys(rules) as (keyof S)[]) {
-    const rule = rules[key] as { capability: Capability; when?: (...a: unknown[]) => boolean } | undefined;
-    const original = service[key];
-    if (!rule || typeof original !== 'function') continue;
-    (out as Record<keyof S, unknown>)[key] = (...args: unknown[]) =>
-      !isEndpointAvailable(rule.capability, opted) && (!rule.when || rule.when(...args))
-        ? Promise.reject(new EndpointUnavailableError(rule.capability))
-        : (original as (...a: unknown[]) => unknown).apply(service, args);
-  }
-  return out;
+  // A Proxy, not a copy: the service may itself be a Proxy with no own properties (the "campus
+  // off" API), which a `{ ...service }` copy would silently turn into an empty object.
+  const wrapped = new Map<PropertyKey, unknown>();
+  return new Proxy(service, {
+    get(target, key, receiver) {
+      const original = Reflect.get(target, key, receiver);
+      const rule = (rules as Record<PropertyKey, { capability: Capability; when?: (...a: unknown[]) => boolean } | undefined>)[key];
+      if (!rule || typeof original !== 'function') return original;
+      if (!wrapped.has(key)) {
+        wrapped.set(key, (...args: unknown[]) =>
+          !isEndpointAvailable(rule.capability, opted) && (!rule.when || rule.when(...args))
+            ? Promise.reject(new EndpointUnavailableError(rule.capability))
+            : (Reflect.get(target, key, receiver) as (...a: unknown[]) => unknown).apply(target, args),
+        );
+      }
+      return wrapped.get(key);
+    },
+  });
 }

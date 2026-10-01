@@ -197,7 +197,7 @@ export const WorldMap = forwardRef<WorldMapHandle, WorldMapProps>(function World
 function MeLayer({ view, k, inverse }: { view: (p: LatLng) => { x: number; y: number }; k: number; inverse: PanZoom['inverse'] }) {
   const loc = useLocation();
   if (!loc.position) return null;
-  return <CurrentUserMarker pos={view(loc.position)} accuracyPx={(loc.accuracy_m ?? 20) * k} inverse={inverse} simulated={loc.simulated} />;
+  return <CurrentUserMarker pos={view(loc.position)} accuracyPx={(loc.accuracy_m ?? 20) * k} inverse={inverse} />;
 }
 
 const styles = StyleSheet.create({

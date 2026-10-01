@@ -7,11 +7,11 @@
 import { useSyncExternalStore } from 'react';
 import * as Location from 'expo-location';
 import type { LatLng } from '@/api/campus/types';
-import { DEV_SIMULATED_LOCATION, getLocationPermission, reportPresence, type LocationPermission } from '@/api/campus/map';
+import { getLocationPermission, reportPresence, type LocationPermission } from '@/api/campus/map';
 
-export type LocationState = { permission: LocationPermission | 'checking'; position: LatLng | null; accuracy_m: number | null; simulated: boolean };
+export type LocationState = { permission: LocationPermission | 'checking'; position: LatLng | null; accuracy_m: number | null };
 
-let state: LocationState = { permission: 'checking', position: null, accuracy_m: null, simulated: false };
+let state: LocationState = { permission: 'checking', position: null, accuracy_m: null };
 const listeners = new Set<() => void>();
 let users = 0;
 let sub: Location.LocationSubscription | null = null;
@@ -43,11 +43,11 @@ function maybeReport() {
 async function start(ask: boolean) {
   const permission = await getLocationPermission(ask);
   if (permission !== 'granted') {
-    // Web / denied: only the dev mock gets a stand-in position (clearly marked as simulated).
-    setState({ permission, ...(DEV_SIMULATED_LOCATION ? { position: DEV_SIMULATED_LOCATION, accuracy_m: 25, simulated: true } : {}) });
+    // Web / denied: no position at all. The app never invents one.
+    setState({ permission });
     return;
   }
-  setState({ permission, simulated: false });
+  setState({ permission });
   sub?.remove();
   sub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.Balanced, timeInterval: 4000, distanceInterval: 8 }, (loc) => {
     const pos: LatLng = [loc.coords.latitude, loc.coords.longitude];

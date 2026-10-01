@@ -3,16 +3,14 @@ import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput,
 import { router } from 'expo-router';
 import { EXERCISE_API_CONFIGURED } from '@/api/config';
 import { ApiError } from '@/api/client';
-import { exerciseApi, type ExerciseProfileInput } from '@/api/exercise';
+import { EXERCISE_GENDER_LABELS, EXERCISE_GENDERS, exerciseApi, type ExerciseGender, type ExerciseProfileInput } from '@/api/exercise';
 import { useAuth } from '@/auth/AuthProvider';
 import { RemoteStatus, StatTile } from '@/components/ExerciseParts';
-import { Button, Card, Display, EmptyState, Header, Kicker, Screen, Segmented, tap } from '@/components/ui';
+import { Button, Card, Display, EmptyState, Header, Kicker, Screen, tap } from '@/components/ui';
 import { invalidateExercise, useExerciseProfile, useExerciseUser } from '@/hooks/useExercise';
 import { useApp } from '@/state/AppState';
 import { colors, fonts, radius } from '@/theme';
 
-const GENDERS = ['female', 'male', 'other'] as const;
-const GENDER_LABELS = { female: 'Female', male: 'Male', other: 'Other' };
 
 /** Coach profile: create (POST /api/users), link an existing id (GET /api/users/{id}), or view. */
 export default function ExerciseProfileScreen() {
@@ -58,7 +56,7 @@ function ViewProfile({ uid }: { uid: string }) {
             <StatTile value={bmi ? bmi.toFixed(1) : '—'} label="BMI" color={colors.primary} />
           </View>
           <Card style={{ marginTop: 12, gap: 6 }}>
-            <Row k="Gender" v={p.data.gender} />
+            <Row k="Gender" v={EXERCISE_GENDER_LABELS[p.data.gender] ?? p.data.gender} />
             <Row k="Date of birth" v={p.data.date_of_birth} />
             <Row k="Email" v={p.data.email} />
             <Row k="Mobile" v={p.data.mobile} />
@@ -100,7 +98,8 @@ const done = () => (router.canGoBack() ? router.back() : router.replace('/exerci
 function CreateProfile() {
   const { setExerciseUser } = useAuth();
   const [f, setF] = useState({ first_name: '', last_name: '', height_cm: '', weight_kg: '', date_of_birth: '', mobile: '', email: '' });
-  const [gender, setGender] = useState<(typeof GENDERS)[number]>('female');
+  // No preselected answer: the user picks one (or "Prefer not to say" → undisclosed).
+  const [gender, setGender] = useState<ExerciseGender | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showLink, setShowLink] = useState(false);
@@ -108,8 +107,8 @@ function CreateProfile() {
   const set = (k: keyof typeof f) => (v: string) => setF((s) => ({ ...s, [k]: v }));
 
   const create = async () => {
-    const bad = validate(f);
-    if (bad) return setError(bad);
+    const bad = validate(f) ?? (gender ? null : 'Pick a gender, or “Prefer not to say”.');
+    if (bad || !gender) return setError(bad);
     setBusy(true);
     setError(null);
     try {
@@ -162,7 +161,16 @@ function CreateProfile() {
             <View style={{ flex: 1 }}>{input('first_name', 'First name', { autoComplete: 'given-name' })}</View>
             <View style={{ flex: 1 }}>{input('last_name', 'Last name', { autoComplete: 'family-name' })}</View>
           </View>
-          <Segmented items={GENDERS} labels={GENDER_LABELS} value={gender} onChange={setGender} />
+          <View style={styles.chips} accessibilityRole="radiogroup" accessibilityLabel="Gender">
+            {EXERCISE_GENDERS.map((g) => {
+              const on = gender === g;
+              return (
+                <Pressable key={g} onPress={() => { tap(); setGender(g); }} style={[styles.chip, on && styles.chipOn]} accessibilityRole="radio" accessibilityState={{ selected: on }} accessibilityLabel={EXERCISE_GENDER_LABELS[g]}>
+                  <Text style={[styles.chipText, on && { color: colors.onPrimary }]}>{EXERCISE_GENDER_LABELS[g]}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
           <View style={styles.pair}>
             <View style={{ flex: 1 }}>{input('height_cm', 'Height (cm)', { keyboardType: 'decimal-pad' })}</View>
             <View style={{ flex: 1 }}>{input('weight_kg', 'Weight (kg)', { keyboardType: 'decimal-pad' })}</View>
@@ -191,6 +199,10 @@ function CreateProfile() {
 const styles = StyleSheet.create({
   input: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 13, color: colors.text, fontFamily: fonts.regular, fontSize: 15 },
   pair: { flexDirection: 'row', gap: 10 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 9, minHeight: 40, justifyContent: 'center' },
+  chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { color: colors.sub, fontFamily: fonts.semibold, fontSize: 13 },
   note: { color: colors.dim, fontFamily: fonts.regular, fontSize: 13, lineHeight: 19, marginTop: 10 },
   error: { color: colors.coral, fontFamily: fonts.semibold, fontSize: 13 },
   dev: { color: colors.dim, fontFamily: fonts.mono, fontSize: 11 },

@@ -2,7 +2,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { campusApi, type Badge } from '@/api/campus';
 import { BadgeTile } from '@/components/campus/Social';
-import { EmptyNote, ErrorState, LoadingRows, SignedOutState, SourceBadge } from '@/components/campus/States';
+import { EmptyNote, ErrorState, LoadingRows, SignedOutState } from '@/components/campus/States';
 import { Display, Header, Kicker, Screen, SectionHeader } from '@/components/ui';
 import { useCampus } from '@/hooks/useCampus';
 import { colors, fonts } from '@/theme';
@@ -13,7 +13,7 @@ export default function Badges() {
   const locked = (r.data ?? []).filter((b) => !b.unlocked);
   return (
     <Screen tabBar={false}>
-      <Header back title="" right={<SourceBadge />} />
+      <Header back title="" />
       <Kicker>Badges</Kicker>
       <Display size={40} style={{ marginTop: 4 }}>Earned <Text style={{ color: colors.primary }}>IRL</Text></Display>
       {r.signedOut ? (

@@ -10,7 +10,7 @@ import { router } from 'expo-router';
 import { Mascot } from '@/art/Mascot';
 import { campusApi, errorText, type PersonCard } from '@/api/campus';
 import { PersonCardView } from '@/components/campus/Social';
-import { EmptyNote, ErrorState, LoadingRows, SignedOutState, SourceBadge } from '@/components/campus/States';
+import { EmptyNote, ErrorState, LoadingRows, SignedOutState } from '@/components/campus/States';
 import { Card, Display, Header, Icon, Kicker, Screen, SectionHeader, tap } from '@/components/ui';
 import { invalidateCampus, useAction, useCampus, useConfig, useMe } from '@/hooks/useCampus';
 import { alpha, colors, fonts, radius } from '@/theme';
@@ -24,7 +24,7 @@ export default function DateMode() {
   const toggle = useAction((on: boolean) => campusApi.updateMe({ date_mode_enabled: on }));
   const people = useCampus<PersonCard[]>('people:date', () => campusApi.suggestedPeople('date'), { enabled: !!gate?.available && enabled });
 
-  const header = <Header back title="" right={<SourceBadge />} />;
+  const header = <Header back title="" />;
   if (!config.data) {
     return (
       <Screen tabBar={false}>

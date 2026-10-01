@@ -4,10 +4,10 @@ import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { campusApi, errorText, type ChallengeInvite } from '@/api/campus';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
-import { EmptyNote, ErrorState, LoadingRows, SourceBadge } from '@/components/campus/States';
+import { EmptyNote, ErrorState, LoadingRows } from '@/components/campus/States';
 import { shortTime } from '@/components/campus/territoryUi';
 import { Button, Card, Header, Icon, IconButton, Screen, Segmented, tap } from '@/components/ui';
-import { formatEventDate } from '@/data/community';
+import { formatEventDate } from '@/logic/format';
 import { invalidateCampus, useAction, useCampus, useRealtime, useRefreshOnFocus } from '@/hooks/useCampus';
 import { useApp } from '@/state/AppState';
 import { colors, fonts, radius } from '@/theme';
@@ -29,7 +29,7 @@ export default function Invites() {
   const items = list.data ?? [];
   return (
     <Screen tabBar={false} scroll={false}>
-      <Header back title="Challenges" right={<><IconButton icon="plus" onPress={() => router.push('/invite/new')} label="New challenge" /><SourceBadge /></>} />
+      <Header back title="Challenges" right={<><IconButton icon="plus" onPress={() => router.push('/invite/new')} label="New challenge" /></>} />
       <Segmented items={TABS} value={tab} onChange={setTab} />
       <FlatList
         data={items}

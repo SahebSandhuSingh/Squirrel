@@ -1,7 +1,7 @@
 import { ActivityIndicator, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { router } from 'expo-router';
 import { Mascot } from '@/art/Mascot';
-import { CAMPUS_SOURCE, CAPABILITY_LABEL, errorKind, errorText, featureUnavailable, isEndpointUnavailable } from '@/api/campus';
+import { CAPABILITY_LABEL, errorKind, errorText, featureUnavailable, isEndpointUnavailable } from '@/api/campus';
 import { Button, Card, Display, Icon } from '@/components/ui';
 import { alpha, colors, fonts, radius } from '@/theme';
 
@@ -77,6 +77,24 @@ export function NotLiveYet({ name, compact, body }: { name?: string | null; comp
   );
 }
 
+/**
+ * The backend for this exists but this build can't reach it: either it isn't configured
+ * (`reason: 'not_configured'`) or it needs your account (`'signed_out'`, with a Sign in button).
+ * Distinct from "Not live yet" (the endpoint isn't built) and from errors. Never shows data.
+ */
+export function NotConnected({ name, reason, body, compact }: { name: string; reason: 'not_configured' | 'signed_out'; body?: string; compact?: boolean }) {
+  const signedOut = reason === 'signed_out';
+  return (
+    <Card style={[styles.box, compact && { paddingVertical: 14 }]}>
+      <Icon name={signedOut ? 'account-lock-outline' : 'lan-disconnect'} size={compact ? 22 : 28} color={colors.blue} />
+      <Text style={styles.soonName}>{name}</Text>
+      <Text style={[styles.soon, { color: colors.blue, borderColor: alpha(colors.blue, 0.5) }]}>{signedOut ? 'Sign in to see this' : 'Not connected'}</Text>
+      <Text style={styles.body}>{body ?? (signedOut ? 'This comes from your account. Sign in and it shows up here.' : 'This build isn’t connected to the server that provides it yet.')}</Text>
+      {signedOut && <Button label="Sign in" size="sm" onPress={() => router.push('/sign-in')} style={styles.btn} />}
+    </Card>
+  );
+}
+
 /** For screens that need an account: explains and links to sign-in. */
 export function SignedOutState({ what }: { what: string }) {
   return (
@@ -97,17 +115,6 @@ export function EmptyNote({ icon = 'emoticon-cool-outline', title, body, action,
       {body ? <Text style={styles.body}>{body}</Text> : null}
       {action && onAction ? <Button label={action} size="sm" variant="secondary" onPress={onAction} style={styles.btn} /> : null}
     </Card>
-  );
-}
-
-/** Marks screens backed by the development mock, so dev data is never mistaken for real data. */
-export function SourceBadge({ style }: { style?: StyleProp<ViewStyle> }) {
-  if (CAMPUS_SOURCE !== 'mock') return null;
-  return (
-    <View style={[styles.dev, style]} accessibilityLabel="Development data">
-      <Icon name="flask-outline" size={11} color={colors.gold} />
-      <Text style={styles.devText}>Dev data</Text>
-    </View>
   );
 }
 
