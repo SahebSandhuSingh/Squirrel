@@ -18,6 +18,7 @@ Base URL: `https://<host>` · all routes are under `/v1` · JSON in, JSON out ·
 | 422 | `invalid`, `invalid_gps` |
 | 429 | `rate_limited`, `cooldown`, `defend_cooldown` (with `expires_at`) |
 | 500 | `internal_error` |
+| 503 | `blocks_unreachable` |
 
 **Common shapes**
 
@@ -64,10 +65,12 @@ Campus constants, feature flags, realtime URL and the active game-rule numbers. 
 ## Me & users
 
 ### `GET /v1/me` 🔒
-Full own profile (public profile + `email`, `hostel_id`, `date_mode_enabled`, `onboarding_completed`, `open_to_meet_until`, `campus_xp`, `level`, `stats`, `territories`, `crews`, `recent_activities`).
+Full own profile (public profile + `email`, `hostel_id`, `date_mode_enabled`, `onboarding_completed`, `open_to_meet_until`, `campus_xp`, `level`, `stats`, `territories`, `crews`, `recent_activities`, `profile_details`).
 
 ### `PATCH /v1/me` 🔒
-Body (all optional): `display_name`, `bio`, `avatar_url`, `connection_mode` (`date|friends|crew|null`), `hostel_id` **or** `hostel_zone_id` (a hostel zone id such as `narmada`), `onboarding_completed`, `date_mode_enabled`. Returns the same as `GET /v1/me`. 422 `invalid` on unknown hostel.
+Body (all optional): `display_name`, `bio`, `avatar_url`, `connection_mode` (`date|friends|crew|null`), `hostel_id` **or** `hostel_zone_id` (a hostel zone id such as `narmada`), `onboarding_completed`, `date_mode_enabled`, `profile_details`. Returns the same as `GET /v1/me`. 422 `invalid` on unknown hostel or invalid details. The whole patch, including the details, applies in one transaction: if any part is rejected nothing is written.
+
+**Private profile details.** `profile_details` holds `full_name`, `personal_email`, `college_email`, `phone`, `gender` (`female|male|non_binary|undisclosed`), `age`, `course` and optional `cgpa`. They live in their own table, are returned only by `GET`/`PATCH /v1/me` for the owner, and never appear on a public profile, a leaderboard or the map. ADR-032 open item 1 proposes moving this to the Exercise service; until that is agreed, this is the live home.
 
 ### `PUT /v1/me/open-to-meet` 🔒 (aliases: `PATCH /v1/me/open-to-meet`, `PATCH /v1/users/me/open-to-meet`)
 Body `{ "enabled": true, "hours": 12 }` (hours optional, default 12, max 168). Response `{ "enabled", "updated_at", "visible_until" }`. While enabled you appear in others' *nearby* lists and can see theirs.
@@ -78,8 +81,12 @@ Public profile: `user_id, display_name, avatar_url, hostel, bio, connection_mode
 ### `GET /v1/users/:id/context` 🔒
 What you have in common: `{ "shared_zones": [{zone_id, zone_name, relation}], "shared_crews": [...], "shared_events": [], "icebreakers": [{id, kind, text, zone_id?, action?}] }`.
 
+A block in either direction returns **404 `not_found`** — the same answer as a user who does not exist, so the route never reveals that a block is the reason. When Social cannot be reached the route returns an empty result with `hidden_reason: "blocks_unreachable"`; that is a different condition and may be shown.
+
 ### `POST /v1/users/:id/block` · `DELETE /v1/users/:id/block` 🔒
-Create or remove a directed block; both operations are idempotent. Self-blocking returns 422. Block state is local to this service and is not shared with the Exercise module.
+Create or remove a directed block; both operations are idempotent. Self-blocking returns 422.
+
+**Blocks are owned by the Social service** (ADR-032). This service reads the caller's full block set from Social's internal API, caches it for at most 30 seconds, and unions it with its own local `blocks` table during migration. If Social cannot be reached and no fresh answer is cached, every block check **fails closed**: lists that filter people (Nearby, Active now, map players, shared zones) return empty with `hidden_reason: "blocks_unreachable"`, and actions between two people are refused with a retryable 503. The app's Block button writes to Social, not here. Running without `SOCIAL_API_URL` and `SOCIAL_INTERNAL_TOKEN` in production is refused at startup.
 
 ### `GET /v1/me/blocks` 🔒
 `{ "blocks": [{ "user_id", "created_at", "person": Person|null }] }` for users the caller has blocked.
@@ -95,6 +102,8 @@ List crews the caller belongs to, or return one crew with its members. Non-membe
 ### `POST /v1/crews/:id/join` · `POST /v1/crews/:id/leave` 🔒
 Joining is open and idempotent. A member can leave freely. An owner with other members must provide `{ "transfer_to": "user-id" }` naming an existing member; ownership transfer and departure are atomic. A last owner leaving deletes the crew.
 
+> ADR-032 assigns crews to the **Social** service. These routes remain until campus-service reads crew membership from Social and these tables are retired.
+
 ## Meetups
 
 `Meetup` includes `id, created_by, zone_id, zone, place_text, starts_at, status, created_at, updated_at, participants[]`. Participants include `user_id, role, status, responded_at, person`, with `open_to_meet` shown only as a hint. Status is `proposed|confirmed|cancelled|completed`; `completed` is derived at read time when a confirmed meetup's start time has passed.
@@ -108,13 +117,34 @@ Return meetups the caller participates in. A non-participant or participant bloc
 ### `POST /v1/meetups/:id/accept` · `/decline` · `/cancel` · `/leave` 🔒
 Guests accept or decline (decline has no reason field); the host is notified of response status only. The host may cancel before completion. An accepted guest may leave. A block created after invitation hides the meetup from the blocked pair and prevents acceptance.
 
+### `GET /v1/meetups/:id/rating` 🔒
+```json
+{ "can_rate": true, "reason": null, "already_rated": false,
+  "rateable": [Person…],
+  "dimensions": [{ "key": "friendly", "label": "Friendly & Welcoming" },
+                 { "key": "punctual", "label": "On Time" },
+                 { "key": "fun", "label": "Fun to be around" },
+                 { "key": "helpful", "label": "Helpful" }],
+  "trust_score": { … } | null }
+```
+Only a participant of a **completed** meetup may rate, and only other participants of that meetup. A blocked pair never appears in `rateable`.
+
+`trust_score` is **the caller's own** — never the score of the person being rated. It is an aggregate (mean stars, rounded to one decimal, with a label) and is `null` below **3 distinct raters**, the same suppression threshold the heatmap uses. Because a rater can only ever read their own score, rating someone cannot reveal the effect of that rating on the other person's score.
+
+### `POST /v1/meetups/:id/ratings` 🔒
+Body `{ "ratings": [{ "user_id", "stars": 1-5, "tags": [key…] }], "idempotency_key" }` → `{ "meetup_id", "submitted_at", "trust_score" }` — again, the caller's own score.
+
+`tags` must be dimension keys (`friendly`, `punctual`, `fun`, `helpful`), enforced by the API **and** by a database CHECK, so a free-text tag cannot exist even if a future code path skips validation. `stars` is likewise constrained in both places. One rating per rater per ratee per meetup: the same `idempotency_key` replays, a different key for an already-rated pair is rejected. Ratings between a blocked pair are refused.
+
+**Individual ratings and rater identities are never returned to anyone**, including the person rated. Only the aggregate is exposed, and only to its owner. Ratings are deleted with the user.
+
 ### `GET /v1/notifications` 🔒
 `{ "items": [{ id, type: "territory"|"invite"|"event"|…, backend_type: "territory.stolen", actor: Person|null, text, created_at, read, data }], "unread": n }` (latest 50).
 
 ### `POST /v1/notifications/read` 🔒
 Body `{ "ids": [uuid…] }` → `{ "unread": n }`.
 
-### `GET /v1/me/badges` 🔒 — `{ "badges": [] }` (badges are not part of this service yet).
+### `GET /v1/me/badges` 🔒 — `{ "badges": [] }` (badges are owned by the Social service — ADR-032).
 
 ---
 
@@ -125,6 +155,8 @@ All active zones with geometry. Query filters (combine freely): `ownedByMe=true`
 ```json
 { "zones": [Zone…], "as_of": "2026-09-28T21:56:20.000Z" }
 ```
+
+**Placeholder geometry.** Every seeded zone carries `geometry_source: "dev_placeholder"` — the outlines are invented and roughly placed, not surveyed. Clients should render them visibly as approximate. The seed only overwrites geometry while that marker is present, so surveyed outlines replace them permanently. See `docs/GEOGRAPHIC_DATA_REQUIRED.md`.
 
 **Zone deletion:** A zone referenced by a meetup cannot be deleted. `meetups.zone_id` uses `ON DELETE RESTRICT`, preserving the meetup's zone association and history; deleting such a zone fails with a foreign-key error. Deactivate it instead by setting `zones.is_active = false`. The service's reads and activity verification exclude inactive zones. There is currently no API route to deactivate a zone, so an operator must make this change through database access.
 
@@ -152,7 +184,11 @@ The server re-derives eligibility inside a transaction with the zone row locked;
 | steal | zone owned by someone else, shield lapsed, caller qualified | `unclaimed`, `own_zone`, `shielded` (+`expires_at`), `not_qualified`, `qualification_pending`, `cooldown` |
 | defend | caller is the owner (or a member of the holding crew), zone `under_challenge`, caller qualified, no defend cooldown | `not_owner`, `not_under_attack`, `not_qualified`, `defend_cooldown` (+`expires_at`), `cooldown` |
 
+A block between two users does **not** affect stealing. Blocking a rival must not make your zones unstealable, and a refusal would tell the blocked person they are blocked.
+
 Effects: ownership/version/shield update, a `territory_events` row, the qualification is marked `CLAIMED` (spent), XP awarded (claim 25 / steal 40 / defend 15), user cooldown starts. Defend also expires every rival's live qualification on the zone.
+
+> ADR-032 makes the **Run Module** the single XP ledger. campus-service will report claim / steal / defend awards to it and stop keeping `campus_xp`.
 
 Response `200`:
 ```json
@@ -174,7 +210,7 @@ curl -X POST $API/v1/zones/cc1/claim -H "Authorization: Bearer $T" -H 'content-t
 
 ### `GET /v1/territories` 👤 — `{ "territories": [Territory…], "as_of" }` — ownership of every active zone (no geometry; join with `/v1/zones` on `zone_id`). Same filters as `/v1/zones`.
 ### `GET /v1/territories/my` 🔒 — `{ "territories": [{ "zone": Zone, "territory": Territory, "actions": Actions }] }`
-### `GET /v1/territories/contested` — owned zones that are under attack or in an active challenge.
+### `GET /v1/territories/contested` — owned zones that are under attack or in an active territory battle.
 ### `GET /v1/territories/:zoneId` — `{ "territory": Territory }`
 
 ---
@@ -200,7 +236,7 @@ Response `{ "accepted": n, "replayed": bool, "point_count": total }`. 409 `activ
 Body (optional) `{ "ended_at"?, "client_distance_m"?, "client_duration_s"?, "device"? }` → `{ "activity_id", "status": "PENDING", "replayed": false }` and the verification job is queued. 422 if longer than 6 h.
 
 ### GPS validation rules (422 `invalid_gps`)
-* lat ∈ [-90,90], lng ∈ [-180,180], finite; `accuracy_m` ≤ 100 (client already filters at 30 m)
+* lat ∈ [-90,90], lng ∈ [-180,180], finite; `accuracy_m` ≤ 100 (the app filters at 20 m before uploading)
 * `recorded_at` parseable, not in the future (> 2 min), not before `started_at` (− 1 min), **non-decreasing** within and across batches; `seq` strictly increasing
 * no segment faster than 30 m/s (a teleport), no two positions > 50 m apart with the same timestamp
 * every point within `CAMPUS_MAX_RADIUS_M` (4 km) of the campus centre
@@ -241,25 +277,42 @@ Body `{ "lat", "lng", "accuracy_m"? }` → `{ "accepted": true }` (or `{ accepte
 { "active_now": 7,
   "active":  [{ "person": Person+{connection_mode,bio}, "activity": { "type": "run", "started_at" }|null, "proximity": "nearby"|null }],
   "nearby":  [{ "person": …, "activity": …, "proximity": "very_close" }],
-  "as_of", "visible": true, "hidden_reason": null|"open_to_meet_off" }
+  "as_of", "visible": true, "hidden_reason": null|"open_to_meet_off"|"blocks_unreachable" }
 ```
 * `active`: anyone on campus with a live activity. `proximity` is only filled when **both** people are open to meet.
 * `nearby`: empty unless the caller is open to meet; contains only others who are open to meet and within 800 m.
+* Both lists come back empty with `hidden_reason: "blocks_unreachable"` when the block set cannot be read from Social — showing nobody is correct; showing a blocked person is not.
 
 ### `GET /v1/map/players` 🔒
-Grid-snapped positions (`position: [lat,lng]`, `precision_m: 100`) of people who are open to meet; empty with `hidden_reason: "open_to_meet_off"` if the caller is not.
+Grid-snapped positions (`position: [lat,lng]`, `precision_m: 100`) of people who are open to meet; empty with `hidden_reason: "open_to_meet_off"` if the caller is not, or `"blocks_unreachable"` if the block set cannot be read.
 
 ### `GET /v1/map/heatmap` 🔒
 Aggregated activity intensity cells for `window=7d|30d` (default `7d`). Cells use a fixed 100 m grid and are returned only when at least 3 distinct, non-banned users have fully verified activity in the window. Response intensities are coarse `low` / `medium` / `high` buckets; exact user counts, identities, timestamps and GPS points are never returned. At most 500 cells are returned.
 
+### `GET /v1/me/shared-zones` 🔒
+Zones the caller and other people have both been active in. Verified activity only, blocked users excluded in either direction, and only people whose `open_to_meet` consent is current. Frequency is a coarse `sometimes` / `often` bucket; no timestamps, coordinates or exact counts are returned. Capped at 10 zones and 5 people per zone.
+
 ### `GET /v1/squirrel-dates/suggestions` 🔒
 Returns up to 10 advisory suggestions for people already visible through shared zones. It reuses the shared-zones verified-activity, active-zone, consent-expiry, banned-user and bidirectional block filters, and preserves the shared-zones `sometimes` / `often` activity bucket. Each item contains the existing public person fields, a shared zone, the next Thursday as a date-only value, and a coarse one-hour slot. The slot is the most active campus-local hour in that zone over the last 30 days only when at least 3 distinct users were active in that hour; otherwise it uses `18:00–19:00`. Activity history contributes only to this zone-wide aggregate, never an individual's routine. Suggestions are read-only: they do not create meetups, invitations, notifications, or stored rows. Dismissals are not remembered; persistence would require a separate product and privacy decision.
+
+### `GET /v1/map/features` 👤
+A GeoJSON `FeatureCollection` of active zones for the map layer: zone geometry, `geometry_source`, and a territory summary (state and a generic owner type). Contains no owner identity, no presence and no user positions.
 
 ### `GET /v1/activity/active-count` — `{ "active_now": n, "as_of" }`
 
 ---
 
-## Challenges (app name: challenge invites)
+## Territory battles (routes: `challenges` / `challenge-invites`)
+
+Named **territory battles** per ADR-032, to distinguish them from two other features that share the word "challenge" in the app's vocabulary but are different things owned by different services:
+
+| name | what | owner |
+|---|---|---|
+| **Duels** | 1-vs-1: most verified km or most workouts in 1–30 days | Social |
+| **Goals** | a target (metric, comparator, threshold, window) with an XP reward | Run Module |
+| **Territory battles** | zone race, territory, weekend war — the winner decided from territory state | campus-service (this API) |
+
+The routes and the table here keep the `challenges` name; only the documented vocabulary changes.
 
 Types: `territory` (needs zone; user or crew), `weekend_war` (crew), `zone_race` (needs zone; user), `group_activity` (user or crew).
 States: `pending → accepted → active → completed`; `pending → declined | cancelled | expired`; `accepted → cancelled`.
@@ -273,7 +326,7 @@ Challenge { "id", "type", "type_label", "from": Person, "target": { "type": "use
             "created_at", "started_at", "completed_at", "result": { "winner": Person|Crew|null, "summary" }|null }
 ```
 ### `POST …` 🔒 — rate limit 20/h
-Body `{ "type", "target": { "type": "user"|"crew", "id" }, "zone_id"?, "starts_at": iso, "ends_at"?: iso, "message"? }` → `201 Challenge`. 422 on bad combos (self-challenge, missing zone, past start), 404 unknown target/zone, 409 `challenge_conflict` if an open challenge already exists for the same target+zone.
+Body `{ "type", "target": { "type": "user"|"crew", "id" }, "zone_id"?, "starts_at": iso, "ends_at"?: iso, "message"? }` → `201 Challenge`. 422 on bad combos (self-challenge, missing zone, past start), 404 unknown target/zone, 409 `challenge_conflict` if an open challenge already exists for the same target+zone. A block in either direction prevents creating one, and fails closed (503 `blocks_unreachable`) when the block set cannot be read.
 ### `PATCH …/:id/schedule` 🔒 — creator only; body `{ "starts_at", "ends_at"? }`.
 ### `POST …/:id/accept` · `/decline` 🔒 — invited side only (crew: owner/admin). 403 otherwise, 409 unless `pending`.
 ### `POST …/:id/cancel` 🔒 — creator only; `pending|accepted`.
@@ -291,6 +344,8 @@ Every transition emits `challenge.created|updated` (and app alias `invite.update
 
 ### `GET /v1/leaderboards/hostels?period=` 👤
 `{ "entries": [{ hostel_id, name, territories, active_members, distance_m, xp, score, rank }], "my_hostel_id" }`. `score = territories×100 + xp + distance_m/100 + active_members×5`.
+
+> ADR-032: a board belongs to the owner of the number it ranks. The "zones held" boards are this service's; XP boards move to the Run Module's ledger once campus XP is reported there.
 
 ### `GET /v1/campus/stats` (app) — users_total, users_active_now, zones_total, zones_claimed, crews_total, zones_claimed_today, territory_changes_today, activities_today, active_squirrels_today, challenges_today, challenges_open, meetups_today, founding_spots_left (null).
 ### `GET /v1/stats/daily` (spec) — `{ date, active_squirrels, zones_claimed_today, crews, activities, territory_changes, meetups, challenges, users_active_now }`.
@@ -327,6 +382,8 @@ Events fan out across API instances via Postgres `LISTEN/NOTIFY`; a page that mi
 ## Notification catalogue (persisted in `notifications`, delivered via `notification.created`)
 
 `territory.stolen` (to previous owner) · `territory.challenged` (to owner when a rival qualifies on an unshielded zone) · `territory.defended` (to repelled attackers) · `zone.claimed` (to crew mates) · `challenge.invitation` · `challenge.updated` · `meetup.invited` · `meetup.accepted` · `meetup.declined` (status only) · `meetup.cancelled` · `activity.verification_complete` · reserved: `challenge.reminder`, `event.reminder`, `meetup.check_in`.
+
+Notifications are filtered against the block set on delivery: a notification about a blocked person is not shown.
 
 ## Rate limits
 Global 300 req/min per user (or IP when anonymous). Ownership writes 20/min. Point batches 60/min. Activity creation 50/day. Presence 10/min. Challenge creation 20/h. Exceeding → 429 `rate_limited`.
