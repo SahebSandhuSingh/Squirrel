@@ -74,8 +74,10 @@ const subByProfile = new Map<string, { sub: string; at: number }>();
 const notAProfile = new Map<string, number>();
 let downUntil = 0;
 
+const blocksCache = new Map<string, { blocked: Set<string>; at: number }>();
+
 export function resetIdentityState() {
-  bySub.clear(); subByProfile.clear(); notAProfile.clear(); downUntil = 0;
+  bySub.clear(); subByProfile.clear(); notAProfile.clear(); blocksCache.clear(); downUntil = 0;
 }
 
 function bounded<K, V>(m: Map<K, V>) {
@@ -254,4 +256,55 @@ export async function resolveInboundIds(ids: string[]): Promise<Map<string, stri
 
 export async function resolveInboundId(id: string): Promise<string> {
   return (await resolveInboundIds([id])).get(id) ?? id;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Blocks
+// ---------------------------------------------------------------------------------------------
+
+export type SocialBlocks = {
+  subject: string;
+  blocked: string[];
+  as_of: string;
+};
+
+export class BlocksUnavailableError extends Error {
+  constructor() {
+    super('Social_Blocks_Unavailable');
+    this.name = 'BlocksUnavailableError';
+  }
+}
+
+export async function lookupBlocks(sub: string): Promise<Set<string>> {
+  const s = socialSettings();
+  if (!s) return new Set(); // bridge is OFF
+
+  const now = Date.now();
+  const c = blocksCache.get(sub);
+  if (c && now - c.at < 30_000) return c.blocked;
+
+  if (now < downUntil) throw new BlocksUnavailableError();
+
+  try {
+    const res = await fetch(`${s.url}/internal/v1/blocks/${encodeURIComponent(sub)}`, {
+      headers: { authorization: `Bearer ${s.token}`, accept: 'application/json' },
+      signal: AbortSignal.timeout(s.timeoutMs),
+    });
+    if (res.status === 404) {
+      await res.body?.cancel().catch(() => undefined);
+      blocksCache.set(sub, { blocked: new Set(), at: Date.now() });
+      return new Set();
+    }
+    if (!res.ok) {
+      await res.body?.cancel().catch(() => undefined);
+      throw new Error(`HTTP ${res.status}`);
+    }
+    const data = await res.json() as SocialBlocks;
+    const blockedSet = new Set(data.blocked || []);
+    blocksCache.set(sub, { blocked: blockedSet, at: Date.now() });
+    return blockedSet;
+  } catch (err) {
+    markDown(err);
+    throw new BlocksUnavailableError();
+  }
 }

@@ -56,8 +56,15 @@ export async function getSharedZones(userId: string): Promise<{ zones: SharedZon
 
   const candidateIds = rows.map((row) => row.other_user_id).filter((id): id is string => !!id);
   const allowedIds = new Set<string>();
-  for (const id of [...new Set(candidateIds)]) {
-    if (!(await isBlockedEitherWay(userId, id))) allowedIds.add(id);
+  try {
+    for (const id of [...new Set(candidateIds)]) {
+      if (!(await isBlockedEitherWay(userId, id))) allowedIds.add(id);
+    }
+  } catch (err: any) {
+    if (err.code === 'blocks_unavailable') {
+      return { zones: [], cap: { zones: MAX_SHARED_ZONES, people_per_zone: MAX_SHARED_PEOPLE_PER_ZONE }, hidden_reason: 'blocks_unavailable' } as any;
+    }
+    throw err;
   }
   const people = await getPeopleLite([...allowedIds]);
   const grouped = new Map<string, { id: string; name: string; kind: string; people: { person: NonNullable<ReturnType<typeof people.get>>; activity: 'sometimes' | 'often' }[] }>();

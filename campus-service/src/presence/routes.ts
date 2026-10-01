@@ -6,6 +6,7 @@ import { haversineM } from '../activities/gps.js';
 import { config } from '../config.js';
 import { activePeople, activeNowCount, snapToGrid, updatePresence, type ActiveRow } from './service.js';
 import { getPool, many } from '../db/pool.js';
+import { isBlockedEitherWay } from '../blocks/service.js';
 
 const PresenceBody = z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180), accuracy_m: z.number().min(0).max(5000).nullable().optional() });
 
@@ -31,8 +32,17 @@ export async function presenceRoutes(app: FastifyInstance) {
   const activeHandler = async (req: FastifyRequest) => {
     const user = currentUser(req);
     const viewerOpen = user.open_to_meet && (!user.open_to_meet_until || Date.parse(user.open_to_meet_until) > Date.now());
-    const r = await activePeople(user.id, viewerOpen);
-    return { active_now: r.active_now, active: r.active.map(personCard), nearby: r.nearby.map(personCard), as_of: new Date().toISOString(), visible: viewerOpen, hidden_reason: viewerOpen ? null : 'open_to_meet_off' };
+    try {
+      const r = await activePeople(user.id, viewerOpen);
+      const active = [];
+      const nearby = [];
+      for (const p of r.active) if (!(await isBlockedEitherWay(user.id, p.user_id))) active.push(personCard(p));
+      for (const p of r.nearby) if (!(await isBlockedEitherWay(user.id, p.user_id))) nearby.push(personCard(p));
+      return { active_now: r.active_now, active, nearby, as_of: new Date().toISOString(), visible: viewerOpen, hidden_reason: viewerOpen ? null : 'open_to_meet_off' };
+    } catch (err: any) {
+      if (err.code === 'blocks_unavailable') return { active_now: 0, active: [], nearby: [], as_of: new Date().toISOString(), visible: viewerOpen, hidden_reason: 'blocks_unavailable' };
+      throw err;
+    }
   };
   // App route + spec aliases
   app.get('/v1/people/active', { preHandler: requireAuth }, activeHandler);
@@ -55,12 +65,20 @@ export async function presenceRoutes(app: FastifyInstance) {
        FROM presence p JOIN users u ON u.id = p.user_id LEFT JOIN hostels h ON h.id = u.hostel_id
        WHERE p.expires_at > now() AND u.id <> $1 AND u.open_to_meet AND NOT u.is_banned LIMIT 200`, [user.id], getPool(),
     );
-    const players = rows.map((r) => {
-      const s = snapToGrid(r.lat, r.lng);
-      return { user_id: r.user_id, display_name: r.display_name, avatar_url: r.avatar_url, hostel: r.hostel, level: Math.floor(r.campus_xp / 2000) + 1, xp: r.campus_xp,
-        position: [s.lat, s.lng], precision_m: s.precision_m, proximity: r.distance_m === null ? 'on_campus' : r.distance_m <= config.presence.veryCloseM ? 'very_close' : r.distance_m <= config.presence.nearbyM ? 'nearby' : 'on_campus',
-        activity: r.activity_type, last_seen_at: r.updated_at, relationship: 'none' };
-    });
+    const players = [];
+    try {
+      for (const r of rows) {
+        if (!(await isBlockedEitherWay(user.id, r.user_id))) {
+          const s = snapToGrid(r.lat, r.lng);
+          players.push({ user_id: r.user_id, display_name: r.display_name, avatar_url: r.avatar_url, hostel: r.hostel, level: Math.floor(r.campus_xp / 2000) + 1, xp: r.campus_xp,
+            position: [s.lat, s.lng], precision_m: s.precision_m, proximity: r.distance_m === null ? 'on_campus' : r.distance_m <= config.presence.veryCloseM ? 'very_close' : r.distance_m <= config.presence.nearbyM ? 'nearby' : 'on_campus',
+            activity: r.activity_type, last_seen_at: r.updated_at, relationship: 'none' });
+        }
+      }
+    } catch (err: any) {
+      if (err.code === 'blocks_unavailable') return { players: [], as_of: new Date().toISOString(), visible: true, hidden_reason: 'blocks_unavailable' };
+      throw err;
+    }
     return { players, as_of: new Date().toISOString(), visible: true, hidden_reason: null };
   });
 

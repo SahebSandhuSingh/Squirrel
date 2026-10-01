@@ -19,6 +19,7 @@ import { ApiError, errors } from '../lib/errors.js';
 import { addHours } from '../lib/time.js';
 import { publish } from '../realtime/bus.js';
 import { notify } from '../notifications/service.js';
+import { isBlockedEitherWay } from '../blocks/service.js';
 import { getPersonLite, touchTerritoryAction, invalidateUserCache, type UserRow } from '../users/repo.js';
 import { getZone, type ZoneRow } from '../zones/repo.js';
 import { computeActions, type ZoneActions } from './rules.js';
@@ -121,6 +122,13 @@ export async function performTerritoryAction(user: UserRow, zoneId: string, acti
     const now = new Date();
     const shieldUntil = addHours(now, config.rules.claimShieldHours);
     const previousOwnerId = territory.owner_id;
+
+    if (action === 'steal' && previousOwnerId) {
+      if (await isBlockedEitherWay(actor.id, previousOwnerId, tx)) {
+        throw errors.conflict('territory_blocked', 'You cannot steal from someone who has blocked you or whom you have blocked.');
+      }
+    }
+
     const nextVersion = territory.version + 1;
     let xp = 0;
     let dbAction: TerritoryEventRow['action'];
