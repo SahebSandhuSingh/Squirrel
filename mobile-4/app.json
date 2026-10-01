@@ -15,7 +15,11 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0C0C0C"
       },
-      "package": "in.squirrelsocial.app"
+      "package": "in.squirrelsocial.app",
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -60,6 +64,13 @@
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#0C0C0C"
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "fc225cfd-08d7-48fc-98de-d042732eaccf"
+      }
+    },
+    "owner": "squirrel-social"
   }
 }
