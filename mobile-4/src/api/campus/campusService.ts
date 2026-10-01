@@ -9,7 +9,7 @@
  *                 activeNow (lite person → PersonCard; hidden_reason kept), sharedZones (by zone → by person;
  *                 hidden_reason kept), heatmap (7d only; {lat,lng} + low/medium/high → HeatCell),
  *                 sharedContext (404 for someone campus-service has never seen, or hidden_reason
- *                 `blocked` / `blocks_unavailable` → nothing shared),
+ *                 `blocked` / `blocks_unreachable` → nothing shared),
  *                 submitActivity (fixes the server's ingest check would refuse are dropped first),
  *                 meetups / meetup (GET /v1/meetups, GET /v1/meetups/{id}: host + invitees → Meetup)
  *   not served    checkIn (POST /v1/meetups/{id}/check-in), meetupRating / rateMeetup

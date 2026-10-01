@@ -333,38 +333,41 @@ test('check-in and rating are gated (campus-service serves neither yet); other c
 test('hidden reasons: known codes → text, both block-list spellings, unknown → generic (never the raw code)', () => {
   assert.match(hiddenReasonText('open_to_meet_off'), /Open to Meet/);
   const blocks = 'Can’t check your block list right now — try again in a moment.';
-  assert.equal(hiddenReasonText('blocks_unavailable'), blocks);
   assert.equal(hiddenReasonText('blocks_unreachable'), blocks);
-  assert.equal(hiddenCodeOf('blocks_unreachable'), 'blocks_unavailable');
+  assert.equal(hiddenReasonText('blocks_unavailable'), blocks, 'old spelling still understood');
+  assert.equal(hiddenCodeOf('blocks_unavailable'), 'blocks_unreachable');
+  assert.equal(hiddenCodeOf('blocks_unreachable'), 'blocks_unreachable');
+  // featureUnavailable() reads any code ending in "unavailable" as "not built": the canonical key must not.
+  assert.ok(!hiddenCodeOf('blocks_unreachable').endsWith('unavailable'));
   assert.equal(hiddenReasonText('quota_exceeded_v2'), HIDDEN_REASON_FALLBACK);
   assert.ok(!HIDDEN_REASON_FALLBACK.includes('quota_exceeded_v2'));
   assert.equal(hiddenReasonText(null), null);
   assert.equal(hiddenCodeOf(undefined), null);
   assert.equal(hiddenActionFor('open_to_meet_off'), 'settings');
-  assert.equal(hiddenActionFor('blocks_unavailable'), 'retry');
+  assert.equal(hiddenActionFor('blocks_unreachable'), 'retry');
   assert.equal(hiddenActionFor('something_new'), 'retry');
   assert.equal(hiddenActionFor('blocked'), null);
   assert.equal(hiddenActionFor(null), null);
 });
 
-test('map players: blocks_unavailable keeps visible:true but carries the code and text', () => {
-  const r = nearbyPlayersFromCampus({ players: [], as_of: 't', visible: true, hidden_reason: 'blocks_unavailable' });
+test('map players: blocks_unreachable keeps visible:true but carries the code and text', () => {
+  const r = nearbyPlayersFromCampus({ players: [], as_of: 't', visible: true, hidden_reason: 'blocks_unreachable' });
   assert.equal(r.visible, true);
-  assert.equal(r.hidden_code, 'blocks_unavailable');
+  assert.equal(r.hidden_code, 'blocks_unreachable');
   assert.match(r.hidden_reason, /block list/);
   assert.equal(nearbyPlayersFromCampus({ players: [], as_of: 't', visible: false, hidden_reason: 'open_to_meet_off' }).hidden_code, 'open_to_meet_off');
   assert.equal(nearbyPlayersFromCampus({ players: [], as_of: 't', visible: true, hidden_reason: null }).hidden_code, null);
 });
 
 test('active now and shared zones pass the reason through (an empty list says why)', () => {
-  const a = activeNowFromCampus({ active_now: 0, active: [], nearby: [], as_of: 't', visible: true, hidden_reason: 'blocks_unreachable' });
-  assert.equal(a.hidden_code, 'blocks_unavailable');
+  const a = activeNowFromCampus({ active_now: 0, active: [], nearby: [], as_of: 't', visible: true, hidden_reason: 'blocks_unavailable' });
+  assert.equal(a.hidden_code, 'blocks_unreachable');
   assert.match(a.hidden_reason, /block list/);
   const off = activeNowFromCampus({ active_now: 3, active: [], nearby: [], as_of: 't', visible: false, hidden_reason: 'open_to_meet_off' });
   assert.equal(off.hidden_code, 'open_to_meet_off');
   assert.equal(activeNowFromCampus({ active_now: 1, active: [], nearby: [], as_of: 't' }).hidden_reason, null);
-  const z = sharedZonesFromCampus({ zones: [], hidden_reason: 'blocks_unavailable' });
-  assert.deepEqual([z.people, z.visible, z.hidden_code], [[], true, 'blocks_unavailable']);
+  const z = sharedZonesFromCampus({ zones: [], hidden_reason: 'blocks_unreachable' });
+  assert.deepEqual([z.people, z.visible, z.hidden_code], [[], true, 'blocks_unreachable']);
   assert.match(z.hidden_reason, /block list/);
   const odd = sharedZonesFromCampus({ zones: [], hidden_reason: 'mystery' });
   assert.equal(odd.hidden_reason, HIDDEN_REASON_FALLBACK);
@@ -374,7 +377,7 @@ test('active now and shared zones pass the reason through (an empty list says wh
 test('a person’s context: blocked → just an empty context (nothing reveals the block)', () => {
   const empty = { shared_zones: [], shared_crews: [], shared_events: [], icebreakers: [] };
   assert.deepEqual(sharedContextFromCampus({ ...empty, hidden_reason: 'blocked' }), empty);
-  assert.deepEqual(sharedContextFromCampus({ ...empty, hidden_reason: 'blocks_unavailable' }), empty);
+  assert.deepEqual(sharedContextFromCampus({ ...empty, hidden_reason: 'blocks_unreachable' }), empty);
   const ctx = { ...empty, shared_zones: [{ zone_id: 'lib', zone_name: 'Library', relation: 'both_ran' }] };
   assert.deepEqual(sharedContextFromCampus({ ...ctx, hidden_reason: null }), ctx);
 });

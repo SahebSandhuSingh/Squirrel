@@ -132,7 +132,7 @@ export default function MapScreen() {
           <LocationBanner
             fallback={
               players.data?.hidden_reason && hiddenAction === 'retry' ? (
-                // blocks_unavailable (or a code this app doesn't know): the list is empty fail-closed, often with visible: true
+                // blocks_unreachable (or a code this app doesn't know): the list is empty fail-closed, often with visible: true
                 <MapBanner icon="shield-alert-outline" tone="warn" text={players.data.hidden_reason} action="Retry" onAction={players.reload} />
               ) : players.data && !players.data.visible && !!players.data.hidden_reason ? (
                 <MapBanner icon="eye-off-outline" tone="info" text={players.data.hidden_reason} action="Settings" onAction={() => router.push('/active')} />

@@ -106,16 +106,21 @@ export type CampusMapFeatures =
 // Mapping
 // ---------------------------------------------------------------------------
 
-/** The team also called `blocks_unavailable` "blocks_unreachable": both mean the same. */
-const HIDDEN_ALIAS: Record<string, T.HiddenCode> = { blocks_unreachable: 'blocks_unavailable' };
+/**
+ * campus-service sends `blocks_unreachable` (Social's block list couldn't be checked). Its old name,
+ * `blocks_unavailable`, is accepted as an alias only. The canonical key must NOT end in
+ * "unavailable": featureUnavailable() treats such codes as "feature not built", which would show
+ * "Not live yet" during a Social outage instead of the retry message.
+ */
+const HIDDEN_ALIAS: Record<string, T.HiddenCode> = { blocks_unavailable: 'blocks_unreachable' };
 const HIDDEN_REASON: Record<string, string> = {
   open_to_meet_off: 'Turn on Open to Meet to see Squirrels near you.',
-  blocks_unavailable: 'Can’t check your block list right now — try again in a moment.',
+  blocks_unreachable: 'Can’t check your block list right now — try again in a moment.',
 };
 /** An unknown code (e.g. from a newer server): honest, and never the raw code. */
 export const HIDDEN_REASON_FALLBACK = 'Some Squirrels can’t be shown right now. Try again in a moment.';
 
-/** campus-service's `hidden_reason` code, normalised (`blocks_unreachable` → `blocks_unavailable`). */
+/** campus-service's `hidden_reason` code, normalised (old `blocks_unavailable` → `blocks_unreachable`). */
 export const hiddenCodeOf = (r: string | null | undefined): T.HiddenCode | null => (r ? (HIDDEN_ALIAS[r] ?? r) : null);
 /** campus-service sends a code; screens show this text (and pick an action from the code). */
 export const hiddenReasonText = (r: string | null | undefined): string | null => {
@@ -133,7 +138,7 @@ export function hiddenActionFor(code: T.HiddenCode | null | undefined): 'setting
 const hidden = (r: string | null | undefined) => ({ hidden_reason: hiddenReasonText(r), hidden_code: hiddenCodeOf(r) });
 
 /**
- * Map players. With `blocks_unavailable` the list is empty (fail-closed) while `visible` stays true,
+ * Map players. With `blocks_unreachable` the list is empty (fail-closed) while `visible` stays true,
  * so the map must show the reason whenever `hidden_code` is set, not only when !visible.
  */
 export function nearbyPlayersFromCampus(raw: T.NearbyPlayers): T.NearbyPlayers {
@@ -144,7 +149,7 @@ export const NOTHING_SHARED = (): T.SharedContext => ({ shared_zones: [], shared
 
 /**
  * A person's context. `blocked` (either direction) → just an empty context: nothing reveals the block.
- * `blocks_unavailable` → empty too (fail-closed); the code isn't part of SharedContext.
+ * `blocks_unreachable` → empty too (fail-closed); the code isn't part of SharedContext.
  */
 export function sharedContextFromCampus(raw: T.SharedContext & CampusHidden): T.SharedContext {
   if (raw.hidden_reason) return NOTHING_SHARED();
@@ -170,7 +175,7 @@ function personCard(p: CampusPerson, activity: T.ActivePerson['activity']): T.Pe
 /** Active now: campus-service's person is a PersonLite + mode/bio; the app's card needs the rest. */
 export function activeNowFromCampus(raw: CampusActiveNow): T.ActiveNow {
   const row = (a: CampusActiveNow['active'][number]): T.ActivePerson => ({ person: personCard(a.person, a.activity ?? null), activity: a.activity ?? null, proximity: a.proximity ?? null });
-  // The reason rides along: an empty list with `blocks_unavailable` must say why, not look like nobody's around.
+  // The reason rides along: an empty list with `blocks_unreachable` must say why, not look like nobody's around.
   return { active_now: raw.active_now ?? 0, active: (raw.active ?? []).map(row), nearby: (raw.nearby ?? []).map(row), as_of: raw.as_of, ...hidden(raw.hidden_reason) };
 }
 
@@ -197,7 +202,7 @@ export function sharedZonesFromCampus(raw: CampusSharedZones): T.SharedZonesInde
     }
   }
   const people = [...byPerson.values()].map((e) => e.row).sort((a, b) => b.shared_zones_count - a.shared_zones_count || a.person.display_name.localeCompare(b.person.display_name));
-  // campus-service has no shared-zones visibility switch; `blocks_unavailable` empties the list (fail-closed).
+  // campus-service has no shared-zones visibility switch; `blocks_unreachable` empties the list (fail-closed).
   return { people, visible: raw.visible ?? true, ...hidden(raw.hidden_reason) };
 }
 

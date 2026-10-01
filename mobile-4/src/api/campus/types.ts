@@ -211,11 +211,11 @@ export type ActivePerson = {
 
 /**
  * Why a people list is hidden or empty, as a code a screen can act on (campus-service's `hidden_reason`):
- * `open_to_meet_off` → Settings (turn Open to Meet on); `blocks_unavailable` → Retry (the block list
+ * `open_to_meet_off` → Settings (turn Open to Meet on); `blocks_unreachable` → Retry (the block list
  * couldn't be checked, so the list came back empty — fail-closed); `blocked` is never shown. Unknown
  * codes may arrive from a newer server.
  */
-export type HiddenCode = 'open_to_meet_off' | 'blocks_unavailable' | 'blocked' | (string & {});
+export type HiddenCode = 'open_to_meet_off' | 'blocks_unreachable' | 'blocked' | (string & {});
 
 /** `hidden_reason` / `hidden_code` (optional): set when the backend hid or emptied the lists — an empty list then says why. */
 export type ActiveNow = { active_now: number; active: ActivePerson[]; nearby: ActivePerson[]; as_of: string; hidden_reason?: string | null; hidden_code?: HiddenCode | null };
