@@ -41,6 +41,14 @@ function startFakeSocial() {
         res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ subject: sub, blocked: [], as_of: new Date().toISOString() }));
         return;
       }
+      if (req.method === 'POST' && req.url === '/internal/v1/crews/memberships') {
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ people: [] }));
+        return;
+      }
+      if (req.method === 'POST' && req.url === '/internal/v1/crews/lookup') {
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ crews: [] }));
+        return;
+      }
       if (req.method !== 'POST' || req.url !== '/internal/v1/people/resolve') { res.writeHead(404).end(); return; }
       if (req.headers.authorization !== `Bearer ${TOKEN}`) { res.writeHead(401).end(); return; }
       const body = JSON.parse(raw || '{}') as { subjects?: string[]; profile_ids?: string[] };

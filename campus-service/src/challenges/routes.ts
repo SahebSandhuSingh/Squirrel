@@ -14,6 +14,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { getPool, many, one, query, withTransaction } from '../db/pool.js';
+import { lookupCrewMemberships, lookupCrews } from '../identity/index.js';
 import { errors } from '../lib/errors.js';
 import { isUuid } from '../lib/ids.js';
 import { requireAuth, currentUser } from '../auth/plugin.js';
@@ -70,14 +71,18 @@ async function serialize(rows: ChallengeRow[], viewerId: string) {
 async function participants(r: ChallengeRow): Promise<string[]> {
   const ids = new Set<string>([r.created_by]);
   if (r.target_user_id) ids.add(r.target_user_id);
-  if (r.target_crew_id) for (const m of await many<{ user_id: string }>(`SELECT user_id FROM crew_members WHERE crew_id = $1`, [r.target_crew_id])) ids.add(m.user_id);
+  if (r.target_crew_id) {
+    const crewData = (await lookupCrews([r.target_crew_id])).get(r.target_crew_id);
+    if (crewData) for (const m of crewData.members) ids.add(m.subject);
+  }
   return [...ids];
 }
 
 /** Can `user` respond (accept/decline) on behalf of the target? A user target: themselves. A crew target: owner/admin. */
 async function canRespond(user: UserRow, r: ChallengeRow) {
   if (r.target_type === 'user') return r.target_user_id === user.id;
-  const m = await one<{ role: string }>(`SELECT role FROM crew_members WHERE crew_id = $1 AND user_id = $2`, [r.target_crew_id, user.id]);
+  const crews = (await lookupCrewMemberships([user.id])).get(user.id) || [];
+  const m = crews.find(c => c.id === r.target_crew_id);
   return !!m && (m.role === 'owner' || m.role === 'admin');
 }
 
@@ -96,11 +101,12 @@ export async function challengeRoutes(app: FastifyInstance) {
       const user = currentUser(req);
       const { box } = z.object({ box: z.enum(['incoming', 'outgoing', 'all']).default('all') }).parse(req.query);
       await expireStale();
+      const myCrews = ((await lookupCrewMemberships([user.id])).get(user.id) || []).map(c => c.id);
       const rows = await many<ChallengeRow>(
         `${SELECT} WHERE (
             ($2 IN ('outgoing','all') AND ch.created_by = $1) OR
-            ($2 IN ('incoming','all') AND (ch.target_user_id = $1 OR ch.target_crew_id IN (SELECT crew_id FROM crew_members WHERE user_id = $1)))
-         ) ORDER BY ch.created_at DESC LIMIT 100`, [user.id, box]);
+            ($2 IN ('incoming','all') AND (ch.target_user_id = $1 OR ch.target_crew_id = ANY($3::uuid[])))
+         ) ORDER BY ch.created_at DESC LIMIT 100`, [user.id, box, myCrews]);
       return { invites: await serialize(rows, user.id), challenges: await serialize(rows, user.id) };
     });
 
@@ -187,7 +193,8 @@ export async function challengeRoutes(app: FastifyInstance) {
                 else sets.result_summary = `Nobody in the challenge holds ${r.zone_name} at the end — draw.`;
               } else if (r.type === 'weekend_war' && r.target_crew_id) {
                 const c = await one<{ n: number }>(`SELECT count(*)::int AS n FROM territories WHERE crew_id = $1`, [r.target_crew_id], tx);
-                const mine = await one<{ n: number }>(`SELECT count(*)::int AS n FROM territories t JOIN crew_members cm ON cm.user_id = $1 AND cm.crew_id = t.crew_id`, [r.created_by], tx);
+                const mineCrewIds = ((await lookupCrewMemberships([r.created_by])).get(r.created_by) || []).map(c => c.id);
+                const mine = mineCrewIds.length ? await one<{ n: number }>(`SELECT count(*)::int AS n FROM territories WHERE crew_id = ANY($1::uuid[])`, [mineCrewIds], tx) : { n: 0 };
                 const a = mine?.n ?? 0, b2 = c?.n ?? 0;
                 if (b2 > a) { sets.winner_crew_id = r.target_crew_id; sets.result_summary = `${r.crew_name} holds ${b2} zones vs ${a}.`; }
                 else if (a > b2) { sets.winner_user_id = r.created_by; sets.result_summary = `Challenger's crew holds ${a} zones vs ${b2}.`; }

@@ -12,6 +12,7 @@ import { listNotifications, markRead, toApp } from '../notifications/service.js'
 import { getPeopleLite } from './repo.js';
 import { authConfigured } from '../auth/jwt.js';
 import { isBlockedEitherWay } from '../blocks/service.js';
+import { lookupCrewMemberships, lookupCrews } from '../identity/index.js';
 import { getProfileDetails, ProfileDetailsInput, saveProfileDetails } from './details.js';
 
 const MePatch = z.object({
@@ -29,25 +30,25 @@ const MePatch = z.object({
 const OpenToMeet = z.object({ enabled: z.boolean(), hours: z.number().min(1).max(24 * 7).optional() });
 
 async function profileStats(userId: string) {
-  const s = await one<{ total_distance_m: number; month_distance_m: number; zones_claimed: number; territories_defended: number; territories_stolen: number; crew_memberships: number }>(
+  const s = await one<{ total_distance_m: number; month_distance_m: number; zones_claimed: number; territories_defended: number; territories_stolen: number }>(
     `SELECT
        coalesce((SELECT sum(distance_m) FROM activities WHERE user_id = $1 AND verification_status IN ('VERIFIED','PARTIALLY_VERIFIED')), 0)::float8 AS total_distance_m,
        coalesce((SELECT sum(distance_m) FROM activities WHERE user_id = $1 AND verification_status IN ('VERIFIED','PARTIALLY_VERIFIED') AND started_at > date_trunc('month', now())), 0)::float8 AS month_distance_m,
        (SELECT count(*) FROM territory_events WHERE actor_id = $1 AND action IN ('CLAIM','STEAL'))::int AS zones_claimed,
        (SELECT count(*) FROM territory_events WHERE actor_id = $1 AND action = 'DEFEND')::int AS territories_defended,
-       (SELECT count(*) FROM territory_events WHERE actor_id = $1 AND action = 'STEAL')::int AS territories_stolen,
-       (SELECT count(*) FROM crew_members WHERE user_id = $1)::int AS crew_memberships`,
+       (SELECT count(*) FROM territory_events WHERE actor_id = $1 AND action = 'STEAL')::int AS territories_stolen`,
     [userId],
   );
-  return { total_distance_m: Math.round(s?.total_distance_m ?? 0), month_distance_m: Math.round(s?.month_distance_m ?? 0), zones_claimed: s?.zones_claimed ?? 0, territories_defended: s?.territories_defended ?? 0, territories_stolen: s?.territories_stolen ?? 0, crew_memberships: s?.crew_memberships ?? 0, events_attended: 0, streak_days: null };
+  const memberships = (await lookupCrewMemberships([userId])).get(userId) || [];
+  return { total_distance_m: Math.round(s?.total_distance_m ?? 0), month_distance_m: Math.round(s?.month_distance_m ?? 0), zones_claimed: s?.zones_claimed ?? 0, territories_defended: s?.territories_defended ?? 0, territories_stolen: s?.territories_stolen ?? 0, crew_memberships: memberships.length, events_attended: 0, streak_days: null };
 }
 
 export async function publicProfile(u: UserRow, viewerId: string | null) {
   const hostel = u.hostel_id ? await one<{ short_name: string }>(`SELECT short_name FROM hostels WHERE id = $1`, [u.hostel_id]) : null;
   const territories = await many<{ zone_id: string; zone_name: string; claimed_at: string; defended_count: number }>(
     `SELECT t.zone_id, z.name AS zone_name, t.claimed_at, t.defense_count AS defended_count FROM territories t JOIN zones z ON z.id = t.zone_id WHERE t.owner_id = $1 ORDER BY t.claimed_at DESC`, [u.id]);
-  const crews = await many<{ id: string; name: string; color: string | null; icon: string | null; role: string }>(
-    `SELECT c.id, c.name, c.color, c.icon, cm.role FROM crew_members cm JOIN crews c ON c.id = cm.crew_id WHERE cm.user_id = $1`, [u.id]);
+  const crewsData = (await lookupCrewMemberships([u.id])).get(u.id) || [];
+  const crews = crewsData.map(c => ({ id: c.id, name: c.name, color: null, icon: null, role: c.role }));
   const recent = viewerId === u.id ? await many<{ id: string; activity_type: string; started_at: string; distance_m: number | null; duration_s: number | null; verification_status: string; zones_count: number }>(
     `SELECT a.id, a.activity_type, a.started_at, a.distance_m, a.duration_s, a.verification_status,
             (SELECT count(*) FROM qualification_results q WHERE q.activity_id = a.id AND q.interaction <> 'passed_through')::int AS zones_count
@@ -142,8 +143,10 @@ export async function userRoutes(app: FastifyInstance) {
        SELECT z.id AS zone_id, z.name AS zone_name,
          CASE WHEN t.owner_id = $1 THEN 'you_own_they_ran' WHEN t.owner_id = $2 THEN 'they_own_you_ran' ELSE 'both_ran' END AS relation
        FROM mine JOIN theirs USING (zone_id) JOIN zones z ON z.id = mine.zone_id LEFT JOIN territories t ON t.zone_id = z.id LIMIT 10`, [me.id, id]);
-    const crews = await many<{ id: string; name: string; color: string | null; icon: string | null }>(
-      `SELECT c.id, c.name, c.color, c.icon FROM crew_members a JOIN crew_members b ON a.crew_id = b.crew_id JOIN crews c ON c.id = a.crew_id WHERE a.user_id = $1 AND b.user_id = $2`, [me.id, id]);
+    const mems = await lookupCrewMemberships([me.id, id]);
+    const myCrews = mems.get(me.id) || [];
+    const theirCrews = new Set((mems.get(id) || []).map(c => c.id));
+    const crews = myCrews.filter(c => theirCrews.has(c.id)).map(c => ({ id: c.id, name: c.name, color: null as string | null, icon: null as string | null }));
     const icebreakers = [
       ...shared.slice(0, 3).map((s) => ({ id: `zone-${s.zone_id}`, kind: 'shared_zone', text: `You both run ${s.zone_name}.`, zone_id: s.zone_id, action: { type: 'challenge', zone_id: s.zone_id } })),
       ...crews.slice(0, 2).map((c) => ({ id: `crew-${c.id}`, kind: 'shared_crew', text: `You're both in ${c.name}.`, crew_id: c.id })),

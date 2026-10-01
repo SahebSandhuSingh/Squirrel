@@ -50,6 +50,15 @@ function startFakeSocial() {
         return;
       }
       
+      if (req.method === 'POST' && req.url === '/internal/v1/crews/memberships') {
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ people: [] }));
+        return;
+      }
+      if (req.method === 'POST' && req.url === '/internal/v1/crews/lookup') {
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ crews: [] }));
+        return;
+      }
+
       if (req.method === 'POST' && req.url === '/internal/v1/people/resolve') {
          res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ people: [] }));
          return;

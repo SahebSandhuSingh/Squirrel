@@ -77,7 +77,9 @@ let downUntil = 0;
 const blocksCache = new Map<string, { blocked: Set<string>; at: number }>();
 
 export function resetIdentityState() {
-  bySub.clear(); subByProfile.clear(); notAProfile.clear(); blocksCache.clear(); downUntil = 0;
+  bySub.clear(); subByProfile.clear(); notAProfile.clear(); blocksCache.clear();
+  crewMemCache.clear(); crewLookupCache.clear();
+  downUntil = 0;
 }
 
 function bounded<K, V>(m: Map<K, V>) {
@@ -302,4 +304,117 @@ export async function lookupBlocks(sub: string): Promise<Set<string>> {
     markDown(err);
     throw new BlocksUnavailableError();
   }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Crews
+// ---------------------------------------------------------------------------------------------
+
+export type SocialCrewRef = { id: string; name: string; role: string; joined_at: string };
+export type SocialCrewMember = { subject: string; role: string; joined_at: string };
+export type SocialCrew = { id: string; name: string; members_count: number; members: SocialCrewMember[] };
+
+const crewMemCache = new Map<string, { crews: SocialCrewRef[]; at: number }>();
+const crewLookupCache = new Map<string, { crew: SocialCrew; at: number }>();
+
+export async function lookupCrewMemberships(subs: string[]): Promise<Map<string, SocialCrewRef[]>> {
+  const s = socialSettings();
+  const out = new Map<string, SocialCrewRef[]>();
+  if (!s) return out;
+
+  const now = Date.now();
+  const need: string[] = [];
+  
+  for (const sub of new Set(subs.filter(Boolean))) {
+    const c = crewMemCache.get(sub);
+    if (c && now - c.at < s.cacheTtlMs) {
+      out.set(sub, c.crews);
+    } else {
+      need.push(sub);
+    }
+  }
+
+  if (need.length && available()) {
+    try {
+      for (const chunk of chunks(need)) {
+        const res = await fetch(`${s.url}/internal/v1/crews/memberships`, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${s.token}`, accept: 'application/json', 'content-type': 'application/json' },
+          body: JSON.stringify({ subjects: chunk }),
+          signal: AbortSignal.timeout(s.timeoutMs),
+        });
+        if (!res.ok) {
+          await res.body?.cancel().catch(() => undefined);
+          throw new Error(`HTTP ${res.status}`);
+        }
+        const data = await res.json() as { people: { subject: string; crews: SocialCrewRef[] }[] };
+        for (const person of data.people) {
+          crewMemCache.set(person.subject, { crews: person.crews, at: Date.now() });
+          out.set(person.subject, person.crews);
+        }
+      }
+    } catch (err) {
+      markDown(err);
+    }
+  }
+  
+  for (const sub of need) {
+    if (!out.has(sub)) {
+      const c = crewMemCache.get(sub);
+      out.set(sub, c ? c.crews : []);
+    }
+  }
+  
+  return out;
+}
+
+export async function lookupCrews(crewIds: string[]): Promise<Map<string, SocialCrew>> {
+  const s = socialSettings();
+  const out = new Map<string, SocialCrew>();
+  if (!s) return out;
+
+  const now = Date.now();
+  const need: string[] = [];
+  
+  for (const id of new Set(crewIds.filter(Boolean))) {
+    const c = crewLookupCache.get(id);
+    if (c && now - c.at < s.cacheTtlMs) {
+      out.set(id, c.crew);
+    } else {
+      need.push(id);
+    }
+  }
+
+  if (need.length && available()) {
+    try {
+      for (const chunk of chunks(need)) {
+        const res = await fetch(`${s.url}/internal/v1/crews/lookup`, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${s.token}`, accept: 'application/json', 'content-type': 'application/json' },
+          body: JSON.stringify({ crew_ids: chunk }),
+          signal: AbortSignal.timeout(s.timeoutMs),
+        });
+        if (!res.ok) {
+          await res.body?.cancel().catch(() => undefined);
+          throw new Error(`HTTP ${res.status}`);
+        }
+        const data = await res.json() as { crews: SocialCrew[] };
+        for (const crew of data.crews) {
+          crewLookupCache.set(crew.id, { crew, at: Date.now() });
+          out.set(crew.id, crew);
+        }
+      }
+    } catch (err) {
+      markDown(err);
+    }
+  }
+  
+  for (const id of need) {
+    if (!out.has(id)) {
+      const c = crewLookupCache.get(id);
+      if (c) out.set(id, c.crew);
+    }
+  }
+  
+  return out;
 }

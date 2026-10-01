@@ -47,15 +47,20 @@ export async function hasPendingVerification(userId: string, zoneId: string, q: 
   return (r?.n ?? 0) > 0;
 }
 
+import { lookupCrewMemberships, lookupCrews } from '../identity';
+
 export async function isCrewMember(userId: string, crewId: string | null, q: pg.PoolClient | pg.Pool) {
   if (!crewId) return false;
-  const r = await one(`SELECT 1 FROM crew_members WHERE crew_id = $1 AND user_id = $2`, [crewId, userId], q);
-  return !!r;
+  const memberships = (await lookupCrewMemberships([userId])).get(userId) || [];
+  return memberships.some(c => c.id === crewId);
 }
 
 export async function primaryCrewId(userId: string, q: pg.PoolClient | pg.Pool) {
-  const r = await one<{ crew_id: string }>(`SELECT crew_id FROM crew_members WHERE user_id = $1 ORDER BY joined_at LIMIT 1`, [userId], q);
-  return r?.crew_id ?? null;
+  const memberships = (await lookupCrewMemberships([userId])).get(userId) || [];
+  if (memberships.length === 0) return null;
+  
+  // They are ordered by oldest membership first by Social
+  return memberships[0].id;
 }
 
 /** The server's answer to "what can this user do here?" — used by every read endpoint. */
@@ -200,7 +205,13 @@ export async function performTerritoryAction(user: UserRow, zoneId: string, acti
   }
   if (action === 'claim') {
     // Crew mates get a heads-up that the crew gained ground.
-    const mates = await many<{ user_id: string }>(`SELECT cm.user_id FROM crew_members cm WHERE cm.crew_id = $1 AND cm.user_id <> $2`, [t.crew?.id ?? '00000000-0000-0000-0000-000000000000', user.id]);
+    const mates: { user_id: string }[] = [];
+    if (t.crew?.id) {
+      const crewData = (await lookupCrews([t.crew.id])).get(t.crew.id);
+      if (crewData) {
+        mates.push(...crewData.members.filter(m => m.subject !== user.id).map(m => ({ user_id: m.subject })));
+      }
+    }
     for (const m of mates) await notify(m.user_id, 'zone.claimed', `${actor?.display_name ?? 'A crew mate'} claimed ${zoneName}.`, { zone_id: zoneId, user_id: user.id }, user.id);
   }
   return committed.result;
