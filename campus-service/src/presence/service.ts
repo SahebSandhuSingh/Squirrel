@@ -45,6 +45,7 @@ export async function activeNowCount(q: Queryable = getPool()) {
 export type ActiveRow = {
   user_id: string; display_name: string; avatar_url: string | null; hostel: string | null; connection_mode: string | null; bio: string | null;
   open_to_meet: boolean; activity_type: string | null; activity_started_at: string | null; distance_m: number | null; updated_at: string;
+  xp_total: number; xp_synced_at: string;
 };
 
 /**
@@ -55,7 +56,7 @@ export type ActiveRow = {
 export async function activePeople(viewerId: string, viewerOpen: boolean, q: Queryable = getPool()) {
   const rows = await many<ActiveRow>(
     `WITH me AS (SELECT geom FROM presence WHERE user_id = $1 AND expires_at > now())
-     SELECT u.id AS user_id, u.display_name, u.avatar_url, h.short_name AS hostel, u.connection_mode, u.bio, u.open_to_meet,
+     SELECT u.id AS user_id, u.display_name, u.avatar_url, h.short_name AS hostel, u.connection_mode, u.bio, u.open_to_meet, u.xp_total, u.xp_synced_at,
             p.activity_type, p.activity_started_at, p.updated_at,
             (SELECT ST_Distance(p.geom::geography, me.geom::geography) FROM me) AS distance_m
      FROM presence p JOIN users u ON u.id = p.user_id LEFT JOIN hostels h ON h.id = u.hostel_id
@@ -63,6 +64,10 @@ export async function activePeople(viewerId: string, viewerOpen: boolean, q: Que
      ORDER BY p.updated_at DESC LIMIT 200`,
     [viewerId], q,
   );
+  
+  const { syncBatchXp } = await import('../run/index.js');
+  await syncBatchXp(rows, q);
+  
   const active = rows.filter((r) => r.activity_type).map((r) => ({ ...r, proximity: viewerOpen && r.open_to_meet ? bucket(r.distance_m) : null }));
   const nearby = viewerOpen
     ? rows.filter((r) => r.open_to_meet && r.distance_m !== null && r.distance_m <= config.presence.nearbyRadiusM).map((r) => ({ ...r, proximity: bucket(r.distance_m) }))

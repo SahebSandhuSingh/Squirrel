@@ -13,7 +13,7 @@ const PresenceBody = z.object({ lat: z.number().min(-90).max(90), lng: z.number(
 function personCard(r: ActiveRow & { proximity: string | null }) {
   // Activity-first card; no location, no route. Only what the person already shows on their public profile.
   return {
-    person: { user_id: r.user_id, display_name: r.display_name, avatar_url: r.avatar_url, hostel: r.hostel, connection_mode: r.connection_mode, bio: r.bio },
+    person: { user_id: r.user_id, display_name: r.display_name, avatar_url: r.avatar_url, hostel: r.hostel, connection_mode: r.connection_mode, bio: r.bio, level: Math.floor(r.xp_total / 2000) + 1, xp: r.xp_total },
     activity: r.activity_type ? { type: r.activity_type, started_at: r.activity_started_at } : null,
     proximity: r.proximity,
   };
@@ -58,21 +58,24 @@ export async function presenceRoutes(app: FastifyInstance) {
     const user = currentUser(req);
     const viewerOpen = user.open_to_meet && (!user.open_to_meet_until || Date.parse(user.open_to_meet_until) > Date.now());
     if (!viewerOpen) return { players: [], as_of: new Date().toISOString(), visible: false, hidden_reason: 'open_to_meet_off' };
-    const rows = await many<ActiveRow & { lat: number; lng: number; campus_xp: number }>(
+    const rows = await many<ActiveRow & { lat: number; lng: number }>(
       `WITH me AS (SELECT geom FROM presence WHERE user_id = $1 AND expires_at > now())
-       SELECT u.id AS user_id, u.display_name, u.avatar_url, h.short_name AS hostel, u.connection_mode, u.bio, u.open_to_meet, u.campus_xp,
+       SELECT u.id AS user_id, u.display_name, u.avatar_url, h.short_name AS hostel, u.connection_mode, u.bio, u.open_to_meet, u.xp_total, u.xp_synced_at,
               p.activity_type, p.activity_started_at, p.updated_at, ST_Y(p.geom) AS lat, ST_X(p.geom) AS lng,
               (SELECT ST_Distance(p.geom::geography, me.geom::geography) FROM me) AS distance_m
        FROM presence p JOIN users u ON u.id = p.user_id LEFT JOIN hostels h ON h.id = u.hostel_id
        WHERE p.expires_at > now() AND u.id <> $1 AND u.open_to_meet AND NOT u.is_banned LIMIT 200`, [user.id], getPool(),
     );
+    const { syncBatchXp } = await import('../run/index.js');
+    await syncBatchXp(rows, getPool());
+    
     const players = [];
     try {
       const blocks = await getFullBlockSet(user.id);
       for (const r of rows) {
         if (!blocks.has(r.user_id)) {
           const s = snapToGrid(r.lat, r.lng);
-          players.push({ user_id: r.user_id, display_name: r.display_name, avatar_url: r.avatar_url, hostel: r.hostel, level: Math.floor(r.campus_xp / 2000) + 1, xp: r.campus_xp,
+          players.push({ user_id: r.user_id, display_name: r.display_name, avatar_url: r.avatar_url, hostel: r.hostel, level: Math.floor(r.xp_total / 2000) + 1, xp: r.xp_total,
             position: [s.lat, s.lng], precision_m: s.precision_m, proximity: r.distance_m === null ? 'on_campus' : r.distance_m <= config.presence.veryCloseM ? 'very_close' : r.distance_m <= config.presence.nearbyM ? 'nearby' : 'on_campus',
             activity: r.activity_type, last_seen_at: r.updated_at, relationship: 'none' });
         }

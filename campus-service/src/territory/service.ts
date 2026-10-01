@@ -158,7 +158,7 @@ export async function performTerritoryAction(user: UserRow, zoneId: string, acti
     );
     // 4. Spend the qualification; award XP; start the cooldown.
     await query(`UPDATE qualification_results SET status = 'CLAIMED', claim_available = false, consumed_by_event_id = $2 WHERE id = $1`, [qual.id, event!.id], tx);
-    await query(`UPDATE users SET campus_xp = campus_xp + $2, updated_at = now() WHERE id = $1`, [actor.id, xp], tx);
+    
     await touchTerritoryAction(actor.id, tx);
 
     const fresh = (await getTerritory(zoneId, tx))!;
@@ -172,6 +172,17 @@ export async function performTerritoryAction(user: UserRow, zoneId: string, acti
 
   invalidateUserCache(user.id);
   if (committed.result.replayed) return committed.result;
+
+  try {
+    const { awardXp } = await import('../run/index.js');
+    const newTotal = await awardXp(user.id, committed.event.xp_awarded, action === 'steal' ? 'territory_steal' : action === 'defend' ? 'territory_defend' : 'territory_claim', idempotencyKey);
+    if (newTotal !== null) {
+      await query(`UPDATE users SET xp_total = $2, xp_synced_at = now(), updated_at = now() WHERE id = $1`, [user.id, newTotal]);
+      invalidateUserCache(user.id);
+    }
+  } catch (err) {
+    console.error('Failed to award territory XP to run module. Claim succeeded, xp_synced_at left stale.', err);
+  }
 
   // 5. Side effects after commit: realtime + notifications.
   const t = committed.result.territory;

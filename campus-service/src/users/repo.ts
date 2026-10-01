@@ -1,5 +1,5 @@
 import type { JWTPayload } from 'jose';
-import { one, many, query, type Queryable } from '../db/pool.js';
+import { one, many, query, getPool, type Queryable } from '../db/pool.js';
 import { bridgeEnabled, lookupBySubs, onFreshSocialPeople, type SocialPerson } from '../identity/index.js';
 
 export type UserRow = {
@@ -17,14 +17,15 @@ export type UserRow = {
   date_mode_enabled: boolean;
   onboarding_completed: boolean;
   founding_member: boolean;
-  campus_xp: number;
+  xp_total: number;
+  xp_synced_at: string;
   last_territory_action_at: string | null;
   is_banned: boolean;
   created_at: string;
   updated_at: string;
 };
 
-export type PersonLite = { user_id: string; display_name: string; avatar_url: string | null; hostel: string | null };
+export type PersonLite = { user_id: string; display_name: string; avatar_url: string | null; hostel: string | null; level?: number; xp?: number; };
 
 const CACHE = new Map<string, { row: UserRow; at: number }>();
 const CACHE_TTL = 5_000;
@@ -93,11 +94,16 @@ export async function getPeopleLite(ids: string[], q?: Queryable): Promise<Map<s
   const out = new Map<string, PersonLite>();
   const uniq = [...new Set(ids.filter(Boolean))];
   if (!uniq.length) return out;
-  const rows = await many<{ id: string; display_name: string; avatar_url: string | null; hostel: string | null }>(
-    `SELECT u.id, u.display_name, u.avatar_url, h.short_name AS hostel FROM users u LEFT JOIN hostels h ON h.id = u.hostel_id WHERE u.id = ANY($1)`,
+  const rows = await many<{ id: string; display_name: string; avatar_url: string | null; hostel: string | null; xp_total: number; xp_synced_at: string }>(
+    `SELECT u.id, u.display_name, u.avatar_url, h.short_name AS hostel, u.xp_total, u.xp_synced_at FROM users u LEFT JOIN hostels h ON h.id = u.hostel_id WHERE u.id = ANY($1)`,
     [uniq], q,
   );
-  for (const r of rows) out.set(r.id, { user_id: r.id, display_name: r.display_name, avatar_url: r.avatar_url, hostel: r.hostel });
+  const { syncBatchXp } = await import('../run/index.js');
+  await syncBatchXp(rows.map(r => ({ user_id: r.id, xp_total: r.xp_total, xp_synced_at: r.xp_synced_at })), q ?? getPool());
+
+  for (const r of rows) {
+    out.set(r.id, { user_id: r.id, display_name: r.display_name, avatar_url: r.avatar_url, hostel: r.hostel, level: Math.floor(r.xp_total / 2000) + 1, xp: r.xp_total });
+  }
   return out;
 }
 

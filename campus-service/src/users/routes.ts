@@ -59,7 +59,7 @@ export async function publicProfile(u: UserRow, viewerId: string | null) {
     stats: await profileStats(u.id), territories, crews, badges: [],
     recent_activities: recent.map((a) => ({ id: a.id, type: a.activity_type, started_at: a.started_at, distance_m: Math.round(a.distance_m ?? 0), duration_s: a.duration_s ?? 0, zones_count: a.zones_count,
       status: a.verification_status === 'VERIFIED' ? 'verified' : a.verification_status === 'PARTIALLY_VERIFIED' ? 'flagged' : a.verification_status === 'REJECTED' ? 'rejected' : 'processing' })),
-    joined_at: u.created_at, founding_member: u.founding_member, level: Math.floor(u.campus_xp / 2000) + 1, campus_xp: u.campus_xp,
+    joined_at: u.created_at, founding_member: u.founding_member, level: Math.floor(u.xp_total / 2000) + 1, campus_xp: u.xp_total,
   };
 }
 

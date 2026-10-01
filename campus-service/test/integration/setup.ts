@@ -20,14 +20,42 @@ export async function resetDb() {
   await seedZones();
 }
 
+export let runFakeStats = { awards: 0, totals: 0, lastTotalSubjects: 0 };
+export function resetRunFakeStats() { runFakeStats = { awards: 0, totals: 0, lastTotalSubjects: 0 }; }
+export let runFakeState = { offline: false };
+
 export function useTestApp() {
+  let runFake: FastifyInstance;
+
   beforeAll(async () => {
     await resetDb();
+    
+    // Fake Run Module
+    runFake = (await import('fastify')).default();
+    runFake.post('/internal/v1/xp/award', async (req, res) => { 
+      if (runFakeState.offline) return res.status(503).send({ error: 'offline' });
+      runFakeStats.awards++;
+      return (req.body as any).amount + 1000; 
+    }); 
+    runFake.post('/internal/v1/xp/totals', async (req, res) => {
+      if (runFakeState.offline) return res.status(503).send({ error: 'offline' });
+      runFakeStats.totals++;
+      const subs = (req.body as any).subjects as string[];
+      runFakeStats.lastTotalSubjects = subs.length;
+      const result: Record<string, number> = {};
+      for (const s of subs) result[s] = 12000; // arbitrary cache refresh value
+      return result;
+    });
+    const runUrl = await runFake.listen({ port: 0 });
+    const { configureRunBridge } = await import('../../src/run/index.js');
+    configureRunBridge({ url: runUrl, token: 'fake' });
+
     app = await buildApp({ logger: false });
     await app.ready();
   });
   afterAll(async () => {
     await app.close();
+    await runFake.close();
     await closePool();
   });
 }

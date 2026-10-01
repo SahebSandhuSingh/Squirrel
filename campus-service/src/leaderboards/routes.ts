@@ -32,10 +32,10 @@ async function squirrelBoard(period: 'daily' | 'weekly' | 'alltime', metric: 'xp
        WHERE verification_status IN ('VERIFIED','PARTIALLY_VERIFIED') AND started_at >= $1 GROUP BY user_id
      ), agg AS (
        SELECT u.id AS user_id, u.display_name, u.avatar_url, h.short_name AS hostel,
-              CASE WHEN $3 = 'alltime' THEN u.campus_xp ELSE coalesce(ev.xp, 0) END AS xp,
+              CASE WHEN $3 = 'alltime' THEN u.xp_total ELSE coalesce(ev.xp, 0) END AS xp,
               coalesce(ev.zones_claimed, 0) AS zones_claimed, coalesce(act.distance_m, 0) AS distance_m
        FROM users u LEFT JOIN hostels h ON h.id = u.hostel_id LEFT JOIN ev ON ev.user_id = u.id LEFT JOIN act ON act.user_id = u.id
-       WHERE NOT u.is_banned AND (ev.user_id IS NOT NULL OR act.user_id IS NOT NULL OR ($3 = 'alltime' AND u.campus_xp > 0))
+       WHERE NOT u.is_banned AND (ev.user_id IS NOT NULL OR act.user_id IS NOT NULL OR ($3 = 'alltime' AND u.xp_total > 0))
      )
      SELECT *, rank() OVER (ORDER BY ${order} DESC, xp DESC, user_id)::int AS rank FROM agg ORDER BY rank LIMIT $2`,
     [since, limit, period],

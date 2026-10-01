@@ -39,6 +39,13 @@ export const config = {
     cacheTtlSeconds: num('SOCIAL_CACHE_TTL_SECONDS', 300),
   },
 
+  run: {
+    apiUrl: str('RUN_API_URL').trim().replace(/\/+$/, ''),
+    internalToken: str('RUN_INTERNAL_TOKEN').trim(),
+    timeoutMs: num('RUN_TIMEOUT_MS', 3000),
+    cacheTtlSeconds: num('RUN_CACHE_TTL_SECONDS', 300),
+  },
+
   auth: {
     jwksUrl: str('AUTH_JWKS_URL'),
     publicKeyPem: str('AUTH_PUBLIC_KEY_PEM'),
