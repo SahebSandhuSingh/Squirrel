@@ -1,4 +1,4 @@
-import { isBlockedEitherWay } from '../blocks/service.js';
+import { isBlockedEitherWay, getFullBlockSet } from '../blocks/service.js';
 import { many } from '../db/pool.js';
 import { getPeopleLite } from '../users/repo.js';
 
@@ -57,12 +57,13 @@ export async function getSharedZones(userId: string): Promise<{ zones: SharedZon
   const candidateIds = rows.map((row) => row.other_user_id).filter((id): id is string => !!id);
   const allowedIds = new Set<string>();
   try {
+    const blocks = await getFullBlockSet(userId);
     for (const id of [...new Set(candidateIds)]) {
-      if (!(await isBlockedEitherWay(userId, id))) allowedIds.add(id);
+      if (!blocks.has(id)) allowedIds.add(id);
     }
   } catch (err: any) {
-    if (err.code === 'blocks_unavailable') {
-      return { zones: [], cap: { zones: MAX_SHARED_ZONES, people_per_zone: MAX_SHARED_PEOPLE_PER_ZONE }, hidden_reason: 'blocks_unavailable' } as any;
+    if (err.code === 'blocks_unreachable') {
+      return { zones: [], cap: { zones: MAX_SHARED_ZONES, people_per_zone: MAX_SHARED_PEOPLE_PER_ZONE }, hidden_reason: 'blocks_unreachable' } as any;
     }
     throw err;
   }

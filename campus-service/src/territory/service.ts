@@ -123,12 +123,6 @@ export async function performTerritoryAction(user: UserRow, zoneId: string, acti
     const shieldUntil = addHours(now, config.rules.claimShieldHours);
     const previousOwnerId = territory.owner_id;
 
-    if (action === 'steal' && previousOwnerId) {
-      if (await isBlockedEitherWay(actor.id, previousOwnerId, tx)) {
-        throw errors.conflict('territory_blocked', 'You cannot steal from someone who has blocked you or whom you have blocked.');
-      }
-    }
-
     const nextVersion = territory.version + 1;
     let xp = 0;
     let dbAction: TerritoryEventRow['action'];

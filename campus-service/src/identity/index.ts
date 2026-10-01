@@ -290,11 +290,6 @@ export async function lookupBlocks(sub: string): Promise<Set<string>> {
       headers: { authorization: `Bearer ${s.token}`, accept: 'application/json' },
       signal: AbortSignal.timeout(s.timeoutMs),
     });
-    if (res.status === 404) {
-      await res.body?.cancel().catch(() => undefined);
-      blocksCache.set(sub, { blocked: new Set(), at: Date.now() });
-      return new Set();
-    }
     if (!res.ok) {
       await res.body?.cancel().catch(() => undefined);
       throw new Error(`HTTP ${res.status}`);

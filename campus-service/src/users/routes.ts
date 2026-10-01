@@ -129,9 +129,10 @@ export async function userRoutes(app: FastifyInstance) {
     const me = currentUser(req);
     const { id } = z.object({ id: z.string().min(1).max(128) }).parse(req.params);
     try {
-      if (await isBlockedEitherWay(me.id, id)) return { shared_zones: [], shared_crews: [], shared_events: [], icebreakers: [], hidden_reason: 'blocked' };
+      if (await isBlockedEitherWay(me.id, id)) throw errors.notFound('Squirrel');
     } catch (err: any) {
-      if (err.code === 'blocks_unavailable') return { shared_zones: [], shared_crews: [], shared_events: [], icebreakers: [], hidden_reason: 'blocks_unavailable' };
+      if (err.statusCode === 404) throw err;
+      if (err.code === 'blocks_unreachable') return { shared_zones: [], shared_crews: [], shared_events: [], icebreakers: [], hidden_reason: 'blocks_unreachable' };
       throw err;
     }
     if (!(await getUser(id))) throw errors.notFound('Squirrel');

@@ -11,6 +11,7 @@ import { bridgeEnabled } from './identity/index.js';
 async function main() {
   const app = await buildApp();
   if (config.isProd && !authConfigured()) { app.log.fatal('AUTH_JWKS_URL or AUTH_PUBLIC_KEY_PEM is required in production'); process.exit(1); }
+  if (config.isProd && !bridgeEnabled()) { app.log.fatal('SOCIAL_API_URL and SOCIAL_INTERNAL_TOKEN are required in production'); process.exit(1); }
   // Single-service deploys (Render): schema and placeholder zones are prepared before the API listens.
   if (config.startup.migrateOnStart) {
     await migrate(undefined, (m) => app.log.info(m));

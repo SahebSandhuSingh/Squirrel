@@ -36,6 +36,11 @@ function startFakeSocial() {
     req.on('end', () => {
       if (social.mode === 'hang') return; // never answers → client timeout
       if (social.mode === 'error') { res.writeHead(500).end('boom'); return; }
+      if (req.method === 'GET' && req.url?.startsWith('/internal/v1/blocks/')) {
+        const sub = req.url.split('/internal/v1/blocks/')[1];
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ subject: sub, blocked: [], as_of: new Date().toISOString() }));
+        return;
+      }
       if (req.method !== 'POST' || req.url !== '/internal/v1/people/resolve') { res.writeHead(404).end(); return; }
       if (req.headers.authorization !== `Bearer ${TOKEN}`) { res.writeHead(401).end(); return; }
       const body = JSON.parse(raw || '{}') as { subjects?: string[]; profile_ids?: string[] };

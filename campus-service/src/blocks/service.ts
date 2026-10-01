@@ -1,6 +1,27 @@
-import { getPool, one, type Queryable } from '../db/pool.js';
+import { getPool, one, many, type Queryable } from '../db/pool.js';
 import { lookupBlocks, BlocksUnavailableError } from '../identity/index.js';
 import { ApiError } from '../lib/errors.js';
+
+/** Fetch the caller's full block set (Social's list plus ONE local query) */
+export async function getFullBlockSet(userId: string, q: Queryable = getPool()): Promise<Set<string>> {
+  let socialBlocks: Set<string>;
+  try {
+    socialBlocks = await lookupBlocks(userId);
+  } catch (err) {
+    if (err instanceof BlocksUnavailableError) {
+      throw new ApiError(503, 'blocks_unreachable', 'Cannot verify block status at this time. Please try again.');
+    }
+    throw err;
+  }
+  const localBlocks = await many<{ other: string }>(
+    `SELECT blocked_id AS other FROM blocks WHERE blocker_id = $1
+     UNION
+     SELECT blocker_id AS other FROM blocks WHERE blocked_id = $1`, [userId], q
+  );
+  const fullSet = new Set(socialBlocks);
+  for (const row of localBlocks) fullSet.add(row.other);
+  return fullSet;
+}
 
 /** True when either user has blocked the other. Keep all block checks on this helper. */
 export async function isBlockedEitherWay(a: string, b: string, q: Queryable = getPool()): Promise<boolean> {
@@ -9,7 +30,7 @@ export async function isBlockedEitherWay(a: string, b: string, q: Queryable = ge
     if (blocksA.has(b)) return true;
   } catch (err) {
     if (err instanceof BlocksUnavailableError) {
-      throw new ApiError(503, 'blocks_unavailable', 'Cannot verify block status at this time. Please try again.');
+      throw new ApiError(503, 'blocks_unreachable', 'Cannot verify block status at this time. Please try again.');
     }
     throw err;
   }
