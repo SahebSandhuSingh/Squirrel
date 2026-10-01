@@ -19,7 +19,7 @@ import { useAuth } from '@/auth/AuthProvider';
 import { isComplete, normalizePhone, validateDetails, type DetailsForm } from '@/logic/profileValidation';
 import { ErrorState, NotLiveYet } from '@/components/campus/States';
 import { Button, Display, FadeIn, Header, Icon, Kicker, PressScale, ProgressBar, Screen, Tagline, tap } from '@/components/ui';
-import { invalidateCampus, useAction, useConfig, useMe, useZones } from '@/hooks/useCampus';
+import { invalidateCampus, useAction, useConfig, useHostelOptions, useMe } from '@/hooks/useCampus';
 import { alpha, colors, fonts, radius } from '@/theme';
 
 const MODES: { id: ConnectionMode; title: string; line: string; body: string; icon: React.ComponentProps<typeof Icon>['name']; color: string }[] = [
@@ -33,7 +33,7 @@ const STEPS = 5;
 export default function Onboarding() {
   const config = useConfig();
   const me = useMe();
-  const zones = useZones();
+  const zones = useHostelOptions();
   const [step, setStep] = useState(0);
   const [mode, setMode] = useState<ConnectionMode | null>(null);
   const [hostel, setHostel] = useState<string | null>(null);
@@ -69,7 +69,7 @@ export default function Onboarding() {
     }
   });
   const dateGate = config.data?.features.date_mode;
-  const hostels = (zones.data ?? []).filter((z) => z.kind === 'hostel');
+  const hostels = zones.list;
   const chosenMode = mode ?? me.data?.connection_mode ?? null;
   const chosenHostel = hostel ?? me.data?.hostel_zone_id ?? null;
 
@@ -195,7 +195,7 @@ export default function Onboarding() {
           <Kicker style={{ marginTop: 16 }}>Step 3 · Hostel</Kicker>
           <Display size={38} style={{ marginTop: 4 }}>Rep your{'\n'}<Text style={{ color: colors.primary }}>hostel</Text></Display>
           <Text style={styles.lead2}>Your moves count toward Hostel vs Hostel. Only your hostel name is shown — never your room.</Text>
-          {zones.error && !zones.data ? (
+          {zones.error && !hostels.length ? (
             <ErrorState cause={zones.cause} onRetry={zones.reload} compact />
           ) : (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 16 }}>
@@ -208,7 +208,7 @@ export default function Onboarding() {
                   </PressScale>
                 );
               })}
-              {!hostels.length && !zones.error && <Text style={styles.note}>Loading hostels…</Text>}
+              {!hostels.length && !zones.error && <Text style={styles.note}>{zones.loading ? 'Loading hostels…' : 'No hostels listed yet.'}</Text>}
             </View>
           )}
           <Button label="Continue" icon="arrow-right" onPress={next} style={{ marginTop: 18 }} />

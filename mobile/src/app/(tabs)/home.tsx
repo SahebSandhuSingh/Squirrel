@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { CampusScene } from '@/art/CampusScene';
 import { GoalCard, SceneImage } from '@/components/cards';
 import { CAMPUS_SOURCE } from '@/api/campus';
+import { CampusToday, WaitlistCard } from '@/components/campus/CampusToday';
 import { ActiveNowStrip, CampusNotLive, CampusTerritoryCard, HomeEvents, HomeLeaderboard, SocialShortcuts } from '@/components/campus/HomeSections';
 import { ErrorState, LoadingRows, NotConnected } from '@/components/campus/States';
 import { TopBar } from '@/components/TopBar';
@@ -15,7 +16,7 @@ import { useAuth } from '@/auth/AuthProvider';
 import { Tape } from '@/components/Brand';
 import { PROGRESS_API_CONFIGURED } from '@/api/config';
 import { xpApi } from '@/api/endpoints';
-import { useConfig } from '@/hooks/useCampus';
+import { useConfig, useMe } from '@/hooks/useCampus';
 import { useDailyProgress } from '@/hooks/useDailyProgress';
 import { goalTargets } from '@/logic/progressStats';
 import { useApp } from '@/state/AppState';
@@ -35,6 +36,7 @@ const greeting = () => {
 
 export default function Home() {
   const { me, syncServerXp, exerciseToday } = useApp();
+  const profile = useMe();
   const { mode } = useAuth();
   const config = useConfig();
   const campus = config.data?.campus.name ?? null;
@@ -53,13 +55,16 @@ export default function Home() {
   const targets = goalTargets(goals);
   const goalsDone = goals.filter((g) => g.completed || g.current >= g.target).length;
 
+  // Your profile name when a profile backend answers; the sign-in handle otherwise.
+  const firstName = (profile.data?.display_name && profile.data.display_name !== 'New Squirrel' ? profile.data.display_name.split(' ')[0] : null) ?? me.name;
+
   return (
     <Screen>
       <TopBar />
 
       {/* Greeting */}
       <FadeIn style={{ marginTop: 18 }}>
-        <Text style={styles.hello}>{greeting()}{me.name ? `, ${me.name}` : ''} 👋</Text>
+        <Text style={styles.hello}>{greeting()}{firstName ? `, ${firstName}` : ''} 👋</Text>
         <Display size={44} style={{ marginTop: 2 }}>Ready to <Text style={{ color: colors.primary }}>move?</Text></Display>
       </FadeIn>
 
@@ -112,6 +117,9 @@ export default function Home() {
         </PressScale>
       </FadeIn>
 
+      {/* Campus today — daily activity across campus (Social service) */}
+      <CampusToday />
+
       {/* Today's goals (progress-service) */}
       <SectionHeader kicker="01 — Today" title="Today's Goals" action={d ? `${goalsDone}/${goals.length} done` : 'Open'} onAction={() => router.push('/missions')} />
       {daily.state !== 'ready' ? (
@@ -151,6 +159,9 @@ export default function Home() {
           <Icon name="chevron-right" size={24} color={colors.secondary} />
         </View>
       </PressScale>
+
+      {/* Waitlist & invites (Social service) */}
+      <WaitlistCard />
 
       {/* A window onto the campus that opens the Map (artwork, no data) */}
       <FadeIn>

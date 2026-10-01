@@ -17,6 +17,7 @@ import { AuthProvider, useAuth } from '@/auth/AuthProvider';
 import { LaunchSplash } from '@/components/LaunchSplash';
 import { ToastHost } from '@/components/Toast';
 import { SocialHost } from '@/components/social/SocialHost';
+import { usePushTapRouting } from '@/lib/push';
 import { colors, statusBarStyle } from '@/theme';
 
 const sheet = { presentation: 'transparentModal', animation: 'fade', contentStyle: { backgroundColor: 'transparent' } } as const;
@@ -35,6 +36,8 @@ export default function RootLayout() {
     Inter_700Bold,
     Inter_900Black,
   });
+  // Tapping a push opens its data.route (cold-start taps wait until the navigator is mounted).
+  usePushTapRouting(loaded);
 
   // Auth restores the saved session while the fonts load and the launch splash plays; the
   // splash lifts only when both are ready (and at least SPLASH_MIN_MS have passed).

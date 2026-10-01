@@ -29,8 +29,9 @@ Everything the app shows about you or anyone else comes from a backend. There is
 |---|---|---|
 | Run Module | `EXPO_PUBLIC_API_URL` | Runs (upload, verification, server XP), run leaderboard |
 | progress-service | `EXPO_PUBLIC_PROGRESS_API_URL` | Home's today (steps, active minutes, calories, streak) and Today's goals, Your Progress, Challenges, XP / level |
-| Exercise Mechanics | `EXPO_PUBLIC_EXERCISE_API_URL` | Form coach: catalog, coach profile, sessions, reports |
-| Campus API | `EXPO_PUBLIC_CAMPUS_API_URL` | Profile, map, people, pokes, zones, crews, meetups, invites, leaderboards, notifications |
+| Exercise Mechanics | `EXPO_PUBLIC_EXERCISE_API_URL` | **Accounts** (email code → register, login, refresh), form coach, the "working out now" counter |
+| Social service | `EXPO_PUBLIC_SOCIAL_API_URL` | Profile + badges, waitlist & referrals, crews + vouching, events, meetup check-in, feed + posts + comments, XP / hostel leaderboards, daily stats, notifications + push, photo uploads, duels, friends (follow) |
+| Campus API | `EXPO_PUBLIC_CAMPUS_API_URL` | Zones + territory, map players, open-to-meet, Date Mode, heatmap, meetup ratings (whatever the Social service doesn't cover) |
 
 Without a backend (or a session), a screen shows one of three honest states, never invented data:
 - **Not connected** — the backend exists but this build isn't configured for it, or it needs you signed in (with a Sign in button). `NotConnected` in `components/campus/States.tsx`.
@@ -42,6 +43,16 @@ You can **look around first** without an account (welcome → *Look around first
 **The IISER Kolkata map** (`api/campus/campusBaseMap.ts`) is the one built-in campus layer: hand-placed, approximate outlines of the named zones, roads, buildings and landmarks (no descriptions, no people, no owners). The Map draws it only when the campus backend's own world (`GET /v1/zones` + `/v1/map/features`) isn't live, says "approx. map" in the header, and tapping a zone shows "Territory · Not live yet". Replace it with surveyed / OpenStreetMap geometry when available.
 
 Removed with the sample content: the shop, coins, cosmetics unlocks, rewards road, posts feed, highlights, city picker and the tap-to-log missions (replaced by the server's daily goals).
+
+## Wired to the real services (v6)
+
+One token works everywhere: the Exercise backend issues it, and the Social service, Run Module and progress-service accept it.
+
+- **Sign-up is IISER-only.** Join: campus email (`EXPO_PUBLIC_ALLOWED_EMAIL_DOMAINS`, default `iiserkol.ac.in`; the server checks again) → 6-digit code by email → name + password. Sign in: email + password. The access token is refreshed a minute before it expires and at start-up (`auth/AuthProvider.tsx`).
+- **Invite links** (`/sign-in?mode=create&invite=CODE`, the Social service's `invite_url`) keep the code through sign-up and claim it right after, which moves your friend up the waitlist (`state/invite.ts`).
+- **Campus features from the Social service.** `api/campus/socialAdapter.ts` answers the campus contract with Social's routes: profile, badges, crews, events + RSVP + create, meetups + check-in, leaderboards, notifications, uploads, challenge invites (as 7-day km / workout duels), people search, and friends (a poke is a follow; mutual follows are friends). Fields Social doesn't track are `null` and hidden — never shown as 0.
+- **New screens:** Waitlist & invites (`/waitlist`: your spot, invite 3 to skip the line, referral code, founding badge), Campus today on Home (`/v1/stats/daily`), the real feed with likes, saves and comments (`/social`, `/post/[id]`, posting from `/compose`), crew vouching (crew page), "tell friends you're here" on meetup check-in (followers + crewmates, max 5), create event (`/event/new`, behind the Events lock), push notifications (Profile → More; needs a development build with an EAS projectId), live counters on Welcome, and the Ambassador programme (`/ambassador-programme`: apply, status, recruit code, recruits).
+- **Waiting on backends** (built in the app, shown as "Not live yet" until the route exists): the ambassador programme (`/v1/ambassador*`, turn on with `ambassador` in `EXPO_PUBLIC_LIVE_ENDPOINTS`), the ambassador waitlist, zones / territory / map players, heatmap, Date Mode, meetup ratings, shared workouts, the all-time board. The XP and hostel boards need the Run Module connected to the Social service.
 
 ## Screens
 

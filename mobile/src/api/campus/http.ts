@@ -51,6 +51,7 @@ export const httpCampusApi: T.CampusApi = {
   events: ({ scope }) => get<T.Page<T.EventSummary>>(`/v1/events${qs({ scope })}`),
   event: (eventId) => get<T.EventDetail>(`/v1/events/${id(eventId)}`),
   rsvp: (eventId, going) => send<T.EventDetail>(`/v1/events/${id(eventId)}/rsvp`, going ? 'PUT' : 'DELETE'),
+  createEvent: (input) => send<T.EventDetail>('/v1/events', 'POST', input),
 
   suggestedPeople: async (mode) => (await get<{ people: T.PersonCard[] }>(`/v1/people/suggested${qs({ mode })}`)).people,
   activeNow: () => get<T.ActiveNow>('/v1/people/active'),
@@ -97,7 +98,7 @@ export const httpCampusApi: T.CampusApi = {
 
   meetups: async () => (await get<{ meetups: T.Meetup[] }>('/v1/meetups')).meetups,
   meetup: (meetupId) => get<T.Meetup>(`/v1/meetups/${id(meetupId)}`),
-  checkIn: (meetupId, notify) => send<T.CheckInResult>(`/v1/meetups/${id(meetupId)}/check-in`, 'POST', { notify_safety_contact: notify }),
+  checkIn: (meetupId, notify, notifyUserIds) => send<T.CheckInResult>(`/v1/meetups/${id(meetupId)}/check-in`, 'POST', { notify_safety_contact: notify, notify_user_ids: notifyUserIds?.length ? notifyUserIds : undefined }),
 };
 
 /** Human list of routes, for docs and the "missing endpoints" report. */
@@ -117,7 +118,7 @@ export const CAMPUS_ROUTES = [
   'GET /v1/runs/{id}/zones',
   'POST /v1/activities (dev/mock recorder only)',
   'GET /v1/crews, GET /v1/crews/{id}, POST /v1/crews, POST /v1/crews/{id}/join | leave',
-  'GET /v1/events, GET /v1/events/{id}, PUT|DELETE /v1/events/{id}/rsvp',
+  'GET /v1/events, GET /v1/events/{id}, POST /v1/events, PUT|DELETE /v1/events/{id}/rsvp',
   'GET /v1/people/suggested?mode=friends|date',
   'GET /v1/people/active',
   'GET /v1/challenge-invites/types, GET|POST /v1/challenge-invites, POST /v1/challenge-invites/{id}/accept | decline | cancel',

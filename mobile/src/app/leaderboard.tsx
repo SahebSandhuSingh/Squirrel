@@ -91,7 +91,7 @@ function SquirrelLine({ r, me }: { r: SquirrelRow; me: boolean }) {
         {!!r.hostel && <Text style={styles.meta}>{r.hostel}</Text>}
       </View>
       <Text style={[styles.num, styles.colN, { color: colors.gold }]}>{r.xp.toLocaleString('en-IN')}</Text>
-      <Text style={[styles.num, styles.colN]}>{r.zones_claimed}</Text>
+      <Text style={[styles.num, styles.colN]}>{r.zones_claimed == null ? '—' : r.zones_claimed}</Text>
       <Text style={[styles.num, styles.colN, { color: colors.dim }]}>{r.distance_m == null ? '—' : km(r.distance_m)}</Text>
     </View>
   );
@@ -118,7 +118,7 @@ function Hostels({ data }: { data: HostelBoard }) {
               <View style={{ width: `${(h.score / top) * 100}%`, height: '100%', backgroundColor: h.rank === 1 ? colors.gold : mine ? colors.primary : colors.lineHi, borderRadius: 4 }} />
             </View>
             <View style={{ flexDirection: 'row', gap: 16 }}>
-              <Stat icon="flag-variant" v={`${h.territories}`} l="territories" />
+              {h.territories != null && <Stat icon="flag-variant" v={`${h.territories}`} l="territories" />}
               <Stat icon="run-fast" v={`${h.active_members}`} l="active" />
               <Stat icon="map-marker-distance" v={h.distance_m == null ? '—' : km(h.distance_m, 0)} l="moved" />
             </View>

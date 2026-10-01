@@ -1,7 +1,12 @@
 /**
  * Backend configuration. Set these in `mobile/.env` (see .env.example):
  *   EXPO_PUBLIC_API_URL   Run Module backend, e.g. https://api.squirrelsocial.in
- *   EXPO_PUBLIC_AUTH_URL  Account service that issues RS256 tokens (does not exist yet)
+ *   EXPO_PUBLIC_AUTH_URL  Separate account service (optional). Without it, sign-in uses the Exercise backend's
+ *                         /api/auth (email code → register / login / refresh), whose tokens the Social service,
+ *                         Run Module and progress-service also accept
+ *   EXPO_PUBLIC_SOCIAL_API_URL    Social service (profiles, waitlist + referrals, crews, events, check-ins, feed,
+ *                                 leaderboards, notifications + push, media)
+ *   EXPO_PUBLIC_ALLOWED_EMAIL_DOMAINS  sign-up email domains, comma-separated (default iiserkol.ac.in)
  *   EXPO_PUBLIC_EXERCISE_API_URL  Exercise Mechanics backend (FastAPI, routes under /api)
  *   EXPO_PUBLIC_PROGRESS_API_URL  progress-service (XP, levels, progress, challenges, leaderboards; routes under /v1)
  *   EXPO_PUBLIC_CAMPUS_API_URL    campus social backend (zones, territories, crews, events, people…); defaults to EXPO_PUBLIC_API_URL
@@ -22,4 +27,11 @@ const RAW_CAMPUS_URL = (process.env.EXPO_PUBLIC_CAMPUS_API_URL ?? '').replace(/\
 /** Campus social backend. Same host as the Run Module unless configured separately. */
 export const CAMPUS_API_URL = RAW_CAMPUS_URL || API_URL;
 export const CAMPUS_API_CONFIGURED = CAMPUS_API_URL.length > 0;
+export const SOCIAL_API_URL = (process.env.EXPO_PUBLIC_SOCIAL_API_URL ?? '').replace(/\/$/, '');
+export const SOCIAL_API_CONFIGURED = SOCIAL_API_URL.length > 0;
+/** Sign-up is limited to these institutional domains (IISER Kolkata first). The backend enforces it too. */
+export const ALLOWED_EMAIL_DOMAINS: string[] = (process.env.EXPO_PUBLIC_ALLOWED_EMAIL_DOMAINS ?? 'iiserkol.ac.in')
+  .split(',')
+  .map((d: string) => d.trim().toLowerCase().replace(/^@/, ''))
+  .filter(Boolean);
 export const REALTIME_URL = (process.env.EXPO_PUBLIC_REALTIME_URL ?? '').replace(/\/$/, '');

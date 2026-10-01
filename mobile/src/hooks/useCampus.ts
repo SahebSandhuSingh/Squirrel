@@ -132,3 +132,18 @@ export function useAction<A extends unknown[], R>(fn: (...args: A) => Promise<R>
 
 /** Random per-attempt idempotency key for ownership actions. */
 export const actionKey = (prefix: string) => `${prefix}:${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+
+/**
+ * Hostel choices for onboarding / edit profile: the backend's hostel list (Social service config)
+ * when it has one, otherwise the campus backend's hostel zones. Ids are what PATCH /v1/me takes.
+ */
+export function useHostelOptions() {
+  const config = useConfig();
+  const listed = config.data?.hostels;
+  const zones = useCampus('zones', () => campusApi.zones(), { needsAuth: false, enabled: !!config.data && !listed?.length });
+  const list: { id: string; name: string; hostel: string | null }[] = listed?.length
+    ? listed.map((h) => ({ id: `hostel:${h}`, name: h, hostel: h }))
+    : (zones.data ?? []).filter((z) => z.kind === 'hostel');
+  const src = listed?.length ? config : zones;
+  return { list, error: config.error ?? zones.error, cause: config.error ? config.cause : zones.cause, reload: src.reload, loading: !config.data && !config.error ? true : !listed?.length && zones.loading };
+}

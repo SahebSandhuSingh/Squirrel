@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { StickerArt } from '@/art/Sticker';
 import { Avatar } from '@/components/Avatar';
 import { SceneImage } from '@/components/cards';
 import { Button, Header, Label, Screen, tap } from '@/components/ui';
 import { PhotoUpload, type ApprovedPhoto } from '@/components/media/PhotoUpload';
-import { NotLiveYet } from '@/components/campus/States';
+import { ErrorState, NotConnected, NotLiveYet } from '@/components/campus/States';
+import { SOCIAL_API_CONFIGURED, socialApi } from '@/api/social';
+import { invalidateCampus, useAction, useCampusSession } from '@/hooks/useCampus';
 import { useApp } from '@/state/AppState';
 import type { SceneKind, StickerKind } from '@/types';
 import { colors, fonts, radius } from '@/theme';
@@ -17,28 +19,54 @@ type RunActivity = { km: number; minutes: number; pace: string };
 
 /**
  * Post composer (also reached after finishing a run, with that run's real numbers prefilled).
- * Posting has no backend on this build, so it says "Posts · Not live yet" and Post is disabled:
- * nothing is saved locally or shown in a feed as if it had been posted.
+ * With the Social service configured, Post publishes via POST /v1/posts (caption, backdrop,
+ * sticker, approved photo's media_id) — the backend links activities itself. Without it, posting
+ * says "Posts · Not live yet" and Post is disabled: nothing is saved locally or faked in a feed.
  */
 export default function Compose() {
   const { km, min, pace } = useLocalSearchParams<{ km?: string; min?: string; pace?: string }>();
-  const { me } = useApp();
+  const { me, toast } = useApp();
   const [scene, setScene] = useState<SceneKind>(km ? 'run' : 'city-sunset');
   const [sticker, setSticker] = useState<StickerKind | undefined>(km ? 'one-more-km' : undefined);
   const [caption, setCaption] = useState(km ? `Just one more km turned into ${km}. 🏃‍♀️` : '');
   const [photo, setPhoto] = useState<ApprovedPhoto | null>(null);
   const activity: RunActivity | undefined = km ? { km: +km, minutes: +(min ?? 0), pace: pace ?? '' } : undefined;
+  const { signedIn } = useCampusSession();
+  // The Social service accepts backdrop seeds 0–999.
+  const [seed] = useState(() => Math.floor(Math.random() * 1000));
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const publish = useAction(() =>
+    socialApi.createPost({ caption: caption.trim(), backdrop: { scene, seed }, sticker: sticker ?? null, media_id: photo?.mediaId ?? null }),
+  );
+  const canPost = SOCIAL_API_CONFIGURED && signedIn && !photoBusy && publish.status !== 'loading' && (caption.trim().length > 0 || !!photo);
+
+  const post = async () => {
+    if (!canPost) return;
+    tap('impact');
+    const created = await publish.run();
+    if (!created) {
+      toast('Couldn’t post that', 'alert-circle-outline', colors.coral);
+      return;
+    }
+    invalidateCampus('social:feed');
+    toast('Posted', 'check-circle');
+    router.replace('/social');
+  };
 
   return (
     <Screen tabBar={false}>
       <Header back title={activity ? 'Share your run' : 'New Post'} />
-      <NotLiveYet name="Posts" compact body="Sharing posts switches on once the feed backend is connected. Your run is already saved by the Run Module." />
+      {!SOCIAL_API_CONFIGURED ? (
+        <NotLiveYet name="Posts" compact body="Sharing posts switches on once the feed backend is connected. Your run is already saved by the Run Module." />
+      ) : !signedIn ? (
+        <NotConnected name="Posts" reason="signed_out" compact />
+      ) : null}
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginTop: 10 }}>
         <Avatar user={me} size={44} link={false} />
         <TextInput value={caption} onChangeText={setCaption} placeholder="What did you move today?" placeholderTextColor={colors.dim} multiline style={styles.input} maxLength={280} />
       </View>
 
-      <SceneImage kind={scene} seed={7} aspect={1.2} style={{ marginTop: 14 }} scrim={false}>
+      <SceneImage kind={scene} seed={SOCIAL_API_CONFIGURED ? seed : 7} aspect={1.2} style={{ marginTop: 14 }} scrim={false}>
         {photo && <Image source={{ uri: photo.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" accessibilityLabel="Your approved photo" />}
         {activity && (
           <View style={styles.actChip}>
@@ -51,7 +79,10 @@ export default function Compose() {
       <Label style={{ marginTop: 18, marginBottom: 8 }}>Photo</Label>
       <PhotoUpload
         purpose="post"
-        onChange={(p) => setPhoto(p)}
+        onChange={(p, busy) => {
+          setPhoto(p);
+          setPhotoBusy(busy);
+        }}
       />
 
       <Label style={{ marginTop: 18, marginBottom: 8 }}>{photo ? 'Backdrop (behind your photo)' : 'Backdrop'}</Label>
@@ -77,7 +108,21 @@ export default function Compose() {
         })}
       </ScrollView>
 
-      <Button label="Posting · Not live yet" iconLeft="lock-outline" onPress={() => {}} disabled style={{ marginTop: 22 }} accessibilityLabel="Post. Not live yet, nothing is sent." />
+      {SOCIAL_API_CONFIGURED ? (
+        <>
+          {publish.status === 'error' && <ErrorState cause={publish.error} onRetry={post} compact title="Couldn’t post" />}
+          <Button
+            label={publish.status === 'loading' ? 'Posting…' : photoBusy ? 'Waiting for photo…' : 'Post'}
+            iconLeft="send"
+            onPress={post}
+            disabled={!canPost}
+            style={{ marginTop: 22 }}
+            accessibilityLabel="Post"
+          />
+        </>
+      ) : (
+        <Button label="Posting · Not live yet" iconLeft="lock-outline" onPress={() => {}} disabled style={{ marginTop: 22 }} accessibilityLabel="Post. Not live yet, nothing is sent." />
+      )}
     </Screen>
   );
 }

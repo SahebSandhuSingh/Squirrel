@@ -34,12 +34,16 @@ export type Campus = {
   launched_at: string | null;
 };
 
+/** A null counter means no backend reports it yet; screens hide it rather than show 0. */
 export type LaunchStats = {
   users_total: number;
-  users_active_now: number;
-  zones_total: number;
-  zones_claimed: number;
-  crews_total: number;
+  users_active_now: number | null;
+  /** Live counters from the Run Module (/v1/live) and the Exercise backend (/api/live), when connected. */
+  running_now?: number | null;
+  working_out_now?: number | null;
+  zones_total: number | null;
+  zones_claimed: number | null;
+  crews_total: number | null;
   /** Founding Squirrel spots left, when the backend runs that programme; null otherwise. */
   founding_spots_left: number | null;
   updated_at: string;
@@ -63,6 +67,8 @@ export type AppConfig = {
   };
   /** WebSocket endpoint for live updates; null → the app refreshes on focus. */
   realtime_url: string | null;
+  /** Hostel teams (Hostel vs Hostel), when the backend lists them. */
+  hostels?: string[];
 };
 
 // ---------------------------------------------------------------------------
@@ -86,27 +92,36 @@ export type Verification = {
   selfie_verified: boolean;
 };
 
+/** A null stat means the profile's backend doesn't track it; the profile hides that tile. */
 export type ProfileStats = {
-  total_distance_m: number;
-  month_distance_m: number;
-  zones_claimed: number;
-  territories_defended: number;
-  territories_stolen: number;
-  crew_memberships: number;
-  events_attended: number;
+  total_distance_m: number | null;
+  month_distance_m: number | null;
+  zones_claimed: number | null;
+  territories_defended: number | null;
+  territories_stolen: number | null;
+  crew_memberships: number | null;
+  events_attended: number | null;
+  /** Extra counters some backends report (Social: XP, followers, workouts this month). */
+  xp?: number | null;
+  level?: number | null;
+  followers?: number | null;
+  following?: number | null;
+  month_workouts?: number | null;
   /** null when the backend doesn't compute streaks. */
   streak_days: number | null;
 };
 
 export type ActivityType = 'run' | 'walk';
+/** History can include workouts (Exercise backend) when the profile comes from the Social service. */
+export type HistoryActivityType = ActivityType | 'workout' | (string & {});
 
 export type ActivityHistoryItem = {
   id: string;
-  type: ActivityType;
+  type: HistoryActivityType;
   started_at: string;
-  distance_m: number;
+  distance_m: number | null;
   duration_s: number;
-  zones_count: number;
+  zones_count: number | null;
   status: 'verified' | 'flagged' | 'rejected' | 'processing';
 };
 
@@ -189,7 +204,8 @@ export type SharedContext = {
 export type PersonCard = PersonLite & {
   connection_mode: ConnectionMode | null;
   bio: string | null;
-  activity: { top_activity: ActivityType | null; runs_30d: number; distance_30d_m: number; usual_time: 'morning' | 'evening' | 'night' | null };
+  /** null when the backend has no activity summary for this person. */
+  activity: { top_activity: ActivityType | null; runs_30d: number; distance_30d_m: number; usual_time: 'morning' | 'evening' | 'night' | null } | null;
   shared: SharedContext;
   /** One-line reason from the backend ("You both run the Sports Ground Loop"). */
   match_reason: string | null;
@@ -305,13 +321,18 @@ export type Crew = CrewLite & {
   joinable: boolean;
 };
 
+export type CrewMemberMeta = { role: string; vouches: number; vouched_by_me: boolean; is_me: boolean };
 export type CrewDetail = Crew & {
   members: PersonLite[];
+  /** Crew vouching (Social service): per member, keyed by user_id. Absent when the backend has none. */
+  member_meta?: Record<string, CrewMemberMeta>;
   territories: OwnedTerritory[];
   upcoming_events: EventSummary[];
 };
 
-export type CrewCreate = { name: string; description: string; color?: string; icon?: string };
+export type CrewCreate = { name: string; description: string; color?: string; icon?: string; interest?: string; meets?: string };
+
+export type EventCreate = { title: string; description?: string; type: EventType; venue: string; starts_at: string; ends_at?: string | null; capacity?: number | null; crew_id?: string | null };
 
 export type EventType = 'run' | 'walk' | 'territory_battle' | 'weekend_war' | 'social' | 'study_break_walk' | (string & {});
 
@@ -383,10 +404,10 @@ export type ChallengeInviteCreate = {
 
 export type LeaderboardPeriod = 'daily' | 'weekly' | 'alltime';
 
-export type SquirrelRow = PersonLite & { rank: number; xp: number; zones_claimed: number; distance_m: number | null };
+export type SquirrelRow = PersonLite & { rank: number; xp: number; zones_claimed: number | null; distance_m: number | null };
 export type SquirrelBoard = { period: LeaderboardPeriod; entries: SquirrelRow[]; me: SquirrelRow | null; updated_at: string };
 
-export type HostelRow = { rank: number; hostel_id: string; name: string; score: number; territories: number; active_members: number; distance_m: number | null };
+export type HostelRow = { rank: number; hostel_id: string; name: string; score: number; territories: number | null; active_members: number; distance_m: number | null };
 export type HostelBoard = { period: LeaderboardPeriod; entries: HostelRow[]; my_hostel_id: string | null; updated_at: string };
 
 // ---------------------------------------------------------------------------
@@ -512,7 +533,7 @@ export type AppNotification = {
   text: string;
   created_at: string;
   read: boolean;
-  data: { user_id?: string; zone_id?: string; invite_id?: string; event_id?: string; poke_id?: string; meetup_id?: string; media_id?: string; application_id?: string; suggestion_id?: string } | null;
+  data: { route?: string; user_id?: string; zone_id?: string; invite_id?: string; event_id?: string; poke_id?: string; meetup_id?: string; media_id?: string; application_id?: string; suggestion_id?: string } | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -676,6 +697,7 @@ export interface CampusApi {
   events(params: { scope?: 'upcoming' | 'mine' }): Promise<Page<EventSummary>>;
   event(eventId: string): Promise<EventDetail>;
   rsvp(eventId: string, going: boolean): Promise<EventDetail>;
+  createEvent(input: EventCreate): Promise<EventDetail>;
 
   suggestedPeople(mode: 'friends' | 'date'): Promise<PersonCard[]>;
   activeNow(): Promise<ActiveNow>;
@@ -723,5 +745,6 @@ export interface CampusApi {
 
   meetups(): Promise<Meetup[]>;
   meetup(meetupId: string): Promise<Meetup>;
-  checkIn(meetupId: string, notifySafetyContact: boolean): Promise<CheckInResult>;
+  /** `notifyUserIds`: up to 5 friends to tell you've arrived (Social service). */
+  checkIn(meetupId: string, notifySafetyContact: boolean, notifyUserIds?: string[]): Promise<CheckInResult>;
 }

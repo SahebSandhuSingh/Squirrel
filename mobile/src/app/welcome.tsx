@@ -19,6 +19,16 @@ import { Button, Display, FadeIn, Pulse } from '@/components/ui';
 import { useCampus, useConfig, useRealtime } from '@/hooks/useCampus';
 import { colors, fonts, MAX_WIDTH } from '@/theme';
 
+function counters(s: LaunchStats): { v: number; l: string }[] {
+  const out: { v: number; l: string }[] = [];
+  if (s.users_total > 0) out.push({ v: s.users_total, l: 'Squirrels' });
+  if (s.running_now != null) out.push({ v: s.running_now, l: 'running now' });
+  if (s.working_out_now != null) out.push({ v: s.working_out_now, l: 'working out' });
+  if (s.crews_total != null && s.crews_total > 0) out.push({ v: s.crews_total, l: 'crews' });
+  if (s.founding_spots_left != null) out.push({ v: s.founding_spots_left, l: 'founding spots left' });
+  return out.slice(0, 4);
+}
+
 export default function Welcome() {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
@@ -64,7 +74,7 @@ export default function Welcome() {
         <FadeIn delay={450} style={{ gap: 10 }}>
           <View style={styles.place}>
             <Text style={styles.placeText}>{campusName}</Text>
-            {s && s.users_active_now > 0 && (
+            {s && (s.users_active_now ?? 0) > 0 && (
               <View style={styles.live} accessibilityLabel={`${s.users_active_now} moving on campus right now`}>
                 <View style={styles.dot}>
                   <Pulse size={7} color={colors.green} />
@@ -73,6 +83,17 @@ export default function Welcome() {
               </View>
             )}
           </View>
+          {/* Live counters: only the ones a connected backend actually reports. */}
+          {s && counters(s).length > 0 && (
+            <View style={styles.counters} accessibilityLabel={counters(s).map((c) => `${c.v} ${c.l}`).join(', ')}>
+              {counters(s).map((c) => (
+                <View key={c.l} style={styles.counter}>
+                  <Text style={styles.counterV}>{c.v.toLocaleString('en-IN')}</Text>
+                  <Text style={styles.counterL}>{c.l}</Text>
+                </View>
+              ))}
+            </View>
+          )}
           <Button label={`Enter ${campusName}`} icon="arrow-right" onPress={() => router.push({ pathname: '/sign-in', params: { mode: 'join' } })} />
           <Button
             label="Look around first"
@@ -104,5 +125,9 @@ const styles = StyleSheet.create({
   live: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.green },
   liveText: { color: colors.onImageSub, fontFamily: fonts.label, fontSize: 13, letterSpacing: 0.6, textTransform: 'uppercase' },
+  counters: { flexDirection: 'row', gap: 8, marginBottom: 4 },
+  counter: { flex: 1, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 12, paddingVertical: 8, paddingHorizontal: 6, alignItems: 'center' },
+  counterV: { color: colors.onImage, fontFamily: fonts.display, fontSize: 22 },
+  counterL: { color: colors.onImageSub, fontFamily: fonts.label, fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase', textAlign: 'center' },
   signIn: { color: colors.onImageSub, fontFamily: fonts.regular, fontSize: 13, textAlign: 'center', paddingVertical: 6 },
 });

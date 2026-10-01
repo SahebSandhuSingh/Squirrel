@@ -142,7 +142,7 @@ export function HomeLeaderboard({ campusName }: { campusName: string }) {
                 <PersonAvatar person={e} size={34} ring={i === 0 ? colors.primary : undefined} />
                 <View style={{ flex: 1, marginLeft: 10 }}>
                   <Text style={styles.leaderName}>{me ? 'You' : e.display_name}</Text>
-                  <Text style={styles.leaderSub}>{[e.hostel, `${e.zones_claimed} zones`].filter(Boolean).join(' · ')}</Text>
+                  <Text style={styles.leaderSub}>{[e.hostel, e.zones_claimed != null && `${e.zones_claimed} zones`].filter(Boolean).join(' · ')}</Text>
                 </View>
                 <Text style={styles.leaderXp}>{e.xp.toLocaleString('en-IN')} XP</Text>
               </View>

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ThemeIconButton } from '@/components/ThemeToggle';
 import { FeatureGate, useLocks } from '@/components/Locked';
 import { StyleSheet, View } from 'react-native';
@@ -7,13 +8,17 @@ import { useUnread } from '@/state/socialStore';
 import { NearbySquirrels } from '@/components/social/NearbySquirrels';
 import { SquirrelDatesSection } from '@/components/social/SquirrelDates';
 import { SceneImage } from '@/components/cards';
-import { NotLiveYet } from '@/components/campus/States';
-import { Display, Icon, IconButton, OverlayKicker, OverlaySub, PressScale, RowSub, RowTitle, Screen, SectionHeader } from '@/components/ui';
+import { EmptyNote, ErrorState, LoadingRows, NotLiveYet, SignedOutState } from '@/components/campus/States';
+import { PostCard } from '@/components/social/PostCard';
+import { SOCIAL_API_CONFIGURED, socialApi } from '@/api/social';
+import type { SFeedKind, SPost } from '@/api/social/types';
+import { useCampus, useRefreshOnFocus } from '@/hooks/useCampus';
+import { Button, Display, Icon, IconButton, OverlayKicker, OverlaySub, PressScale, RowSub, RowTitle, Screen, SectionHeader, Segmented } from '@/components/ui';
 import { alpha, colors, fonts, radius } from '@/theme';
 
 /**
- * SOCIAL — people, crews and discovery from the campus backend. The posts feed and stories have
- * no backend on this build, so they say "Not live yet" (no sample posts or people).
+ * SOCIAL — people, crews and discovery from the campus backend, plus the posts feed from the
+ * Social service when it's configured (otherwise the feed says "Not live yet" — no sample posts).
  */
 export default function Social() {
   const locks = useLocks();
@@ -94,10 +99,85 @@ export default function Social() {
         </SceneImage>
       </PressScale>
 
-      {/* Feed: no posts backend on this build */}
-      <SectionHeader title="Feed" />
-      <NotLiveYet name="Posts & stories" compact body="The feed switches on once the posts backend is connected. Nothing here is sample content." />
+      {SOCIAL_API_CONFIGURED ? (
+        <SocialFeed />
+      ) : (
+        <>
+          {/* Feed: no posts backend on this build */}
+          <SectionHeader title="Feed" />
+          <NotLiveYet name="Posts & stories" compact body="The feed switches on once the posts backend is connected. Nothing here is sample content." />
+        </>
+      )}
     </Screen>
+  );
+}
+
+const FEEDS = ['for_you', 'following', 'nearby'] as const satisfies readonly SFeedKind[];
+const FEED_LABELS: Record<SFeedKind, string> = { for_you: 'For You', following: 'Following', nearby: 'Nearby' };
+const EMPTY: Record<SFeedKind, { title: string; body: string }> = {
+  for_you: { title: 'No posts yet', body: 'Be the first — share a run or a workout.' },
+  following: { title: 'Nothing from people you follow', body: 'Follow people from crews and events to see their posts here.' },
+  nearby: { title: 'Nothing nearby yet', body: 'Posts from your area show up here.' },
+};
+
+/** The real feed (Social service GET /v1/feed): first page via the shared cache, more pages appended locally. */
+function SocialFeed() {
+  const [kind, setKind] = useState<SFeedKind>('for_you');
+  const first = useCampus(`social:feed:${kind}`, () => socialApi.feed(kind));
+  // Pages loaded with "Load more", tied to the feed + first page they continue from.
+  const [more, setMore] = useState<{ base: unknown; items: SPost[]; cursor: string | null } | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState<unknown>(null);
+  useRefreshOnFocus(first.reload);
+
+  const page = first.data;
+  const extra = more && more.base === page ? more : null;
+  const seen = new Set<string>();
+  const items = [...(page?.items ?? []), ...(extra?.items ?? [])].filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true)));
+  const cursor = extra ? extra.cursor : (page?.next_cursor ?? null);
+
+  const loadMore = async () => {
+    if (!cursor || loadingMore) return;
+    setLoadingMore(true);
+    setMoreError(null);
+    try {
+      const r = await socialApi.feed(kind, cursor);
+      setMore({ base: page, items: [...(extra?.items ?? []), ...r.items], cursor: r.next_cursor });
+    } catch (e) {
+      setMoreError(e);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const changeKind = (k: SFeedKind) => {
+    setKind(k);
+    setMore(null);
+    setMoreError(null);
+  };
+
+  return (
+    <>
+      <SectionHeader title="Feed" action="Post" onAction={() => router.push('/compose')} />
+      <Segmented items={FEEDS} value={kind} onChange={changeKind} labels={FEED_LABELS} style={{ marginBottom: 14 }} />
+      {first.signedOut ? (
+        <SignedOutState what="your feed" />
+      ) : !page && first.cause ? (
+        <ErrorState cause={first.cause} onRetry={first.reload} feature="Feed" compact />
+      ) : !page ? (
+        <LoadingRows rows={2} height={280} />
+      ) : items.length === 0 ? (
+        <EmptyNote icon="image-multiple-outline" title={EMPTY[kind].title} body={EMPTY[kind].body} action="Create a post" onAction={() => router.push('/compose')} />
+      ) : (
+        <>
+          {items.map((p) => (
+            <PostCard key={p.id} post={p} />
+          ))}
+          {moreError ? <ErrorState cause={moreError} onRetry={loadMore} compact /> : null}
+          {cursor ? <Button label={loadingMore ? 'Loading…' : 'Load more'} variant="secondary" size="md" disabled={loadingMore} onPress={loadMore} style={{ marginTop: 4 }} /> : null}
+        </>
+      )}
+    </>
   );
 }
 

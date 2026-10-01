@@ -3,7 +3,8 @@
  * activity-first person card used by Friend Mode, Date Mode and Active Now.
  */
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, Share, StyleSheet, Switch, Text, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import { BadgeArt } from '@/art/Badge';
 import { campusApi, errorText, type Badge, type Icebreaker, type PersonCard, type Proximity } from '@/api/campus';
@@ -12,6 +13,7 @@ import { km } from '@/components/campus/territoryUi';
 import { PokeButton } from '@/components/social/PokeButton';
 import { Card, Icon, PressScale, ProgressBar, tap } from '@/components/ui';
 import { invalidateCampus, useAction } from '@/hooks/useCampus';
+import { useApp } from '@/state/AppState';
 import type { BadgeKind } from '@/types';
 import { alpha, colors, fonts, radius } from '@/theme';
 
@@ -19,8 +21,30 @@ import { alpha, colors, fonts, radius } from '@/theme';
 // Icebreakers — rendered verbatim from the backend; hidden when there are none.
 // ---------------------------------------------------------------------------
 
+/** Copies an icebreaker so it can be pasted into a chat. Resolves false if nothing could take it. */
+async function copyIcebreaker(text: string): Promise<boolean> {
+  try {
+    if (Platform.OS === 'web') {
+      const clip = typeof navigator !== 'undefined' ? navigator.clipboard : undefined;
+      if (!clip?.writeText) return false;
+      await clip.writeText(text);
+      return true;
+    }
+    return await Clipboard.setStringAsync(text);
+  } catch {
+    return false;
+  }
+}
+
 export function Icebreakers({ items, targetUserId, max = 3, title = 'Icebreakers' }: { items: Icebreaker[] | undefined; targetUserId?: string; max?: number; title?: string }) {
+  const { toast } = useApp();
   if (!items?.length) return null; // never invent one
+  const copy = async (text: string) => {
+    tap();
+    if (await copyIcebreaker(text)) toast('Copied — say hi', 'content-copy');
+    else if (Platform.OS !== 'web') Share.share({ message: text }).catch(() => undefined);
+    else toast('Couldn’t copy — select the text instead', 'alert-circle-outline', colors.dim);
+  };
   return (
     <View style={{ gap: 8 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -32,10 +56,11 @@ export function Icebreakers({ items, targetUserId, max = 3, title = 'Icebreakers
         return (
           <PressScale
             key={ib.id}
-            onPress={() => (challenge ? router.push({ pathname: '/invite/new', params: { userId: targetUserId, zoneId: ib.action?.zone_id ?? '' } }) : tap())}
+            onPress={() => (challenge ? router.push({ pathname: '/invite/new', params: { userId: targetUserId, zoneId: ib.action?.zone_id ?? '' } }) : copy(ib.text))}
+            haptic={!!challenge}
             scaleTo={0.98}
             style={[styles.ib, challenge && { borderColor: alpha(colors.secondary, 0.5) }]}
-            accessibilityLabel={ib.text}>
+            accessibilityLabel={challenge ? ib.text : `${ib.text}. Tap to copy`}>
             <Text style={styles.ibText}>“{ib.text}”</Text>
             {challenge && (
               <View style={styles.ibAction}>
@@ -201,7 +226,8 @@ export function PersonCardView({ p, extra, onChallenge, showIcebreakers = true }
         </View>
         {extra}
       </Pressable>
-      {/* Activity first */}
+      {/* Activity first (only when the backend summarises it) */}
+      {a && (
       <View style={styles.actRow}>
         <View style={styles.act}>
           <Icon name={a.top_activity === 'walk' ? 'walk' : 'run-fast'} size={14} color={colors.primary} />
@@ -218,6 +244,7 @@ export function PersonCardView({ p, extra, onChallenge, showIcebreakers = true }
           </View>
         )}
       </View>
+      )}
       {(p.shared.shared_zones.length > 0 || p.shared.shared_crews.length > 0) && (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
           {p.shared.shared_zones.slice(0, 3).map((z) => (

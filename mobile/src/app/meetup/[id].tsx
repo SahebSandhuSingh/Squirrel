@@ -1,7 +1,8 @@
 /**
  * MEETUP CHECK-IN. View the meetup, see who's coming / checked in, check in, and optionally ask
  * the backend to notify your safety contact. We only say a notification was sent when the API
- * returns status "sent".
+ * returns status "sent". With the Social service, check-in instead tells up to five friends (people
+ * who follow you or share a crew) that you've arrived — "meetup check-in notifies a friend".
  */
 import { useState } from 'react';
 import { StyleSheet, Switch, Text, View } from 'react-native';
@@ -9,14 +10,28 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Mascot } from '@/art/Mascot';
 import { campusApi, errorText, type CheckInResult, type Meetup } from '@/api/campus';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
+import { SOCIAL_API_CONFIGURED, socialApi } from '@/api/social';
+
 import { PhotoUpload } from '@/components/media/PhotoUpload';
 import { MeetupRating } from '@/components/meetup/MeetupRating';
 import { ErrorState, LoadingRows } from '@/components/campus/States';
-import { Button, Card, Display, Header, Icon, Kicker, Screen, SectionHeader, tap } from '@/components/ui';
+import { Button, Card, Display, Header, Icon, Kicker, PressScale, Screen, SectionHeader, tap } from '@/components/ui';
 import { formatEventDate } from '@/logic/format';
 import { invalidateCampus, useAction, useCampus, useConfig, useMe } from '@/hooks/useCampus';
 import { colors, fonts, radius } from '@/theme';
 import { checkInOpen } from '@/logic/meetups';
+
+type NotifyCandidate = { id: string; display_name: string; avatar_url: string | null };
+
+async function loadNotifyCandidates(): Promise<NotifyCandidate[]> {
+  const meId = (await socialApi.myProfile()).user.id;
+  const [following, crews] = await Promise.all([socialApi.following(meId, 50), socialApi.crews(true)]);
+  const details = await Promise.all(crews.items.slice(0, 5).map((c) => socialApi.crew(c.id).catch(() => null)));
+  const seen = new Map<string, NotifyCandidate>();
+  for (const u of following.items) if (!u.is_me) seen.set(u.id, { id: u.id, display_name: u.display_name, avatar_url: u.avatar_url });
+  for (const d of details) for (const m of d?.members ?? []) if (!m.is_me && !seen.has(m.user.id)) seen.set(m.user.id, { id: m.user.id, display_name: m.user.display_name, avatar_url: m.user.avatar_url });
+  return [...seen.values()];
+}
 
 const SAFETY_TEXT: Record<CheckInResult['safety_notification']['status'], string> = {
   sent: 'Your safety contact was notified.',
@@ -24,6 +39,13 @@ const SAFETY_TEXT: Record<CheckInResult['safety_notification']['status'], string
   not_configured: 'No safety contact is set up, so nobody was notified.',
   skipped: 'You chose not to notify anyone.',
 };
+const FRIEND_TEXT: Record<CheckInResult['safety_notification']['status'], string> = {
+  sent: 'Your friends were told you’ve arrived.',
+  failed: 'None of the people you picked could be notified (only followers and crewmates can be).',
+  not_configured: 'Nobody was notified.',
+  skipped: 'You didn’t notify anyone.',
+};
+const MAX_NOTIFY = 5;
 
 export default function MeetupScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -32,7 +54,11 @@ export default function MeetupScreen() {
   const config = useConfig();
   const [notify, setNotify] = useState(true);
   const [openedAt] = useState(() => Date.now());
-  const check = useAction((n: boolean) => campusApi.checkIn(id, n));
+  const [picked, setPicked] = useState<string[]>([]);
+  const check = useAction((n: boolean) => campusApi.checkIn(id, n, picked));
+  // Who can be told: people you follow and your crewmates (the Social service skips anyone else).
+  const friends = useCampus<NotifyCandidate[]>('social:notify-candidates', loadNotifyCandidates, { enabled: SOCIAL_API_CONFIGURED });
+  const togglePick = (uid: string) => setPicked((p) => (p.includes(uid) ? p.filter((x) => x !== uid) : p.length >= MAX_NOTIFY ? p : [...p, uid]));
   const m = r.data;
   const safetyOn = !!config.data?.features.meetup_safety_notifications;
 
@@ -49,7 +75,7 @@ export default function MeetupScreen() {
   const checkedIn = !!check.data || !!m.my_check_in_at;
   const doCheckIn = async () => {
     tap('impact');
-    const res = await check.run(safetyOn && notify && !!me.data?.safety_contact_configured);
+    const res = await check.run(SOCIAL_API_CONFIGURED ? picked.length > 0 : safetyOn && notify && !!me.data?.safety_contact_configured);
     if (res) {
       tap('success');
       invalidateCampus('meetup');
@@ -81,7 +107,7 @@ export default function MeetupScreen() {
                 color={check.data.safety_notification.status === 'sent' ? colors.green : check.data.safety_notification.status === 'failed' ? colors.coral : colors.dim}
               />
               <Text style={styles.safetyText}>
-                {SAFETY_TEXT[check.data.safety_notification.status]}
+                {(SOCIAL_API_CONFIGURED ? FRIEND_TEXT : SAFETY_TEXT)[check.data.safety_notification.status]}
                 {check.data.safety_notification.status === 'sent' && check.data.safety_notification.contact_label ? ` Sent to ${check.data.safety_notification.contact_label}.` : ''}
               </Text>
             </View>
@@ -89,7 +115,38 @@ export default function MeetupScreen() {
         </Card>
       ) : (
         <Card style={{ marginTop: 14, gap: 12 }}>
-          {safetyOn && (
+          {SOCIAL_API_CONFIGURED && (
+            <View style={{ gap: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Icon name="account-multiple-check" size={22} color={colors.green} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>Tell friends you’re here</Text>
+                  <Text style={styles.small}>Pick up to {MAX_NOTIFY}. They get the meetup name when you check in.</Text>
+                </View>
+              </View>
+              {friends.error && !friends.data ? (
+                <ErrorState cause={friends.cause} onRetry={friends.reload} compact />
+              ) : !friends.data ? (
+                <LoadingRows rows={1} height={40} />
+              ) : friends.data.length ? (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {friends.data.map((u) => {
+                    const on = picked.includes(u.id);
+                    return (
+                      <PressScale key={u.id} onPress={() => { tap(); togglePick(u.id); }} style={[styles.pick, on && { borderColor: colors.green, backgroundColor: colors.card }]} scaleTo={0.95} accessibilityRole="checkbox" accessibilityState={{ checked: on }} accessibilityLabel={`Notify ${u.display_name}`}>
+                        <PersonAvatar person={{ user_id: u.id, display_name: u.display_name, avatar_url: u.avatar_url }} size={24} link={false} />
+                        <Text style={[styles.pickText, on && { color: colors.green }]} numberOfLines={1}>{u.display_name.split(' ')[0]}</Text>
+                        {on && <Icon name="check" size={14} color={colors.green} />}
+                      </PressScale>
+                    );
+                  })}
+                </View>
+              ) : (
+                <Text style={styles.small}>Follow people (or join a crew) to be able to notify them.</Text>
+              )}
+            </View>
+          )}
+          {safetyOn && !SOCIAL_API_CONFIGURED && (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <Icon name="shield-account" size={22} color={colors.green} />
               <View style={{ flex: 1 }}>
@@ -147,6 +204,8 @@ const styles = StyleSheet.create({
   label: { color: colors.text, fontFamily: fonts.label, fontSize: 15, letterSpacing: 0.6, textTransform: 'uppercase' },
   small: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, lineHeight: 17 },
   err: { color: colors.coral, fontFamily: fonts.medium, fontSize: 13, textAlign: 'center' },
+  pick: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1.5, borderColor: colors.line, borderRadius: radius.pill, paddingLeft: 4, paddingRight: 10, paddingVertical: 4, maxWidth: 160 },
+  pickText: { color: colors.sub, fontFamily: fonts.medium, fontSize: 13, flexShrink: 1 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, padding: 10 },
   name: { flex: 1, color: colors.text, fontFamily: fonts.semibold, fontSize: 14 },
   status: { fontFamily: fonts.label, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },

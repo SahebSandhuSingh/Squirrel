@@ -1,9 +1,14 @@
-/** CREW PROFILE — members, crew territories, upcoming events, join / leave. */
+/**
+ * CREW PROFILE — members, crew territories, upcoming events, join / leave. When the crew comes
+ * from the Social service, members can vouch for each other (one vouch per member; members only).
+ */
+import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Scene } from '@/art/Scene';
-import { campusApi, type CrewDetail } from '@/api/campus';
+import { campusApi, errorText, type CrewDetail } from '@/api/campus';
+import { socialApi } from '@/api/social';
 import { CrewJoinButton } from '@/components/campus/CrewJoin';
 import { EventRow } from '@/components/campus/EventRow';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
@@ -11,6 +16,7 @@ import { ErrorState, LoadingRows } from '@/components/campus/States';
 import { shortTime } from '@/components/campus/territoryUi';
 import { Display, Icon, IconButton, PressScale, Scrim, SectionHeader, Tag } from '@/components/ui';
 import { useCampus } from '@/hooks/useCampus';
+import { useApp } from '@/state/AppState';
 import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
 import { SoonPill } from '@/components/Locked';
 import { isLocked } from '@/data/features';
@@ -32,6 +38,9 @@ export default function CrewScreen() {
     );
   }
   const c = crew.color ?? colors.primary;
+  // Social-service crews carry vouches per member and no territory.
+  const vouching = !!crew.member_meta;
+  const member = crew.my_membership != null;
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ paddingBottom: insets.bottom + 30 }}>
       <View style={{ height: 230 + insets.top }}>
@@ -52,7 +61,7 @@ export default function CrewScreen() {
       <View style={styles.col}>
         <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
           <Tag label={`${crew.members_count} members`} icon="account-group" color={colors.secondary} />
-          <Tag label={`${crew.territories_count} zones`} icon="flag-variant" />
+          {!vouching && <Tag label={`${crew.territories_count} zones`} icon="flag-variant" />}
           {!!crew.meets && <Tag label={crew.meets} icon="calendar-clock" color={colors.green} />}
         </View>
         <View style={{ marginTop: 16 }}>
@@ -60,7 +69,15 @@ export default function CrewScreen() {
         </View>
 
         <SectionHeader title="Members" />
-        {crew.members.length ? (
+        {vouching ? (
+          <View style={{ gap: 8 }}>
+            {crew.members.map((m) => (
+              <MemberRow key={m.user_id} crewId={crew.id} person={m} meta={crew.member_meta![m.user_id]} canVouch={member} onChanged={() => r.reload()} />
+            ))}
+            {!crew.members.length && <Text style={styles.empty}>No members yet.</Text>}
+            <Text style={styles.fine}>{member ? 'Vouch for crewmates you’ve actually met — it builds trust on campus.' : 'Join the crew to vouch for its members.'}</Text>
+          </View>
+        ) : crew.members.length ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14 }}>
             {crew.members.map((m) => (
               <View key={m.user_id} style={{ alignItems: 'center', width: 64 }}>
@@ -73,6 +90,8 @@ export default function CrewScreen() {
           <Text style={styles.empty}>No members yet.</Text>
         )}
 
+        {!vouching && (
+          <>
         <SectionHeader title="Crew territory" />
         {crew.territories.length ? (
           <View style={{ gap: 8 }}>
@@ -86,6 +105,8 @@ export default function CrewScreen() {
           </View>
         ) : (
           <Text style={styles.empty}>The crew doesn’t hold any zones right now.</Text>
+        )}
+          </>
         )}
 
         <SectionHeader title="Upcoming" />
@@ -105,7 +126,46 @@ export default function CrewScreen() {
   );
 }
 
+function MemberRow({ crewId, person, meta, canVouch, onChanged }: { crewId: string; person: CrewDetail['members'][number]; meta?: NonNullable<CrewDetail['member_meta']>[string]; canVouch: boolean; onChanged: () => void }) {
+  const { toast } = useApp();
+  const [busy, setBusy] = useState(false);
+  const [state, setState] = useState<{ vouches: number; mine: boolean } | null>(null);
+  const vouches = state?.vouches ?? meta?.vouches ?? 0;
+  const mine = state?.mine ?? meta?.vouched_by_me ?? false;
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      const v = mine ? await socialApi.unvouch(crewId, person.user_id) : await socialApi.vouch(crewId, person.user_id);
+      setState({ vouches: v.vouches, mine: v.vouched_by_me });
+      if (v.vouched_by_me) toast(`You vouched for ${person.display_name.split(' ')[0]}`, 'shield-check', colors.primary);
+      onChanged();
+    } catch (e) {
+      toast(errorText(e), 'alert-circle-outline', colors.coral);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <View style={styles.row}>
+      <PersonAvatar person={person} size={40} />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.rowTitle} numberOfLines={1}>{meta?.is_me ? 'You' : person.display_name}</Text>
+        <Text style={styles.meta}>{[meta?.role && meta.role !== 'member' ? meta.role : null, `${vouches} vouch${vouches === 1 ? '' : 'es'}`].filter(Boolean).join(' · ')}</Text>
+      </View>
+      {canVouch && !meta?.is_me && (
+        <PressScale onPress={toggle} disabled={busy} style={[styles.vouch, mine && { backgroundColor: colors.primary, borderColor: colors.primary }]} scaleTo={0.95} accessibilityRole="button" accessibilityState={{ selected: mine, busy }} accessibilityLabel={mine ? `Remove your vouch for ${person.display_name}` : `Vouch for ${person.display_name}`}>
+          <Icon name={mine ? 'shield-check' : 'shield-plus-outline'} size={15} color={mine ? colors.onPrimary : colors.primary} />
+          <Text style={[styles.vouchText, mine && { color: colors.onPrimary }]}>{mine ? 'Vouched' : 'Vouch'}</Text>
+        </PressScale>
+      )}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  vouch: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1.5, borderColor: colors.primary, borderRadius: radius.pill, paddingHorizontal: 11, paddingVertical: 6 },
+  vouchText: { color: colors.primary, fontFamily: fonts.label, fontSize: 12, letterSpacing: 0.8, textTransform: 'uppercase' },
+  fine: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, marginTop: 4 },
   top: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   col: { paddingHorizontal: 16, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center', marginTop: 14 },
   heroText: { position: 'absolute', left: 16, right: 16, bottom: 14 },

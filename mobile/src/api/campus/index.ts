@@ -2,7 +2,8 @@
  * Entry point for the campus social backend. Screens import `campusApi` from here and never
  * call fetch themselves.
  *
- *   live  → REST (api/campus/http.ts) against CAMPUS_API_URL
+ *   live  → REST (api/campus/http.ts) against CAMPUS_API_URL, and/or the Social service
+ *           (api/campus/socialAdapter.ts) for the features it implements
  *   off   → no campus backend configured: every call rejects with "not live yet"; screens show
  *           that state, never fake data. There is no mock or simulated backend in any build.
  *
@@ -10,10 +11,11 @@
  * campus endpoints with no backend yet reject with EndpointUnavailableError in every mode, while
  * the rest of the service keeps working. One missing endpoint never takes down another.
  */
-import { EndpointUnavailableError, gateEndpoints, isEndpointUnavailable } from '@/api/availability';
+import { EndpointUnavailableError, gateEndpoints, isEndpointAvailable as baseIsEndpointAvailable, isEndpointUnavailable, type Capability } from '@/api/availability';
 import { ApiError, getApiToken } from '@/api/client';
-import { CAMPUS_API_CONFIGURED, REALTIME_URL } from '@/api/config';
+import { CAMPUS_API_CONFIGURED, REALTIME_URL, SOCIAL_API_CONFIGURED } from '@/api/config';
 import { httpCampusApi } from '@/api/campus/http';
+import { socialCampusApi } from '@/api/campus/socialAdapter';
 import type { CampusApi, RealtimeMessage } from '@/api/campus/types';
 
 /**
@@ -22,7 +24,8 @@ import type { CampusApi, RealtimeMessage } from '@/api/campus/types';
  */
 export type CampusSource = 'live' | 'mock' | 'off';
 
-export const CAMPUS_SOURCE: CampusSource = CAMPUS_API_CONFIGURED ? 'live' : 'off';
+/** 'live' once any real backend serves campus features: the campus backend and/or the Social service. */
+export const CAMPUS_SOURCE: CampusSource = CAMPUS_API_CONFIGURED || SOCIAL_API_CONFIGURED ? 'live' : 'off';
 
 export const NOT_LIVE = 'not_live';
 
@@ -30,7 +33,15 @@ const offApi: CampusApi = new Proxy({} as CampusApi, {
   get: () => () => Promise.reject(new ApiError(0, 'Campus features aren’t live yet', { code: NOT_LIVE, detail: 'Campus features aren’t live yet' })),
 });
 
-const sourceApi: CampusApi = CAMPUS_SOURCE === 'live' ? httpCampusApi : offApi;
+const baseApi: CampusApi = CAMPUS_API_CONFIGURED ? httpCampusApi : offApi;
+
+/**
+ * The Social service answers the campus features it already implements (api/campus/socialAdapter.ts);
+ * the rest go to the campus backend — or, when that isn't configured, reject as "not live yet".
+ */
+const sourceApi: CampusApi = SOCIAL_API_CONFIGURED
+  ? new Proxy(baseApi, { get: (t, k: string) => (socialCampusApi as Record<string, unknown>)[k] ?? (t as unknown as Record<string, unknown>)[k] })
+  : baseApi;
 
 /** Method → capability for every endpoint that isn't built yet. Everything unlisted passes through. */
 export const campusApi: CampusApi = gateEndpoints(sourceApi, {
@@ -39,9 +50,8 @@ export const campusApi: CampusApi = gateEndpoints(sourceApi, {
   dateSuggestions: { capability: 'dateSuggestions' },
   dismissDateSuggestion: { capability: 'dateSuggestions' },
   inviteFromSuggestion: { capability: 'dateSuggestions' },
-  createUpload: { capability: 'media' },
-  completeUpload: { capability: 'media' },
-  media: { capability: 'media' },
+  // Photo uploads are live through the Social service's presigned flow.
+  ...(SOCIAL_API_CONFIGURED ? {} : { createUpload: { capability: 'media' as const }, completeUpload: { capability: 'media' as const }, media: { capability: 'media' as const } }),
   meetupRating: { capability: 'meetupRating' },
   rateMeetup: { capability: 'meetupRating' },
   ambassador: { capability: 'ambassador' },
@@ -51,7 +61,13 @@ export const campusApi: CampusApi = gateEndpoints(sourceApi, {
 });
 
 export { EndpointUnavailableError, isEndpointUnavailable };
-export { CAPABILITY_LABEL, endpointAvailability, isEndpointAvailable, type Capability } from '@/api/availability';
+export { CAPABILITY_LABEL, endpointAvailability, type Capability } from '@/api/availability';
+
+/**
+ * Per-capability availability for screens. Photo uploads are served by the Social service when it's
+ * connected (its own 503 media_unavailable, e.g. no storage configured, still reads as "not live").
+ */
+export const isEndpointAvailable = (c: Capability, opted?: Set<Capability>) => (c === 'media' && SOCIAL_API_CONFIGURED) || baseIsEndpointAvailable(c, opted);
 
 // ---------------------------------------------------------------------------
 // Errors

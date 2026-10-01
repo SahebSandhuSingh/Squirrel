@@ -14,6 +14,9 @@ import { ThemeIconButton, ThemeToggle } from '@/components/ThemeToggle';
 import { ProfileDateSuggestion } from '@/components/social/SquirrelDates';
 import { SharedZonesEntry } from '@/components/discovery/SharedZones';
 import { ambassadorWaitlistLive } from '@/api/campus/ambassadorWaitlist';
+import { SOCIAL_API_CONFIGURED } from '@/api/social';
+import { PushSetting } from '@/components/settings/PushSetting';
+import { ambassadorProgrammeLive } from '@/api/social/ambassador';
 import { getAmbassador } from '@/api/campus/community';
 import type { AmbassadorState } from '@/api/campus/types';
 import { BadgeRow, Icebreakers, ModeChip, OpenToMeetToggle } from '@/components/campus/Social';
@@ -137,13 +140,16 @@ export function CampusProfileView({ userId, isMe }: { userId?: string; isMe: boo
         {/* Stats */}
         <SectionHeader title="Activity stats" />
         <View style={styles.grid}>
-          <StatTile icon="map-marker-distance" v={km(s.total_distance_m)} l="Total distance" />
-          <StatTile icon="calendar-month" v={km(s.month_distance_m)} l="This month" />
-          <StatTile icon="flag-variant" v={String(s.zones_claimed)} l="Zones held" c={colors.primary} />
-          <StatTile icon="shield-check" v={String(s.territories_defended)} l="Defended" c={colors.gold} />
-          <StatTile icon="sword-cross" v={String(s.territories_stolen)} l="Stolen" c={colors.secondary} />
-          <StatTile icon="account-group" v={String(s.crew_memberships)} l="Crews" c={colors.blue} />
-          <StatTile icon="calendar-check" v={String(s.events_attended)} l="Events" c={colors.violet} />
+          {s.total_distance_m != null && <StatTile icon="map-marker-distance" v={km(s.total_distance_m)} l="Total distance" />}
+          {s.month_distance_m != null && <StatTile icon="calendar-month" v={km(s.month_distance_m)} l="This month" />}
+          {s.xp != null && <StatTile icon="lightning-bolt" v={s.xp.toLocaleString()} l={s.level != null ? `XP · LV ${s.level}` : 'XP'} c={colors.primary} />}
+          {s.month_workouts != null && <StatTile icon="arm-flex" v={String(s.month_workouts)} l="Workouts · month" c={colors.secondary} />}
+          {s.zones_claimed != null && <StatTile icon="flag-variant" v={String(s.zones_claimed)} l="Zones held" c={colors.primary} />}
+          {s.territories_defended != null && <StatTile icon="shield-check" v={String(s.territories_defended)} l="Defended" c={colors.gold} />}
+          {s.territories_stolen != null && <StatTile icon="sword-cross" v={String(s.territories_stolen)} l="Stolen" c={colors.secondary} />}
+          {s.crew_memberships != null && <StatTile icon="account-group" v={String(s.crew_memberships)} l="Crews" c={colors.blue} />}
+          {s.events_attended != null && <StatTile icon="calendar-check" v={String(s.events_attended)} l="Events" c={colors.violet} />}
+          {s.followers != null && <StatTile icon="account-heart-outline" v={String(s.followers)} l="Followers" c={colors.violet} />}
           {s.streak_days != null && <StatTile icon="fire" v={`${s.streak_days}d`} l="Streak" c={colors.orange} />}
         </View>
 
@@ -204,11 +210,11 @@ export function CampusProfileView({ userId, isMe }: { userId?: string; isMe: boo
             <View style={{ gap: 8 }}>
               {p.recent_activities.map((a) => (
                 <View key={a.id} style={styles.row}>
-                  <Icon name={a.type === 'walk' ? 'walk' : 'run-fast'} size={18} color={colors.primary} />
+                  <Icon name={a.type === 'walk' ? 'walk' : a.type === 'workout' ? 'arm-flex' : 'run-fast'} size={18} color={colors.primary} />
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.rowTitle}>{km(a.distance_m, 2)} {a.type}</Text>
+                    <Text style={styles.rowTitle}>{a.distance_m != null ? `${km(a.distance_m, 2)} ` : ''}{a.type}</Text>
                     <Text style={styles.meta}>
-                      {shortTime(a.started_at)} · {Math.round(a.duration_s / 60)} min · {a.zones_count} zone{a.zones_count === 1 ? '' : 's'}
+                      {[shortTime(a.started_at), `${Math.round(a.duration_s / 60)} min`, a.zones_count != null && `${a.zones_count} zone${a.zones_count === 1 ? '' : 's'}`].filter(Boolean).join(' · ')}
                     </Text>
                   </View>
                   <Text style={[styles.status, { color: a.status === 'verified' ? colors.green : a.status === 'rejected' ? colors.coral : colors.gold }]}>{a.status}</Text>
@@ -241,9 +247,18 @@ function ProfileMore({ ambStatus }: { ambStatus?: string }) {
       <SectionHeader title="More" />
       <View style={{ gap: 8 }}>
         <ThemeToggle />
+        <PushSetting />
+        {SOCIAL_API_CONFIGURED && <LinkRow icon="ticket-confirmation-outline" label="Waitlist & invites" detail="Invite 3 friends to skip the line" onPress={() => router.push('/waitlist')} />}
+        <LinkRow
+          icon="account-star-outline"
+          label="Ambassador programme"
+          detail={ambassadorProgrammeLive() ? 'Apply · track recruits' : 'Apply · Not live yet'}
+          detailColor={colors.violet}
+          onPress={() => router.push('/ambassador-programme')}
+        />
         <LinkRow
           icon="star-four-points-outline"
-          label={ambStatus ? 'Ambassador application' : 'Campus Ambassador'}
+          label={ambStatus ? 'Ambassador application' : 'Ambassador waitlist'}
           detail={ambStatus ? AMB_STATUS[ambStatus] : ambassadorWaitlistLive() ? 'Join the waitlist' : 'Waitlist · Not live yet'}
           detailColor={ambStatus === 'approved' ? colors.primary : ambStatus === 'rejected' ? colors.dim : colors.violet}
           onPress={() => router.push('/ambassador')}

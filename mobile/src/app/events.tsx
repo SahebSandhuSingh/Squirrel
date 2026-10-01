@@ -37,7 +37,7 @@ function Events() {
   const items = featured ? all.filter((e) => e.id !== featured.id) : all;
   return (
     <Screen tabBar={false} scroll={false}>
-      <Header back title="Events" right={<><IconButton icon="calendar-check" onPress={() => router.push('/meetups')} label="Meetups and check-in" /></>} />
+      <Header back title="Events" right={<><IconButton icon="calendar-plus" onPress={() => router.push('/event/new')} label="Create an event" /><IconButton icon="calendar-check" onPress={() => router.push('/meetups')} label="Meetups and check-in" /></>} />
       <Segmented items={TABS} value={tab} onChange={setTab} />
       <FlatList
         data={items}
