@@ -6,7 +6,7 @@ import { haversineM } from '../activities/gps.js';
 import { config } from '../config.js';
 import { activePeople, activeNowCount, snapToGrid, updatePresence, type ActiveRow } from './service.js';
 import { getPool, many } from '../db/pool.js';
-import { isBlockedEitherWay } from '../blocks/service.js';
+import { isBlockedEitherWay, getFullBlockSet } from '../blocks/service.js';
 
 const PresenceBody = z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180), accuracy_m: z.number().min(0).max(5000).nullable().optional() });
 
@@ -36,11 +36,12 @@ export async function presenceRoutes(app: FastifyInstance) {
       const r = await activePeople(user.id, viewerOpen);
       const active = [];
       const nearby = [];
-      for (const p of r.active) if (!(await isBlockedEitherWay(user.id, p.user_id))) active.push(personCard(p));
-      for (const p of r.nearby) if (!(await isBlockedEitherWay(user.id, p.user_id))) nearby.push(personCard(p));
+      const blocks = await getFullBlockSet(user.id);
+      for (const p of r.active) if (!blocks.has(p.user_id)) active.push(personCard(p));
+      for (const p of r.nearby) if (!blocks.has(p.user_id)) nearby.push(personCard(p));
       return { active_now: r.active_now, active, nearby, as_of: new Date().toISOString(), visible: viewerOpen, hidden_reason: viewerOpen ? null : 'open_to_meet_off' };
     } catch (err: any) {
-      if (err.code === 'blocks_unavailable') return { active_now: 0, active: [], nearby: [], as_of: new Date().toISOString(), visible: viewerOpen, hidden_reason: 'blocks_unavailable' };
+      if (err.code === 'blocks_unreachable') return { active_now: 0, active: [], nearby: [], as_of: new Date().toISOString(), visible: viewerOpen, hidden_reason: 'blocks_unreachable' };
       throw err;
     }
   };
@@ -67,8 +68,9 @@ export async function presenceRoutes(app: FastifyInstance) {
     );
     const players = [];
     try {
+      const blocks = await getFullBlockSet(user.id);
       for (const r of rows) {
-        if (!(await isBlockedEitherWay(user.id, r.user_id))) {
+        if (!blocks.has(r.user_id)) {
           const s = snapToGrid(r.lat, r.lng);
           players.push({ user_id: r.user_id, display_name: r.display_name, avatar_url: r.avatar_url, hostel: r.hostel, level: Math.floor(r.campus_xp / 2000) + 1, xp: r.campus_xp,
             position: [s.lat, s.lng], precision_m: s.precision_m, proximity: r.distance_m === null ? 'on_campus' : r.distance_m <= config.presence.veryCloseM ? 'very_close' : r.distance_m <= config.presence.nearbyM ? 'nearby' : 'on_campus',
@@ -76,7 +78,7 @@ export async function presenceRoutes(app: FastifyInstance) {
         }
       }
     } catch (err: any) {
-      if (err.code === 'blocks_unavailable') return { players: [], as_of: new Date().toISOString(), visible: true, hidden_reason: 'blocks_unavailable' };
+      if (err.code === 'blocks_unreachable') return { players: [], as_of: new Date().toISOString(), visible: true, hidden_reason: 'blocks_unreachable' };
       throw err;
     }
     return { players, as_of: new Date().toISOString(), visible: true, hidden_reason: null };

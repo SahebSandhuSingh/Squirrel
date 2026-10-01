@@ -14,7 +14,7 @@ const TOKEN = 'test-internal-token';
 
 const social = {
   blocks: new Map<string, string[]>(), // subject -> array of blocked subjects
-  mode: 'ok' as 'ok' | 'error' | 'hang',
+  mode: 'ok' as 'ok' | 'error' | 'hang' | '404',
   blockCalls: [] as string[],
   clear() {
     this.blocks.clear();
@@ -33,6 +33,7 @@ function startFakeSocial() {
     req.on('end', () => {
       if (social.mode === 'hang') return;
       if (social.mode === 'error') { res.writeHead(500).end('boom'); return; }
+      if (social.mode === '404') { res.writeHead(404).end(); return; }
       
       if (req.method === 'GET' && req.url?.startsWith('/internal/v1/blocks/')) {
         if (req.headers.authorization !== `Bearer ${TOKEN}`) { res.writeHead(401).end(); return; }
@@ -116,11 +117,11 @@ describe.skipIf(!HAS_DB)('blocks via Social (integration)', () => {
     const players = await api('GET', '/v1/map/players', 'u_sb_5');
     expect(players.status).toBe(200);
     expect(players.body.players).toEqual([]);
-    expect(players.body.hidden_reason).toBe('blocks_unavailable');
+    expect(players.body.hidden_reason).toBe('blocks_unreachable');
 
     const invite = await api('POST', '/v1/meetups', 'u_sb_5', { place_text: 'Campus cafe', starts_at: new Date(Date.now() + 3600000).toISOString(), invitee_ids: ['u_sb_6'] });
     expect(invite.status).toBe(503);
-    expect(invite.body.code).toBe('blocks_unavailable');
+    expect(invite.body.code).toBe('blocks_unreachable');
   });
 
   it('cached answer older than 30s is refreshed', async () => {
@@ -147,12 +148,29 @@ describe.skipIf(!HAS_DB)('blocks via Social (integration)', () => {
   });
 
   it('Social returns empty list for unseen user: nothing breaks, nobody wrongly hidden', async () => {
+    await active('u_sb_11');
+    await active('u_sb_12');
+
+    const players = await api('GET', '/v1/map/players', 'u_sb_11');
+    expect(players.status).toBe(200);
+    expect(players.body.hidden_reason).toBeNull();
+    expect(players.body.players.find((p: any) => p.user_id === 'u_sb_12')).toBeDefined();
+  });
+
+  it('Social returns 404: lists empty with hidden_reason, meetup invite returns 503', async () => {
     await active('u_sb_9');
     await active('u_sb_10');
 
+    // Make social return 404 for this specific user to simulate a missing route or bad token
+    social.mode = '404';
+
     const players = await api('GET', '/v1/map/players', 'u_sb_9');
     expect(players.status).toBe(200);
-    expect(players.body.hidden_reason).toBeNull();
-    expect(players.body.players.find((p: any) => p.user_id === 'u_sb_10')).toBeDefined();
+    expect(players.body.players).toEqual([]);
+    expect(players.body.hidden_reason).toBe('blocks_unreachable');
+
+    const invite = await api('POST', '/v1/meetups', 'u_sb_9', { place_text: 'Campus cafe', starts_at: new Date(Date.now() + 3600000).toISOString(), invitee_ids: ['u_sb_10'] });
+    expect(invite.status).toBe(503);
+    expect(invite.body.code).toBe('blocks_unreachable');
   });
 });
