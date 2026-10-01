@@ -12,6 +12,7 @@ import {
   BarlowCondensed_700Bold_Italic,
   BarlowCondensed_800ExtraBold_Italic,
 } from '@expo-google-fonts/barlow-condensed';
+import { CormorantGaramond_600SemiBold, CormorantGaramond_700Bold } from '@expo-google-fonts/cormorant-garamond';
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_900Black } from '@expo-google-fonts/inter';
 import { AppStateProvider } from '@/state/AppState';
 import { AuthProvider, useAuth } from '@/auth/AuthProvider';
@@ -31,6 +32,8 @@ export default function RootLayout() {
     BarlowCondensed_700Bold,
     BarlowCondensed_700Bold_Italic,
     BarlowCondensed_800ExtraBold_Italic,
+    CormorantGaramond_600SemiBold,
+    CormorantGaramond_700Bold,
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
@@ -42,7 +45,7 @@ export default function RootLayout() {
   useAlarmTriggers(loaded);
 
   // The launch splash overlays everything until the fonts are loaded and auth has restored the
-  // saved session (and at least SPLASH_MIN_MS have passed). It stays mounted at one place in the
+  // saved session (and at least SPLASH_MIN_MS have passed, across its two screens). It stays mounted at one place in the
   // tree so its animation isn't restarted when the app mounts underneath it.
   return (
     <SafeAreaProvider>

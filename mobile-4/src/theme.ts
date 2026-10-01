@@ -192,6 +192,9 @@ export const fonts = {
   semibold: 'Inter_600SemiBold',
   bold: 'Inter_700Bold',
   black: 'Inter_900Black',
+  /** Serif lockup on the launch splash ("THE PARAS MANI EFFECT") — nowhere else. */
+  serif: 'CormorantGaramond_600SemiBold',
+  serifBold: 'CormorantGaramond_700Bold',
 };
 
 /** Forward slant applied to display type for the GTA title-card feel. */
