@@ -131,6 +131,24 @@ def test_a_territory_steal_from_the_run_module_notifies_and_pushes_once(client, 
     assert pushes.sent[0]["data"]["kind"] == "territory_lost"
 
 
+def test_a_steal_by_someone_blocked_either_way_never_names_them(client, api):
+    victim, thief = new_sub(), new_sub()
+    api.user(victim)
+    thief_id = api.user(thief, display_name="Rhea")["id"]
+    victim_id = api.me(victim)["user"]["id"]
+    for blocker, blocked_id in ((thief, victim_id), (victim, thief_id)):  # the thief blocked them, then the reverse
+        client.post(f"/v1/users/{blocked_id}/block", headers=auth(blocker))
+        body = {"user_subject": victim, "kind": "territory_lost", "actor_subject": thief,
+                "data": {"area_delta_m2": 1234.4, "territory_id": "t-1", "run_id": "r-1", "capture_event_id": "ce-1"},
+                "dedupe_key": f"ce-{blocker}"}
+        assert client.post("/internal/v1/notifications", json=body, headers=SVC).json() == {"created": True}
+        n = notes(client, victim)[0]
+        assert n["title"] == "Someone stole your territory" and n["actor"] is None
+        assert "Rhea" not in str(n) and "run_id" not in n["data"] and "capture_event_id" not in n["data"]
+        assert n["data"]["territory_id"] == "t-1"
+        client.delete(f"/v1/users/{blocked_id}/block", headers=auth(blocker))
+
+
 def test_pushes_wait_for_commit_and_dead_tokens_are_disabled(database, pushes, client, api):
     me = new_sub()
     api.user(me)

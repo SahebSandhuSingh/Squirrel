@@ -29,7 +29,7 @@ Social profile ids; services translate through Social (`POST /internal/v1/people
 | Public profile: name, username, avatar, hostel, bio | **Social** | Read through Social (campus-service already does). No own copy. |
 | Private personal details: age/date of birth, gender, phone, height, weight, course, CGPA, emails | **Exercise** (proposed — see open item 1) | campus-service's `user_profile_details` (004) is to be migrated and removed. |
 | Blocking | **Social** (`user_blocks`) | campus-service and Exercise (Partner Hunt) ask Social; their tables are migrated and removed. Checks **fail closed** (see below). |
-| Crews (membership, vouching, crew events) | **Social** | campus-service reads membership from Social for crew territory (weekend war); its `crews` tables are retired. |
+| Crews (membership, vouching, crew events) | **Social** | campus-service reads membership from Social for crew territory (weekend war) via `POST /internal/v1/crews/memberships` and `/crews/lookup`; its `crews` tables are retired. |
 | XP — the one ledger, levels | **Run Module** (XP engine) | campus-service stops keeping `campus_xp` and reports claim / steal / defend awards to the Run Module. |
 | Leaderboards | **The owner of the number**: XP and hostel boards from the Run Module (Social shows them); "zones held" boards from campus-service | No board recomputes another service's number. |
 | Progress (XP history, daily rollups) | **Run Module** — absorbs the 8 endpoints the app calls on the planned progress-service | No separate progress-service is built. |

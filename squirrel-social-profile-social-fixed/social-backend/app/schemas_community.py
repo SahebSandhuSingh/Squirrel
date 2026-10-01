@@ -326,6 +326,52 @@ class InternalPeopleResolveOut(BaseModel):
 Subject = Annotated[str, Field(min_length=1, max_length=255)]
 
 
+class InternalCrewMembershipsIn(_In):
+    """Login subjects whose crews another service (campus-service) needs, e.g. for crew territory."""
+
+    subjects: Annotated[list[Subject], Field(min_length=1, max_length=200)]
+
+
+class InternalCrewRef(BaseModel):
+    id: uuid.UUID
+    name: str
+    role: str  # owner | member
+    joined_at: datetime
+
+
+class InternalCrewMemberships(BaseModel):
+    subject: str
+    crews: list[InternalCrewRef]  # oldest membership first; [] for no crews or a subject Social hasn't seen
+
+
+class InternalCrewMembershipsOut(BaseModel):
+    people: list[InternalCrewMemberships]
+
+
+class InternalCrewsLookupIn(_In):
+    crew_ids: Annotated[list[uuid.UUID], Field(min_length=1, max_length=200)]
+
+
+class InternalCrewMember(BaseModel):
+    subject: str
+    role: str
+    joined_at: datetime
+
+
+class InternalCrew(BaseModel):
+    id: uuid.UUID
+    name: str
+    interest: str
+    scope: str
+    hostel: str | None
+    members_count: int
+    members: list[InternalCrewMember]  # oldest first
+
+
+class InternalCrewsLookupOut(BaseModel):
+    crews: list[InternalCrew]  # in request order; unknown ids left out
+
+
 class InternalBlocksOut(BaseModel):
     """Everyone `subject` must not be shown to or paired with: blocked by them or blocking them.
     Callers cache it for at most 30 seconds and fail closed when they can't get a fresh one."""

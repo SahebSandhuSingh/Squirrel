@@ -9,6 +9,8 @@
   GET  /internal/v1/blocks/{subject}        everyone blocked either way with that person, by subject
                                             (campus-service: Nearby, map, meetups); never writes
   POST /internal/v1/blocks/import           one-time copy of another service's own blocks into Social
+  POST /internal/v1/crews/memberships       subjects → their crews (campus-service: crew territory)
+  POST /internal/v1/crews/lookup            crew ids → crew + members by subject
 
 The Run Module's finish worker (or the Exercise backend) calls this once an activity is final.
 It is idempotent on (source, source_ref): re-sending the same run returns the same activity, with
@@ -21,6 +23,7 @@ POST /v1/posts { activity: { source: "activity", activity_id } }. Never exposed 
 from __future__ import annotations
 
 import hmac
+import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Header, Request, Response, status
@@ -31,12 +34,20 @@ from app.auth import bearer_token, get_or_create_user
 from app.db import utcnow
 from app.deps import DB, AppSettings, Storage
 from app.errors import ApiError, conflict
-from app.models import Activity, User, UserBlock, UserStats
+from app.models import Activity, Crew, CrewMember, User, UserBlock, UserStats
 from app.schemas import InternalActivityOut, InternalActivityIn
 from app.schemas_community import (
     InternalBlocksImportIn,
     InternalBlocksImportOut,
     InternalBlocksOut,
+    InternalCrew,
+    InternalCrewMember,
+    InternalCrewMemberships,
+    InternalCrewMembershipsIn,
+    InternalCrewMembershipsOut,
+    InternalCrewRef,
+    InternalCrewsLookupIn,
+    InternalCrewsLookupOut,
     InternalNotificationIn,
     InternalNotificationOut,
     InternalPeopleResolveIn,
@@ -139,6 +150,10 @@ def _territory_text(kind: str, actor: User | None, data: dict) -> tuple[str, str
     return "Your territory faded", "Run there again to claim it back."
 
 
+# Fields that point at the actor's own run: dropped when the actor is hidden.
+_ACTOR_DATA = {"run_id", "capture_event_id"}
+
+
 @router.post("/notifications", response_model=InternalNotificationOut)
 def ingest_notification(
     body: InternalNotificationIn,
@@ -151,8 +166,12 @@ def ingest_notification(
     actor = None
     if body.actor_subject and body.actor_subject != body.user_subject:
         actor = db.scalar(select(User).where(User.auth_subject == body.actor_subject))
-    title, text = _territory_text(body.kind, actor, body.data)
     data = {k: v for k, v in body.data.items() if isinstance(v, (str, int, float, bool)) and len(str(v)) <= 100}
+    if actor and dates.is_blocked(db, user.id, actor.id):
+        # Blocked either way: the notification still arrives, but never says who, or which run.
+        actor = None
+        data = {k: v for k, v in data.items() if k not in _ACTOR_DATA}
+    title, text = _territory_text(body.kind, actor, body.data)
     created = notifications.notify(db, user.id, body.kind, title, text, data={"route": "/territory", **data},
                                    actor_id=actor.id if actor else None, dedupe_key=body.dedupe_key)
     db.commit()
@@ -276,3 +295,55 @@ def import_blocks(
             already += 1
     db.commit()
     return InternalBlocksImportOut(imported=imported, already=already, skipped=skipped)
+
+
+@router.post("/crews/memberships", response_model=InternalCrewMembershipsOut)
+def crew_memberships(
+    body: InternalCrewMembershipsIn,
+    db: DB,
+    settings: AppSettings,
+    authorization: Annotated[str | None, Header()] = None,
+):
+    """Each subject's crews, oldest membership first (so the first is their main crew), one row per
+    subject in request order. Never writes: a subject Social hasn't seen has no crews."""
+    _check_service_token(settings, authorization)
+    subjects = list(dict.fromkeys(body.subjects))
+    rows = db.execute(
+        select(User.auth_subject, Crew.id, Crew.name, CrewMember.role, CrewMember.joined_at)
+        .join(CrewMember, CrewMember.user_id == User.id)
+        .join(Crew, Crew.id == CrewMember.crew_id)
+        .where(User.auth_subject.in_(subjects))
+        .order_by(CrewMember.joined_at, Crew.id)
+    ).all()
+    crews: dict[str, list[InternalCrewRef]] = {s: [] for s in subjects}
+    for subject, crew_id, name, role, joined_at in rows:
+        crews[subject].append(InternalCrewRef(id=crew_id, name=name, role=role, joined_at=joined_at))
+    return InternalCrewMembershipsOut(people=[InternalCrewMemberships(subject=s, crews=crews[s]) for s in subjects])
+
+
+@router.post("/crews/lookup", response_model=InternalCrewsLookupOut)
+def crews_lookup(
+    body: InternalCrewsLookupIn,
+    db: DB,
+    settings: AppSettings,
+    authorization: Annotated[str | None, Header()] = None,
+):
+    """Crews by id with their members as subjects (oldest first). Unknown ids are left out, so
+    "no such crew" is a missing entry, never a 404."""
+    _check_service_token(settings, authorization)
+    ids = list(dict.fromkeys(body.crew_ids))
+    found = {c.id: c for c in db.scalars(select(Crew).where(Crew.id.in_(ids)))}
+    members: dict[uuid.UUID, list[InternalCrewMember]] = {i: [] for i in found}
+    if found:
+        for crew_id, subject, role, joined_at in db.execute(
+            select(CrewMember.crew_id, User.auth_subject, CrewMember.role, CrewMember.joined_at)
+            .join(User, User.id == CrewMember.user_id)
+            .where(CrewMember.crew_id.in_(list(found)))
+            .order_by(CrewMember.joined_at, User.auth_subject)
+        ):
+            members[crew_id].append(InternalCrewMember(subject=subject, role=role, joined_at=joined_at))
+    return InternalCrewsLookupOut(crews=[
+        InternalCrew(id=c.id, name=c.name, interest=c.interest, scope=c.scope, hostel=c.hostel,
+                     members_count=c.members_count, members=members[c.id])
+        for i in ids if (c := found.get(i))
+    ])

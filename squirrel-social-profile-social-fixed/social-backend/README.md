@@ -187,11 +187,13 @@ saves 120/min, follows 60/min, profile updates 20/min, username checks 60/min, u
 | `GET·POST /v1/challenges`, `POST …/{id}/accept\|decline\|cancel` | Head-to-head: most verified km or most workouts in 1–30 days |
 | `GET /v1/notifications`, `/unread-count`, `POST /v1/notifications/read` | The in-app list |
 | `POST /v1/me/push-tokens`, `DELETE /v1/me/push-tokens/{token}` | Expo push tokens; pushes go through Expo's service after the request commits (`app/services/push.py`) |
-| `POST /internal/v1/notifications` | Service token: the Run Module's territory captured / lost / expired events |
+| `POST /internal/v1/notifications` | Service token: the Run Module's territory captured / lost / expired events. When the actor and the recipient are blocked either way, the notification says "Someone" and drops the actor's run ids |
 | `POST /internal/v1/tasks/event-reminders` | Service token: send due event reminders (a cron, while the free plan sleeps) |
 | `POST /internal/v1/people/resolve` | Service token (campus-service): `{ subjects[]≤200, profile_ids[]≤200 }` → `{ people: [{ subject, profile_id, username, display_name, avatar_url, hostel, level }] }`; unseen subjects are provisioned, unknown profile ids omitted, each person once. The only place a subject↔profile mapping leaves Social |
 | `GET /internal/v1/blocks/{subject}` | Service token (campus-service): `{ subject, blocked: [subject…], as_of }` — everyone blocked **either way** with that person. Never writes; an unseen subject has none. Callers cache ≤30 s and fail closed (ADR-032) |
 | `POST /internal/v1/blocks/import` | Service token: `{ blocks: [{ blocker, blocked }]≤1000 }` (subjects) → `{ imported, already, skipped }`. One-time copy of another service's own block table; safe to re-run; provisions unseen subjects; removes follows between the two, like an app block |
+| `POST /internal/v1/crews/memberships` | Service token (campus-service): `{ subjects[]≤200 }` → `{ people: [{ subject, crews: [{ id, name, role, joined_at }] }] }`, oldest membership first (the first is the main crew); request order, each subject once. Never writes; an unseen subject has no crews |
+| `POST /internal/v1/crews/lookup` | Service token: `{ crew_ids[]≤200 }` → `{ crews: [{ id, name, interest, scope, hostel, members_count, members: [{ subject, role, joined_at }] }] }`; unknown ids are left out (never a 404) |
 
 **Moving existing blocks into Social (once):** `scripts/import_blocks.py` reads campus-service's `blocks` table (`--campus-db`) and/or a copy of the Exercise backend's `data/users/` folder (`--partner-hunt-dir`, Partner Hunt's `partner_blocks.json` files) and sends them to the import route. Dry run by default; `--apply` sends. The service token comes from `SOCIAL_INTERNAL_TOKEN` in the environment, never the command line. Safe to re-run.
 
@@ -253,7 +255,7 @@ This matches how the app already uses it, but it must be confirmed against the R
 | `SOCIAL_JWT_ISSUER`, `SOCIAL_JWT_AUDIENCE` | no | – | Checked when set |
 | `SOCIAL_RUN_MODULE_URL` | recommended | – | XP sync + run sharing. Unset: XP stays at its last synced value and run sharing returns 503 |
 | `SOCIAL_RUN_MODULE_TIMEOUT_S` | no | `4` | |
-| `SOCIAL_INTERNAL_TOKEN` | for ingestion | – | Service token for `/internal/v1/*` (activities, notifications, event reminders, people resolve, blocks); those endpoints 404 when unset |
+| `SOCIAL_INTERNAL_TOKEN` | for ingestion | – | Service token for `/internal/v1/*` (activities, notifications, event reminders, people resolve, blocks, crews); those endpoints 404 when unset |
 | `SOCIAL_XP_PER_LEVEL` | no | `2000` | Must match the app |
 | `SOCIAL_STREAK_TIMEZONE` | no | `Asia/Kolkata` | Day boundary for streaks |
 | `SOCIAL_MEDIA_BUCKET`, `SOCIAL_MEDIA_REGION`, `SOCIAL_MEDIA_ENDPOINT_URL`, `SOCIAL_MEDIA_PUBLIC_BASE_URL`, `SOCIAL_MEDIA_MAX_BYTES` + standard AWS credentials | for photos | – | S3-compatible storage. Unset bucket: uploads return 503 |
