@@ -13,7 +13,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
-from backend.partners import store as blocks_store
 from backend.profiles import service as profiles
 from backend.profiles import store as profile_store
 from backend.profiles.store import HistoryUnreadable
@@ -73,9 +72,3 @@ def matching_profile(user_id: str, *, today: date | None = None) -> MatchingProf
         opted_in="matching" in granted,
         consents_readable=consents_readable,
     )
-
-
-def read_blocks(user_id: str) -> frozenset[str]:
-    """The member's block list, shared with Partner Hunt: one block covers every way of being
-    suggested to someone. Raises partners.store.BlockListUnreadable when it can't be read."""
-    return blocks_store.read_blocks(user_id)

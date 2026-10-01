@@ -8,6 +8,7 @@ exactly what stands in the way:
     xp_unavailable        the Run Module's XP gate could not be consulted  (not the user's to fix)
     xp_locked             the gate says no: not enough XP yet             (the user's to fix)
     preferences_required  no preferences, or not visible — you browse only if others can see you
+    blocks_unreachable    Social, which owns blocks, could not be asked     (not the user's to fix)
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ import logging
 from dataclasses import replace
 from datetime import date, datetime, timezone
 
+from backend import social_blocks
 from backend.partners import store
 from backend.partners.matching import Person, Preferences, age_on, is_age_eligible, normalise_gender, rank
 from backend.partners.policy import PARTNER_HUNT_MIN_XP
@@ -87,25 +89,20 @@ def find_matches(user_id: str, gate: XPGate, *, today: date | None = None) -> li
         )
 
     try:
-        viewer = _with_blocks(viewer)
-    except store.BlockListUnreadable as exc:
-        # Showing the board without the viewer's own blocks would re-surface people they blocked.
-        raise PartnerHuntError(
-            500, "blocks_unreadable", "Your block list could not be read, so the board is withheld.",
-        ) from exc
+        # Social's answer covers both directions (who the viewer blocked, and who blocked them), so it
+        # is the only block list a board needs; candidates are not asked one by one.
+        viewer = replace(viewer, blocked_ids=social_blocks.blocked_either_way(user_id))
+    except social_blocks.BlocksUnreachable as exc:
+        # Showing the board without the viewer's blocks would re-surface people they blocked.
+        raise _blocks_unreachable_error("so the board is withheld") from exc
 
     people = []
     for candidate_id in store.list_user_ids():
         if candidate_id == user_id:
             continue
         candidate = _load_person(candidate_id, today)
-        if candidate is None:
-            continue
-        try:
-            people.append(_with_blocks(candidate))
-        except store.BlockListUnreadable:
-            # We cannot tell whether this person blocked the viewer, so they are left out.
-            log.warning("skipping %s in Partner Hunt: unreadable block list", candidate_id)
+        if candidate is not None:
+            people.append(candidate)
 
     return [match.to_dict() for match in rank(viewer, people, _cached_gate(gate))]
 
@@ -117,11 +114,11 @@ def block_user(user_id: str, blocked_user_id: str) -> None:
     if read_profile(blocked_user_id) is None:
         raise PartnerHuntError(404, "user_not_found", "That user does not exist.")
     try:
-        store.add_block(user_id, blocked_user_id)
-    except store.BlockListUnreadable as exc:
-        raise PartnerHuntError(
-            500, "blocks_unreadable", "Your block list could not be read, so it was not changed.",
-        ) from exc
+        # A real Social block, the same as the app's Block button: it hides the two people from each
+        # other everywhere, not only in Partner Hunt.
+        social_blocks.block(user_id, blocked_user_id)
+    except social_blocks.BlocksUnreachable as exc:
+        raise _blocks_unreachable_error("so nobody was blocked") from exc
 
 
 # --- helpers ----------------------------------------------------------------------------------------
@@ -180,14 +177,18 @@ def _load_person(user_id: str, today: date | None) -> Person | None:
     )
 
 
-def _with_blocks(person: Person) -> Person:
-    return replace(person, blocked_ids=store.read_blocks(person.user_id))
-
-
 def _age_error() -> PartnerHuntError:
     return PartnerHuntError(
         403, "age_restricted",
         "Partner Hunt is for members aged 18 and over, with a date of birth on their profile.",
+    )
+
+
+def _blocks_unreachable_error(consequence: str) -> PartnerHuntError:
+    # Never "…_unavailable": the app reads a 503 code with that suffix as a feature not built yet.
+    return PartnerHuntError(
+        503, "blocks_unreachable",
+        f"Blocked members could not be checked right now, {consequence}. Try again in a moment.",
     )
 
 

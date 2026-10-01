@@ -7,6 +7,9 @@ No test ever uses the DATABASE_URL of the shell it runs in: it is removed, so a 
 .env points at Supabase cannot write test accounts into it. To run the whole suite with accounts and
 profiles in PostgreSQL instead of files, point TEST_ACCOUNTS_DATABASE_URL at a disposable database;
 its account and profile tables are emptied before every test.
+
+Social is never called for real either: SOCIAL_API_URL and SOCIAL_INTERNAL_TOKEN are removed, and
+tests that need Social's blocks use the `fake_social` fixture (tests/fake_social.py).
 """
 
 from __future__ import annotations
@@ -16,11 +19,13 @@ import os
 import psycopg
 import pytest
 
-from backend import config
+from backend import config, social_blocks
 from backend.auth import throttle
+from backend.tests.fake_social import TOKEN as SOCIAL_TOKEN, URL as SOCIAL_URL, FakeSocial
 
 ACCOUNTS_DB_URL = os.environ.get("TEST_ACCOUNTS_DATABASE_URL", "")
-_ACCOUNT_TABLES = "user_refresh_tokens, user_accounts, user_profile_data, user_profiles, auth_throttle, email_verification_codes"
+_ACCOUNT_TABLES = ("user_refresh_tokens, user_accounts, user_profile_data, user_personal_details, user_profiles, "
+                   "auth_throttle, email_verification_codes, partner_hunt_preferences")
 
 
 @pytest.fixture(scope="session")
@@ -50,11 +55,25 @@ def _isolated_auth_storage(tmp_path_factory, monkeypatch, _accounts_database):
     for name in ("SMTP_USER", "SMTP_PASSWORD", "RESEND_API_KEY"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.delenv("DATABASE_URL", raising=False)
+    for name in ("SOCIAL_API_URL", "SOCIAL_INTERNAL_TOKEN"):
+        monkeypatch.delenv(name, raising=False)
+    social_blocks.clear_cache()
     throttle.reset_memory()
     if _accounts_database:
         with psycopg.connect(_accounts_database, autocommit=True) as conn:
             conn.execute(f"TRUNCATE {_ACCOUNT_TABLES}")
         monkeypatch.setenv("DATABASE_URL", _accounts_database)
+
+
+@pytest.fixture
+def fake_social(monkeypatch) -> FakeSocial:
+    """Social's block routes, in memory: configured as Social would be, and answering normally until
+    a test sets `failure`."""
+    social = FakeSocial()
+    monkeypatch.setenv("SOCIAL_API_URL", SOCIAL_URL)
+    monkeypatch.setenv("SOCIAL_INTERNAL_TOKEN", SOCIAL_TOKEN)
+    monkeypatch.setattr(social_blocks, "_urlopen", social)
+    return social
 
 
 @pytest.fixture

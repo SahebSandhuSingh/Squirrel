@@ -3,17 +3,21 @@ update routes. Every enumerated answer is closed; unknown fields are rejected.""
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timedelta, timezone
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.profiles.vocab import (
+    ABOUT_YOU_AGE,
+    ABOUT_YOU_GENDERS,
     ACTIVITY_CODES,
     ACTIVITY_LEVELS,
     ALCOHOL,
     BODY_FAT_PCT,
     BODY_TYPES,
+    CGPA,
     CONSENT_CATEGORIES,
     DIETS,
     EXPERIENCE,
@@ -167,3 +171,52 @@ class SignUpDetails(BaseModel):
             "physique": self.physique.model_dump() if self.physique else None,
             "habits": self.habits.model_dump() if self.habits else None,
         }
+
+
+_EMAIL = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$")
+_INDIAN_MOBILE = re.compile(r"^\+91[6-9]\d{9}$")  # E.164
+
+
+class ProfileDetailsIn(BaseModel):
+    """The app's "About you" form (PUT /api/me/profile-details), field for field. The rules are
+    campus-service's (its migration 004, src/users/details.ts), so the two agree while both exist.
+    Checks against the account (age, college_email, the two emails differing) are in
+    service.save_profile_details."""
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    full_name: str = Field(min_length=2, max_length=60)
+    personal_email: str = Field(max_length=254)
+    college_email: str = Field(max_length=254)
+    phone: str = Field(max_length=16)
+    gender: Literal[ABOUT_YOU_GENDERS]
+    age: int = Field(ge=ABOUT_YOU_AGE[0], le=ABOUT_YOU_AGE[1])
+    course: str = Field(min_length=1, max_length=60)
+    cgpa: float | None = Field(default=None, ge=CGPA[0], le=CGPA[1])
+
+    @field_validator("full_name")
+    @classmethod
+    def _a_name(cls, value: str) -> str:
+        if not any(ch.isalpha() for ch in value):
+            raise ValueError("enter your full name")
+        return " ".join(value.split())
+
+    @field_validator("personal_email", "college_email")
+    @classmethod
+    def _an_email(cls, value: str) -> str:
+        if not _EMAIL.fullmatch(value):
+            raise ValueError("enter a valid email address")
+        return value.lower()
+
+    @field_validator("phone")
+    @classmethod
+    def _e164_mobile(cls, value: str) -> str:
+        if not _INDIAN_MOBILE.fullmatch(value):
+            raise ValueError("phone must be an Indian mobile in E.164 form, e.g. +919876543210")
+        return value
+
+    @field_validator("cgpa")
+    @classmethod
+    def _two_decimals(cls, value: float | None) -> float | None:
+        if value is not None and abs(value * 100 - round(value * 100)) > 1e-6:
+            raise ValueError("CGPA can have at most 2 decimals")
+        return value

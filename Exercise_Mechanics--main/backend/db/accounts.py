@@ -1,4 +1,4 @@
-"""Accounts and profiles in PostgreSQL (migration 002). Used instead of the files under data/ whenever
+"""Accounts and profiles in PostgreSQL (migrations 002 and 006). Used instead of the files under data/ whenever
 DATABASE_URL is set; auth/store.py, users/store.py and profiles/store.py pick one or the other.
 
 Every function takes and returns the same shapes the file stores did, so nothing above the stores
@@ -133,3 +133,23 @@ def append_to_list(user_id: str, kind: str, key: str, item: dict, empty: dict) -
             {"u": user_id, "k": kind, "key": key, "item": Jsonb([item]),
              "first": Jsonb({**empty, key: [item]})}).fetchone()
     return row[0]
+
+
+# ---------------------------------------------------------------- private personal details (migration 006)
+
+def read_personal_details(user_id: str) -> dict | None:
+    with pooled() as conn:
+        row = conn.execute("SELECT personal_email, course, cgpa FROM user_personal_details WHERE user_id = %s",
+                           (user_id,)).fetchone()
+    if row is None:
+        return None
+    return {"personal_email": row[0], "course": row[1], "cgpa": None if row[2] is None else float(row[2])}
+
+
+def write_personal_details(user_id: str, details: dict) -> None:
+    with pooled() as conn:
+        conn.execute(
+            "INSERT INTO user_personal_details (user_id, personal_email, course, cgpa) VALUES (%s, %s, %s, %s) "
+            "ON CONFLICT (user_id) DO UPDATE SET personal_email = EXCLUDED.personal_email, "
+            "course = EXCLUDED.course, cgpa = EXCLUDED.cgpa, updated_at = now()",
+            (user_id, details["personal_email"], details["course"], details["cgpa"]))

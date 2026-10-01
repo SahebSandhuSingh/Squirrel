@@ -2,7 +2,7 @@
 
     GET  /api/users/{id}/activity-matching          status: what's missing, and what matches see
     GET  /api/users/{id}/activity-matches           members who share your activities, best first
-    POST /api/users/{id}/activity-matches/blocks    block someone (shared with Partner Hunt)
+    POST /api/users/{id}/activity-matches/blocks    block someone (a Social block, ADR-032)
 
 Opting in is the "matching" consent: POST /api/users/{id}/consents {"category": "matching", ...}.
 Activities and their interest scores come from sign-up page 2 (PUT /api/users/{id}/details).

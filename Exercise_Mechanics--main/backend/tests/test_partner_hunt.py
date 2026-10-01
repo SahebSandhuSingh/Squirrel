@@ -1,5 +1,7 @@
 """Partner Hunt: the XP gate, two-way eligibility, ranking, blocking and the REST contract.
 
+Blocks are Social's (ADR-032); the `fake_social` fixture (tests/fake_social.py) stands in for it.
+
 The properties that matter most here are safety properties, and most tests are about them: a user
 never appears to someone they excluded or blocked, nobody gets in on an XP read that did not happen,
 and a card never carries more personal data than it needs.
@@ -17,7 +19,7 @@ from datetime import date
 import pytest
 from fastapi import FastAPI
 
-from backend import config
+from backend import config, social_blocks
 from backend.auth import tokens
 from backend.partners import store
 from backend.partners.matching import (
@@ -409,6 +411,11 @@ def isolated_users(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "USERS_DIR", tmp_path)
 
 
+@pytest.fixture(autouse=True)
+def social(fake_social):
+    return fake_social
+
+
 def test_status_reports_a_locked_user_with_their_progress():
     ana = _user("ana")
     gate = RecordingGate({ana: 40})
@@ -542,22 +549,44 @@ def test_invalid_preferences_are_rejected(bad):
     assert status == 422
 
 
-def test_blocking_hides_both_people_from_each_other_immediately():
+def test_blocking_hides_both_people_from_each_other_immediately(social):
     ana, ben = _user("ana"), _user("ben", gender="male")
     app = _app(RecordingGate(default_xp=500))
     for uid in (ana, ben):
         _request(app, "PUT", f"/api/users/{uid}/partner-hunt/preferences", prefs())
     assert _request(app, "GET", f"/api/users/{ana}/partner-hunt/matches")[1]["matches"]
+    assert _request(app, "GET", f"/api/users/{ben}/partner-hunt/matches")[1]["matches"]
 
+    # Both answers were cached a moment ago; the block still applies to both boards at once.
     status, body = _request(app, "POST", f"/api/users/{ben}/partner-hunt/blocks", {"user_id": ana})
     assert status == 200 and body == {"blocked_user_id": ana}
     assert _request(app, "GET", f"/api/users/{ana}/partner-hunt/matches")[1]["matches"] == []
     assert _request(app, "GET", f"/api/users/{ben}/partner-hunt/matches")[1]["matches"] == []
 
+    # A real Social block, made through its import route, so the whole app honours it.
+    assert ("POST", "/internal/v1/blocks/import", {"blocks": [{"blocker": ben, "blocked": ana}]}) in social.requests
+    assert social.pairs == {(ben, ana)}
+
     # Blocking twice is harmless, and saving preferences afterwards does not lift the block.
     assert _request(app, "POST", f"/api/users/{ben}/partner-hunt/blocks", {"user_id": ana})[0] == 200
     _request(app, "PUT", f"/api/users/{ben}/partner-hunt/preferences", prefs(mode="remote"))
-    assert store.read_blocks(ben) == {ana}
+    assert social.pairs == {(ben, ana)}
+    assert not (config.user_dir(ben) / "partner_blocks.json").exists()  # nothing kept here
+
+
+@pytest.mark.parametrize("who_blocked", ["viewer", "candidate"])
+def test_a_block_made_in_the_app_hides_the_pair_both_ways(social, who_blocked):
+    ana, ben, cat = _user("ana"), _user("ben", gender="male"), _user("cat")
+    app = _app(RecordingGate(default_xp=500))
+    for uid in (ana, ben, cat):
+        _request(app, "PUT", f"/api/users/{uid}/partner-hunt/preferences", prefs())
+    # Made with the app's Block button (Social), never through Partner Hunt.
+    social.block(*((ana, ben) if who_blocked == "viewer" else (ben, ana)))
+
+    assert [m["user_id"] for m in _request(app, "GET", f"/api/users/{ana}/partner-hunt/matches")[1]["matches"]] == [cat]
+    assert [m["user_id"] for m in _request(app, "GET", f"/api/users/{ben}/partner-hunt/matches")[1]["matches"]] == [cat]
+    # One lookup per board, for the viewer only: their either-way set covers every candidate.
+    assert social.lookups() == [ana, ben]
 
 
 def test_block_rejects_self_unknown_and_malformed_ids():
@@ -568,21 +597,57 @@ def test_block_rejects_self_unknown_and_malformed_ids():
     assert _request(app, "POST", f"/api/users/{ana}/partner-hunt/blocks", {"user_id": "../etc"})[0] == 400
 
 
-def test_an_unreadable_block_list_never_re_exposes_anyone():
-    ana, ben, cat = _user("ana"), _user("ben", gender="male"), _user("cat")
+@pytest.mark.parametrize("failure", ["down", "timeout", 404, 401, 500, "garbage"])
+def test_when_social_cannot_be_asked_the_board_is_withheld(social, failure):
+    ana, ben = _user("ana"), _user("ben", gender="male")
     app = _app(RecordingGate(default_xp=500))
-    for uid in (ana, ben, cat):
+    for uid in (ana, ben):
         _request(app, "PUT", f"/api/users/{uid}/partner-hunt/preferences", prefs())
+    social.failure = failure  # a 404 too: Social answers 200 for a person it has never seen
 
-    # Ben's block list is corrupt: we cannot know whether he blocked Ana, so he is left off her board.
-    (config.user_dir(ben) / store.BLOCKS_FILENAME).write_text("{not json")
-    assert [m["user_id"] for m in _request(app, "GET", f"/api/users/{ana}/partner-hunt/matches")[1]["matches"]] == [cat]
+    # Shown without the viewer's blocks, the board could put someone they blocked back in front of them.
+    status, body = _request(app, "GET", f"/api/users/{ana}/partner-hunt/matches")
+    assert status == 503 and body["detail"]["code"] == "blocks_unreachable"
+    # A block is refused, with nothing written anywhere.
+    status, body = _request(app, "POST", f"/api/users/{ana}/partner-hunt/blocks", {"user_id": ben})
+    assert status == 503 and body["detail"]["code"] == "blocks_unreachable"
+    assert social.pairs == set()
+    # Status needs no blocks, so it still answers.
+    assert _request(app, "GET", f"/api/users/{ana}/partner-hunt")[0] == 200
 
-    # Ben's own board is withheld entirely rather than shown without his blocks applied.
-    status, body = _request(app, "GET", f"/api/users/{ben}/partner-hunt/matches")
-    assert status == 500 and body["detail"]["code"] == "blocks_unreadable"
-    # And a new block is refused rather than overwriting — and silently lifting — the old ones.
-    assert _request(app, "POST", f"/api/users/{ben}/partner-hunt/blocks", {"user_id": cat})[0] == 500
+
+def test_an_answer_is_used_for_30_seconds_and_never_after(social, monkeypatch):
+    ana, ben = _user("ana"), _user("ben", gender="male")
+    app = _app(RecordingGate(default_xp=500))
+    for uid in (ana, ben):
+        _request(app, "PUT", f"/api/users/{uid}/partner-hunt/preferences", prefs())
+    now = [1000.0]
+    monkeypatch.setattr(social_blocks, "_clock", lambda: now[0])
+
+    assert _request(app, "GET", f"/api/users/{ana}/partner-hunt/matches")[1]["matches"]
+    social.block(ben, ana)  # in the app: this server is not told
+    social.failure = "down"
+    now[0] += 29.9
+    assert _request(app, "GET", f"/api/users/{ana}/partner-hunt/matches")[1]["matches"]  # still fresh
+    now[0] += 0.1
+    status, body = _request(app, "GET", f"/api/users/{ana}/partner-hunt/matches")
+    assert status == 503 and body["detail"]["code"] == "blocks_unreachable"  # no stale fallback
+    social.failure = None
+    assert _request(app, "GET", f"/api/users/{ana}/partner-hunt/matches")[1]["matches"] == []
+    assert social.lookups() == [ana, ana, ana]
+
+
+@pytest.mark.parametrize("unset", ["SOCIAL_API_URL", "SOCIAL_INTERNAL_TOKEN"])
+def test_without_social_configured_partner_hunt_stays_closed(social, monkeypatch, caplog, unset):
+    monkeypatch.delenv(unset)
+    ana, ben = _user("ana"), _user("ben", gender="male")
+    app = _app(RecordingGate(default_xp=500))
+    for uid in (ana, ben):
+        _request(app, "PUT", f"/api/users/{uid}/partner-hunt/preferences", prefs())
+    status, body = _request(app, "GET", f"/api/users/{ana}/partner-hunt/matches")
+    assert status == 503 and body["detail"]["code"] == "blocks_unreachable"
+    assert _request(app, "POST", f"/api/users/{ana}/partner-hunt/blocks", {"user_id": ben})[0] == 503
+    assert social.requests == [] and "SOCIAL_API_URL and SOCIAL_INTERNAL_TOKEN" in caplog.text
 
 
 def test_malformed_user_ids_are_refused_not_redirected():

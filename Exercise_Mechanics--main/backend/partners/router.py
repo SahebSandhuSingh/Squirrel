@@ -3,7 +3,7 @@
     GET  /api/users/{id}/partner-hunt              status: XP, gate, age, saved preferences
     PUT  /api/users/{id}/partner-hunt/preferences  save preferences (allowed while still locked)
     GET  /api/users/{id}/partner-hunt/matches      the board — only once every access check passes
-    POST /api/users/{id}/partner-hunt/blocks       block someone, both directions, immediately
+    POST /api/users/{id}/partner-hunt/blocks       block someone, both directions, immediately (in Social)
 
 Errors carry a machine-readable `code` in `detail` (see service.py) so the client can say exactly
 what stands between the user and the board.

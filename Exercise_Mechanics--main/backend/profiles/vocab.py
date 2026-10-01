@@ -12,6 +12,13 @@ from backend.users.store import SKILLS
 
 GENDERS = ("female", "male", "non_binary", "other", "undisclosed")
 
+# The app's "About you" form (GET/PUT /api/me/profile-details): the same rules as campus-service's
+# copy (its migration 004, src/users/details.ts) and the app's own checks. Its genders are ours
+# without "other", which the form doesn't offer.
+ABOUT_YOU_GENDERS = tuple(g for g in GENDERS if g != "other")
+ABOUT_YOU_AGE = (16, 99)
+CGPA = (0.0, 10.0)
+
 # Same values as the dashboard skill level (skill.json), which stays the single source of truth.
 FITNESS_LEVELS = SKILLS
 ACTIVITY_LEVELS = ("sedentary", "light", "moderate", "active", "very_active")

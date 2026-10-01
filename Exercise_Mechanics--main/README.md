@@ -207,8 +207,9 @@ optional and switch features on:
 |---|---|---|
 | `RUN_MODULE_URL` | Partner Hunt's XP gate: the Run Module's `/v1/users/{id}/xp-gate`, called with a short-lived service token signed with `JWT_SECRET` (`RUN_MODULE_TOKEN` overrides it with a fixed token) | Partner Hunt reports the XP service as unavailable |
 | `PARTNER_HUNT_DEV_XP` | Local testing only, when `RUN_MODULE_URL` is unset: a fixed XP for every user | — |
+| `SOCIAL_API_URL`, `SOCIAL_INTERNAL_TOKEN` | The Social service and its service token. Finished workouts are published to it (`backend/social_publish.py`). **Blocks are Social's** ([ADR-032](../docs/decisions/ADR-032-service-ownership.md)): Partner Hunt and activity matching read each viewer's either-way block set from `GET /internal/v1/blocks/{id}` (cached at most 30 s), and their Block buttons create a Social block through `POST /internal/v1/blocks/import` (`backend/social_blocks.py`). Checks fail closed: with Social unreachable (a 404 included), the board is withheld and a block refused, `503 blocks_unreachable` | Workouts are not published; Partner Hunt and activity-matching boards and blocks answer `503 blocks_unreachable` (logged) |
 | `MODERATION_TOKEN` | Moderator routes for reports | Moderator routes refuse every request (503) |
-| `DATABASE_URL` | **Accounts and profiles are stored here** (sign-in, refresh tokens, profile, skill, profile details, measurements, consents). Exercise sessions are also copied into `exercise_sessions`, and into the shared `activity_sessions` that XP is derived from (see below) | Accounts and profiles are files under `data/`, lost on a redeploy without a volume |
+| `DATABASE_URL` | **Accounts and profiles are stored here** (sign-in, refresh tokens, profile, skill, profile details, measurements, consents, Partner Hunt preferences). Exercise sessions are also copied into `exercise_sessions`, and into the shared `activity_sessions` that XP is derived from (see below) | Accounts and profiles are files under `data/`, lost on a redeploy without a volume |
 | `JWT_SECRET` | Signs Squirrel Social login tokens (HS256 JWTs). The **same value as the Run Module's**, so one sign-in works on both. **Required in production** (`SQUIRREL_AUTH_SECRET`, if set, takes precedence) | A development key is generated once in `data/auth/secret.key` |
 | `EXERCISE_REQUIRE_AUTH` | `0` switches off the sign-in check on per-user routes, only to try the password-less browser coach locally | Sign-in required |
 | `SQUIRREL_PUBLIC_BASE_URL` | Origin used in QR codes and invite links | `https://squirrelsocial.app` |
@@ -269,6 +270,29 @@ Routes: `GET /api/users/{id}/details` (everything, with age and BMI derived);
 `PUT /api/users/{id}/details` (page 2, all at once);
 `PUT /api/users/{id}/details/{fitness|activities|physique|habits}`;
 `GET|POST /api/users/{id}/measurements`; `GET|POST /api/users/{id}/consents`.
+
+### The app's "About you" form
+
+Exercise is the one home of a member's private details (ADR-032). The app's "About you" form is
+`GET /api/me/profile-details` and `PUT /api/me/profile-details`, for the signed-in user only: the
+user is the bearer token's, a token is always required (401 without one, even with sign-in switched
+off), and there is no route by user id. The body is the form as the app sends it:
+`{ full_name, personal_email, college_email, phone, gender, age, course, cgpa }`. Each field has one
+source, so nothing is stored twice:
+
+| Field | Source | Rule (the same as campus-service's copy and the app) |
+|---|---|---|
+| `full_name` | `first_name` + `last_name` | 2–60 characters with a letter. Saved split on the first space; a one-word name is all first name. An unchanged name keeps its split |
+| `phone` | `mobile` | Indian mobile in E.164, e.g. `+919876543210` |
+| `gender` | `gender` | `female`, `male`, `non_binary` or `undisclosed` |
+| `age` | `date_of_birth` | Never stored. 16–99, and it must be the age the date of birth gives (422 `age_mismatch` otherwise). Without a date of birth it is accepted and not kept: `null` until one is set |
+| `college_email` | the sign-in email | Read-only here: 422 `college_email_read_only` if it differs (case and spaces aside) |
+| `personal_email`, `course`, `cgpa` | `user_personal_details` (migration 006), or `personal_details.json` | Valid email, different from the college one; course 1–60 characters; CGPA 0–10, at most 2 decimals, optional |
+
+`PUT` replaces the whole form (a CGPA left out is cleared) and answers with the saved form. `GET`
+always answers the same shape: before the first save, with what the account already knows and
+`null` for the rest. A refused `PUT` changes nothing; its 422s are in FastAPI's validation shape
+(`detail: [{loc, msg, type}]`).
 
 ## Workout Score and Activity Rating
 
@@ -354,8 +378,9 @@ city and no meeting preferences. The frontend doesn't show it yet.
 - **A match card shows only** first name and last initial, age band, fitness level, the shared
   activities, the score and the reasons. Never gender, body data, contact details, location or
   interest scores.
-- **Blocking** uses the same list as Partner Hunt and works both ways. Anyone whose consent or
-  block list can't be read is left out, never shown.
+- **Blocking** is Social's, the same block as the app's Block button and Partner Hunt's, and works
+  both ways. Anyone whose consent can't be read is left out, never shown; if Social can't be asked,
+  no matches are shown at all (`503 blocks_unreachable`).
 
 Routes: `GET /api/users/{id}/activity-matching` (status, and exactly what matches see),
 `GET /api/users/{id}/activity-matches`, `POST /api/users/{id}/activity-matches/blocks`.
@@ -379,7 +404,7 @@ side is in [`backup/mobile-nearby/nearby/`](../backup/mobile-nearby/nearby/) (no
 - **Accounts.** A registered account's id is a UUID, the form the Run Module also requires. With `DATABASE_URL` set, the account, its refresh tokens (hashed) and its profile are rows in the database (see "PostgreSQL" below). Without it, they are files: the profile in `data/users/<id>/profile.json`, credentials and refresh tokens as hashes under `data/auth/`, which is private and git-ignored, like `data/invites/`.
 - **Sign-in limits** (`backend/auth/throttle.py`). 5 wrong passwords lock that account's sign-in for 15 minutes, from any device. Looser per-address limits (50 failed logins per 15 min, 20 sign-ups per hour, 1000 refreshes per 15 min) stop one machine hammering the service without locking out phones that share a carrier address. Over a limit: `429` with `Retry-After`. With `DATABASE_URL` the counters are shared by every instance (`auth_throttle`).
 - **One sign-in, both backends.** Access tokens are HS256 JWTs signed with `JWT_SECRET`, the Run Module's secret, so the Run Module accepts them as they are.
-- **Every per-user route is locked to its user.** `/api/users/{user_id}/...` needs `Authorization: Bearer <that user's token>`: 401 without one, 403 with anyone else's. The training sockets take the token as `?token=`. Sign-up (`POST /api/users`) now takes a `password` and returns tokens; an account made elsewhere (e.g. the mobile app, with email and name only) adds its details with `PUT /api/users/{id}/profile`. `backend/tests/test_access.py` checks every per-user route.
+- **Every per-user route is locked to its user.** `/api/users/{user_id}/...` needs `Authorization: Bearer <that user's token>`: 401 without one, 403 with anyone else's. The training sockets take the token as `?token=`. Sign-up (`POST /api/users`) now takes a `password` and returns tokens; an account made elsewhere (e.g. the mobile app, with email and name only) adds its details with `PUT /api/users/{id}/profile`. `backend/tests/test_access.py` checks every per-user route. The private "About you" details are `/api/me/profile-details`, which takes the user from the token alone (see the "About you" section above).
 
 ## PostgreSQL: accounts, profiles and exercise sessions
 
@@ -390,7 +415,10 @@ With `DATABASE_URL` set (`backend/db/`):
   hashes only), profiles (`user_profiles`: the profile as JSON, with `first_name`, `last_name` and
   `email` as columns) and the rest of each profile (`user_profile_data`: skill level, the fitness /
   activities / physique / habits answers, the measurement history and the consent log, one row each).
-  They survive a redeploy. A database that is down means sign-in and profiles fail until it is back.
+  Partner Hunt preferences are in `partner_hunt_preferences` (migration 005, one row per member, the
+  validated preferences as JSON), and the "About you" form's personal email, course and CGPA are in
+  `user_personal_details` (migration 006). Both survive a redeploy. A database that is down means
+  sign-in and profiles fail until it is back. Blocks are not stored here: Social owns them (ADR-032).
 - **Every exercise session is copied** into `exercise_sessions`, and, for accounts, into the shared
   `activity_sessions` table, which is what earns the session XP (below). Session files stay the
   source of truth.

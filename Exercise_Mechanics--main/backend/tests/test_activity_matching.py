@@ -18,7 +18,6 @@ from backend import config
 from backend.activity_matching import scoring
 from backend.activity_matching.features import MatchingProfile
 from backend.activity_matching.router import router as matching_router
-from backend.partners import store as blocks_store
 from backend.profiles import store as profile_store
 from backend.profiles.router import router as profiles_router
 from backend.tests.storage import corrupt_profile_data
@@ -97,6 +96,12 @@ def ids(uid: str) -> list[str]:
 @pytest.fixture(autouse=True)
 def isolated_users(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "USERS_DIR", tmp_path)
+
+
+@pytest.fixture(autouse=True)
+def social(fake_social):
+    """Blocks are Social's (ADR-032): tests/fake_social.py stands in for it."""
+    return fake_social
 
 
 # ---------------------------------------------------------------- who gets paired
@@ -216,12 +221,22 @@ def test_ties_are_ordered_stably_and_the_list_is_capped():
 
 # ---------------------------------------------------------------- safety
 
-def test_a_block_hides_both_people_from_each_other_and_is_shared_with_partner_hunt():
+def test_a_block_hides_both_people_from_each_other_and_is_a_social_block(social):
     ana, ben = member("Ana", {"running": 5}), member("Ben", {"running": 5})
+    assert ids(ana) == [ben] and ids(ben) == [ana]
     status, _ = _request("POST", f"/api/users/{ana}/activity-matches/blocks", {"user_id": ben})
     assert status == 200
     assert matches(ana) == [] and matches(ben) == []
-    assert ben in blocks_store.read_blocks(ana)
+    # Made in Social, so Partner Hunt and the rest of the app honour it too.
+    assert social.pairs == {(ana, ben)}
+
+
+@pytest.mark.parametrize("who_blocked", ["viewer", "candidate"])
+def test_a_block_made_in_the_app_hides_the_pair_both_ways(social, who_blocked):
+    ana, ben, cat = (member(n, {"running": 5}) for n in ("Ana", "Ben", "Cat"))
+    social.block(*((ana, ben) if who_blocked == "viewer" else (ben, ana)))
+    assert ids(ana) == [cat] and ids(ben) == [cat]
+    assert social.lookups() == [ana, ben]  # the viewer's either-way set: one call per board
 
 
 def test_blocking_yourself_or_nobody_is_refused():
@@ -230,19 +245,25 @@ def test_blocking_yourself_or_nobody_is_refused():
     assert _request("POST", f"/api/users/{ana}/activity-matches/blocks", {"user_id": "nobody-123456"})[0] == 404
 
 
-def test_unreadable_data_fails_closed():
-    ana, ben, cat = (member(n, {"running": 5}) for n in ("Ana", "Ben", "Cat"))
+def test_unreadable_data_fails_closed(social):
+    ana, ben = (member(n, {"running": 5}) for n in ("Ana", "Ben"))
     # A candidate whose consent can't be confirmed is not shown.
     corrupt_profile_data(ben, profile_store.CONSENTS_FILENAME)
-    # A candidate whose block list can't be read might have blocked Ana: not shown either.
-    (config.user_dir(cat) / blocks_store.BLOCKS_FILENAME).parent.mkdir(parents=True, exist_ok=True)
-    (config.user_dir(cat) / blocks_store.BLOCKS_FILENAME).write_text("{not json")
     assert matches(ana) == []
-    # And the viewer's own unreadable files stop the board rather than guessing.
+    # And the viewer's own unreadable consents stop the board rather than guessing.
     status, body = _request("GET", f"/api/users/{ben}/activity-matches")
     assert status == 503 and body["detail"]["code"] == "consents_unreadable"
-    status, body = _request("GET", f"/api/users/{cat}/activity-matches")
-    assert status == 500 and body["detail"]["code"] == "blocks_unreadable"
+
+
+@pytest.mark.parametrize("failure", ["down", "timeout", 404, 500])
+def test_when_social_cannot_be_asked_no_matches_are_shown_and_nobody_is_blocked(social, failure):
+    ana, ben = (member(n, {"running": 5}) for n in ("Ana", "Ben"))
+    social.failure = failure
+    status, body = _request("GET", f"/api/users/{ana}/activity-matches")
+    assert status == 503 and body["detail"]["code"] == "blocks_unreachable"
+    status, body = _request("POST", f"/api/users/{ana}/activity-matches/blocks", {"user_id": ben})
+    assert status == 503 and body["detail"]["code"] == "blocks_unreachable"
+    assert social.pairs == set()
 
 
 def test_a_match_card_reveals_nothing_beyond_the_matching_view():

@@ -40,7 +40,8 @@ def db(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "USERS_DIR", tmp_path)
     monkeypatch.setenv("DATABASE_URL", TEST_URL)
     with psycopg.connect(TEST_URL, autocommit=True) as conn:
-        conn.execute("DROP TABLE IF EXISTS exercise_sessions, activity_types, user_refresh_tokens, user_accounts, user_profile_data, user_profiles, auth_throttle, schema_migrations CASCADE")
+        conn.execute("DROP TABLE IF EXISTS exercise_sessions, activity_types, user_refresh_tokens, user_accounts, user_profile_data, user_personal_details, user_profiles, auth_throttle, email_verification_codes, "
+                     "partner_hunt_preferences, schema_migrations CASCADE")
     migrate()
     with psycopg.connect(TEST_URL, autocommit=True) as conn:
         yield conn
@@ -299,7 +300,8 @@ def test_a_database_that_is_down_is_logged_not_raised(tmp_path, monkeypatch, cap
 def test_the_app_migrates_on_startup(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", TEST_URL)
     with psycopg.connect(TEST_URL, autocommit=True) as conn:
-        conn.execute("DROP TABLE IF EXISTS exercise_sessions, activity_types, user_refresh_tokens, user_accounts, user_profile_data, user_profiles, auth_throttle, schema_migrations CASCADE")
+        conn.execute("DROP TABLE IF EXISTS exercise_sessions, activity_types, user_refresh_tokens, user_accounts, user_profile_data, user_personal_details, user_profiles, auth_throttle, email_verification_codes, "
+                     "partner_hunt_preferences, schema_migrations CASCADE")
     from backend.main import _lifespan, app
 
     async def start_and_stop():

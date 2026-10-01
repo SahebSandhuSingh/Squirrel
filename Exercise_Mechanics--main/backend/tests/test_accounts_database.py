@@ -1,4 +1,5 @@
-"""Accounts and profiles in PostgreSQL (migration 002), against a real database.
+"""Accounts and profiles in PostgreSQL (migration 002), and Partner Hunt preferences (005), against a
+real database.
 
 Runs when TEST_DATABASE_URL points at a disposable database (its tables are dropped and recreated);
 skipped otherwise. The rest of the suite covers the same behaviour on either storage (conftest.py);
@@ -19,6 +20,8 @@ from backend.auth import store as auth_store
 from backend.db import connection
 from backend.db.import_files import import_files
 from backend.db.migrate import migrate
+from backend.partners import service as partners
+from backend.partners import store as partner_store
 from backend.profiles import store as profile_store
 from backend.profiles.service import onboard
 from backend.users.store import read_profile, read_skill, write_skill
@@ -35,7 +38,8 @@ def db(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "USERS_DIR", tmp_path / "users")
     with psycopg.connect(TEST_URL, autocommit=True) as conn:
         conn.execute("DROP TABLE IF EXISTS exercise_sessions, activity_types, user_refresh_tokens, user_accounts, "
-                     "user_profile_data, user_profiles, auth_throttle, schema_migrations CASCADE")
+                     "user_profile_data, user_personal_details, user_profiles, auth_throttle, "
+                     "email_verification_codes, partner_hunt_preferences, schema_migrations CASCADE")
     with psycopg.connect(TEST_URL, autocommit=True) as conn:
         migrate(conn)
     monkeypatch.setenv("DATABASE_URL", TEST_URL)
@@ -140,3 +144,35 @@ def test_the_database_refuses_impossible_rows(db):
         with pytest.raises(psycopg.errors.IntegrityError):
             db.execute("INSERT INTO user_accounts (user_id, email, password_hash) VALUES ('ana-1', %s, %s)",
                        (email, digest))
+    for user_id, email, course, cgpa in (("nobody-1", "ana@gmail.test", "BSc", 8), ("ana-1", "Ana@Gmail.test", "BSc", 8),
+                                         ("ana-1", "not-an-email", "BSc", 8), ("ana-1", "ana@gmail.test", "", 8),
+                                         ("ana-1", "ana@gmail.test", "BSc", 10.5)):
+        with pytest.raises(psycopg.errors.IntegrityError):
+            db.execute("INSERT INTO user_personal_details (user_id, personal_email, course, cgpa) "
+                       "VALUES (%s, %s, %s, %s)", (user_id, email, course, cgpa))
+    db.execute("INSERT INTO user_personal_details (user_id, personal_email, course, cgpa) "
+               "VALUES ('ana-1', 'ana@gmail.test', 'BSc', NULL)")
+    db.execute("DELETE FROM user_profiles WHERE user_id = 'ana-1'")
+    assert db.execute("SELECT count(*) FROM user_personal_details").fetchone()[0] == 0  # goes with the account
+
+
+def test_partner_hunt_preferences_live_in_the_database_and_survive_a_restart(db):
+    uid = onboard(dict(CORE), password="correct horse")["user_id"]
+    assert partner_store.read_preferences(uid) is None  # none saved: the default, as with no file
+    preferences = {"visible": True, "activities": ["running"], "mode": "remote", "city": None,
+                   "preferred_times": ["morning"], "partner_genders": [], "partner_age_min": 18,
+                   "partner_age_max": 40}
+    partners.save_preferences(uid, preferences)
+    partners.save_preferences(uid, {**preferences, "visible": False})  # a save replaces the last one
+    assert not (config.USERS_DIR / uid / partner_store.PREFERENCES_FILENAME).exists()  # nothing on disk
+    [(stored,)] = db.execute("SELECT preferences FROM partner_hunt_preferences WHERE user_id = %s", (uid,)).fetchall()
+    assert stored == {**preferences, "visible": False}
+
+    connection.close_pools()  # a redeploy: nothing in memory, nothing on disk
+    assert partner_store.read_preferences(uid) == {**preferences, "visible": False}
+
+    # Only an object can be stored, and a user's preferences go with their profile.
+    with pytest.raises(psycopg.errors.IntegrityError):
+        db.execute("UPDATE partner_hunt_preferences SET preferences = '[]' WHERE user_id = %s", (uid,))
+    db.execute("DELETE FROM user_profiles WHERE user_id = %s", (uid,))
+    assert partner_store.read_preferences(uid) is None

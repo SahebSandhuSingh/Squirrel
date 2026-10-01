@@ -34,6 +34,14 @@ class ProfileError(Exception):
         return {"code": self.code, "message": self.message}
 
 
+class InvalidFields(Exception):
+    """A 422 on named request fields: [(field, code, message)], answered in the shape of FastAPI's
+    own validation errors so a client reads both the same way."""
+    def __init__(self, errors: list[tuple[str, str, str]]):
+        super().__init__("; ".join(message for _, _, message in errors))
+        self.errors = errors
+
+
 # ---------------------------------------------------------------- derived values
 
 def parse_date_of_birth(raw: object) -> date | None:
@@ -426,3 +434,71 @@ def save_sign_up_details(user_id: str, sections: dict, consents: list[dict], *,
         if sections.get(section) is not None:
             save_section(user_id, section, sections[section])
     return details(user_id)
+
+
+# ---------------------------------------------------------------- "About you" (the app's profile details)
+
+# The app's form, read and written as one object (ADR-032: Exercise is the home of private details).
+# Each field has one source: full_name is first_name + last_name, phone is mobile, gender is gender,
+# age is derived from date_of_birth and college_email is the sign-in address (both read-only here);
+# only personal_email, course and CGPA are stored for this form (store.write_personal_details).
+
+def full_name(profile: dict) -> str | None:
+    parts = (profile.get("first_name") or "", profile.get("last_name") or "")
+    return " ".join(" ".join(parts).split()) or None
+
+
+def split_full_name(name: str) -> tuple[str, str]:
+    """First name up to the first space, last name the rest. A one-word name is all first name with
+    an empty last name, as an account made by code sign-in without a last name already has."""
+    first, _, last = " ".join(name.split()).partition(" ")
+    return first, last
+
+
+def profile_details(user_id: str, *, today: date | None = None) -> dict:
+    """The form as saved. Before its first save it is still answered, with what the account already
+    knows and null for the rest (personal_email, course, cgpa; and anything never given, such as age
+    without a date of birth), so the app can prefill the form."""
+    profile = _require_user(user_id)
+    saved = store.read_personal_details(user_id) or {}
+    dob = parse_date_of_birth(profile.get("date_of_birth"))
+    return {
+        "full_name": full_name(profile),
+        "personal_email": saved.get("personal_email"),
+        "college_email": profile.get("email"),
+        "phone": profile.get("mobile"),
+        "gender": profile.get("gender"),
+        "age": age_on(dob, today or date.today()) if dob else None,
+        "course": saved.get("course"),
+        "cgpa": saved.get("cgpa"),
+    }
+
+
+def save_profile_details(user_id: str, details: dict, *, today: date | None = None) -> dict:
+    """Replace the form (the app always sends all of it). Raises InvalidFields, changing nothing, when
+    the age isn't the one the date of birth gives or the college email isn't the sign-in address."""
+    profile = _require_user(user_id)
+    errors = []
+    if details["college_email"] != (profile.get("email") or "").lower():
+        errors.append(("college_email", "college_email_read_only",
+                       "college_email is the address you sign in with and can't be changed here"))
+    elif details["personal_email"] == details["college_email"]:
+        errors.append(("personal_email", "personal_email_same_as_college",
+                       "use a personal address, different from your college email"))
+    dob = parse_date_of_birth(profile.get("date_of_birth"))
+    # Age is never stored. Without a date of birth on file there is nothing to check it against: it
+    # is accepted and not kept, and GET answers null for it until a date of birth is set.
+    derived_age = age_on(dob, today or date.today()) if dob else None
+    if derived_age is not None and derived_age != details["age"]:
+        errors.append(("age", "age_mismatch", f"age comes from your date of birth, which makes you "
+                                              f"{derived_age}; change your date of birth to change it"))
+    if errors:
+        raise InvalidFields(errors)
+
+    first, last = split_full_name(details["full_name"])
+    if details["full_name"] == full_name(profile):  # unchanged: keep how the name was split before
+        first, last = profile.get("first_name") or "", profile.get("last_name") or ""
+    store.write_personal_details(user_id, details)
+    write_profile(user_id, {**profile, "first_name": first, "last_name": last,
+                            "mobile": details["phone"], "gender": details["gender"]})
+    return profile_details(user_id, today=today)

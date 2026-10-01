@@ -6,12 +6,14 @@
     data/users/<id>/habits.json        schedule, sleep, diet, …       (consent: habits)
     data/users/<id>/measurements.json  height / weight / body-fat / waist history
     data/users/<id>/consents.json      append-only consent log
+    data/users/<id>/personal_details.json  personal email, course, CGPA ("About you")
 
 Separate files mirror the separate tables in the agreed schema: each sensitive category can be
 erased on its own when its consent is withdrawn.
 
 With DATABASE_URL set, each of these is instead one row of user_profile_data (kind = the category,
-data = the same JSON; see db/accounts.py), so they survive a redeploy.
+data = the same JSON; see db/accounts.py), so they survive a redeploy. Personal details are instead a
+row of their own table, user_personal_details (migration 006).
 """
 
 from __future__ import annotations
@@ -36,6 +38,8 @@ PHYSIQUE_FILENAME = "physique.json"
 HABITS_FILENAME = "habits.json"
 MEASUREMENTS_FILENAME = "measurements.json"
 CONSENTS_FILENAME = "consents.json"
+PERSONAL_DETAILS_FILENAME = "personal_details.json"
+PERSONAL_DETAILS_FIELDS = ("personal_email", "course", "cgpa")
 
 _SECTIONS = {
     "fitness": (FITNESS_FILENAME, dict),
@@ -173,6 +177,34 @@ def append_consent_event(user_id: str, event: dict) -> list[dict]:
     events = read_consent_events(user_id) + [event]
     _write_history(user_id, _CONSENTS, events)
     return events
+
+
+# ---------------------------------------------------------------- personal details ("About you")
+
+def read_personal_details(user_id: str) -> dict | None:
+    """The saved personal email, course and CGPA, or None before the first save. A corrupt file
+    reads as unsaved (with a warning), like a section."""
+    if connection.enabled():
+        return db_accounts.read_personal_details(user_id)
+    path = _path(user_id, PERSONAL_DETAILS_FILENAME)
+    if not path.exists():
+        return None
+    try:
+        with open(path, encoding="utf-8") as handle:
+            document = json.load(handle)
+        return {field: document[field] for field in PERSONAL_DETAILS_FIELDS}
+    except (OSError, ValueError, KeyError, TypeError):
+        log.warning("unreadable %s for %s; treating as unsaved", PERSONAL_DETAILS_FILENAME, user_id)
+        return None
+
+
+def write_personal_details(user_id: str, details: dict) -> None:
+    saved = {field: details[field] for field in PERSONAL_DETAILS_FIELDS}
+    if connection.enabled():
+        db_accounts.write_personal_details(user_id, saved)
+    else:
+        _atomic_write_json(_path(user_id, PERSONAL_DETAILS_FILENAME),
+                           {"schema_version": SCHEMA_VERSION, **saved, "updated_at": _now()})
 
 
 def _atomic_write_json(path: Path, payload: dict) -> None:

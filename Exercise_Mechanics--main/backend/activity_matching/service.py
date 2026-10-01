@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import date
 
+from backend import social_blocks
 from backend.activity_matching import scoring
-from backend.activity_matching.features import MatchingProfile, matching_profile, read_blocks
-from backend.partners import store as blocks_store
+from backend.activity_matching.features import MatchingProfile, matching_profile
+from backend.partners import store as partners_store
 from backend.partners.matching import age_band, display_name
-from backend.partners.store import BlockListUnreadable
 from backend.profiles.vocab import WORKOUT_TIMES
 from backend.users.store import read_profile
-
-log = logging.getLogger(__name__)
 
 
 class ActivityMatchingError(Exception):
@@ -81,30 +78,25 @@ def find_matches(user_id: str, *, today: date | None = None) -> list[dict]:
         raise ActivityMatchingError(409, "activities_required",
                                     "Add at least one activity so we can find people who share it.")
     try:
-        viewer_blocks = read_blocks(user_id)
-    except BlockListUnreadable as exc:
-        raise ActivityMatchingError(500, "blocks_unreadable",
-                                    "Your block list couldn't be read, so no matches were shown.") from exc
+        # Social owns blocks (ADR-032). The viewer's set holds both directions, so candidates need no
+        # list of their own.
+        viewer_blocks = social_blocks.blocked_either_way(user_id)
+    except social_blocks.BlocksUnreachable as exc:
+        raise _blocks_unreachable_error("so no matches were shown") from exc
 
     candidates: list[tuple[MatchingProfile, frozenset[str]]] = []
-    for other_id in blocks_store.list_user_ids():
+    for other_id in partners_store.list_user_ids():
         if other_id == user_id:
             continue
         other = matching_profile(other_id, today=today)
         if other is None or not other.opted_in:
             continue
-        try:
-            other_blocks = read_blocks(other_id)
-        except BlockListUnreadable:
-            # Can't confirm they haven't blocked the viewer: leave them out.
-            log.warning("block list unreadable for %s; excluded from activity matches", other_id)
-            continue
-        candidates.append((other, other_blocks))
+        candidates.append((other, frozenset()))
     return [m.to_dict() for m in scoring.rank(viewer, candidates, viewer_blocks)]
 
 
 def block(user_id: str, blocked_user_id: str) -> None:
-    """Block someone from every people-matching feature (the list is shared with Partner Hunt)."""
+    """Block someone: a Social block (ADR-032), so it covers Partner Hunt and the rest of the app too."""
     if blocked_user_id == user_id:
         raise ActivityMatchingError(400, "invalid_block", "You cannot block yourself.")
     if read_profile(user_id) is None:
@@ -112,10 +104,15 @@ def block(user_id: str, blocked_user_id: str) -> None:
     if read_profile(blocked_user_id) is None:
         raise ActivityMatchingError(404, "user_not_found", "That user does not exist.")
     try:
-        blocks_store.add_block(user_id, blocked_user_id)
-    except BlockListUnreadable as exc:
-        raise ActivityMatchingError(500, "blocks_unreadable",
-                                    "Your block list couldn't be read, so it wasn't changed.") from exc
+        social_blocks.block(user_id, blocked_user_id)
+    except social_blocks.BlocksUnreachable as exc:
+        raise _blocks_unreachable_error("so nobody was blocked") from exc
+
+
+def _blocks_unreachable_error(consequence: str) -> ActivityMatchingError:
+    # Never "…_unavailable": the app reads a 503 code with that suffix as a feature not built yet.
+    return ActivityMatchingError(503, "blocks_unreachable",
+                                 f"Blocked members couldn't be checked right now, {consequence}. Try again in a moment.")
 
 
 def _time_order(time: str) -> int:

@@ -11,6 +11,11 @@
     POST /api/users/{id}/measurements              log a reading (body-fat/waist need physique consent)
     GET  /api/users/{id}/consents                  current decision per category
     POST /api/users/{id}/consents                  grant or withdraw; withdrawing erases that data
+    GET  /api/me/profile-details                   the app's "About you" form, for the signed-in user
+    PUT  /api/me/profile-details                   save it (the whole form)
+
+The /api/me routes take the user from the bearer token, which they always need (even with sign-in
+switched off for development): private details are never addressed by id.
 
 Sign-up page 1 (name, date of birth, contact, height, weight) stays POST /api/users
 (backend/users/router.py); page 2 is PUT /api/users/{id}/details.
@@ -19,8 +24,10 @@ Errors carry a machine-readable `code` in `detail`.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.exceptions import RequestValidationError
 
+from backend.auth.deps import current_user
 from backend.core.ids import is_valid_user_id
 from backend.profiles import service
 from backend.profiles.models import (
@@ -30,6 +37,7 @@ from backend.profiles.models import (
     HabitsAnswers,
     MeasurementIn,
     PhysiqueAnswers,
+    ProfileDetailsIn,
     SignUpDetails,
 )
 from backend.profiles.vocab import ACTIVITY_TYPES
@@ -109,3 +117,17 @@ def get_consents(user_id: str) -> dict:
 def post_consent(user_id: str, body: ConsentDecision) -> dict:
     return {"consents": _call(service.record_consent, _checked(user_id),
                               body.category, body.granted, body.policy_version)}
+
+
+@router.get("/me/profile-details")
+def get_profile_details(user_id: str = Depends(current_user)) -> dict:
+    return _call(service.profile_details, user_id)
+
+
+@router.put("/me/profile-details")
+def put_profile_details(body: ProfileDetailsIn, user_id: str = Depends(current_user)) -> dict:
+    try:
+        return _call(service.save_profile_details, user_id, body.model_dump())
+    except service.InvalidFields as exc:
+        raise RequestValidationError([{"type": code, "loc": ("body", field), "msg": message}
+                                      for field, code, message in exc.errors]) from None

@@ -27,10 +27,10 @@ Social profile ids; services translate through Social (`POST /internal/v1/people
 |---|---|---|
 | Accounts, sign-in, tokens (email, codes, refresh, RS256 keys) | **Exercise** | Store only `sub`. Verify tokens with the public key / JWKS. |
 | Public profile: name, username, avatar, hostel, bio | **Social** | Read through Social (campus-service already does). No own copy. |
-| Private personal details: age/date of birth, gender, phone, height, weight, course, CGPA, emails | **Exercise** (proposed — see open item 1) | campus-service's `user_profile_details` (004) is to be migrated and removed. |
+| Private personal details: age/date of birth, gender, phone, height, weight, course, CGPA, emails | **Exercise** (decided — see open item 1) | campus-service's `user_profile_details` (004) stops being served and is dropped. |
 | Blocking | **Social** (`user_blocks`) | campus-service and Exercise (Partner Hunt) ask Social; their tables are migrated and removed. Checks **fail closed** (see below). |
 | Crews (membership, vouching, crew events) | **Social** | campus-service reads membership from Social for crew territory (weekend war) via `POST /internal/v1/crews/memberships` and `/crews/lookup`; its `crews` tables are retired. |
-| XP — the one ledger, levels | **Run Module** (XP engine) | campus-service stops keeping `campus_xp` and reports claim / steal / defend awards to the Run Module. |
+| XP — the one ledger, levels | **Run Module** (XP engine) | campus-service reports claim / steal / defend awards to the Run Module; it and Social keep only a read cache of the total (see **XP reads**). |
 | Leaderboards | **The owner of the number**: XP and hostel boards from the Run Module (Social shows them); "zones held" boards from campus-service | No board recomputes another service's number. |
 | Progress (XP history, daily rollups) | **Run Module** — absorbs the 8 endpoints the app calls on the planned progress-service | No separate progress-service is built. |
 | Named zones, territory, GPS verification, map, presence, Active now, Open to Meet, heatmap, shared zones, meetups (+ post-meetup rating) | **campus-service** | — |
@@ -68,6 +68,27 @@ together.
 - campus-service checks blocks wherever two people meet: meetups and their notifications, shared zones,
   Nearby, Active now, map players, a person's context, and territory battles.
 
+## XP reads
+
+The Run Module is the only XP ledger: it derives a person's total on read from `activity_sessions`,
+`challenge_participants` and `external_xp_awards` (awards reported by other services, unique on
+`(source, idempotency_key)`). Other services may keep a **read cache** of the total, to show level in
+lists without one call per person. A cache is not a second ledger as long as:
+
+1. **It is written only from the Run Module's answer.** An award call returns the new total, which the
+   cache stores; nothing increments a cached number locally.
+2. **It refreshes in batches.** `POST /internal/v1/xp/totals { subjects[] ≤200 }` (service token) on the
+   Run Module returns `{ subject: total }`; a service refreshes stale rows in one call while serving a
+   list. XP is display only, so when the Run Module is unreachable the last cached value is shown
+   (fail open, unlike blocks).
+3. **Its name says what it is:** `xp_total` with `xp_synced_at` (campus-service's `campus_xp`, which today
+   counts only campus-earned XP, becomes this cache; levels shown on the map change once at the switch).
+4. **Every cache refreshes the same way.** Social's `user_stats.xp` (profiles, top bar, Squirrel Dates)
+   and campus-service's cache (map, Nearby) both refresh from the batch route with the same TTL
+   (5 minutes, as the name cache), so one person's level doesn't differ by screen.
+
+Order: Run Module (awards table, totals, intake, batch route) → campus-service cache → Social refresh.
+
 ## Order
 
 1. Blocking (safety).
@@ -80,11 +101,19 @@ For each, the owner's side ships first; the consumer's side follows.
 
 ## Open items
 
-1. **Private details owner.** Exercise is proposed: it owns the account and already holds age, gender,
-   phone, height and weight from sign-up. campus-service's 004 is live with course, CGPA and two emails
-   that Exercise lacks. Removal plan if accepted: Exercise adds the missing fields → the app's "About
-   you" form talks to Exercise → existing campus rows are copied to Exercise once → campus `/v1/me`
-   stops serving them → a later campus migration drops the table.
+1. **Private details owner.** Decided: **Exercise**. It owns the account and already held date of
+   birth (age), gender, phone, height and weight from sign-up; it now also stores personal email,
+   course and CGPA (`user_personal_details`, Exercise migration 006). The app's "About you" form is
+   `GET /api/me/profile-details` and `PUT /api/me/profile-details` on Exercise (signed-in user from
+   the token; the body is the app's `ProfileDetails` unchanged). Each field has one source there:
+   `full_name` is first + last name, `phone` the mobile, `age` derived from the date of birth and
+   `college_email` the sign-in address (both read-only), so nothing is copied. Field rules are in
+   the Exercise README's "About you" section. Remaining steps:
+   - **App owner:** repoint "About you" from `PATCH /v1/me` `profile_details` (and its read from
+     `GET /v1/me`) to these routes.
+   - **campus-service owner:** stop serving `profile_details` on `/v1/me`, then drop
+     `user_profile_details` in a later migration. (Its rows are not copied: likely none; the campus
+     owner reports the count.)
 2. **Ambassador applications.** The app has the screens and no backend has the routes. Where the app
    sends them today: `/v1/ambassador/application` goes to `CAMPUS_API_URL`, which in production falls
    back to Social (`EXPO_PUBLIC_CAMPUS_API_URL` unset); campus-service only receives the methods listed in
