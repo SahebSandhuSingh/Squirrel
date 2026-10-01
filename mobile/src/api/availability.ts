@@ -19,6 +19,7 @@ export type Capability =
   | 'dateSuggestions' // GET /v1/dates/suggestions, POST …/{id}/dismiss | invite
   | 'media' // POST /v1/media/uploads, PUT {upload_url}, POST /v1/media/{id}/complete, GET /v1/media/{id}
   | 'meetupRating' // GET /v1/meetups/{id}/rating, POST /v1/meetups/{id}/ratings
+  | 'meetupCheckIn' // POST /v1/meetups/{id}/check-in on campus-service (Social's event check-in is live)
   | 'ambassador' // GET | POST /v1/ambassador/application
   | 'ambassadorWaitlist' // POST /v1/ambassador/waitlist
   | 'profileDetails' // PATCH /v1/me with `profile_details`
@@ -30,13 +31,14 @@ export const CAPABILITY_LABEL: Record<Capability, string> = {
   dateSuggestions: 'Squirrel Dates',
   media: 'Photo uploads',
   meetupRating: 'Meetup ratings',
+  meetupCheckIn: 'Meetup check-in',
   ambassador: 'Ambassador applications',
   ambassadorWaitlist: 'The ambassador waitlist',
   profileDetails: 'Saving profile details',
   sharedWorkout: 'Shared workouts',
 };
 
-const SINGULAR = new Set<Capability>(['profileDetails', 'heatmap', 'ambassadorWaitlist']);
+const SINGULAR = new Set<Capability>(['profileDetails', 'heatmap', 'ambassadorWaitlist', 'meetupCheckIn']);
 
 /** Backend status in code. All false today: none of these endpoints exist yet. */
 const BUILT: Record<Capability, boolean> = {
@@ -45,6 +47,7 @@ const BUILT: Record<Capability, boolean> = {
   dateSuggestions: false,
   media: false,
   meetupRating: false,
+  meetupCheckIn: false,
   ambassador: false,
   ambassadorWaitlist: false,
   profileDetails: false,

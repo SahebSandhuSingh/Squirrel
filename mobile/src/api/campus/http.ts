@@ -11,9 +11,15 @@ import { CAMPUS_API_URL } from '@/api/config';
 import { withRetry } from '@/api/endpoints';
 import type * as T from '@/api/campus/types';
 
-const base = CAMPUS_API_URL;
-const get = <R,>(path: string) => withRetry(() => api<R>(path, { base }));
-const send = <R,>(path: string, method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', body?: unknown) => api<R>(path, { base, method, body });
+/** GET with retries (429 / 5xx / network) and a plain write, both against `base`. Shared with campusService.ts. */
+export function restClient(base: string) {
+  return {
+    get: <R,>(path: string) => withRetry(() => api<R>(path, { base })),
+    send: <R,>(path: string, method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', body?: unknown) => api<R>(path, { base, method, body }),
+  };
+}
+
+const { get, send } = restClient(CAMPUS_API_URL);
 const qs = (p: Record<string, string | number | undefined>) => {
   const s = Object.entries(p)
     .filter(([, v]) => v !== undefined && v !== '')

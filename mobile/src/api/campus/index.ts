@@ -2,21 +2,26 @@
  * Entry point for the campus social backend. Screens import `campusApi` from here and never
  * call fetch themselves.
  *
- *   live  → REST (api/campus/http.ts) against CAMPUS_API_URL, and/or the Social service
- *           (api/campus/socialAdapter.ts) for the features it implements
+ *   live  → per method, the first of (api/campus/campusShapes.ts → composeCampusApi):
+ *             1. campus-service (api/campus/campusService.ts) for the map world + meetups, when
+ *                EXPO_PUBLIC_CAMPUS_SERVICE_URL is set (CAMPUS_SERVICE_METHODS)
+ *             2. the Social service (api/campus/socialAdapter.ts) for the features it implements
+ *             3. REST (api/campus/http.ts) against CAMPUS_API_URL — or "off" when that isn't set
  *   off   → no campus backend configured: every call rejects with "not live yet"; screens show
  *           that state, never fake data. There is no mock or simulated backend in any build.
  *
- * On top of the source, availability is decided PER ENDPOINT (api/availability.ts): the seven
- * campus endpoints with no backend yet reject with EndpointUnavailableError in every mode, while
- * the rest of the service keeps working. One missing endpoint never takes down another.
+ * On top of the source, availability is decided PER ENDPOINT (api/availability.ts): campus
+ * endpoints with no backend yet reject with EndpointUnavailableError in every mode, while the rest
+ * of the service keeps working. One missing endpoint never takes down another.
  */
-import { EndpointUnavailableError, gateEndpoints, isEndpointAvailable as baseIsEndpointAvailable, isEndpointUnavailable, type Capability } from '@/api/availability';
+import { EndpointUnavailableError, gateEndpoints, endpointAvailability as baseEndpointAvailability, isEndpointUnavailable, type Capability, type GateRule } from '@/api/availability';
 import { ApiError, getApiToken } from '@/api/client';
-import { CAMPUS_API_CONFIGURED, REALTIME_URL, SOCIAL_API_CONFIGURED } from '@/api/config';
+import { CAMPUS_API_CONFIGURED, CAMPUS_SERVICE_CONFIGURED, CAMPUS_SERVICE_URL, REALTIME_URL, SOCIAL_API_CONFIGURED } from '@/api/config';
+import { composeCampusApi, meetupPathFor, servedCapabilities, withoutServed, type MeetupPath } from '@/api/campus/campusShapes';
+import { makeCampusServiceApi } from '@/api/campus/campusService';
 import { httpCampusApi } from '@/api/campus/http';
 import { socialCampusApi } from '@/api/campus/socialAdapter';
-import type { CampusApi, RealtimeMessage } from '@/api/campus/types';
+import type { CampusApi, HeatWindow, RealtimeMessage } from '@/api/campus/types';
 
 /**
  * 'mock' is never produced any more (the dev mock was removed); it stays in the type only so the
@@ -24,8 +29,11 @@ import type { CampusApi, RealtimeMessage } from '@/api/campus/types';
  */
 export type CampusSource = 'live' | 'mock' | 'off';
 
-/** 'live' once any real backend serves campus features: the campus backend and/or the Social service. */
-export const CAMPUS_SOURCE: CampusSource = CAMPUS_API_CONFIGURED || SOCIAL_API_CONFIGURED ? 'live' : 'off';
+/** 'live' once any real backend serves campus features: campus-service, the campus backend and/or the Social service. */
+export const CAMPUS_SOURCE: CampusSource = CAMPUS_SERVICE_CONFIGURED || CAMPUS_API_CONFIGURED || SOCIAL_API_CONFIGURED ? 'live' : 'off';
+
+/** campus-service serves the map world and meetups (EXPO_PUBLIC_CAMPUS_SERVICE_URL is set). */
+export const CAMPUS_ON_SERVICE = CAMPUS_SERVICE_CONFIGURED;
 
 export const NOT_LIVE = 'not_live';
 
@@ -34,40 +42,65 @@ const offApi: CampusApi = new Proxy({} as CampusApi, {
 });
 
 const baseApi: CampusApi = CAMPUS_API_CONFIGURED ? httpCampusApi : offApi;
+const socialPart = SOCIAL_API_CONFIGURED ? socialCampusApi : null;
 
-/**
- * The Social service answers the campus features it already implements (api/campus/socialAdapter.ts);
- * the rest go to the campus backend — or, when that isn't configured, reject as "not live yet".
- */
-const sourceApi: CampusApi = SOCIAL_API_CONFIGURED
-  ? new Proxy(baseApi, { get: (t, k: string) => (socialCampusApi as Record<string, unknown>)[k] ?? (t as unknown as Record<string, unknown>)[k] })
-  : baseApi;
+/** Everything below campus-service: the Social adapter over the campus backend (or "off"). Events live here. */
+const lowerApi: CampusApi = composeCampusApi(baseApi, socialPart, null);
+const sourceApi: CampusApi = CAMPUS_SERVICE_CONFIGURED ? composeCampusApi(baseApi, socialPart, makeCampusServiceApi(CAMPUS_SERVICE_URL)) : lowerApi;
 
+/** Capabilities a configured backend serves (Social: photo uploads; campus-service: shared zones, heatmap). */
+const SERVED = servedCapabilities({ social: SOCIAL_API_CONFIGURED, campusService: CAMPUS_SERVICE_CONFIGURED });
+
+type Rules = { [K in keyof CampusApi]?: GateRule<CampusApi[K]> };
 /** Method → capability for every endpoint that isn't built yet. Everything unlisted passes through. */
-export const campusApi: CampusApi = gateEndpoints(sourceApi, {
+const RULES: Rules = {
   sharedZones: { capability: 'sharedZones' },
   heatmap: { capability: 'heatmap' },
   dateSuggestions: { capability: 'dateSuggestions' },
   dismissDateSuggestion: { capability: 'dateSuggestions' },
   inviteFromSuggestion: { capability: 'dateSuggestions' },
-  // Photo uploads are live through the Social service's presigned flow.
-  ...(SOCIAL_API_CONFIGURED ? {} : { createUpload: { capability: 'media' as const }, completeUpload: { capability: 'media' as const }, media: { capability: 'media' as const } }),
+  createUpload: { capability: 'media' },
+  completeUpload: { capability: 'media' },
+  media: { capability: 'media' },
+  // Routed to campus-service when it's configured (it owns meetup rating, ADR-032), but its API
+  // reference doesn't document the routes yet: campus-service must serve GET /v1/meetups/{id}/rating
+  // and POST /v1/meetups/{id}/ratings before 'meetupRating' is opted in.
   meetupRating: { capability: 'meetupRating' },
   rateMeetup: { capability: 'meetupRating' },
   ambassador: { capability: 'ambassador' },
   applyAmbassador: { capability: 'ambassador' },
   // PATCH /v1/me itself is live; only the profile_details field has no backend yet.
   updateMe: { capability: 'profileDetails', when: (patch) => patch.profile_details !== undefined },
-});
+};
+/** Only campus-service's check-in is gated (the Social service's event check-in is live): it must serve POST /v1/meetups/{id}/check-in. */
+const CAMPUS_SERVICE_RULES: Rules = { checkIn: { capability: 'meetupCheckIn' } };
 
-export { EndpointUnavailableError, isEndpointUnavailable };
-export { CAPABILITY_LABEL, endpointAvailability, type Capability } from '@/api/availability';
+/** The rules minus what's served: a served capability passes straight through, like 'media' on Social. */
+const gate = (api: CampusApi, rules: Rules): CampusApi => gateEndpoints(api, withoutServed(rules, SERVED));
+
+export const campusApi: CampusApi = gate(sourceApi, CAMPUS_SERVICE_CONFIGURED ? { ...RULES, ...CAMPUS_SERVICE_RULES } : RULES);
 
 /**
- * Per-capability availability for screens. Photo uploads are served by the Social service when it's
- * connected (its own 503 media_unavailable, e.g. no storage configured, still reads as "not live").
+ * Meetups shown from an event (Event → "Meetup check-in") belong to the events backend (the Social
+ * service, else the campus backend); every other meetup comes from `campusApi` (campus-service when
+ * configured). `path` tells the screen whose check-in semantics apply: 'social' → tell up to five
+ * friends; otherwise → notify your safety contact.
  */
-export const isEndpointAvailable = (c: Capability, opted?: Set<Capability>) => (c === 'media' && SOCIAL_API_CONFIGURED) || baseIsEndpointAvailable(c, opted);
+const eventMeetupApi: CampusApi = CAMPUS_SERVICE_CONFIGURED ? gate(lowerApi, RULES) : campusApi;
+export function meetupApiFor(fromEvent: boolean): { api: Pick<CampusApi, 'meetup' | 'checkIn'>; path: MeetupPath } {
+  const path = meetupPathFor({ fromEvent, social: SOCIAL_API_CONFIGURED, campusService: CAMPUS_SERVICE_CONFIGURED });
+  return { api: path === 'campus_service' ? campusApi : eventMeetupApi, path };
+}
+
+/** The heatmap window to open on: campus-service aggregates the last 7 days only. */
+export const DEFAULT_HEAT_WINDOW: HeatWindow = CAMPUS_SERVICE_CONFIGURED ? '7d' : '24h';
+
+export { EndpointUnavailableError, isEndpointUnavailable };
+export { CAPABILITY_LABEL, type Capability } from '@/api/availability';
+
+/** Availability as the campus API sees it: what a configured backend serves counts as available. */
+export const endpointAvailability = (c: Capability, opted?: Set<Capability>) => (SERVED.has(c) ? ({ status: 'available' } as const) : baseEndpointAvailability(c, opted));
+export const isEndpointAvailable = (c: Capability, opted?: Set<Capability>) => endpointAvailability(c, opted).status === 'available';
 
 // ---------------------------------------------------------------------------
 // Errors

@@ -8,13 +8,15 @@ import { campusApi, featureUnavailable } from '@/api/campus';
 import { IISER_FEATURES, IISER_ZONES } from '@/api/campus/campusBaseMap';
 import type { LatLng, MapFeatures, NearbyPlayers, PresenceUpdate, Territory, Zone } from '@/api/campus/types';
 
-/** `source`: 'live' = the campus backend's world; 'base' = the static IISER base map (no territory state). */
+/** `source`: 'live' = a backend's world (campus-service, or the campus backend); 'base' = the static IISER base map (no territory state). */
 export type MapData = { zones: Zone[]; features: MapFeatures; territories: Territory[]; source: 'live' | 'base' };
 
 /**
- * The world (zones + base map) and current territory state in one call. When the campus backend
- * isn't live (not configured, or the routes aren't deployed), the Map still shows IISER Kolkata:
- * the static base map, with NO territory state and no people. Real errors stay errors.
+ * The world (zones + base map) and current territory state in one call. With campus-service
+ * configured (EXPO_PUBLIC_CAMPUS_SERVICE_URL) these three calls go there and the Map shows its live
+ * zones and territory (campus-service has no roads / buildings, so they're drawn on plain ground).
+ * When no backend serves the world (not configured, or the routes aren't deployed), the Map still
+ * shows IISER Kolkata: the static base map, with NO territory state and no people. Real errors stay errors.
  */
 export async function getMapData(): Promise<MapData> {
   try {

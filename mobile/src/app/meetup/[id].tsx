@@ -1,16 +1,21 @@
 /**
  * MEETUP CHECK-IN. View the meetup, see who's coming / checked in, check in, and optionally ask
  * the backend to notify your safety contact. We only say a notification was sent when the API
- * returns status "sent". With the Social service, check-in instead tells up to five friends (people
- * who follow you or share a crew) that you've arrived — "meetup check-in notifies a friend".
+ * returns status "sent". Two paths (api/campus → meetupApiFor):
+ *   social          an event's check-in on the Social service (opened from the event, or the meetups
+ *                   list when campus-service isn't configured): tells up to five friends (people who
+ *                   follow you or share a crew) that you've arrived — "meetup check-in notifies a friend".
+ *   campus_service  a campus-service meetup (EXPO_PUBLIC_CAMPUS_SERVICE_URL): its safety-contact
+ *   / campus        notification, no friend picker. campus-service's check-in route is gated
+ *                   ('meetupCheckIn') until it serves POST /v1/meetups/{id}/check-in.
  */
 import { useState } from 'react';
 import { StyleSheet, Switch, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Mascot } from '@/art/Mascot';
-import { campusApi, errorText, type CheckInResult, type Meetup } from '@/api/campus';
+import { CAMPUS_ON_SERVICE, errorText, isEndpointAvailable, meetupApiFor, type CheckInResult, type Meetup } from '@/api/campus';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
-import { SOCIAL_API_CONFIGURED, socialApi } from '@/api/social';
+import { socialApi } from '@/api/social';
 
 import { PhotoUpload } from '@/components/media/PhotoUpload';
 import { MeetupRating } from '@/components/meetup/MeetupRating';
@@ -48,16 +53,20 @@ const FRIEND_TEXT: Record<CheckInResult['safety_notification']['status'], string
 const MAX_NOTIFY = 5;
 
 export default function MeetupScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const r = useCampus<Meetup>(`meetup:${id}`, () => campusApi.meetup(id));
+  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
+  // Whose meetup this is decides the check-in semantics (friends picker only on the Social path).
+  const { api: meetupApi, path } = meetupApiFor(from === 'event');
+  const social = path === 'social';
+  const checkInLive = path !== 'campus_service' || isEndpointAvailable('meetupCheckIn');
+  const r = useCampus<Meetup>(`meetup:${path}:${id}`, () => meetupApi.meetup(id));
   const me = useMe();
   const config = useConfig();
   const [notify, setNotify] = useState(true);
   const [openedAt] = useState(() => Date.now());
   const [picked, setPicked] = useState<string[]>([]);
-  const check = useAction((n: boolean) => campusApi.checkIn(id, n, picked));
+  const check = useAction((n: boolean) => (social ? meetupApi.checkIn(id, n, picked) : meetupApi.checkIn(id, n)));
   // Who can be told: people you follow and your crewmates (the Social service skips anyone else).
-  const friends = useCampus<NotifyCandidate[]>('social:notify-candidates', loadNotifyCandidates, { enabled: SOCIAL_API_CONFIGURED });
+  const friends = useCampus<NotifyCandidate[]>('social:notify-candidates', loadNotifyCandidates, { enabled: social });
   const togglePick = (uid: string) => setPicked((p) => (p.includes(uid) ? p.filter((x) => x !== uid) : p.length >= MAX_NOTIFY ? p : [...p, uid]));
   const m = r.data;
   const safetyOn = !!config.data?.features.meetup_safety_notifications;
@@ -75,7 +84,7 @@ export default function MeetupScreen() {
   const checkedIn = !!check.data || !!m.my_check_in_at;
   const doCheckIn = async () => {
     tap('impact');
-    const res = await check.run(SOCIAL_API_CONFIGURED ? picked.length > 0 : safetyOn && notify && !!me.data?.safety_contact_configured);
+    const res = await check.run(social ? picked.length > 0 : safetyOn && notify && !!me.data?.safety_contact_configured);
     if (res) {
       tap('success');
       invalidateCampus('meetup');
@@ -107,7 +116,7 @@ export default function MeetupScreen() {
                 color={check.data.safety_notification.status === 'sent' ? colors.green : check.data.safety_notification.status === 'failed' ? colors.coral : colors.dim}
               />
               <Text style={styles.safetyText}>
-                {(SOCIAL_API_CONFIGURED ? FRIEND_TEXT : SAFETY_TEXT)[check.data.safety_notification.status]}
+                {(social ? FRIEND_TEXT : SAFETY_TEXT)[check.data.safety_notification.status]}
                 {check.data.safety_notification.status === 'sent' && check.data.safety_notification.contact_label ? ` Sent to ${check.data.safety_notification.contact_label}.` : ''}
               </Text>
             </View>
@@ -115,7 +124,7 @@ export default function MeetupScreen() {
         </Card>
       ) : (
         <Card style={{ marginTop: 14, gap: 12 }}>
-          {SOCIAL_API_CONFIGURED && (
+          {social && (
             <View style={{ gap: 8 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 <Icon name="account-multiple-check" size={22} color={colors.green} />
@@ -146,7 +155,7 @@ export default function MeetupScreen() {
               )}
             </View>
           )}
-          {safetyOn && !SOCIAL_API_CONFIGURED && (
+          {safetyOn && !social && checkInLive && (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <Icon name="shield-account" size={22} color={colors.green} />
               <View style={{ flex: 1 }}>
@@ -159,18 +168,20 @@ export default function MeetupScreen() {
             </View>
           )}
           <Button
-            label={check.status === 'loading' ? 'Checking in…' : open ? 'Check in' : `Check-in opens ${formatEventDate(m.check_in_opens_at)}`}
+            label={!checkInLive ? 'Check-in isn’t live yet' : check.status === 'loading' ? 'Checking in…' : open ? 'Check in' : `Check-in opens ${formatEventDate(m.check_in_opens_at)}`}
             iconLeft="map-marker-check"
-            disabled={!open || check.status === 'loading'}
+            disabled={!checkInLive || !open || check.status === 'loading'}
             onPress={doCheckIn}
           />
           {check.status === 'error' && <Text style={styles.err}>{errorText(check.error)}</Text>}
-          {done === undefined && !open && <Text style={styles.small}>Check-in closes {formatEventDate(m.check_in_closes_at)}.</Text>}
+          {!checkInLive && <Text style={styles.small}>Checking in to this meetup switches on once the campus service supports it.</Text>}
+          {checkInLive && done === undefined && !open && <Text style={styles.small}>Check-in closes {formatEventDate(m.check_in_closes_at)}.</Text>}
         </Card>
       )}
 
       {/* After it's over: rate the people you met (the backend decides when that's possible) */}
-      <MeetupRating meetupId={m.id} meId={me.data?.user_id ?? null} />
+      {/* Ratings belong to campus-service's meetups; a Social event's check-in has none there. */}
+      {!(social && CAMPUS_ON_SERVICE) && <MeetupRating meetupId={m.id} meId={me.data?.user_id ?? null} />}
 
       {checkedIn && (
         <>

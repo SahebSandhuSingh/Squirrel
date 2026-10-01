@@ -3,7 +3,7 @@
  * interest and the Squirrels around you; tap someone → card → POKE 👋. Everything shown (who
  * appears, where roughly, who holds what, relationship state) comes from the backend.
  */
-import { featureUnavailable } from '@/api/campus';
+import { DEFAULT_HEAT_WINDOW, featureUnavailable } from '@/api/campus';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
@@ -40,7 +40,7 @@ export default function MapScreen() {
   const [sheet, setSheet] = useState<Sheet>(null);
   // Map → Heat: an optional layer; fetched only while it's on.
   const [heatOn, setHeatOn] = useState(false);
-  const [heatWindow, setHeatWindow] = useState<HeatWindow>('24h');
+  const [heatWindow, setHeatWindow] = useState<HeatWindow>(DEFAULT_HEAT_WINDOW);
   const heat = useCampus<Heatmap>(`map:heat:${heatWindow}`, () => getHeatmap(heatWindow), { enabled: heatOn });
   useRefreshOnFocus(heat.reload, 60_000);
   const meId = me.data?.user_id ?? null;

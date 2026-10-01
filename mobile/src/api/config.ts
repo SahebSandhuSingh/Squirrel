@@ -10,6 +10,10 @@
  *   EXPO_PUBLIC_EXERCISE_API_URL  Exercise Mechanics backend (FastAPI, routes under /api)
  *   EXPO_PUBLIC_PROGRESS_API_URL  progress-service (XP, levels, progress, challenges, leaderboards; routes under /v1)
  *   EXPO_PUBLIC_CAMPUS_API_URL    campus social backend (zones, territories, crews, events, people…); defaults to EXPO_PUBLIC_API_URL
+ *   EXPO_PUBLIC_CAMPUS_SERVICE_URL campus-service (routes under /v1): when set, it serves the map world — zones,
+ *                                 territory + claim / steal / defend, activity → zones, map players + presence,
+ *                                 Active now, Open to Meet, shared zones, heatmap — and meetups (+ rating), ahead of
+ *                                 the Social service and the campus backend (api/campus/campusShapes.ts)
  *   EXPO_PUBLIC_REALTIME_URL      optional WebSocket for live updates (the backend's /v1/config can also provide it)
  * Only public URLs belong here. Never put server secrets or API keys in EXPO_PUBLIC_* variables.
  * A screen whose backend isn't configured shows a "not connected" / "not live yet" state. There is no
@@ -27,6 +31,9 @@ const RAW_CAMPUS_URL = (process.env.EXPO_PUBLIC_CAMPUS_API_URL ?? '').replace(/\
 /** Campus social backend. Same host as the Run Module unless configured separately. */
 export const CAMPUS_API_URL = RAW_CAMPUS_URL || API_URL;
 export const CAMPUS_API_CONFIGURED = CAMPUS_API_URL.length > 0;
+/** campus-service base URL (no trailing slash; the app appends the /v1 paths itself, like the others). */
+export const CAMPUS_SERVICE_URL = (process.env.EXPO_PUBLIC_CAMPUS_SERVICE_URL ?? '').replace(/\/$/, '');
+export const CAMPUS_SERVICE_CONFIGURED = CAMPUS_SERVICE_URL.length > 0;
 export const SOCIAL_API_URL = (process.env.EXPO_PUBLIC_SOCIAL_API_URL ?? '').replace(/\/$/, '');
 export const SOCIAL_API_CONFIGURED = SOCIAL_API_URL.length > 0;
 /** Sign-up is limited to these institutional domains (IISER Kolkata first). The backend enforces it too. */

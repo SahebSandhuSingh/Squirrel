@@ -109,7 +109,7 @@ function EventScreen() {
             onPress={toggle}
           />
           {rsvp.status === 'error' && <Text style={styles.err}>{errorText(rsvp.error)}</Text>}
-          {going && e.meetup_id && <Button label="Meetup check-in" variant="ghost" size="sm" iconLeft="map-marker-check" onPress={() => router.push({ pathname: '/meetup/[id]', params: { id: e.meetup_id! } })} />}
+          {going && e.meetup_id && <Button label="Meetup check-in" variant="ghost" size="sm" iconLeft="map-marker-check" onPress={() => router.push({ pathname: '/meetup/[id]', params: { id: e.meetup_id!, from: 'event' } })} />}
         </View>
 
         <SectionHeader title={`Participants · ${e.participants_count}`} />
