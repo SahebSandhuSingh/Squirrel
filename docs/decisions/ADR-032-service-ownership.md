@@ -36,7 +36,7 @@ Social profile ids; services translate through Social (`POST /internal/v1/people
 | Named zones, territory, GPS verification, map, presence, Active now, Open to Meet, heatmap, shared zones, meetups (+ post-meetup rating) | **campus-service** | — |
 | Runs, GPS route points, run territory polygons | **Run Module** | campus-service receives a one-shot copy of a run's points for zone eligibility only. |
 | Workouts, rep counting, coaching, Partner Hunt | **Exercise** | — |
-| Feed, posts, follows, notifications, events, waitlist/referrals, Squirrel Dates, badges (incl. rules: Early Bird, Night Owl, Park Regular) | **Social** | — |
+| Feed, posts, follows, notifications, events, waitlist/referrals, Squirrel Dates, badges (incl. rules: Early Bird, Night Owl, Park Regular), ambassador applications | **Social** | — |
 | Shared workouts ("workout with a partner") | **Exercise** (proposed — see open item 3) | — |
 
 ### "Challenges" is three features
@@ -115,14 +115,16 @@ For each, the owner's side ships first; the consumer's side follows.
    - **campus-service owner:** stop serving `profile_details` on `/v1/me`, then drop
      `user_profile_details` in a later migration. (Its rows are not copied: likely none; the campus
      owner reports the count.)
-2. **Ambassador applications.** The app has the screens and no backend has the routes. Where the app
-   sends them today: `/v1/ambassador/application` goes to `CAMPUS_API_URL`, which in production falls
-   back to Social (`EXPO_PUBLIC_CAMPUS_API_URL` unset); campus-service only receives the methods listed in
-   `CAMPUS_SERVICE_METHODS` (mobile-4 `src/api/campus/campusShapes.ts`). So Social needs no app code
-   change (switch it on with `EXPO_PUBLIC_LIVE_ENDPOINTS=ambassador` or `BUILT`); campus-service needs
-   `ambassador` and `applyAmbassador` added to that list. The same holds for meetups, post-meetup
-   rating and `PATCH /v1/me` profile details, which also reach Social today. To be agreed with the app's
-   owner before it is built.
+2. **Ambassador applications — decided: Social; reviewer unassigned.** Social serves
+   `GET`/`POST /v1/ambassador/application`, where the app already sends them (it needs no code change).
+   One open application per person, approved is final, and a rejected applicant may apply again after
+   30 days (`SOCIAL_AMBASSADOR_REAPPLY_DAYS`). Admins (`users.role = 'admin'`) decide through
+   `/v1/admin/ambassador/applications`; there is no screen, so a reviewer uses those routes directly
+   (a screen would be app work).
+   **No reviewer has been named, so `SOCIAL_AMBASSADOR_OPEN` stays off**: Social answers the form as
+   closed and refuses submissions. Don't switch it on until a person is named, given the admin role,
+   and has agreed how quickly applicants hear back; otherwise applications sit unanswered. That is a
+   company decision.
 3. **Shared workouts.** No backend in this repository implements either `/v1/workout-sessions` (what the
    app calls) or `/v1/shared-workouts`. Exercise is proposed: it already runs live coaching sockets and
    counts reps. If a deployed service serves `/v1/shared-workouts`, its source must be brought into
