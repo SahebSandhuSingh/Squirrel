@@ -186,7 +186,9 @@ def create_ambassador_application(body: CreateAmbassadorApplication, db: DB, vie
             select(AmbassadorApplication)
             .where(AmbassadorApplication.user_id == viewer.id, AmbassadorApplication.status.in_(["pending", "under_review", "approved"]))
         )
-        return _serialize_app(open_app)
+        if open_app:
+            return _serialize_app(open_app)
+        raise conflict("Could not complete application submission due to a database conflict.")
     
     return _serialize_app(app)
 
