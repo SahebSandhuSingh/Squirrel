@@ -47,7 +47,7 @@ export async function hasPendingVerification(userId: string, zoneId: string, q: 
   return (r?.n ?? 0) > 0;
 }
 
-import { lookupCrewMemberships, lookupCrews } from '../identity';
+import { lookupCrewMemberships, lookupCrews } from '../identity/index.js';
 
 export async function isCrewMember(userId: string, crewId: string | null, q: pg.PoolClient | pg.Pool) {
   if (!crewId) return false;
