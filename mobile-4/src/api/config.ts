@@ -12,10 +12,13 @@
  *                                 activities → zones, presence, Active now, heatmap, shared zones. With the
  *                                 Social service, those go here and everything else stays on Social
  *                                 (api/campus/hybrid.ts). Empty: the app behaves exactly as without it.
- *   EXPO_PUBLIC_PROGRESS_API_URL  progress-service (not built); empty = Progress uses the Run Module's XP
+ *   EXPO_PUBLIC_PROGRESS_API_URL  Never set: ADR-032 cancelled the progress-service and moves its 8 endpoints
+ *                                 into the Run Module. Until api/progress.ts is repointed there, Progress uses
+ *                                 the Run Module's XP and daily progress / challenges show "Not connected".
  *   EXPO_PUBLIC_REALTIME_URL      optional WebSocket for live updates (the backend's /v1/config can also provide it)
  * Only public URLs belong here. Never put server secrets or API keys in EXPO_PUBLIC_* variables.
- * With no API URL the app runs in demo mode on the seed data in src/data/.
+ * With a URL unset, the screens that need that backend say so (Not connected / not live yet) — there
+ * is no demo mode and no seed data.
  */
 const trim = (v: string | undefined) => (v ?? '').replace(/\/$/, '');
 

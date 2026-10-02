@@ -361,6 +361,8 @@ To point the app at a backend, copy `.env.example` to `.env`, then set `EXPO_PUB
 
 ## Backend integration (progress-service)
 
+> **Superseded by ADR-032.** No progress-service will be built: its 8 endpoints move into the Run Module, so `EXPO_PUBLIC_PROGRESS_API_URL` is never set. Until `src/api/progress.ts` is repointed at the Run Module, `useDailyProgress` (Home, Missions) and `/challenges` show *Not connected*. The contract below is what that repoint has to serve.
+
 `../progress-service` owns XP, levels, daily goals, streaks, challenges and XP leaderboards. Set `EXPO_PUBLIC_PROGRESS_API_URL` and sign in; it authenticates the same bearer token, and a token alone is enough to go live when only this service is configured. With it unset, or signed out, those screens show *Not connected* — never demo numbers.
 
 | Area | Live behaviour |
@@ -408,6 +410,8 @@ assets/                App icon, splash, and PNG exports of the illustration set
 - State is in memory and resets on reload.
 
 ## Movement Alarm (frontend only)
+
+> **Status:** complete on-device; no backend, nothing synced. Alarms, wake-up history and the streak live only on the phone. **Not yet a real alarm:** on iOS / Android it rings as a scheduled notification, which can be swiped away and can't open the app by itself — so it can be silenced without doing the challenge. Closing that gap needs the native system-alarm integration (point 1 below, development build).
 
 An alarm that only stops once you move: **Dance** or **Shake it** (keep moving for N seconds) or **Squats** / **Jumps** (N reps). Entry points: Create sheet → *Movement alarm*, Profile → More → *Movement alarm*. Routes: `/alarm` (your alarms), `/alarm/edit` (new / `?id=` edit), `/alarm/ring/[id]` (the full-screen challenge; `id=practice` for a practice round).
 
