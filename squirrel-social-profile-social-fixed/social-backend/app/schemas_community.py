@@ -67,6 +67,55 @@ class CommunityConfig(BaseModel):
     timezone: str
 
 
+# --------------------------------------------------------------------------- ambassador
+
+
+class AmbassadorField(BaseModel):
+    key: str
+    label: str
+    type: Literal["text", "multiline", "select"]
+    required: bool
+    max_length: int | None = None
+    options: list[str] | None = None
+    placeholder: str | None = None
+    prefill: str | None = None
+
+
+class AmbassadorApplication(BaseModel):
+    id: uuid.UUID
+    status: Literal["pending", "under_review", "approved", "rejected"]
+    submitted_at: datetime
+    decided_at: datetime | None
+    message: str | None
+
+
+class AmbassadorState(BaseModel):
+    open: bool
+    closed_reason: str | None
+    application: AmbassadorApplication | None
+    fields: list[AmbassadorField]
+
+
+class CreateAmbassadorApplication(_In):
+    answers: dict[str, str]
+    idempotency_key: str
+
+
+class AdminAmbassadorDecision(_In):
+    status: Literal["under_review", "approved", "rejected"]
+    message: str | None = None
+
+
+class AdminAmbassadorApplication(AmbassadorApplication):
+    user: UserSummary
+    answers: dict[str, str]
+    form_version: int
+
+
+class AdminAmbassadorList(BaseModel):
+    items: list[AdminAmbassadorApplication]
+
+
 # --------------------------------------------------------------------------- crews
 
 

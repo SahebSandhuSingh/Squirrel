@@ -89,3 +89,12 @@ CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 def clean_text(value: str) -> str:
     """Strip surrounding whitespace and control characters (newlines and tabs are kept)."""
     return CONTROL_CHARS_RE.sub("", value).strip()
+
+
+AMBASSADOR_FORM_VERSION = 1
+AMBASSADOR_FORM = [
+    {"key": "why", "label": "Why do you want to be an ambassador?", "type": "multiline", "required": True, "max_length": 500},
+    {"key": "ideas", "label": "What ideas do you have?", "type": "multiline", "required": True, "max_length": 500},
+    {"key": "hostel", "label": "Your hostel", "type": "text", "required": False, "max_length": 40},
+    {"key": "role", "label": "Current role", "type": "select", "required": True, "options": ["Student", "Alumni", "Faculty"]},
+]

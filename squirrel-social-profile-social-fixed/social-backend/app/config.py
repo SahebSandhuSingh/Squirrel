@@ -103,6 +103,10 @@ class Settings:
     reminders_enabled: bool = True           # the in-process event-reminder loop
     event_reminder_minutes: int = 60
 
+    # --- ambassador ----------------------------------------------------------------------
+    ambassador_open: bool = False
+    ambassador_reapply_days: int = 30
+
     # --- misc ----------------------------------------------------------------------------
     cors_origins: tuple[str, ...] = field(default_factory=tuple)
     rate_limits_enabled: bool = True
@@ -161,4 +165,6 @@ def get_settings() -> Settings:
         expo_access_token=_opt("EXPO_ACCESS_TOKEN"),
         reminders_enabled=os.environ.get("SOCIAL_EVENT_REMINDERS", "on").lower() not in ("off", "0", "false"),
         event_reminder_minutes=_int("SOCIAL_EVENT_REMINDER_MINUTES", 60),
+        ambassador_open=os.environ.get("SOCIAL_AMBASSADOR_OPEN", "off").lower() not in ("off", "0", "false"),
+        ambassador_reapply_days=_int("SOCIAL_AMBASSADOR_REAPPLY_DAYS", 30),
     )
