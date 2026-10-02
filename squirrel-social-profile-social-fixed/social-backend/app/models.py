@@ -27,6 +27,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -480,6 +481,35 @@ class PushToken(Base):
     __table_args__ = (
         CheckConstraint("platform IN ('ios', 'android', 'web')", name="ck_push_tokens_platform"),
         Index("ix_push_tokens_user", "user_id"),
+    )
+
+
+class AmbassadorApplication(Base):
+    """An application to become a Squirrel Ambassador."""
+
+    __tablename__ = "ambassador_applications"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    form_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    answers: Mapped[dict] = mapped_column(JSON, nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    submitted_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+    decided_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    message: Mapped[str | None] = mapped_column(String(500))
+
+    __table_args__ = (
+        CheckConstraint("status IN ('pending', 'under_review', 'approved', 'rejected')", name="ck_ambassador_status"),
+        UniqueConstraint("user_id", "idempotency_key", name="uq_ambassador_idempotency"),
+        Index("ix_ambassador_applications_user", "user_id", "submitted_at"),
+        Index(
+            "uq_ambassador_open",
+            "user_id",
+            unique=True,
+            sqlite_where=text("status IN ('pending', 'under_review', 'approved')"),
+            postgresql_where=text("status IN ('pending', 'under_review', 'approved')"),
+        ),
     )
 
 

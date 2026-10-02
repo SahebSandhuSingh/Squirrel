@@ -197,6 +197,9 @@ saves 120/min, follows 60/min, profile updates 20/min, username checks 60/min, u
 | `POST /internal/v1/crews/memberships` | Service token (campus-service): `{ subjects[]≤200 }` → `{ people: [{ subject, crews: [{ id, name, role, joined_at }] }] }`, oldest membership first (the first is the main crew); request order, each subject once. Never writes; an unseen subject has no crews |
 | `POST /internal/v1/crews/lookup` | Service token: `{ crew_ids[]≤200 }` → `{ crews: [{ id, name, interest, scope, hostel, members_count, members: [{ subject, role, joined_at }] }] }`; unknown ids are left out (never a 404) |
 
+| GET / POST /v1/ambassador/application | Ambassador applications, settings, and rate-limited form submission. |
+| GET /v1/admin/ambassador/applications / POST ./decision | Requires dmin role: list pending/reviewed applications and approve/reject with notifications. |
+
 **Moving existing blocks into Social (once):** `scripts/import_blocks.py` reads campus-service's `blocks` table (`--campus-db`) and/or a copy of the Exercise backend's `data/users/` folder (`--partner-hunt-dir`, Partner Hunt's `partner_blocks.json` files) and sends them to the import route. Dry run by default; `--apply` sends. The service token comes from `SOCIAL_INTERNAL_TOKEN` in the environment, never the command line. Safe to re-run.
 
 Profiles also carry `hostel`, `stats.month_km / month_runs / month_workouts` (verified this month) and
@@ -297,6 +300,8 @@ This matches how the app already uses it, but it must be confirmed against the R
 | `SOCIAL_PUSH` | no | `on` | `off` stores notifications without sending pushes |
 | `EXPO_ACCESS_TOKEN` | no | – | Only when the Expo project requires an access token for pushes |
 | `SOCIAL_EVENT_REMINDERS`, `SOCIAL_EVENT_REMINDER_MINUTES` | no | `on`, `60` | The in-process reminder loop and how long before the start it reminds |
+| `SOCIAL_AMBASSADOR_OPEN` | no | `off` | When off, ambassador applications are closed with a default message |
+| `SOCIAL_AMBASSADOR_REAPPLY_DAYS` | no | `30` | Days to wait after a rejection before reapplying |
 
 ## Run it
 

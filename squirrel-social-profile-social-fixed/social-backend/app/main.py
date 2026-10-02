@@ -19,7 +19,7 @@ from app.config import Settings, get_settings
 from app.db import Database
 from app.errors import ApiError, api_error_handler
 from app.ratelimit import RateLimiter
-from app.routers import blocks, challenges, community, crews, dates, events, feed, follows, internal, media, notifications, posts, profiles
+from app.routers import ambassador, blocks, challenges, community, crews, dates, events, feed, follows, internal, media, notifications, posts, profiles
 from app.services.media import MediaStorage, make_storage
 from app.services.push import ExpoPush, PushSender
 from app.services.reminders import ReminderLoop
@@ -73,7 +73,7 @@ def create_app(
     # profiles first: its literal /users/me/… and /users/search routes must win over /users/{id}/….
     for r in (profiles.router, follows.router, feed.router, posts.router, media.router, internal.router,
               community.router, crews.router, events.router, challenges.router, notifications.router, dates.router,
-              blocks.router):
+              blocks.router, ambassador.router):
         app.include_router(r)
 
     @app.get("/healthz", include_in_schema=False)
