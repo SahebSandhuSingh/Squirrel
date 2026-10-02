@@ -11,15 +11,19 @@ from __future__ import annotations
 
 import uuid
 from datetime import timedelta
+from typing import Literal
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.auth import Viewer
 from app.db import utcnow
 from app.deps import DB, AppSettings, CurrentViewer, Limiter, Storage
 from app.errors import forbidden, invalid, not_found, conflict
 from app.models import AmbassadorApplication, Member, User, UserStats
+from app.pagination import clamp_limit
 from app.rules import AMBASSADOR_FORM, AMBASSADOR_FORM_VERSION
 from app.schemas import UserSummary
 from app.schemas_community import (
@@ -71,7 +75,8 @@ def get_ambassador_application(db: DB, viewer: CurrentViewer, settings: AppSetti
     if app and app.status == "rejected" and app.decided_at:
         wait_until = app.decided_at + timedelta(days=settings.ambassador_reapply_days)
         if utcnow() < wait_until:
-            date_str = wait_until.strftime("%b %d, %Y").replace(" 0", " ")
+            tz = ZoneInfo(settings.community_timezone)
+            date_str = wait_until.astimezone(tz).strftime("%b %d, %Y").replace(" 0", " ")
             return AmbassadorState(
                 open=False,
                 closed_reason=f"You can apply again on {date_str}.",
@@ -168,7 +173,6 @@ def create_ambassador_application(body: CreateAmbassadorApplication, db: DB, vie
 
     limiter.hit("ambassador", str(viewer.id))
     
-    import sqlalchemy.exc
     app = AmbassadorApplication(
         user_id=viewer.id,
         status="pending",
@@ -180,7 +184,7 @@ def create_ambassador_application(body: CreateAmbassadorApplication, db: DB, vie
     try:
         db.flush()
         db.commit()
-    except sqlalchemy.exc.IntegrityError:
+    except IntegrityError:
         db.rollback()
         open_app = db.scalar(
             select(AmbassadorApplication)
@@ -193,10 +197,10 @@ def create_ambassador_application(body: CreateAmbassadorApplication, db: DB, vie
     return _serialize_app(app)
 
 
-from typing import Literal
 @router.get("/admin/ambassador/applications", response_model=AdminAmbassadorList)
 def list_ambassador_applications(db: DB, viewer: CurrentViewer, settings: AppSettings, storage: Storage, status: Literal["pending", "under_review", "approved", "rejected"] | None = None, limit: int = 50):
     _check_admin(viewer.user)
+    limit = clamp_limit(limit)
     
     query = (
         select(AmbassadorApplication, User, UserStats.xp)

@@ -310,3 +310,18 @@ def test_decision_unknown_app(client, settings, database):
     import uuid
     r = client.post(f"/v1/admin/ambassador/applications/{uuid.uuid4()}/decision", json={"status": "approved", "message": "x"}, headers=verified(admin_sub))
     assert r.status_code == 404
+
+def test_admin_list_clamp_limit(client, settings, database):
+    object.__setattr__(settings, "ambassador_open", True)
+    admin_sub = new_sub()
+    client.get("/v1/users/me/profile", headers=verified(admin_sub))
+    with database.engine.begin() as conn:
+        conn.execute(User.__table__.update().where(User.auth_subject == admin_sub).values(role="admin"))
+    
+    # Negative limit
+    r = client.get("/v1/admin/ambassador/applications?limit=-1", headers=verified(admin_sub))
+    assert r.status_code == 200
+    
+    # Absurdly large limit
+    r = client.get("/v1/admin/ambassador/applications?limit=100000", headers=verified(admin_sub))
+    assert r.status_code == 200
