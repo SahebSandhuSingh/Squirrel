@@ -98,7 +98,7 @@ class AmbassadorState(BaseModel):
 
 class CreateAmbassadorApplication(_In):
     answers: dict[str, str]
-    idempotency_key: str
+    idempotency_key: Annotated[str, Field(max_length=120)]
 
 
 class AdminAmbassadorDecision(_In):

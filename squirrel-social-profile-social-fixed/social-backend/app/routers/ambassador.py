@@ -18,7 +18,7 @@ from sqlalchemy import select
 from app.auth import Viewer
 from app.db import utcnow
 from app.deps import DB, AppSettings, CurrentViewer, Limiter, Storage
-from app.errors import forbidden, invalid
+from app.errors import forbidden, invalid, not_found, conflict
 from app.models import AmbassadorApplication, Member, User, UserStats
 from app.rules import AMBASSADOR_FORM, AMBASSADOR_FORM_VERSION
 from app.schemas import UserSummary
@@ -31,7 +31,7 @@ from app.schemas_community import (
     AmbassadorState,
     CreateAmbassadorApplication,
 )
-from app.services import notify
+from app.services import notify, social
 
 router = APIRouter(prefix="/v1", tags=["ambassador"])
 
@@ -62,17 +62,19 @@ def get_ambassador_application(db: DB, viewer: CurrentViewer, settings: AppSetti
     if not member or not member.email_verified:
         return AmbassadorState(
             open=False, 
-            closed_reason="verify_email", 
+            closed_reason="Verify your college email to apply.", 
             application=_serialize_app(app), 
             fields=[]
         )
     
     # 2. Reapply cooldown
     if app and app.status == "rejected" and app.decided_at:
-        if utcnow() < app.decided_at + timedelta(days=settings.ambassador_reapply_days):
+        wait_until = app.decided_at + timedelta(days=settings.ambassador_reapply_days)
+        if utcnow() < wait_until:
+            date_str = wait_until.strftime("%b %d, %Y").replace(" 0", " ")
             return AmbassadorState(
                 open=False,
-                closed_reason="reapply_later",
+                closed_reason=f"You can apply again on {date_str}.",
                 application=_serialize_app(app),
                 fields=[]
             )
@@ -81,7 +83,7 @@ def get_ambassador_application(db: DB, viewer: CurrentViewer, settings: AppSetti
     if not settings.ambassador_open:
         return AmbassadorState(
             open=False,
-            closed_reason="Check back soon — new rounds open through the year.",
+            closed_reason="Applications are currently closed. Check back soon.",
             application=_serialize_app(app),
             fields=[]
         )
@@ -121,6 +123,18 @@ def create_ambassador_application(body: CreateAmbassadorApplication, db: DB, vie
     if existing:
         return _serialize_app(existing)
 
+    if not settings.ambassador_open:
+        raise forbidden("Applications are currently closed. Check back soon.")
+
+    member = db.get(Member, viewer.id)
+    if not member or not member.email_verified:
+        raise forbidden("Verify your college email to apply.")
+
+    last_app = db.scalar(select(AmbassadorApplication).where(AmbassadorApplication.user_id == viewer.id).order_by(AmbassadorApplication.submitted_at.desc()).limit(1))
+    if last_app and last_app.status == "rejected" and last_app.decided_at:
+        if utcnow() < last_app.decided_at + timedelta(days=settings.ambassador_reapply_days):
+            raise forbidden("You cannot reapply yet.")
+
     # Check for any open applications
     open_app = db.scalar(
         select(AmbassadorApplication)
@@ -154,6 +168,7 @@ def create_ambassador_application(body: CreateAmbassadorApplication, db: DB, vie
 
     limiter.hit("ambassador", str(viewer.id))
     
+    import sqlalchemy.exc
     app = AmbassadorApplication(
         user_id=viewer.id,
         status="pending",
@@ -162,25 +177,36 @@ def create_ambassador_application(body: CreateAmbassadorApplication, db: DB, vie
         idempotency_key=body.idempotency_key
     )
     db.add(app)
-    db.flush()
-    db.commit()
+    try:
+        db.flush()
+        db.commit()
+    except sqlalchemy.exc.IntegrityError:
+        db.rollback()
+        open_app = db.scalar(
+            select(AmbassadorApplication)
+            .where(AmbassadorApplication.user_id == viewer.id, AmbassadorApplication.status.in_(["pending", "under_review", "approved"]))
+        )
+        return _serialize_app(open_app)
     
     return _serialize_app(app)
 
 
+from typing import Literal
 @router.get("/admin/ambassador/applications", response_model=AdminAmbassadorList)
-def list_ambassador_applications(status: str, db: DB, viewer: CurrentViewer, settings: AppSettings, storage: Storage):
+def list_ambassador_applications(db: DB, viewer: CurrentViewer, settings: AppSettings, storage: Storage, status: Literal["pending", "under_review", "approved", "rejected"] | None = None, limit: int = 50):
     _check_admin(viewer.user)
     
-    rows = db.execute(
+    query = (
         select(AmbassadorApplication, User, UserStats.xp)
         .join(User, User.id == AmbassadorApplication.user_id)
         .join(UserStats, UserStats.user_id == User.id)
-        .where(AmbassadorApplication.status == status)
-        .order_by(AmbassadorApplication.submitted_at.desc())
-    ).all()
+    )
+    if status:
+        query = query.where(AmbassadorApplication.status == status)
     
-    from app.services import social
+    query = query.order_by(AmbassadorApplication.submitted_at.desc()).limit(limit)
+    rows = db.execute(query).all()
+    
     urls = social.media_urls(db, storage, [u.avatar_media_id for _, u, _ in rows])
     items = []
     for app, u, xp in rows:
@@ -205,7 +231,16 @@ def decide_ambassador_application(id: uuid.UUID, body: AdminAmbassadorDecision, 
     
     app = db.get(AmbassadorApplication, id)
     if not app:
-        raise invalid("Application not found")
+        raise not_found("Application not found")
+        
+    if app.status in ("approved", "rejected"):
+        raise conflict("Already decided")
+        
+    if app.status == "pending" and body.status not in ("under_review", "approved", "rejected"):
+        raise conflict("Invalid transition")
+        
+    if app.status == "under_review" and body.status not in ("approved", "rejected"):
+        raise conflict("Invalid transition")
         
     app.status = body.status
     if body.status in ("approved", "rejected"):
