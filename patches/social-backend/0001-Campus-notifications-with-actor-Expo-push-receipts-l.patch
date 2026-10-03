@@ -1,0 +1,857 @@
+From faabc89e707d5bf7caaa55f9bcfbe4fb56da4825 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 3 Oct 2026 15:14:47 +0000
+Subject: [PATCH] Campus notifications with {actor}, Expo push receipts, loud
+ TEST_DATABASE_URL
+
+- POST /internal/v1/notifications accepts campus-service kinds with caller-written
+  title/body; {actor} is filled with the display name, or actor_fallback when the
+  actor is unknown or the two are blocked either way (actor ids dropped from data).
+  The response carries Social's notification_id (the same id on a retry).
+- Expo ticket ids are stored (push_tickets, migration 0008); receipts are read
+  ~15 min later every 5 min and on POST /internal/v1/tasks/push-receipts; failures
+  are logged with the reason and DeviceNotRegistered tokens disabled.
+- The test suite stops when only TEST_DATABASE_URL is set instead of running SQLite.
+- README: the ambassador admin row read 'dmin' (a stray BEL character).
+---
+ .env.example                             |   1 +
+ README.md                                |   9 +-
+ app/config.py                            |   2 +
+ app/main.py                              |  12 ++-
+ app/models.py                            |  14 +++
+ app/routers/internal.py                  |  56 +++++++++--
+ app/schemas_community.py                 |  36 ++++++-
+ app/services/push.py                     | 115 ++++++++++++++++++++++-
+ migrations/versions/0008_push_tickets.py |  34 +++++++
+ tests/conftest.py                        |  13 ++-
+ tests/test_challenges_notifications.py   |   9 +-
+ tests/test_internal_notifications.py     | 105 +++++++++++++++++++++
+ tests/test_push_receipts.py              | 112 ++++++++++++++++++++++
+ tests/test_test_database_guard.py        |  19 ++++
+ 14 files changed, 510 insertions(+), 27 deletions(-)
+ create mode 100644 migrations/versions/0008_push_tickets.py
+ create mode 100644 tests/test_internal_notifications.py
+ create mode 100644 tests/test_push_receipts.py
+ create mode 100644 tests/test_test_database_guard.py
+
+diff --git a/.env.example b/.env.example
+index 91820a0..da4b7fb 100644
+--- a/.env.example
++++ b/.env.example
+@@ -61,6 +61,7 @@ SOCIAL_INTERNAL_TOKEN=
+ # SOCIAL_APP_URL=https://squirrel-social.vercel.app
+ # Pushes via Expo (on unless off); an access token only if the Expo project requires one.
+ # SOCIAL_PUSH=on
++# SOCIAL_PUSH_RECEIPTS=on   # read Expo receipts ~15 min after each push; log failures, disable dead tokens
+ # EXPO_ACCESS_TOKEN=
+ 
+ # Ambassador Applications
+diff --git a/README.md b/README.md
+index 9e1e070..61787bf 100644
+--- a/README.md
++++ b/README.md
+@@ -189,8 +189,9 @@ saves 120/min, follows 60/min, profile updates 20/min, username checks 60/min, u
+ | `GET·POST /v1/challenges`, `POST …/{id}/accept\|decline\|cancel` | Head-to-head: most verified km or most workouts in 1–30 days |
+ | `GET /v1/notifications`, `/unread-count`, `POST /v1/notifications/read` | The in-app list |
+ | `POST /v1/me/push-tokens`, `DELETE /v1/me/push-tokens/{token}` | Expo push tokens; pushes go through Expo's service after the request commits (`app/services/push.py`) |
+-| `POST /internal/v1/notifications` | Service token: the Run Module's territory captured / lost / expired events. When the actor and the recipient are blocked either way, the notification says "Someone" and drops the actor's run ids |
++| `POST /internal/v1/notifications` | Service token: `{ user_subject, kind, actor_subject?, title?, body?, actor_fallback?, data{}, dedupe_key }` → `{ created, notification_id }` (Social's id; a retry with the same `dedupe_key` returns the same id). **Run Module kinds** `territory_lost / territory_captured / territory_expired`: Social writes the text, so `title` / `body` must be left out. **Campus kinds** `territory.stolen / territory.challenged / territory.defended / zone.claimed / challenge.invitation / challenge.reminder / challenge.updated / event.reminder / meetup.check_in / meetup.invited / meetup.accepted / meetup.declined / meetup.cancelled / activity.verification_complete`: the caller sends `title` (required) and `body`, with `{actor}` where the actor's name goes; Social puts in the display name, or `actor_fallback` (default `Someone`) when there is no actor or Social doesn't know them. When the actor and the recipient are blocked either way, the notification never names them and drops `run_id`, `capture_event_id`, `user_id`, `actor_id` and `actor_subject` from `data`. A tap opens `data.route` when it is a path, otherwise one picked from the kind (`/meetup/{meetup_id}`, `/zone/{zone_id}`, `/invites`, `/events`, …) |
+ | `POST /internal/v1/tasks/event-reminders` | Service token: send due event reminders (a cron, while the free plan sleeps) |
++| `POST /internal/v1/tasks/push-receipts` | Service token: `{ receipts_read }` — read the Expo receipts of pushes sent ≥15 min ago now (the service also does it every 5 min); failures are logged with Expo's reason and `DeviceNotRegistered` tokens disabled (a cron, while the free plan sleeps) |
+ | `POST /internal/v1/people/resolve` | Service token (campus-service): `{ subjects[]≤200, profile_ids[]≤200 }` → `{ people: [{ subject, profile_id, username, display_name, avatar_url, hostel, level }] }`; unseen subjects are provisioned, unknown profile ids omitted, each person once. The only place a subject↔profile mapping leaves Social |
+ | `GET /internal/v1/blocks/{subject}` | Service token (campus-service): `{ subject, blocked: [subject…], as_of }` — everyone blocked **either way** with that person. Never writes; an unseen subject has none. Callers cache ≤30 s and fail closed (ADR-032) |
+ | `POST /internal/v1/blocks/import` | Service token: `{ blocks: [{ blocker, blocked }]≤1000 }` (subjects) → `{ imported, already, skipped }`. One-time copy of another service's own block table; safe to re-run; provisions unseen subjects; removes follows between the two, like an app block |
+@@ -198,7 +199,7 @@ saves 120/min, follows 60/min, profile updates 20/min, username checks 60/min, u
+ | `POST /internal/v1/crews/lookup` | Service token: `{ crew_ids[]≤200 }` → `{ crews: [{ id, name, interest, scope, hostel, members_count, members: [{ subject, role, joined_at }] }] }`; unknown ids are left out (never a 404) |
+ 
+ | GET / POST /v1/ambassador/application | Ambassador applications, settings, and rate-limited form submission. |
+-| GET /v1/admin/ambassador/applications / POST ./decision | Requires dmin role: list pending/reviewed applications and approve/reject with notifications. |
++| GET /v1/admin/ambassador/applications / POST ./decision | Requires `admin` role: list pending/reviewed applications and approve/reject with notifications. |
+ 
+ **Moving existing blocks into Social (once):** `scripts/import_blocks.py` reads campus-service's `blocks` table (`--campus-db`) and/or a copy of the Exercise backend's `data/users/` folder (`--partner-hunt-dir`, Partner Hunt's `partner_blocks.json` files) and sends them to the import route. Dry run by default; `--apply` sends. The service token comes from `SOCIAL_INTERNAL_TOKEN` in the environment, never the command line. Safe to re-run.
+ 
+@@ -299,6 +300,7 @@ This matches how the app already uses it, but it must be confirmed against the R
+ | `SOCIAL_PARK_REGULAR_DAYS` | no | `5` | Park Regular: different days in the same zone |
+ | `SOCIAL_PUSH` | no | `on` | `off` stores notifications without sending pushes |
+ | `EXPO_ACCESS_TOKEN` | no | – | Only when the Expo project requires an access token for pushes |
++| `SOCIAL_PUSH_RECEIPTS` | no | `on` | `off` stops the in-process receipt check (`POST /internal/v1/tasks/push-receipts` still runs it) |
+ | `SOCIAL_EVENT_REMINDERS`, `SOCIAL_EVENT_REMINDER_MINUTES` | no | `on`, `60` | The in-process reminder loop and how long before the start it reminds |
+ | `SOCIAL_AMBASSADOR_OPEN` | no | `off` | When off, ambassador applications are closed with a default message |
+ | `SOCIAL_AMBASSADOR_REAPPLY_DAYS` | no | `30` | Days to wait after a rejection before reapplying |
+@@ -337,5 +339,8 @@ SOCIAL_TEST_DATABASE_URL=postgresql+psycopg://USER:PASS@localhost:5432/social_te
+   .venv/bin/python -m pytest -q                                 # same suite on PostgreSQL (+ concurrency test)
+ ```
+ 
++`TEST_DATABASE_URL` (the name campus-service and Exercise use) is **not** read here: set on its own,
++it stops the run with an error rather than letting the suite quietly test SQLite.
++
+ The Run Module and object storage are replaced by in-process doubles in tests. Everything else
+ is the real code path: HTTP, JWT verification, SQL and migrations.
+diff --git a/app/config.py b/app/config.py
+index 1582aab..547364d 100644
+--- a/app/config.py
++++ b/app/config.py
+@@ -101,6 +101,7 @@ class Settings:
+     push_enabled: bool = True                # send Expo pushes (SOCIAL_PUSH=off to only store them)
+     expo_access_token: str | None = None     # EXPO_ACCESS_TOKEN, when the Expo project requires one
+     reminders_enabled: bool = True           # the in-process event-reminder loop
++    push_receipts_enabled: bool = True       # the in-process Expo receipt check (services/push.py)
+     event_reminder_minutes: int = 60
+ 
+     # --- ambassador ----------------------------------------------------------------------
+@@ -164,6 +165,7 @@ def get_settings() -> Settings:
+         push_enabled=os.environ.get("SOCIAL_PUSH", "on").lower() not in ("off", "0", "false"),
+         expo_access_token=_opt("EXPO_ACCESS_TOKEN"),
+         reminders_enabled=os.environ.get("SOCIAL_EVENT_REMINDERS", "on").lower() not in ("off", "0", "false"),
++        push_receipts_enabled=os.environ.get("SOCIAL_PUSH_RECEIPTS", "on").lower() not in ("off", "0", "false"),
+         event_reminder_minutes=_int("SOCIAL_EVENT_REMINDER_MINUTES", 60),
+         ambassador_open=os.environ.get("SOCIAL_AMBASSADOR_OPEN", "off").lower() not in ("off", "0", "false"),
+         ambassador_reapply_days=_int("SOCIAL_AMBASSADOR_REAPPLY_DAYS", 30),
+diff --git a/app/main.py b/app/main.py
+index 62d3175..7f51f04 100644
+--- a/app/main.py
++++ b/app/main.py
+@@ -21,7 +21,7 @@ from app.errors import ApiError, api_error_handler
+ from app.ratelimit import RateLimiter
+ from app.routers import ambassador, blocks, challenges, community, crews, dates, events, feed, follows, internal, media, notifications, posts, profiles
+ from app.services.media import MediaStorage, make_storage
+-from app.services.push import ExpoPush, PushSender
++from app.services.push import ExpoPush, PushSender, ReceiptLoop
+ from app.services.reminders import ReminderLoop
+ from app.services.route_points import RoutePoints, SqlRoutePoints
+ from app.services.run_module import HttpRunModule, RunModule
+@@ -41,11 +41,15 @@ def create_app(
+ 
+     @asynccontextmanager
+     async def lifespan(app: FastAPI):
+-        loop = ReminderLoop(app.state.db, settings, app.state.push) if settings.reminders_enabled else None
+-        if loop:
++        loops = []
++        if settings.reminders_enabled:
++            loops.append(ReminderLoop(app.state.db, settings, app.state.push))
++        if settings.push_receipts_enabled and isinstance(app.state.push, ExpoPush) and app.state.push.enabled:
++            loops.append(ReceiptLoop(app.state.push))
++        for loop in loops:
+             loop.start()
+         yield
+-        if loop:
++        for loop in loops:
+             loop.stop()
+ 
+     app = FastAPI(title="Squirrel Social — Profile & Social API", version="1.0.0", lifespan=lifespan)
+diff --git a/app/models.py b/app/models.py
+index 7ef77d7..c6508d9 100644
+--- a/app/models.py
++++ b/app/models.py
+@@ -484,6 +484,20 @@ class PushToken(Base):
+     )
+ 
+ 
++class PushTicket(Base):
++    """An Expo push ticket waiting for its receipt (services/push.py). Expo only says whether a
++    message reached Apple / Google in the receipt, fetched ~15 minutes after the send; the row is
++    deleted once its receipt is read, or after a day if Expo never has one."""
++
++    __tablename__ = "push_tickets"
++
++    id: Mapped[str] = mapped_column(String(64), primary_key=True)  # Expo's ticket id
++    token: Mapped[str] = mapped_column(String(255), nullable=False)
++    created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
++
++    __table_args__ = (Index("ix_push_tickets_created", "created_at"),)
++
++
+ class AmbassadorApplication(Base):
+     """An application to become a Squirrel Ambassador."""
+ 
+diff --git a/app/routers/internal.py b/app/routers/internal.py
+index 1c4af45..571298c 100644
+--- a/app/routers/internal.py
++++ b/app/routers/internal.py
+@@ -1,7 +1,9 @@
+ """Service-to-service routes — how the other modules publish into Social.
+ 
+   POST /internal/v1/activities              Authorization: Bearer $SOCIAL_INTERNAL_TOKEN
+-  POST /internal/v1/notifications           a territory steal (Run Module) → the in-app list + push
++  POST /internal/v1/notifications           a territory event (Run Module) or a campus event (campus-service)
++                                            → the in-app list + push; returns Social's notification id
++  POST /internal/v1/tasks/push-receipts     check Expo push receipts now (for an external cron)
+   POST /internal/v1/tasks/event-reminders   send due event reminders now (for an external cron)
+   POST /internal/v1/people/resolve          token subjects / profile ids → Social names, profile ids,
+                                             avatar, hostel, level (campus-service); unseen subjects
+@@ -35,7 +37,7 @@ from app.auth import bearer_token, get_or_create_user
+ from app.db import utcnow
+ from app.deps import DB, AppSettings, Storage
+ from app.errors import ApiError, conflict
+-from app.models import Activity, Crew, CrewMember, User, UserBlock, UserStats
++from app.models import Activity, Crew, CrewMember, Notification, User, UserBlock, UserStats
+ from app.schemas import InternalActivityOut, InternalActivityIn
+ from app.schemas_community import (
+     InternalBlocksImportIn,
+@@ -54,6 +56,7 @@ from app.schemas_community import (
+     InternalPeopleResolveIn,
+     InternalPeopleResolveOut,
+     InternalPerson,
++    RUN_MODULE_KINDS,
+ )
+ from app.services import notify as notifications
+ from app.services import badges, dates, reminders, social, xp_cache
+@@ -154,8 +157,28 @@ def _territory_text(kind: str, actor: User | None, data: dict) -> tuple[str, str
+     return "Your territory faded", "Run there again to claim it back."
+ 
+ 
+-# Fields that point at the actor's own run: dropped when the actor is hidden.
+-_ACTOR_DATA = {"run_id", "capture_event_id"}
++# Fields that identify the actor or point at their own run: dropped when the actor is hidden.
++_ACTOR_DATA = {"run_id", "capture_event_id", "user_id", "actor_id", "actor_subject"}
++
++# Where a tap opens when the caller sends no `data.route` (app screens, see mobile src/app/).
++_ROUTES = {"territory": "/territory", "zone": "/territory", "challenge": "/invites", "event": "/events",
++           "meetup": "/meetups", "activity": "/notifications"}
++
++
++def _route(kind: str, data: dict) -> str:
++    if kind in RUN_MODULE_KINDS:
++        return "/territory"
++    prefix = kind.split(".", 1)[0]
++    if prefix == "meetup" and isinstance(data.get("meetup_id"), str):
++        return f"/meetup/{data['meetup_id']}"
++    if prefix in ("territory", "zone") and isinstance(data.get("zone_id"), str):
++        return f"/zone/{data['zone_id']}"
++    return _ROUTES[prefix]
++
++
++def _fill_actor(text: str, actor: User | None, fallback: str) -> str:
++    """`{actor}` → the actor's name; plain replace, so nothing else in the text is interpreted."""
++    return text.replace("{actor}", actor.display_name if actor else fallback)
+ 
+ 
+ @router.post("/notifications", response_model=InternalNotificationOut)
+@@ -175,11 +198,19 @@ def ingest_notification(
+         # Blocked either way: the notification still arrives, but never says who, or which run.
+         actor = None
+         data = {k: v for k, v in data.items() if k not in _ACTOR_DATA}
+-    title, text = _territory_text(body.kind, actor, body.data)
+-    created = notifications.notify(db, user.id, body.kind, title, text, data={"route": "/territory", **data},
++    if body.kind in RUN_MODULE_KINDS:
++        title, text = _territory_text(body.kind, actor, body.data)
++    else:
++        title = _fill_actor(body.title or "", actor, body.actor_fallback)
++        text = _fill_actor(body.body or "", actor, body.actor_fallback)
++    if not (isinstance(data.get("route"), str) and data["route"].startswith("/")):
++        data["route"] = _route(body.kind, data)
++    created = notifications.notify(db, user.id, body.kind, title, text, data=data,
+                                    actor_id=actor.id if actor else None, dedupe_key=body.dedupe_key)
+     db.commit()
+-    return InternalNotificationOut(created=created > 0)
++    notification_id = db.scalar(select(Notification.id).where(
++        Notification.user_id == user.id, Notification.dedupe_key == body.dedupe_key))
++    return InternalNotificationOut(created=created > 0, notification_id=notification_id)
+ 
+ 
+ @router.post("/tasks/event-reminders")
+@@ -192,6 +223,17 @@ def run_event_reminders(
+     return {"reminded_events": reminders.send_due(db, settings)}
+ 
+ 
++@router.post("/tasks/push-receipts")
++def run_push_receipts(
++    request: Request,
++    settings: AppSettings,
++    authorization: Annotated[str | None, Header()] = None,
++):
++    _check_service_token(settings, authorization)
++    check = getattr(request.app.state.push, "check_receipts", None)
++    return {"receipts_read": check() if check else 0}
++
++
+ @router.post("/people/resolve", response_model=InternalPeopleResolveOut)
+ def resolve_people(
+     body: InternalPeopleResolveIn,
+diff --git a/app/schemas_community.py b/app/schemas_community.py
+index 6d3d076..5dd4ad4 100644
+--- a/app/schemas_community.py
++++ b/app/schemas_community.py
+@@ -7,7 +7,7 @@ import uuid
+ from datetime import date, datetime
+ from typing import Annotated, Literal
+ 
+-from pydantic import BaseModel, ConfigDict, Field, field_validator
++from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+ 
+ from app import rules
+ from app.schemas import UserSummary
+@@ -335,19 +335,47 @@ class PushTokenRequest(_In):
+     platform: Literal["ios", "android", "web"]
+ 
+ 
++RUN_MODULE_KINDS = ("territory_lost", "territory_captured", "territory_expired")
++CAMPUS_KINDS = (
++    "territory.stolen", "territory.challenged", "territory.defended", "zone.claimed",
++    "challenge.invitation", "challenge.reminder", "challenge.updated",
++    "event.reminder", "meetup.check_in", "meetup.invited", "meetup.accepted", "meetup.declined", "meetup.cancelled",
++    "activity.verification_complete",
++)
++NotificationKind = Literal[RUN_MODULE_KINDS + CAMPUS_KINDS]  # type: ignore[valid-type]
++
++
+ class InternalNotificationIn(_In):
+-    """From the Run Module (territory steals) or another service. The text is written here, from
+-    `kind` and the names Social knows."""
++    """From the Run Module (territory steals) or campus-service.
++
++    Run Module kinds: the text is written here, from `kind` and the names Social knows; `title` and
++    `body` must be left out. Campus kinds: the caller writes `title` (and optionally `body`) and may
++    put `{actor}` where the actor's name goes. Social fills it with the actor's display name, or with
++    `actor_fallback` when there is no actor, Social doesn't know them, or the two are blocked either
++    way."""
+ 
+     user_subject: Annotated[str, Field(min_length=1, max_length=255)]
+-    kind: Literal["territory_lost", "territory_captured", "territory_expired"]
++    kind: NotificationKind
+     actor_subject: Annotated[str, Field(min_length=1, max_length=255)] | None = None
++    title: Annotated[str, Field(min_length=1, max_length=200)] | None = None
++    body: Annotated[str, Field(max_length=400)] | None = None
++    actor_fallback: Annotated[str, Field(min_length=1, max_length=40)] = "Someone"
+     data: dict = {}
+     dedupe_key: Annotated[str, Field(min_length=1, max_length=120)]
+ 
++    @model_validator(mode="after")
++    def _text_by_kind(self):
++        if self.kind in RUN_MODULE_KINDS:
++            if self.title is not None or self.body is not None:
++                raise ValueError("title and body are written by Social for Run Module kinds; leave them out.")
++        elif self.title is None:
++            raise ValueError("title is required for this kind.")
++        return self
++
+ 
+ class InternalNotificationOut(BaseModel):
+     created: bool
++    notification_id: uuid.UUID | None  # Social's id: the new one, or the existing one on a retry
+ 
+ 
+ class InternalPeopleResolveIn(_In):
+diff --git a/app/services/push.py b/app/services/push.py
+index 8117dbf..5f06c8c 100644
+--- a/app/services/push.py
++++ b/app/services/push.py
+@@ -5,25 +5,40 @@ queues one message per live token on the database session, and they are sent onc
+ commits, so a rolled-back request never pushes. Sending happens on a small thread pool: a slow Expo
+ never slows the request. A token Expo reports as `DeviceNotRegistered` (app uninstalled) is
+ disabled.
++
++Expo's answer to a send is only a ticket; whether Apple / Google took the message comes in a
++receipt, ready about 15 minutes later. Each ticket id is stored (`push_tickets`) and
++`check_receipts` fetches the receipts of tickets at least `RECEIPT_DELAY` old: a failed one is
++logged with its reason, and a `DeviceNotRegistered` one disables the token. It runs every
++`RECEIPT_INTERVAL_S` in `ReceiptLoop` and on POST /internal/v1/tasks/push-receipts (for a cron while
++the host sleeps). A ticket whose receipt never comes is dropped after `RECEIPT_GIVE_UP`.
+ """
+ 
+ from __future__ import annotations
+ 
+ import logging
++import threading
+ from concurrent.futures import ThreadPoolExecutor
++from datetime import datetime, timedelta
+ from typing import Protocol
+ 
+ import httpx
+-from sqlalchemy import event, update
++from sqlalchemy import delete, event, select, update
+ from sqlalchemy.orm import Session
+ 
+ from app.db import Database, utcnow
+-from app.models import PushToken
++from app.models import PushTicket, PushToken
+ 
+ log = logging.getLogger(__name__)
+ 
+ EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
++EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts"
+ _BATCH = 100  # Expo accepts up to 100 messages per request
++_RECEIPT_BATCH = 1000  # and up to 1000 receipt ids
++_RECEIPTS_PER_RUN = 10_000
++RECEIPT_DELAY = timedelta(minutes=15)
++RECEIPT_GIVE_UP = timedelta(hours=24)  # Expo keeps receipts for a day
++RECEIPT_INTERVAL_S = 300
+ 
+ 
+ class PushSender(Protocol):
+@@ -47,6 +62,7 @@ class ExpoPush:
+ 
+     def deliver(self, messages: list[dict]) -> None:
+         dead: list[str] = []
++        tickets_sent: dict[str, str] = {}
+         for start in range(0, len(messages), _BATCH):
+             chunk = messages[start:start + _BATCH]
+             try:
+@@ -59,16 +75,105 @@ class ExpoPush:
+                 log.warning("expo push answered %s: %s", res.status_code, res.text[:300])
+                 continue
+             for message, ticket in zip(chunk, tickets if isinstance(tickets, list) else []):
+-                if not isinstance(ticket, dict) or ticket.get("status") != "error":
++                if not isinstance(ticket, dict):
++                    continue
++                if ticket.get("status") == "ok" and isinstance(ticket.get("id"), str) and len(ticket["id"]) <= 64:
++                    tickets_sent[ticket["id"]] = message["to"]
++                    continue
++                if ticket.get("status") != "error":
+                     continue
+                 details = ticket.get("details") if isinstance(ticket.get("details"), dict) else {}
++                log.warning("expo push rejected: %s (%s) token=%s", details.get("error") or "unknown",
++                            str(ticket.get("message", ""))[:200], _short(message["to"]))
+                 if details.get("error") == "DeviceNotRegistered":
+                     dead.append(message["to"])
+-        if dead:
++        if dead or tickets_sent:
+             with self.database.SessionLocal() as db:
+-                db.execute(update(PushToken).where(PushToken.token.in_(dead)).values(disabled_at=utcnow()))
++                if tickets_sent:
++                    now = utcnow()
++                    db.add_all(PushTicket(id=i, token=t, created_at=now) for i, t in tickets_sent.items())
++                _disable(db, dead)
+                 db.commit()
+ 
++    def check_receipts(self, now: datetime | None = None) -> int:
++        """Read the receipts of tickets at least RECEIPT_DELAY old. Returns how many were read."""
++        if not self.enabled:
++            return 0
++        now = now or utcnow()
++        read: list[str] = []
++        dead: list[str] = []
++        with self.database.SessionLocal() as db:
++            db.execute(delete(PushTicket).where(PushTicket.created_at < now - RECEIPT_GIVE_UP))
++            due = dict(db.execute(
++                select(PushTicket.id, PushTicket.token).where(PushTicket.created_at <= now - RECEIPT_DELAY)
++                .order_by(PushTicket.created_at).limit(_RECEIPTS_PER_RUN)
++            ).all())
++            ids = list(due)
++            for start in range(0, len(ids), _RECEIPT_BATCH):
++                chunk = ids[start:start + _RECEIPT_BATCH]
++                try:
++                    res = self._client.post(EXPO_RECEIPTS_URL, json={"ids": chunk}, headers=self._headers)
++                    receipts = res.json().get("data") if res.status_code < 400 else None
++                except (httpx.HTTPError, ValueError) as e:
++                    log.warning("expo receipts failed: %s", e)
++                    continue  # kept: the next run asks again
++                if not isinstance(receipts, dict):
++                    log.warning("expo receipts answered %s: %s", res.status_code, res.text[:300])
++                    continue
++                for ticket_id in chunk:
++                    receipt = receipts.get(ticket_id)
++                    if not isinstance(receipt, dict):
++                        continue  # not ready yet
++                    read.append(ticket_id)
++                    if receipt.get("status") != "error":
++                        continue
++                    details = receipt.get("details") if isinstance(receipt.get("details"), dict) else {}
++                    reason = details.get("error") or "unknown"
++                    log.warning("expo push receipt %s failed: %s (%s) token=%s", ticket_id, reason,
++                                str(receipt.get("message", ""))[:200], _short(due[ticket_id]))
++                    if reason == "DeviceNotRegistered":
++                        dead.append(due[ticket_id])
++            if read:
++                db.execute(delete(PushTicket).where(PushTicket.id.in_(read)))
++            _disable(db, dead)
++            db.commit()
++        return len(read)
++
++
++def _short(token: str) -> str:
++    """Enough of a token to find it in the table, not the whole thing in the logs."""
++    return token[:26] + "…" if len(token) > 26 else token
++
++
++def _disable(db: Session, tokens: list[str]) -> None:
++    if tokens:
++        db.execute(update(PushToken).where(PushToken.token.in_(tokens), PushToken.disabled_at.is_(None))
++                   .values(disabled_at=utcnow()))
++
++
++class ReceiptLoop:
++    """Runs `check_receipts` every RECEIPT_INTERVAL_S in a background thread of the service."""
++
++    def __init__(self, sender: ExpoPush):
++        self.sender = sender
++        self._stop = threading.Event()
++        self._thread: threading.Thread | None = None
++
++    def start(self) -> None:
++        if self._thread is None:
++            self._thread = threading.Thread(target=self._run, name="expo-receipts", daemon=True)
++            self._thread.start()
++
++    def stop(self) -> None:
++        self._stop.set()
++
++    def _run(self) -> None:
++        while not self._stop.wait(RECEIPT_INTERVAL_S):
++            try:
++                self.sender.check_receipts()
++            except Exception:  # a database or network hiccup must not end the loop
++                log.exception("expo receipts failed")
++
+ 
+ class RecordingPush:
+     """Test double: keeps what would have been sent."""
+diff --git a/migrations/versions/0008_push_tickets.py b/migrations/versions/0008_push_tickets.py
+new file mode 100644
+index 0000000..bd95643
+--- /dev/null
++++ b/migrations/versions/0008_push_tickets.py
+@@ -0,0 +1,34 @@
++"""Expo push tickets awaiting their receipts.
++
++Revision ID: 0008_push_tickets
++Revises: 0007_ambassador
++Create Date: 2026-10-03
++
++"""
++
++from __future__ import annotations
++
++import sqlalchemy as sa
++from alembic import op
++
++from app.db import UTCDateTime
++
++revision = "0008_push_tickets"
++down_revision = "0007_ambassador"
++branch_labels = None
++depends_on = None
++
++
++def upgrade() -> None:
++    op.create_table(
++        "push_tickets",
++        sa.Column("id", sa.String(64), primary_key=True),
++        sa.Column("token", sa.String(255), nullable=False),
++        sa.Column("created_at", UTCDateTime(), nullable=False),
++    )
++    op.create_index("ix_push_tickets_created", "push_tickets", ["created_at"])
++
++
++def downgrade() -> None:
++    op.drop_index("ix_push_tickets_created", table_name="push_tickets")
++    op.drop_table("push_tickets")
+diff --git a/tests/conftest.py b/tests/conftest.py
+index 811a78c..a931c06 100644
+--- a/tests/conftest.py
++++ b/tests/conftest.py
+@@ -2,7 +2,8 @@
+ 
+ * Schema is built by running the real Alembic migrations (not create_all), once per session.
+ * Database: a temp SQLite file by default; set SOCIAL_TEST_DATABASE_URL to run the same suite on
+-  PostgreSQL, e.g. postgresql+psycopg://social:social@localhost:5432/social_test
++  PostgreSQL, e.g. postgresql+psycopg://social:social@localhost:5432/social_test. TEST_DATABASE_URL
++  (the other services' name) alone stops the run instead of quietly testing on SQLite.
+ * Tokens are real RS256 JWTs signed with a key generated for the session.
+ * The Run Module and object storage are replaced by in-process doubles (the only external
+   services); everything else — HTTP layer, auth, SQL — is the production code path.
+@@ -149,10 +150,18 @@ class FakeStorage:
+ 
+ # --------------------------------------------------------------------------- database
+ 
+-TABLES = ["ambassador_applications", "date_dismissals", "zone_visits", "dates_prefs", "user_blocks", "push_tokens", "notifications", "social_challenges", "checkins", "event_rsvps", "events", "crew_vouches",
++TABLES = ["push_tickets", "ambassador_applications", "date_dismissals", "zone_visits", "dates_prefs", "user_blocks", "push_tokens", "notifications", "social_challenges", "checkins", "event_rsvps", "events", "crew_vouches",
+           "crew_members", "crews", "members", "user_badges", "comments", "post_saves", "post_likes", "posts", "media", "activities", "follows", "user_stats", "users"]
+ 
+ 
++def pytest_configure(config):
++    if os.environ.get("TEST_DATABASE_URL") and not os.environ.get("SOCIAL_TEST_DATABASE_URL"):
++        raise pytest.UsageError(
++            "TEST_DATABASE_URL is set but this suite reads SOCIAL_TEST_DATABASE_URL; it would have run on "
++            "SQLite instead. Set SOCIAL_TEST_DATABASE_URL (or unset TEST_DATABASE_URL to use SQLite)."
++        )
++
++
+ @pytest.fixture(scope="session")
+ def database(tmp_path_factory) -> Database:
+     url = os.environ.get("SOCIAL_TEST_DATABASE_URL") or f"sqlite:///{tmp_path_factory.mktemp('db') / 'social.db'}"
+diff --git a/tests/test_challenges_notifications.py b/tests/test_challenges_notifications.py
+index 78f5f45..878db7f 100644
+--- a/tests/test_challenges_notifications.py
++++ b/tests/test_challenges_notifications.py
+@@ -122,9 +122,12 @@ def test_a_territory_steal_from_the_run_module_notifies_and_pushes_once(client,
+     body = {"user_subject": victim, "kind": "territory_lost", "actor_subject": thief,
+             "data": {"area_delta_m2": 1234.4, "territory_id": "t-1", "capture_event_id": "ce-1"}, "dedupe_key": "ce-1:territory_lost"}
+     assert client.post("/internal/v1/notifications", json=body).status_code == 401
+-    assert client.post("/internal/v1/notifications", json=body, headers=SVC).json() == {"created": True}
+-    assert client.post("/internal/v1/notifications", json=body, headers=SVC).json() == {"created": False}  # a retry
++    first = client.post("/internal/v1/notifications", json=body, headers=SVC).json()
++    assert first["created"] is True
++    retry = client.post("/internal/v1/notifications", json=body, headers=SVC).json()
++    assert retry == {"created": False, "notification_id": first["notification_id"]}  # a retry: the same id
+     [n] = notes(client, victim)
++    assert n["id"] == first["notification_id"]
+     assert n["title"] == "Rhea stole your territory" and n["body"] == "1,234 m² taken. Run it back!"
+     assert n["data"]["route"] == "/territory" and n["actor"]["display_name"] == "Rhea"
+     assert [p["to"] for p in pushes.sent] == ["ExponentPushToken[victim]"]
+@@ -141,7 +144,7 @@ def test_a_steal_by_someone_blocked_either_way_never_names_them(client, api):
+         body = {"user_subject": victim, "kind": "territory_lost", "actor_subject": thief,
+                 "data": {"area_delta_m2": 1234.4, "territory_id": "t-1", "run_id": "r-1", "capture_event_id": "ce-1"},
+                 "dedupe_key": f"ce-{blocker}"}
+-        assert client.post("/internal/v1/notifications", json=body, headers=SVC).json() == {"created": True}
++        assert client.post("/internal/v1/notifications", json=body, headers=SVC).json()["created"] is True
+         n = notes(client, victim)[0]
+         assert n["title"] == "Someone stole your territory" and n["actor"] is None
+         assert "Rhea" not in str(n) and "run_id" not in n["data"] and "capture_event_id" not in n["data"]
+diff --git a/tests/test_internal_notifications.py b/tests/test_internal_notifications.py
+new file mode 100644
+index 0000000..3b30bfa
+--- /dev/null
++++ b/tests/test_internal_notifications.py
+@@ -0,0 +1,105 @@
++"""POST /internal/v1/notifications from campus-service: campus kinds, the caller's text with an
++`{actor}` placeholder Social fills (or hides on a block), and Social's notification id back."""
++
++from __future__ import annotations
++
++from tests.conftest import auth, new_sub
++
++SVC = {"Authorization": "Bearer svc-secret"}
++URL = "/internal/v1/notifications"
++
++
++def notes(client, sub) -> list[dict]:
++    return client.get("/v1/notifications", headers=auth(sub)).json()["items"]
++
++
++def campus(user, actor=None, **extra) -> dict:
++    body = {"user_subject": user, "kind": "meetup.invited", "title": "{actor} invited you to a meetup.",
++            "data": {"meetup_id": "m-1", "user_id": "campus-u-9"}, "dedupe_key": f"meetup.invited:m-1:{user}"}
++    if actor:
++        body["actor_subject"] = actor
++    return {**body, **extra}
++
++
++def test_a_campus_notification_names_the_actor_and_returns_socials_id(client, api, pushes):
++    me, host = new_sub(), new_sub()
++    api.user(me)
++    api.user(host, display_name="Rhea")
++    client.post("/v1/me/push-tokens", json={"token": "ExponentPushToken[me]", "platform": "ios"}, headers=auth(me))
++    r = client.post(URL, json=campus(me, host, body="Tomorrow, {actor}'s pick."), headers=SVC)
++    assert r.status_code == 200, r.text
++    out = r.json()
++    assert out["created"] is True and out["notification_id"]
++    [n] = notes(client, me)
++    assert n["id"] == out["notification_id"] and n["kind"] == "meetup.invited"
++    assert n["title"] == "Rhea invited you to a meetup." and n["body"] == "Tomorrow, Rhea's pick."
++    assert n["actor"]["display_name"] == "Rhea"
++    assert n["data"]["route"] == "/meetup/m-1" and n["data"]["user_id"] == "campus-u-9"
++    assert pushes.sent[-1]["title"] == "Rhea invited you to a meetup."
++    assert pushes.sent[-1]["data"]["kind"] == "meetup.invited"
++    # A retry lands once and answers with the same id.
++    again = client.post(URL, json=campus(me, host, body="Tomorrow, {actor}'s pick."), headers=SVC).json()
++    assert again == {"created": False, "notification_id": out["notification_id"]}
++    assert len(notes(client, me)) == 1
++
++
++def test_blocked_either_way_the_placeholder_becomes_the_fallback_and_actor_ids_go(client, api, pushes):
++    me, host = new_sub(), new_sub()
++    me_id = api.user(me)["id"]
++    host_id = api.user(host, display_name="Rhea")["id"]
++    client.post("/v1/me/push-tokens", json={"token": "ExponentPushToken[me]", "platform": "ios"}, headers=auth(me))
++    for blocker, blocked_id in ((host, me_id), (me, host_id)):
++        client.post(f"/v1/users/{blocked_id}/block", headers=auth(blocker))
++        body = campus(me, host, kind="zone.claimed", title="{actor} claimed Main Quad.", actor_fallback="A crew mate",
++                      data={"zone_id": "z-1", "user_id": "campus-u-9", "run_id": "r-1"}, dedupe_key=f"zc:{blocker}")
++        assert client.post(URL, json=body, headers=SVC).json()["created"] is True
++        n = notes(client, me)[0]
++        assert n["title"] == "A crew mate claimed Main Quad." and n["actor"] is None
++        assert "Rhea" not in str(n) and "user_id" not in n["data"] and "run_id" not in n["data"]
++        assert n["data"]["zone_id"] == "z-1" and n["data"]["route"] == "/zone/z-1"
++        assert "Rhea" not in str(pushes.sent[-1])
++        client.delete(f"/v1/users/{blocked_id}/block", headers=auth(blocker))
++
++
++def test_an_unknown_or_missing_actor_reads_as_the_fallback(client, api):
++    me = new_sub()
++    api.user(me)
++    body = campus(me, "never-signed-in", kind="territory.stolen", title="{actor} stole Library Lawn from you.",
++                  data={"zone_id": "z-2"}, dedupe_key="ts-1")
++    assert client.post(URL, json=body, headers=SVC).json()["created"] is True
++    body = campus(me, kind="event.reminder", title="Night run starts in 30 min", data={}, dedupe_key="er-1")
++    assert client.post(URL, json=body, headers=SVC).json()["created"] is True
++    reminder, stolen = notes(client, me)
++    assert stolen["title"] == "Someone stole Library Lawn from you." and stolen["actor"] is None
++    assert reminder["title"] == "Night run starts in 30 min" and reminder["data"]["route"] == "/events"
++
++
++def test_the_placeholder_is_only_ever_replaced_never_formatted(client, api):
++    me, host = new_sub(), new_sub()
++    api.user(me)
++    api.user(host, display_name="Rhea")
++    body = campus(me, host, title="{actor} said {0} {user_subject} {actor.__class__}", dedupe_key="fmt-1")
++    assert client.post(URL, json=body, headers=SVC).status_code == 200
++    assert notes(client, me)[0]["title"] == "Rhea said {0} {user_subject} {actor.__class__}"
++
++
++def test_the_caller_route_wins_when_it_is_a_path(client, api):
++    me = new_sub()
++    api.user(me)
++    body = campus(me, kind="challenge.invitation", title="New challenge", data={"route": "/challenges"}, dedupe_key="c-1")
++    client.post(URL, json=body, headers=SVC)
++    body = campus(me, kind="challenge.updated", title="Updated", data={"route": "https://evil.test"}, dedupe_key="c-2")
++    client.post(URL, json=body, headers=SVC)
++    updated, invited = notes(client, me)
++    assert invited["data"]["route"] == "/challenges" and updated["data"]["route"] == "/invites"
++
++
++def test_text_rules_by_kind(client, api):
++    me = new_sub()
++    api.user(me)
++    assert client.post(URL, json=campus(me, title=None), headers=SVC).status_code == 422  # campus kinds need a title
++    run_module = {"user_subject": me, "kind": "territory_lost", "title": "mine", "dedupe_key": "x"}
++    assert client.post(URL, json=run_module, headers=SVC).status_code == 422  # Run Module text is Social's
++    assert client.post(URL, json=campus(me, kind="meetup.exploded"), headers=SVC).status_code == 422
++    assert client.post(URL, json=campus(me), headers={"Authorization": "Bearer nope"}).status_code == 401
++
+diff --git a/tests/test_push_receipts.py b/tests/test_push_receipts.py
+new file mode 100644
+index 0000000..b21c142
+--- /dev/null
++++ b/tests/test_push_receipts.py
+@@ -0,0 +1,112 @@
++"""Expo push receipts: ticket ids are stored on send, receipts fetched once they are 15 minutes old,
++failures logged with their reason, dead tokens disabled, and the rows cleaned up."""
++
++from __future__ import annotations
++
++import json
++import logging
++from datetime import timedelta
++
++import httpx
++from sqlalchemy import select, update
++
++from app.db import utcnow
++from app.models import PushTicket, PushToken
++from app.services.push import EXPO_RECEIPTS_URL, ExpoPush
++from tests.conftest import auth, new_sub
++
++SVC = {"Authorization": "Bearer svc-secret"}
++DEAD, LIVE, BIG = "ExponentPushToken[dead]", "ExponentPushToken[live]", "ExponentPushToken[big]"
++
++
++def _tokens(client, api):
++    me = new_sub()
++    api.user(me)
++    for t in (DEAD, LIVE, BIG):
++        client.post("/v1/me/push-tokens", json={"token": t, "platform": "ios"}, headers=auth(me))
++
++
++class FakeExpo:
++    def __init__(self):
++        self.receipt_requests: list[list[str]] = []
++        self.receipts: dict = {}
++
++    def __call__(self, request: httpx.Request) -> httpx.Response:
++        if str(request.url) == EXPO_RECEIPTS_URL:
++            ids = json.loads(request.read())["ids"]
++            self.receipt_requests.append(ids)
++            return httpx.Response(200, json={"data": {i: r for i, r in self.receipts.items() if i in ids}})
++        sent = json.loads(request.read())
++        return httpx.Response(200, json={"data": [{"status": "ok", "id": f"ticket-{m['to']}"} for m in sent]})
++
++
++def _age(database, minutes):
++    with database.SessionLocal() as db:
++        db.execute(update(PushTicket).values(created_at=utcnow() - timedelta(minutes=minutes)))
++        db.commit()
++
++
++def _state(database):
++    with database.SessionLocal() as db:
++        tokens = dict(db.execute(select(PushToken.token, PushToken.disabled_at)).all())
++        tickets = set(db.scalars(select(PushTicket.id)).all())
++    return tokens, tickets
++
++
++def test_receipts_are_read_after_15_minutes_failures_logged_and_dead_tokens_disabled(client, api, database, caplog):
++    _tokens(client, api)
++    expo = FakeExpo()
++    sender = ExpoPush(database, client=httpx.Client(transport=httpx.MockTransport(expo)))
++    sender.deliver([{"to": t, "title": "t"} for t in (DEAD, LIVE, BIG)])
++    _, tickets = _state(database)
++    assert tickets == {f"ticket-{t}" for t in (DEAD, LIVE, BIG)}
++
++    assert sender.check_receipts() == 0 and expo.receipt_requests == []  # too early to ask
++
++    _age(database, 16)
++    expo.receipts = {
++        f"ticket-{DEAD}": {"status": "error", "message": "not registered", "details": {"error": "DeviceNotRegistered"}},
++        f"ticket-{BIG}": {"status": "error", "message": "payload too big", "details": {"error": "MessageTooBig"}},
++        # LIVE's receipt isn't ready yet
++    }
++    with caplog.at_level(logging.WARNING, logger="app.services.push"):
++        assert sender.check_receipts() == 2
++    tokens, tickets = _state(database)
++    assert tokens[DEAD] is not None and tokens[LIVE] is None and tokens[BIG] is None
++    assert tickets == {f"ticket-{LIVE}"}  # asked again next run
++    assert "DeviceNotRegistered" in caplog.text and "MessageTooBig" in caplog.text and "payload too big" in caplog.text
++    assert LIVE not in caplog.text  # only failures are logged
++
++    expo.receipts = {f"ticket-{LIVE}": {"status": "ok"}}
++    assert sender.check_receipts() == 1
++    assert _state(database)[1] == set()
++
++
++def test_a_receipt_that_never_comes_is_dropped_after_a_day(client, api, database):
++    _tokens(client, api)
++    expo = FakeExpo()
++    sender = ExpoPush(database, client=httpx.Client(transport=httpx.MockTransport(expo)))
++    sender.deliver([{"to": LIVE, "title": "t"}])
++    _age(database, 25 * 60)
++    assert sender.check_receipts() == 0 and expo.receipt_requests == []
++    assert _state(database)[1] == set()
++
++
++def test_expo_unreachable_keeps_the_tickets_for_the_next_run(client, api, database):
++    _tokens(client, api)
++    sender = ExpoPush(database, client=httpx.Client(transport=httpx.MockTransport(FakeExpo())))
++    sender.deliver([{"to": LIVE, "title": "t"}])
++    _age(database, 20)
++
++    def down(request):
++        raise httpx.ConnectError("down")
++
++    broken = ExpoPush(database, client=httpx.Client(transport=httpx.MockTransport(down)))
++    assert broken.check_receipts() == 0
++    assert _state(database)[1] == {f"ticket-{LIVE}"}
++
++
++def test_the_cron_endpoint_runs_the_check(client):
++    assert client.post("/internal/v1/tasks/push-receipts").status_code == 401
++    # The test app records pushes instead of sending them, so there is nothing to check.
++    assert client.post("/internal/v1/tasks/push-receipts", headers=SVC).json() == {"receipts_read": 0}
+diff --git a/tests/test_test_database_guard.py b/tests/test_test_database_guard.py
+new file mode 100644
+index 0000000..a82e378
+--- /dev/null
++++ b/tests/test_test_database_guard.py
+@@ -0,0 +1,19 @@
++"""The suite refuses to run on SQLite when only TEST_DATABASE_URL (the other services' name) is set."""
++
++from __future__ import annotations
++
++import os
++import subprocess
++import sys
++from pathlib import Path
++
++ROOT = Path(__file__).resolve().parent.parent
++
++
++def test_only_test_database_url_set_stops_the_run():
++    env = {k: v for k, v in os.environ.items() if k != "SOCIAL_TEST_DATABASE_URL"}
++    env["TEST_DATABASE_URL"] = "postgresql+psycopg://nobody@localhost:1/none"
++    r = subprocess.run([sys.executable, "-m", "pytest", "-q", "--collect-only", "-p", "no:cacheprovider",
++                        "tests/test_follows.py"], cwd=ROOT, env=env, capture_output=True, text=True, timeout=120)
++    assert r.returncode != 0
++    assert "SOCIAL_TEST_DATABASE_URL" in r.stdout + r.stderr
+-- 
+2.43.0
+
