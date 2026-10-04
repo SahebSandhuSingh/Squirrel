@@ -9,7 +9,7 @@ import {
   volume,
 } from "railway/iac";
 
-const repository = "SahebSandhuSingh/Squirrel";
+const repository = "SquirrelSo/Squirrel";
 const branch = "saheb";
 const singapore = "asia-southeast1-eqsg3a";
 
