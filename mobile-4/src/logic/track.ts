@@ -59,6 +59,13 @@ export function addFix(s: TrackState, f: Fix): TrackState {
   return { ...s, points: [...s.points, f], reference: f, meters: s.meters + d, movingSec: s.movingSec + dt, lowSpeedSince, lowSpeedSec };
 }
 
+/** Feed a location batch in timestamp order; addFix rejects fixes older than the last point. */
+export function addFixBatch(s: TrackState, fixes: readonly Fix[]): TrackState {
+  return [...fixes]
+    .sort((a, b) => a.t - b.t)
+    .reduce(addFix, s);
+}
+
 /** Client-side plausibility check shown before the server's verdict arrives. */
 export type Verdict = 'accepted' | 'flagged' | 'rejected';
 
