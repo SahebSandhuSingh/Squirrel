@@ -6,8 +6,10 @@
  *                                       · seq = index in the FULL point array (half the primary key)
  *                                       · accuracy_m required, never null · ≤ 1000 points per batch (500 used)
  *   POST /v1/runs/:id/finish          → { status: 'finishing' } — ASYNC; a worker finalises the run
- *   GET  /v1/runs/:id                 → { run_id, status, started_at, stats{}, territory, rejection, score }
+ *   GET  /v1/runs/:id                 → { run_id, status, territory_reason, started_at, stats{}, territory, rejection, score }
  *                                       · poll until status ∈ finalized | flagged | rejected
+ *                                       · territory_reason: why a finalized / flagged run claimed no ground
+ *                                         (not_closed | no_faces | below_minimum_area), null otherwise
  *   GET  /v1/users/me/xp              → { xp, updated_at, breakdown: [{ reason, xp }] } (XP lives only here)
  *   GET  /v1/leaderboard?scope=global&metric=area&window=daily|weekly|alltime
  *                                     → { entries: [{ rank, user_id, score }], me, next_cursor }
@@ -20,6 +22,7 @@
 import { api, ApiError } from '@/api/client';
 import type { Fix } from '@/logic/track';
 import { deviceTimeZone } from '@/logic/localDay';
+import type { TerritoryReason } from '@/logic/runOutcome';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -43,6 +46,8 @@ export type RunRejection = { reason: string; [k: string]: unknown } | null;
 export type RunSummary = {
   run_id: string;
   status: RunStatus;
+  /** Why a finalized / flagged run claimed no ground; null when it did (or for rejections). Optional for older backends. */
+  territory_reason?: TerritoryReason | null;
   started_at: string;
   stats: RunStats;
   territory: RunTerritory;
@@ -185,6 +190,8 @@ export async function submitRun(
 // Display helpers
 // ---------------------------------------------------------------------------
 
+// not_closed is now a territory_reason on a finalized run (logic/runOutcome.ts); kept here for
+// backends that still reject open loops.
 const REJECTION_TEXT: Record<string, string> = {
   not_closed: "Your loop didn't close. End near where you started to claim ground.",
 };

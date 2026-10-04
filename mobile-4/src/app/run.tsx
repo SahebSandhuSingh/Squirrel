@@ -42,6 +42,7 @@ import {
   waitForRunTrackingStartupCleanup,
 } from '@/logic/runTracking';
 import { uploadAndClearOnSuccess } from '@/logic/uploadLifecycle';
+import { recordedRunReason } from '@/logic/runOutcome';
 import { useApp, type FinishRunResult } from '@/state/AppState';
 import { StatusBar } from 'expo-status-bar';
 import { alpha, colors, fonts, MAX_WIDTH, radius, statusBarStyle } from '@/theme';
@@ -532,7 +533,8 @@ export default function Run() {
     const terminal = TERMINAL_STATUSES.includes(r.status);
     const outcome: Outcome = !terminal ? 'processing' : r.status === 'finalized' ? 'accepted' : r.status === 'flagged' ? 'flagged' : 'rejected';
     out.verdict = outcome;
-    out.reason = outcome === 'rejected' ? rejectionText(r.rejection) : outcome === 'flagged' ? 'Flagged for review.' : outcome === 'processing' ? 'Uploaded. The server is still finishing it.' : 'Verified by the server.';
+    // A route that encloses no ground is still a recorded activity: say why nothing was claimed.
+    out.reason = outcome === 'rejected' ? rejectionText(r.rejection) : recordedRunReason(outcome, r.territory_reason);
     const area = r.territory && typeof r.territory.area_m2 === 'number' ? r.territory.area_m2 : undefined;
     if (area != null && outcome !== 'rejected') out.areaText = `${formatArea(area)} of route area`;
     const after = terminal ? await xpApi.me().catch(() => null) : null;
