@@ -337,3 +337,4 @@ fresh profile. History and saved baselines are lost, a demo still runs.
 Runtime profiles, sessions and raw captures are written under `data/users/<user-id>/` and are
 **private local data** — they are excluded from version control and must not be shared publicly.
 Make changes in the `backend/` and `frontend-react/` codebases only.
+
