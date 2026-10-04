@@ -76,6 +76,28 @@ const VERDICT_UI: Record<Outcome, { label: string; icon: React.ComponentProps<ty
 /** Backoff for re-reading zones while campus-service verifies an activity. */
 const ZONE_POLL_MS = [3000, 5000, 8000, 13000, 20000];
 const VERIFYING_NOTE = 'The campus is still verifying your GPS. Zones appear here as soon as it’s done — this usually takes a few seconds.';
+const APP_RESUME_TIMEOUT_MS = 5000;
+
+/** Wait briefly for permission dialogs or Settings to return the app to the foreground. */
+function waitForAppToBecomeActive(timeoutMs = APP_RESUME_TIMEOUT_MS): Promise<boolean> {
+  if (RNAppState.currentState === 'active') return Promise.resolve(true);
+  return new Promise((resolve) => {
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    let settled = false;
+    const finish = (active: boolean) => {
+      if (settled) return;
+      settled = true;
+      if (timeout) clearTimeout(timeout);
+      subscription.remove();
+      resolve(active);
+    };
+    const subscription = RNAppState.addEventListener('change', (state) => {
+      if (state === 'active') finish(true);
+    });
+    timeout = setTimeout(() => finish(RNAppState.currentState === 'active'), timeoutMs);
+    if (RNAppState.currentState === 'active') finish(true);
+  });
+}
 
 type Summary = FinishRunResult & { verdict: Outcome; reason: string; km: number; time: string; pace: string; uploadNote?: string; areaText?: string; uploadFailed?: boolean };
 
@@ -251,6 +273,12 @@ export default function Run() {
         if (p.status === 'granted' && isApproximate(p)) setPerm('approximate');
         else if (p.status === 'granted') {
           setPerm('granted');
+          // Keep the GPS warm and populate the setup map until the run task takes over.
+          await startForegroundFallback();
+          if (cancelled) {
+            await stopForegroundFallback();
+            return;
+          }
           await configureBackgroundPermission(false);
         } else setPerm(p.status === 'denied' ? (p.canAskAgain ? 'denied' : 'blocked') : 'undetermined');
       } catch {
@@ -261,7 +289,7 @@ export default function Run() {
       cancelled = true;
       watchRef.current?.remove();
     };
-  }, [configureBackgroundPermission]);
+  }, [configureBackgroundPermission, startForegroundFallback, stopForegroundFallback]);
 
   const askPermission = async () => {
     tap();
@@ -352,15 +380,28 @@ export default function Run() {
       // A real activity needs precise location permission — never start one without it.
       if (src === 'gps' && perm !== 'granted') return;
       let backgroundReady = src === 'gps' && backgroundAvailableRef.current;
+      let backgroundFailure: 'permission' | 'app_resume' | null = null;
       if (src === 'gps' && !backgroundReady && !backgroundPermissionRequestedRef.current) {
         // Ask for Always/background permission while the run screen is still foregrounded.
         backgroundReady = await configureBackgroundPermission(true);
+        if (!backgroundReady) backgroundFailure = 'permission';
+      }
+      if (src === 'gps' && backgroundReady) {
+        // The OS may leave the app inactive while the permission dialog or Settings is open.
+        // Give it up to five seconds to foreground before starting the native foreground service.
+        if (!(await waitForAppToBecomeActive())) {
+          backgroundReady = false;
+          backgroundFailure = 'app_resume';
+        }
       }
       if (src === 'gps' && backgroundReady) {
         await stopForegroundFallback();
         // This is the only startLocationUpdatesAsync path and it is called from the foreground
         // Start action, after an AppState check inside startBackgroundUpdates.
         backgroundReady = await startBackgroundUpdates();
+        if (!backgroundReady) {
+          backgroundFailure = RNAppState.currentState === 'active' ? 'permission' : 'app_resume';
+        }
       }
       if (src === 'gps' && !backgroundReady) await startForegroundFallback();
       if (src === 'demo') {
@@ -376,7 +417,9 @@ export default function Run() {
       demoMeters.current = DEMO_START;
       lastKmMarker.current = 0;
       setNotice(src === 'gps' && !backgroundReady
-        ? 'Background location is not enabled. Keep Squirrel open during your run; the route will pause when the app is backgrounded.'
+        ? backgroundFailure === 'app_resume'
+          ? 'Squirrel is still returning to the foreground. Keep the app open during your run; background tracking did not start.'
+          : 'Background location is not enabled. Keep Squirrel open during your run; the route will pause when the app is backgrounded.'
         : null);
       setCount(3);
       setPhase('countdown');
@@ -556,7 +599,7 @@ export default function Run() {
     if (!summary) return;
     setPhase('uploading');
     try {
-      const u = await uploadAndClearOnSuccess(() => upload(), clearRunTracking);
+      const u = await uploadAndClearOnSuccess(() => upload(finishedPoints ?? track.points), clearRunTracking);
       if (u.serverXpTotal != null) syncServerXp(u.serverXpTotal);
       setSummary({ ...summary, ...u, uploadFailed: false, km: u.kmFinal ?? summary.km, pace: u.pace ?? summary.pace } as Summary);
       setZonesState({ status: 'idle' });

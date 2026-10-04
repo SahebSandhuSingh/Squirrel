@@ -56,6 +56,8 @@ export const BACKGROUND_LOCATION_OPTIONS: Location.LocationTaskOptions = {
   accuracy: Location.Accuracy.BestForNavigation,
   timeInterval: 1000,
   distanceInterval: 0,
+  activityType: Location.ActivityType.Fitness,
+  pausesUpdatesAutomatically: false,
   foregroundService: {
     notificationTitle: 'Squirrel run in progress',
     notificationBody: 'Recording your route. Tap to return to Squirrel.',
