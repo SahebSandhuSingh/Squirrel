@@ -1,73 +1,23 @@
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
-import { addFix, addFixBatch, emptyTrack, type Fix, type TrackState } from './track';
+import { Platform } from 'react-native';
+import { addRunTrackingBatch } from './runTrackingStore';
+
+export {
+  addRunTrackingBatch,
+  addRunTrackingFix,
+  beginRunTracking,
+  clearRunTracking,
+  endRunTracking,
+  getRunTrackingSnapshot,
+  noteRunLocationFix,
+  prepareRunTracking,
+  setRunTrackingPaused,
+  subscribeRunTracking,
+} from './runTrackingStore';
+export type { RunSource, RunTrackingSnapshot } from './runTrackingStore';
 
 export const RUN_LOCATION_TASK = 'squirrel-run-location-updates';
-
-export type RunSource = 'gps' | 'demo';
-export type RunTrackingSnapshot = {
-  track: TrackState;
-  lastFixAt: number;
-  active: boolean;
-  paused: boolean;
-  source: RunSource | null;
-};
-
-const initial = (): RunTrackingSnapshot => ({
-  track: emptyTrack(),
-  lastFixAt: 0,
-  active: false,
-  paused: false,
-  source: null,
-});
-
-let snapshot = initial();
-const listeners = new Set<() => void>();
-
-function publish(next: RunTrackingSnapshot) {
-  snapshot = next;
-  for (const listener of listeners) listener();
-}
-
-export function getRunTrackingSnapshot() {
-  return snapshot;
-}
-
-export function subscribeRunTracking(listener: () => void) {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
-export function beginRunTracking(source: RunSource, now = Date.now()) {
-  publish({ track: emptyTrack(), lastFixAt: now, active: true, paused: false, source });
-}
-
-export function prepareRunTracking(source: RunSource) {
-  publish({ track: emptyTrack(), lastFixAt: Date.now(), active: false, paused: false, source });
-}
-
-export function endRunTracking() {
-  publish({ ...snapshot, active: false, paused: false, source: null });
-}
-
-export function setRunTrackingPaused(paused: boolean) {
-  publish({ ...snapshot, paused });
-}
-
-export function noteRunLocationFix() {
-  publish({ ...snapshot, lastFixAt: Date.now() });
-}
-
-export function addRunTrackingFix(fix: Fix) {
-  if (!snapshot.active || snapshot.paused || !snapshot.source) return;
-  publish({ ...snapshot, lastFixAt: Date.now(), track: addFix(snapshot.track, fix) });
-}
-
-/** Background batches can arrive out of order; sort each batch before addFix's monotonic gate. */
-export function addRunTrackingBatch(fixes: readonly Fix[]) {
-  if (!snapshot.active || snapshot.paused || snapshot.source !== 'gps' || fixes.length === 0) return;
-  publish({ ...snapshot, lastFixAt: Date.now(), track: addFixBatch(snapshot.track, fixes) });
-}
 
 type LocationTaskData = { locations?: Location.LocationObject[] };
 
@@ -82,6 +32,25 @@ TaskManager.defineTask<LocationTaskData>(RUN_LOCATION_TASK, async ({ data, error
     accuracy: location.coords.accuracy,
   })));
 });
+
+// A killed process cannot restore its in-memory run, so discard any native updates it left behind.
+// Do this asynchronously so a slow or unavailable native task API never holds up app startup.
+async function stopOrphanedRunLocationUpdates() {
+  if (Platform.OS === 'web') return;
+  try {
+    if (await Location.hasStartedLocationUpdatesAsync(RUN_LOCATION_TASK)) {
+      await Location.stopLocationUpdatesAsync(RUN_LOCATION_TASK);
+    }
+  } catch {
+    // No registered native task (or an unavailable module) is normal during startup.
+  }
+}
+
+const startupCleanup = stopOrphanedRunLocationUpdates();
+
+export function waitForRunTrackingStartupCleanup() {
+  return startupCleanup;
+}
 
 export const BACKGROUND_LOCATION_OPTIONS: Location.LocationTaskOptions = {
   accuracy: Location.Accuracy.BestForNavigation,

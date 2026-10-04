@@ -5,9 +5,8 @@
  * A run never claims anything by itself. Zone eligibility, claim / steal / defend availability
  * and ownership all come from the backend after the activity is recorded.
  *
- * Handles: permission denied/blocked, location services off, weak GPS, no fix, foreground and
- * background location handoff, honest gap notices when background tracking is unavailable,
- * discard, and upload failure with a resumable retry.
+ * Handles: permission denied/blocked, location services off, weak GPS, no fix, a single
+ * background location task with a foreground-only fallback, discard, and resumable upload retry.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { ActivityIndicator, Animated, AppState as RNAppState, Easing, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
@@ -32,6 +31,7 @@ import {
   addRunTrackingFix,
   BACKGROUND_LOCATION_OPTIONS,
   beginRunTracking,
+  clearRunTracking,
   endRunTracking,
   getRunTrackingSnapshot,
   noteRunLocationFix,
@@ -39,7 +39,9 @@ import {
   RUN_LOCATION_TASK,
   setRunTrackingPaused,
   subscribeRunTracking,
+  waitForRunTrackingStartupCleanup,
 } from '@/logic/runTracking';
+import { uploadAndClearOnSuccess } from '@/logic/uploadLifecycle';
 import { useApp, type FinishRunResult } from '@/state/AppState';
 import { StatusBar } from 'expo-status-bar';
 import { alpha, colors, fonts, MAX_WIDTH, radius, statusBarStyle } from '@/theme';
@@ -94,11 +96,11 @@ export default function Run() {
   const [count, setCount] = useState(3);
   const [perm, setPerm] = useState<Perm>(Platform.OS === 'web' ? 'web' : 'checking');
   const [source, setSource] = useState<Source | null>(null);
-  const [here, setHere] = useState<LatLng | null>(null);
   const [sec, setSec] = useState(0);
   const tracking = useSyncExternalStore(subscribeRunTracking, getRunTrackingSnapshot, getRunTrackingSnapshot);
   const track = tracking.track;
-  const [accuracy, setAccuracy] = useState<number | null>(null);
+  const [finishedPoints, setFinishedPoints] = useState<Fix[] | null>(null);
+  const [finishedMovingSec, setFinishedMovingSec] = useState<number | null>(null);
   const [, setBackgroundAvailable] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
@@ -117,12 +119,9 @@ export default function Run() {
   const endedAt = useRef(0);
   const phaseRef = useRef<Phase>('setup');
   const sourceRef = useRef<Source | null>(null);
-  const bgAt = useRef<number | null>(null);
   const backgroundAvailableRef = useRef(false);
-  const backgroundActiveRef = useRef(false);
-  const backgroundFailureRef = useRef(false);
   const backgroundPermissionRequestedRef = useRef(false);
-  const locationTransitionRef = useRef<Promise<void>>(Promise.resolve());
+  const startInProgressRef = useRef(false);
   const demoMeters = useRef(0);
   const lastKmMarker = useRef(0);
   const [progress] = useState(() => new Animated.Value(0.2));
@@ -135,29 +134,22 @@ export default function Run() {
     const end = pausedAt.current ? Math.min(at, pausedAt.current) : at;
     return Math.max(0, Math.floor((end - startedAt.current - pausedTotalMs.current) / 1000));
   };
-  const enqueueLocationTransition = useCallback((work: () => Promise<void>) => {
-    const next = locationTransitionRef.current.then(work, work);
-    locationTransitionRef.current = next.catch(() => undefined);
-    return next;
-  }, []);
   useEffect(() => {
     phaseRef.current = phase;
     sourceRef.current = source;
   });
   useEffect(() => () => pollAbort.current?.abort(), []);
 
-  // ---- Location permission + a warm GPS watch (so the first fix is ready at Start).
+  // ---- Location permission + a foreground-only fallback when background tracking is unavailable.
   const startWatch = useCallback(async () => {
     try {
       if (!(await Location.hasServicesEnabledAsync())) return setPerm('services_off');
       setPerm('granted');
       return await Location.watchPositionAsync({ accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 }, (loc) => {
         const acc = loc.coords.accuracy ?? null;
-        setAccuracy(acc);
-        setHere([loc.coords.latitude, loc.coords.longitude]);
-        noteRunLocationFix();
-        if (phaseRef.current !== 'running' || sourceRef.current !== 'gps') return;
-        addRunTrackingFix({ lat: loc.coords.latitude, lon: loc.coords.longitude, t: loc.timestamp, accuracy: acc });
+        const fix = { lat: loc.coords.latitude, lon: loc.coords.longitude, t: loc.timestamp, accuracy: acc };
+        if (phaseRef.current === 'running' && sourceRef.current === 'gps') addRunTrackingFix(fix);
+        else noteRunLocationFix(fix);
       });
     } catch {
       setPerm('services_off');
@@ -165,27 +157,54 @@ export default function Run() {
     }
   }, []);
   const watchRef = useRef<Location.LocationSubscription | null>(null);
-  const startBackgroundWatch = useCallback(async () => {
-    if (Platform.OS === 'web' || Constants.appOwnership === AppOwnership.Expo || !backgroundAvailableRef.current) return false;
-    if (getRunTrackingSnapshot().source !== 'gps' || !getRunTrackingSnapshot().active) return false;
+  const foregroundWatchStartRef = useRef<Promise<boolean> | null>(null);
+  const startForegroundFallback = useCallback(async () => {
+    if (watchRef.current) return true;
+    if (foregroundWatchStartRef.current) return foregroundWatchStartRef.current;
+    const pending = (async () => {
+      const subscription = await startWatch();
+      watchRef.current = subscription ?? null;
+      return !!subscription;
+    })();
+    foregroundWatchStartRef.current = pending;
     try {
-      watchRef.current?.remove();
-      watchRef.current = null;
+      return await pending;
+    } finally {
+      if (foregroundWatchStartRef.current === pending) foregroundWatchStartRef.current = null;
+    }
+  }, [startWatch]);
+  const stopForegroundFallback = useCallback(async () => {
+    if (foregroundWatchStartRef.current) await foregroundWatchStartRef.current;
+    watchRef.current?.remove();
+    watchRef.current = null;
+  }, []);
+  const startBackgroundUpdates = useCallback(async () => {
+    if (Platform.OS === 'web' || Constants.appOwnership === AppOwnership.Expo || !backgroundAvailableRef.current) return false;
+    if (RNAppState.currentState !== 'active') return false;
+    try {
       if (!(await TaskManager.isAvailableAsync())) throw new Error('Background location tasks are unavailable');
-      if (!(await Location.hasStartedLocationUpdatesAsync(RUN_LOCATION_TASK))) {
-        await Location.startLocationUpdatesAsync(RUN_LOCATION_TASK, BACKGROUND_LOCATION_OPTIONS);
+      if (RNAppState.currentState !== 'active') return false;
+      if (await Location.hasStartedLocationUpdatesAsync(RUN_LOCATION_TASK)) {
+        await Location.stopLocationUpdatesAsync(RUN_LOCATION_TASK);
       }
-      backgroundActiveRef.current = true;
-      backgroundFailureRef.current = false;
+      // Recheck immediately before the native start: Android requires this foreground service
+      // to be started while the app is visible, never in response to a background event.
+      if (RNAppState.currentState !== 'active') return false;
+      await Location.startLocationUpdatesAsync(RUN_LOCATION_TASK, BACKGROUND_LOCATION_OPTIONS);
       return true;
     } catch {
-      backgroundActiveRef.current = false;
-      backgroundFailureRef.current = true;
+      try {
+        if (await Location.hasStartedLocationUpdatesAsync(RUN_LOCATION_TASK)) {
+          await Location.stopLocationUpdatesAsync(RUN_LOCATION_TASK);
+        }
+      } catch {
+        // Fall back to the foreground watcher if the native task could not start cleanly.
+      }
       setBackgroundCapability(false);
       return false;
     }
   }, []);
-  const stopBackgroundWatch = useCallback(async () => {
+  const stopBackgroundUpdates = useCallback(async () => {
     try {
       if (await Location.hasStartedLocationUpdatesAsync(RUN_LOCATION_TASK)) {
         await Location.stopLocationUpdatesAsync(RUN_LOCATION_TASK);
@@ -193,14 +212,12 @@ export default function Run() {
     } catch {
       // A task that already stopped needs no further cleanup.
     }
-    backgroundActiveRef.current = false;
   }, []);
-  const stopLocationSources = useCallback(async () => enqueueLocationTransition(async () => {
-    watchRef.current?.remove();
-    watchRef.current = null;
-    await stopBackgroundWatch();
+  const stopLocationSources = useCallback(async () => {
+    await stopForegroundFallback();
+    await stopBackgroundUpdates();
     endRunTracking();
-  }), [enqueueLocationTransition, stopBackgroundWatch]);
+  }, [stopBackgroundUpdates, stopForegroundFallback]);
   useEffect(() => () => { void stopLocationSources(); }, [stopLocationSources]);
   const configureBackgroundPermission = useCallback(async (ask: boolean) => {
     if (Platform.OS === 'web' || Constants.appOwnership === AppOwnership.Expo) {
@@ -231,12 +248,10 @@ export default function Run() {
       try {
         const p = await Location.getForegroundPermissionsAsync();
         if (cancelled) return;
-        if (p.status === 'granted') void configureBackgroundPermission(false);
         if (p.status === 'granted' && isApproximate(p)) setPerm('approximate');
         else if (p.status === 'granted') {
-          const sub = await startWatch();
-          if (cancelled) sub?.remove();
-          else watchRef.current = sub ?? null;
+          setPerm('granted');
+          await configureBackgroundPermission(false);
         } else setPerm(p.status === 'denied' ? (p.canAskAgain ? 'denied' : 'blocked') : 'undetermined');
       } catch {
         if (!cancelled) setPerm('services_off');
@@ -246,7 +261,7 @@ export default function Run() {
       cancelled = true;
       watchRef.current?.remove();
     };
-  }, [startWatch, configureBackgroundPermission]);
+  }, [configureBackgroundPermission]);
 
   const askPermission = async () => {
     tap();
@@ -254,44 +269,17 @@ export default function Run() {
     const p = await Location.requestForegroundPermissionsAsync();
     if (p.status === 'granted' && isApproximate(p)) setPerm('approximate');
     else if (p.status === 'granted') {
-      watchRef.current?.remove();
-      watchRef.current = (await startWatch()) ?? null;
+      setPerm('granted');
       const backgroundGranted = await configureBackgroundPermission(true);
       if (!backgroundGranted) {
+        await startForegroundFallback();
         setNotice('Background location is not enabled. Keep Squirrel open during your run; the route will pause when the app is backgrounded.');
+      } else {
+        await stopForegroundFallback();
+        setNotice(null);
       }
     } else setPerm(p.canAskAgain ? 'denied' : 'blocked');
   };
-
-  // ---- Move the one location stream between foreground and background; never run both.
-  useEffect(() => {
-    const sub = RNAppState.addEventListener('change', (st) => {
-      if (phaseRef.current !== 'running') return;
-      if (st === 'background' || st === 'inactive') {
-        if (bgAt.current == null) bgAt.current = Date.now();
-        if (sourceRef.current === 'gps' && backgroundAvailableRef.current) {
-          void enqueueLocationTransition(async () => { await startBackgroundWatch(); });
-        }
-      }
-      else if (st === 'active' && bgAt.current) {
-        const gap = Math.round((Date.now() - bgAt.current) / 1000);
-        bgAt.current = null;
-        void enqueueLocationTransition(async () => {
-          const hadBackgroundTracking = backgroundActiveRef.current;
-          await stopBackgroundWatch();
-          if (sourceRef.current === 'gps' && getRunTrackingSnapshot().active) {
-            watchRef.current?.remove();
-            watchRef.current = (await startWatch()) ?? null;
-            setSec(elapsedSeconds());
-          }
-          if (gap >= 5 && !hadBackgroundTracking && (!backgroundAvailableRef.current || backgroundFailureRef.current)) {
-            setNotice(`Tracking paused for ${gap < 60 ? `${gap}s` : `${Math.round(gap / 60)} min`} while Squirrel was in the background. Keep the app open for a complete route.`);
-          }
-        });
-      }
-    });
-    return () => sub.remove();
-  }, [startBackgroundWatch, stopBackgroundWatch, startWatch, enqueueLocationTransition]);
 
   // ---- Countdown
   useEffect(() => {
@@ -322,7 +310,6 @@ export default function Run() {
       if (sourceRef.current === 'demo') {
         demoMeters.current += DEMO_SPEED[kind];
         const [lat, lon] = demoPosition(demoMeters.current);
-        setHere([lat, lon]);
         addRunTrackingFix({ lat, lon, t: Date.now(), accuracy: 5 });
       } else if (Date.now() - getRunTrackingSnapshot().lastFixAt > 20_000) {
         setNotice('No GPS fix for 20 s. Head into open sky — distance only counts with a location fix.');
@@ -331,12 +318,16 @@ export default function Run() {
     return () => clearInterval(id);
   }, [phase, kind]);
 
+  const currentFix = tracking.latestFix;
+  const here: LatLng | null = currentFix ? [currentFix.lat, currentFix.lon] : null;
+  const accuracy = currentFix?.accuracy ?? null;
   const km = track.meters / 1000;
   const movingSec = track.movingSec;
   const paceSec = km >= 0.05 ? movingSec / km : NaN;
   const time = fmtClock(sec);
   const kcal = Math.round(km * (kind === 'walk' ? 55 : 80.5));
-  const route = useMemo(() => track.points.map((p) => [p.lat, p.lon] as LatLng), [track.points]);
+  const displayedPoints = finishedPoints ?? track.points;
+  const route = useMemo(() => displayedPoints.map((p) => [p.lat, p.lon] as LatLng), [displayedPoints]);
   const weak = source === 'gps' && accuracy != null && accuracy > MAX_ACCURACY_M;
 
   useEffect(() => {
@@ -353,22 +344,45 @@ export default function Run() {
   }, [km, progress]);
 
   const start = async (src: Source) => {
-    // A real activity needs precise location permission — never start one without it.
-    if (src === 'gps' && perm !== 'granted') return;
-    let bgReady = backgroundAvailableRef.current;
-    if (src === 'gps' && !bgReady && !backgroundPermissionRequestedRef.current) bgReady = await configureBackgroundPermission(true);
-    tap('impact');
-    setSource(src);
-    prepareRunTracking(src);
-    setSec(src === 'demo' ? DEMO_START : 0);
-    demoMeters.current = DEMO_START;
-    lastKmMarker.current = 0;
-    backgroundFailureRef.current = false;
-    setNotice(src === 'gps' && !bgReady
-      ? 'Background location is not enabled. Keep Squirrel open during your run; the route will pause when the app is backgrounded.'
-      : null);
-    setCount(3);
-    setPhase('countdown');
+    if (startInProgressRef.current) return;
+    startInProgressRef.current = true;
+    try {
+      // BG-2 cleanup runs at module load without holding app startup; serialize run start behind it.
+      await waitForRunTrackingStartupCleanup();
+      // A real activity needs precise location permission — never start one without it.
+      if (src === 'gps' && perm !== 'granted') return;
+      let backgroundReady = src === 'gps' && backgroundAvailableRef.current;
+      if (src === 'gps' && !backgroundReady && !backgroundPermissionRequestedRef.current) {
+        // Ask for Always/background permission while the run screen is still foregrounded.
+        backgroundReady = await configureBackgroundPermission(true);
+      }
+      if (src === 'gps' && backgroundReady) {
+        await stopForegroundFallback();
+        // This is the only startLocationUpdatesAsync path and it is called from the foreground
+        // Start action, after an AppState check inside startBackgroundUpdates.
+        backgroundReady = await startBackgroundUpdates();
+      }
+      if (src === 'gps' && !backgroundReady) await startForegroundFallback();
+      if (src === 'demo') {
+        await stopForegroundFallback();
+        await stopBackgroundUpdates();
+      }
+      tap('impact');
+      setSource(src);
+      prepareRunTracking(src);
+      setFinishedPoints(null);
+      setFinishedMovingSec(null);
+      setSec(src === 'demo' ? DEMO_START : 0);
+      demoMeters.current = DEMO_START;
+      lastKmMarker.current = 0;
+      setNotice(src === 'gps' && !backgroundReady
+        ? 'Background location is not enabled. Keep Squirrel open during your run; the route will pause when the app is backgrounded.'
+        : null);
+      setCount(3);
+      setPhase('countdown');
+    } finally {
+      startInProgressRef.current = false;
+    }
   };
 
   const toggleManualPause = () => {
@@ -393,14 +407,15 @@ export default function Run() {
     setZonePolls(0);
     try {
       if (CAMPUS_SOURCE === 'off') return setZonesState({ status: 'unavailable', note: 'Zone claiming switches on when the campus backend goes live.' });
+      const points = finishedPoints ?? track.points;
       // campus-service decides zones from GPS it verifies itself and doesn't know Run Module run
       // ids, so the same points go to it one-shot, after (never instead of) the Run Module upload.
       // Only real, signed-in GPS activities: a demo route never reaches real territory.
-      const toCampusService = CAMPUS_MAP_ON_SERVICE && live && sourceRef.current === 'gps' && track.points.length > 1;
+      const toCampusService = CAMPUS_MAP_ON_SERVICE && live && sourceRef.current === 'gps' && points.length > 1;
       let id = CAMPUS_MAP_ON_SERVICE ? activityIdRef.current : (activityIdRef.current ?? runIdRef.current);
       if ((CAMPUS_SOURCE === 'mock' || toCampusService) && !activityIdRef.current) {
         // The dev mock and campus-service record the route themselves; the Run Module keeps its own copy.
-        const pts = track.points.map((p) => ({ lat: p.lat, lng: p.lon, recorded_at: new Date(p.t).toISOString(), accuracy_m: p.accuracy ?? 10 }));
+        const pts = points.map((p) => ({ lat: p.lat, lng: p.lon, recorded_at: new Date(p.t).toISOString(), accuracy_m: p.accuracy ?? 10 }));
         const r = await campusApi.submitActivity({ type: kind, started_at: new Date(startedAt.current).toISOString(), ended_at: new Date(endedAt.current).toISOString(), points: pts });
         activityIdRef.current = r.activity_id;
         id = r.activity_id;
@@ -421,7 +436,7 @@ export default function Run() {
     } catch (e) {
       setZonesState({ status: 'error', error: e });
     }
-  }, [track.points, kind, live]);
+  }, [finishedPoints, track.points, kind, live]);
 
   // campus-service verifies asynchronously: while it answers 'processing', look again a few times
   // (backing off, ~50 s in all), then leave it to "Check again". Never a tight loop.
@@ -499,6 +514,8 @@ export default function Run() {
     const finalTrack = getRunTrackingSnapshot().track;
     const finalKm = finalTrack.meters / 1000;
     const finalMovingSec = finalTrack.movingSec;
+    setFinishedPoints(finalTrack.points);
+    setFinishedMovingSec(finalMovingSec);
     const finalPaceSec = finalKm >= 0.05 ? finalMovingSec / finalKm : NaN;
     let kmFinal = +finalKm.toFixed(2);
     let minutes = Math.max(1, Math.round(finalMovingSec / 60));
@@ -510,7 +527,7 @@ export default function Run() {
     if (live && source === 'gps' && finalTrack.points.length > 1) {
       setPhase('uploading');
       try {
-        const u = await upload(finalTrack.points);
+        const u = await uploadAndClearOnSuccess(() => upload(finalTrack.points), clearRunTracking);
         kmFinal = u.kmFinal ?? kmFinal;
         minutes = u.minutes ?? minutes;
         pace = u.pace ?? pace;
@@ -539,7 +556,7 @@ export default function Run() {
     if (!summary) return;
     setPhase('uploading');
     try {
-      const u = await upload();
+      const u = await uploadAndClearOnSuccess(() => upload(), clearRunTracking);
       if (u.serverXpTotal != null) syncServerXp(u.serverXpTotal);
       setSummary({ ...summary, ...u, uploadFailed: false, km: u.kmFinal ?? summary.km, pace: u.pace ?? summary.pace } as Summary);
       setZonesState({ status: 'idle' });
@@ -774,7 +791,7 @@ export default function Run() {
                 <Button
                   label="Share to feed"
                   iconLeft="send"
-                  onPress={() => router.replace({ pathname: '/compose', params: { km: summary.km.toFixed(2), min: String(Math.round(movingSec / 60)), pace: summary.pace } })}
+                  onPress={() => router.replace({ pathname: '/compose', params: { km: summary.km.toFixed(2), min: String(Math.round((finishedMovingSec ?? movingSec) / 60)), pace: summary.pace } })}
                   style={{ alignSelf: 'stretch', marginTop: 14 }}
                 />
               )}
