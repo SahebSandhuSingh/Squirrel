@@ -217,6 +217,7 @@ const runsRoutes: FastifyPluginAsync = async (fastify) => {
       distance_m: number | null;
       moving_time_s: number | null;
       elapsed_time_s: number | null;
+      territory_reason: string | null;
       t_id: string | null;
       t_area_m2: number | null;
       t_claimed_at: Date | null;
@@ -261,6 +262,7 @@ const runsRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.status(200).send({
       run_id: row.run_id,
       status: row.status,
+      territory_reason: row.territory_reason,
       started_at: row.started_at.toISOString(),
       stats: {
         distance_m: row.distance_m || 0,

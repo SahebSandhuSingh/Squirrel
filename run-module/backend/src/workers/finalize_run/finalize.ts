@@ -16,7 +16,7 @@ import type { LatLng } from "../../geometry/types.js";
 export type FinalizeResult =
   | {
       ok: true;
-      territoryId: string;
+      territoryId: string | null;
       areaM2: number;
       faceCount: number;
       repaired: boolean; attempts?: number;
@@ -232,7 +232,68 @@ export async function finalizeRun(runId: string): Promise<FinalizeResult> {
     const pipelineResult: PipelineResult = await processTrack(points);
 
     if (!pipelineResult.ok) {
-      return await rejectRun(pipelineResult.reason, pipelineResult.detail);
+      const noTerritoryReasons = new Set(["not_closed", "no_faces", "below_minimum_area"]);
+      if (!noTerritoryReasons.has(pipelineResult.reason)) {
+        return await rejectRun(pipelineResult.reason, pipelineResult.detail);
+      }
+
+      // A route can be a valid activity without enclosing a territory. Keep
+      // the reason separate from rejection_reason so XP and app status remain
+      // activity-level, and still run the existing anti-cheat layers.
+      await client.query(
+        "INSERT INTO run_signatures (run_id, user_id, point_hash, geom_centroid, area_m2, duration_s, mean_speed_ms) VALUES ($1, $2, $3, NULL, NULL, $4, $5) ON CONFLICT (run_id) DO NOTHING",
+        [runId, run.user_id, pointHash, durationS || null, meanSpeedMs]
+      );
+      const scoreRes = await scoreRun(runId, undefined, {
+        user_id: run.user_id,
+        point_hash: pointHash,
+        area_m2: null,
+        duration_s: durationS || null,
+        mean_speed_ms: meanSpeedMs,
+      });
+      await client.query(`
+        INSERT INTO run_scores (run_id, aggregate, band, layers, scored_at)
+        VALUES ($1, $2, $3, $4, now())
+        ON CONFLICT (run_id) DO UPDATE
+        SET aggregate = EXCLUDED.aggregate, band = EXCLUDED.band, layers = EXCLUDED.layers, scored_at = EXCLUDED.scored_at
+      `, [runId, scoreRes.aggregate, scoreRes.band, JSON.stringify(scoreRes.layers)]);
+
+      if (scoreRes.band === "reject") {
+        return await rejectRun(
+          "anticheat_rejected",
+          `Decisive layer: ${scoreRes.decisiveLayer || "aggregate"}, Score: ${scoreRes.aggregate}`,
+          scoreRes.band
+        );
+      }
+
+      const finalStatus = scoreRes.band === "pending" ? "flagged" : "finalized";
+      await client.query("UPDATE runs SET status = $1, territory_reason = $2 WHERE id = $3", [finalStatus, pipelineResult.reason, runId]);
+      await client.query(INSERT_ACTIVITY_SESSION, [
+        crypto.randomUUID(), run.user_id, activityStartedAt, durationS, intensity,
+        JSON.stringify({
+          distance_m: trackDistanceM,
+          area_m2: 0,
+          moving_time_s: movingTimeS,
+          elapsed_time_s: durationS,
+          territory_claimed: false,
+          territory_reason: pipelineResult.reason,
+          rejection_reason: null,
+          band: scoreRes.band,
+          ...(run.timezone ? { timezone: run.timezone } : {}),
+        }),
+      ]);
+      await client.query("COMMIT");
+
+      try {
+        await enqueueLeaderboardSync([]);
+        await enqueueNotificationSync(runId, []);
+      } catch (err) {
+        console.error("Failed to enqueue leaderboard sync:", err);
+      }
+      if (finalStatus === "finalized") {
+        void publishRun({ runId, userId: run.user_id, startedAt: run.started_at, distanceM: trackDistanceM, movingTimeS, elapsedTimeS: durationS, areaM2: 0 });
+      }
+      return { ok: true, territoryId: null, areaM2: 0, faceCount: 0, repaired: false };
     }
 
     // We insert signature BEFORE anti-cheat scoring so it can catch replays even if rejected

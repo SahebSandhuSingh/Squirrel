@@ -102,6 +102,7 @@ export const getRunSummarySchema = {
         run_id: { type: 'string' },
         status: { type: 'string' },
         started_at: { type: 'string', format: 'date-time' },
+        territory_reason: { type: ['string', 'null'] },
         stats: {
           type: 'object',
           properties: {
@@ -137,7 +138,7 @@ export const getRunSummarySchema = {
           required: ['aggregate', 'band']
         },
       },
-      required: ['run_id', 'status', 'started_at', 'stats', 'territory', 'rejection', 'score'],
+      required: ['run_id', 'status', 'started_at', 'territory_reason', 'stats', 'territory', 'rejection', 'score'],
     },
   },
 };

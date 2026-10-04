@@ -17,7 +17,7 @@ import {
 } from "../../geometry/__fixtures__/shape-tracks.js";
 import { createLocalProjection } from "../../geometry/projection.js";
 import type { LatLng } from "../../geometry/types.js";
-import { computeXp, DEFAULT_XP_TIMEZONE, xpDay, type ActivityRow } from "../../xp/rules.js";
+import { computeXp, DEFAULT_XP_TIMEZONE, runLines, xpDay, type ActivityRow } from "../../xp/rules.js";
 
 // We hoist the mock of pipeline.js so we can intercept processTrack in A2
 vi.mock("../../geometry/pipeline.js", async (importOriginal) => {
@@ -86,7 +86,7 @@ describe("finalizeRun Worker", () => {
   it("AC1: VALID RUN > inserts exactly one territories row with owner_id = user_id and sets status finalized", async () => {
     // A clean rectangle (200x150 = 30000 m2)
     const points = generateSimpleLoop({ noiseStdDevM: 0, rotationDeg: 0 });
-    const { runId, userId } = await seedRun(points); testRunIds.push(runId);
+    const { runId, userId } = await seedRun(points); testRunIds.push(runId);
 
     const result = await finalizeRun(runId);
 
@@ -109,7 +109,7 @@ describe("finalizeRun Worker", () => {
 
   describe("AC2/A3: stored area_m2 equals the area of the STORED geometry for all fixtures", () => {
     it("matches area for Simple Loop", async () => {
-      const { runId } = await seedRun(generateSimpleLoop({ noiseStdDevM: 0, rotationDeg: 0 })); testRunIds.push(runId);
+      const { runId } = await seedRun(generateSimpleLoop({ noiseStdDevM: 0, rotationDeg: 0 })); testRunIds.push(runId);
       const result = await finalizeRun(runId);
       if(!result.ok) console.log(result); expect(result.ok).toBe(true);
       const { rows } = await pool.query<{ area_m2: number; recomputed_area: number }>(`SELECT area_m2, ST_Area(geom::geography) AS recomputed_area FROM territories WHERE run_id = $1`, [runId]);
@@ -118,7 +118,7 @@ describe("finalizeRun Worker", () => {
     });
 
     it("matches area for Clean Figure-Eight", async () => {
-      const { runId } = await seedRun(generateFigureEight({ noiseStdDevM: 0, rotationDeg: 0 })); testRunIds.push(runId);
+      const { runId } = await seedRun(generateFigureEight({ noiseStdDevM: 0, rotationDeg: 0 })); testRunIds.push(runId);
       const result = await finalizeRun(runId);
       expect(result.ok).toBe(true);
       const { rows } = await pool.query<{ area_m2: number; recomputed_area: number }>(`SELECT area_m2, ST_Area(geom::geography) AS recomputed_area FROM territories WHERE run_id = $1`, [runId]);
@@ -127,7 +127,7 @@ describe("finalizeRun Worker", () => {
     });
 
     it("matches area for Noisy Figure-Eight", async () => {
-      const { runId } = await seedRun(generateNoisyFigureEight()); testRunIds.push(runId);
+      const { runId } = await seedRun(generateNoisyFigureEight()); testRunIds.push(runId);
       const result = await finalizeRun(runId);
       expect(result.ok).toBe(true);
       const { rows } = await pool.query<{ area_m2: number; recomputed_area: number }>(`SELECT area_m2, ST_Area(geom::geography) AS recomputed_area FROM territories WHERE run_id = $1`, [runId]);
@@ -136,7 +136,7 @@ describe("finalizeRun Worker", () => {
     });
 
     it("matches area for Out-and-Back", async () => {
-      const { runId } = await seedRun(generateOutAndBack({ noiseStdDevM: 0, rotationDeg: 0 })); testRunIds.push(runId);
+      const { runId } = await seedRun(generateOutAndBack({ noiseStdDevM: 0, rotationDeg: 0 })); testRunIds.push(runId);
       const result = await finalizeRun(runId);
       expect(result.ok).toBe(true);
       const { rows } = await pool.query<{ area_m2: number; recomputed_area: number }>(`SELECT area_m2, ST_Area(geom::geography) AS recomputed_area FROM territories WHERE run_id = $1`, [runId]);
@@ -145,16 +145,15 @@ describe("finalizeRun Worker", () => {
     });
   });
 
-  it("AC3: INVALID RUN (below min area) > sets status rejected, no territory, adds rejection row", async () => {
+  it("WALK-2: SMALL CLOSED ROUTE > finalizes as an activity but claims no territory", async () => {
     // 10x10 = 100m2 < 500m2
     const points = generateTinyLoop();
-    const { runId } = await seedRun(points); testRunIds.push(runId);
+    const { runId, userId } = await seedRun(points);
+ testRunIds.push(runId);
 
     const result = await finalizeRun(runId);
 
-    console.log(result); expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.reason).toBe("below_minimum_area");
+    expect(result.ok).toBe(true);
 
     // Check territories table
     const { rows: territories } = await pool.query<{ id: string }>(
@@ -164,35 +163,61 @@ describe("finalizeRun Worker", () => {
     expect(territories.length).toBe(0);
 
     // Check runs table
-    expect(await getRunStatus(runId)).toBe("rejected");
+    expect(await getRunStatus(runId)).toBe("finalized");
 
     // Check run_rejections table
-    const rejection = await getRunRejection(runId);
-    expect(rejection).not.toBeNull();
-    expect(rejection?.reason).toBe("below_minimum_area");
+    expect(await getRunRejection(runId)).toBeNull();
+    const { rows: sessions } = await pool.query<{ metrics: Record<string, unknown> }>(
+      "SELECT metrics FROM activity_sessions WHERE user_id = $1", [userId]
+    );
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]!.metrics).toMatchObject({
+      territory_claimed: false,
+      area_m2: 0,
+      territory_reason: "below_minimum_area",
+      rejection_reason: null,
+    });
+    expect(runLines(sessions[0]!.metrics).some((line) => line.reason === "run_completed" && line.xp === 50)).toBe(true);
   });
 
-  it("AC4: INVALID RUN (not closed) > sets status rejected, no territory, reason = not_closed", async () => {
+  it("WALK-2: NON-CLOSED WALK > finalizes, earns run XP, and records no territory claim", async () => {
     // Take 4 points from a rectangle so it has enough points to bypass the
     // insufficient_points check, but the ends are too far apart to close.
     const points = generateSimpleLoop({ noiseStdDevM: 0, rotationDeg: 0 }).slice(0, 4);
-    const { runId } = await seedRun(points); testRunIds.push(runId);
+    const { runId, userId } = await seedRun(points);
+ testRunIds.push(runId);
 
     const result = await finalizeRun(runId);
 
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.reason).toBe("not_closed");
+    expect(result.ok).toBe(true);
+    expect(await getRunStatus(runId)).toBe("finalized");
 
-    // Verify rejection written
-    const rejection = await getRunRejection(runId);
-    expect(rejection?.reason).toBe("not_closed");
+    expect(await getRunRejection(runId)).toBeNull();
+    const { rows: sessions } = await pool.query<{ metrics: Record<string, unknown> }>(
+      "SELECT metrics FROM activity_sessions WHERE user_id = $1", [userId]
+    );
+    expect(sessions[0]!.metrics).toMatchObject({
+      territory_claimed: false,
+      area_m2: 0,
+      territory_reason: "not_closed",
+      rejection_reason: null,
+    });
+    expect(runLines(sessions[0]!.metrics).reduce((sum, line) => sum + line.xp, 0)).toBeGreaterThan(0);
+  });
+
+  it("WALK-2: TOO FEW POINTS > remains rejected as an invalid activity", async () => {
+    const { runId } = await seedRun(generateSimpleLoop({ noiseStdDevM: 0, rotationDeg: 0 }).slice(0, 3));
+    testRunIds.push(runId);
+    const result = await finalizeRun(runId);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe("insufficient_points");
     expect(await getRunStatus(runId)).toBe("rejected");
+    expect((await getRunRejection(runId))?.reason).toBe("insufficient_points");
   });
 
   it("AC5: IDEMPOTENCY > calling finalizeRun twice returns 'already_finalized'", async () => {
     const points = generateSimpleLoop({ noiseStdDevM: 0, rotationDeg: 0 });
-    const { runId } = await seedRun(points); testRunIds.push(runId);
+    const { runId } = await seedRun(points); testRunIds.push(runId);
 
     const r1 = await finalizeRun(runId);
     expect(r1.ok).toBe(true);
@@ -212,7 +237,7 @@ describe("finalizeRun Worker", () => {
 
   it("AC6: FIGURE-EIGHT > exactly 1 territory row, ST_IsValid = true", async () => {
     const points = generateNoisyFigureEight();
-    const { runId } = await seedRun(points); testRunIds.push(runId);
+    const { runId } = await seedRun(points); testRunIds.push(runId);
 
     const result = await finalizeRun(runId);
     expect(result.ok).toBe(true);
@@ -257,7 +282,7 @@ testRunIds.push(runId2);
 
   it("AC8: TRANSACTIONAL > rollback on territory constraint failure", async () => {
     const points = generateSimpleLoop({ noiseStdDevM: 0, rotationDeg: 0 });
-    const { runId, userId } = await seedRun(points); testRunIds.push(runId);
+    const { runId, userId } = await seedRun(points); testRunIds.push(runId);
 
     // To simulate a PK constraint violation on INSERT_TERRITORY,
     // we pre-insert a dummy territory and spy on randomUUID to return its ID.
@@ -284,7 +309,7 @@ testRunIds.push(runId2);
   });
 
   it("EDGE CASE: zero points > rejects without throwing", async () => {
-    const { runId } = await seedRun([]); testRunIds.push(runId);
+    const { runId } = await seedRun([]); testRunIds.push(runId);
     const result = await finalizeRun(runId);
 
     expect(result.ok).toBe(false);
@@ -293,7 +318,7 @@ testRunIds.push(runId2);
     expect(await getRunStatus(runId)).toBe("rejected");
   });
 
-  it("EDGE CASE: stationary points > pipeline rejection", async () => {
+  it("EDGE CASE: stationary points > finalize as an activity without territory", async () => {
     const { runId } = await seedRun([
       { lat: 10, lng: 10 },
       { lat: 10, lng: 10 },
@@ -303,17 +328,15 @@ testRunIds.push(runId2);
     ]);
     const result = await finalizeRun(runId);
 
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.reason).toBe("not_closed");
-    expect(await getRunStatus(runId)).toBe("rejected");
+    expect(result.ok).toBe(true);
+    expect(await getRunStatus(runId)).toBe("finalized");
   });
 
   // --- RM-6.4 + RM-3.2a tests ---
 
   it("A2: Consistency guard fires when area mismatches by > 0.5%", async () => {
     const points = generateSimpleLoop({ noiseStdDevM: 0, rotationDeg: 0 });
-    const { runId, userId } = await seedRun(points); testRunIds.push(runId);
+    const { runId, userId } = await seedRun(points); testRunIds.push(runId);
 
     let mockEnabled = true;
     const originalProcessTrack = (await vi.importActual('../../geometry/pipeline.js') as any).processTrack;
@@ -327,7 +350,7 @@ testRunIds.push(runId2);
     });
 
     const result = await finalizeRun(runId);
-      
+
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.reason).toBe("area_geometry_mismatch");
@@ -341,7 +364,7 @@ testRunIds.push(runId2);
 
     // Verify activity_session was STILL created for the rejected run
     const { rows: activities } = await pool.query<{ id: string; metrics: Record<string, unknown> }>(
-      `SELECT id, metrics FROM activity_sessions WHERE user_id = $1`, 
+      `SELECT id, metrics FROM activity_sessions WHERE user_id = $1`,
       [userId]
     );
     expect(activities.length).toBe(1);
@@ -350,7 +373,7 @@ testRunIds.push(runId2);
 
   it("B1-B5: VALID run produces exactly one activity_sessions row with correct metrics", async () => {
     const points = generateSimpleLoop({ noiseStdDevM: 0, rotationDeg: 0 });
-    const { runId, userId } = await seedRun(points); testRunIds.push(runId);
+    const { runId, userId } = await seedRun(points); testRunIds.push(runId);
     await finalizeRun(runId);
 
     const { rows } = await pool.query<{
@@ -359,7 +382,7 @@ testRunIds.push(runId2);
       metrics: Record<string, unknown>;
     }>(`SELECT * FROM activity_sessions WHERE user_id = $1`, [userId]);
     expect(rows.length).toBe(1);
-    
+
     const row = rows[0]!;
     expect(row.type).toBe("run");
     expect(row.subtype).toBe("territory_run");
@@ -411,14 +434,14 @@ testRunIds.push(runId2);
     expect(rows[0]!.metrics["timezone"]).toBe("Asia/Kolkata");
   });
 
-  it("B1-B5: REJECTED run produces exactly one activity_sessions row", async () => {
-    // 10x10 = 100m2 < 500m2 -> rejected below_minimum_area
+  it("B1-B5: no-territory run produces one activity_sessions row without a rejection reason", async () => {
+    // 10x10 = 100m2 < 500m2 -> no territory, but a valid activity
     const points = generateTinyLoop();
-    const { runId, userId } = await seedRun(points); testRunIds.push(runId);
+    const { runId, userId } = await seedRun(points); testRunIds.push(runId);
     await finalizeRun(runId);
 
     const { rows } = await pool.query<{ metrics: Record<string, unknown> }>(
-      `SELECT metrics FROM activity_sessions WHERE user_id = $1`, 
+      `SELECT metrics FROM activity_sessions WHERE user_id = $1`,
       [userId]
     );
     expect(rows.length).toBe(1);
@@ -426,17 +449,18 @@ testRunIds.push(runId2);
     const row = rows[0]!;
     expect(row.metrics["territory_claimed"]).toBe(false);
     expect(row.metrics["area_m2"]).toBe(0);
-    expect(row.metrics["rejection_reason"]).toBe("below_minimum_area");
+    expect(row.metrics["rejection_reason"]).toBeNull();
+    expect(row.metrics["territory_reason"]).toBe("below_minimum_area");
   });
 
   it("B1-B5: duration_s is derived from points when elapsed_time_s is null", async () => {
     const points = generateSimpleLoop({ noiseStdDevM: 0, rotationDeg: 0 }).slice(0, 2);
-    const { runId, userId } = await seedRun(points, undefined, { elapsedTimeS: null }); testRunIds.push(runId);
+    const { runId, userId } = await seedRun(points, undefined, { elapsedTimeS: null }); testRunIds.push(runId);
     await finalizeRun(runId);
 
     // Distance is 200m. 200m / 3m/s = 66 seconds.
     const { rows } = await pool.query<{ duration_s: number }>(
-      `SELECT duration_s FROM activity_sessions WHERE user_id = $1`, 
+      `SELECT duration_s FROM activity_sessions WHERE user_id = $1`,
       [userId]
     );
     expect(rows[0]!.duration_s).toBe(66);

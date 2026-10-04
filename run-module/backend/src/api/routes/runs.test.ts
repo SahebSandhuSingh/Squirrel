@@ -386,11 +386,35 @@ describe('Runs API', () => {
     const body = res.json();
     expect(body.run_id).toBe(testRunId);
     expect(body.status).toBe('finalized');
+    expect(body.territory_reason).toBeNull();
     expect(body.stats).toBeDefined();
     expect(body.territory).toBeDefined();
     expect(body.territory.id).toBe(testTerritoryId);
     expect(body.rejection).toBeNull();
     expect(body.score).toBeNull();
+  });
+
+  it('WALK-2: GET /v1/runs/:id exposes a no-territory reason separately from rejection', async () => {
+    const userA = crypto.randomUUID();
+    const tokenA = await createToken(userA);
+    const testRunId = crypto.randomUUID();
+    await pool.query("INSERT INTO runs (id, user_id, status, started_at, territory_reason) VALUES ($1, $2, 'finalized', now(), 'not_closed')", [testRunId, userA]);
+    testRunIds.push(testRunId);
+    testUserIds.push(userA);
+
+    const res = await fastify.inject({
+      method: 'GET',
+      url: `/v1/runs/${testRunId}`,
+      headers: { authorization: `Bearer ${tokenA}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      status: 'finalized',
+      territory: null,
+      territory_reason: 'not_closed',
+      rejection: null,
+    });
   });
 
   it('AC11: GET /v1/runs/:id for a REJECTED run returns territory null and a populated rejection object with the correct reason code', async () => {

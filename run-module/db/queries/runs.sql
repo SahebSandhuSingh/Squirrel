@@ -45,6 +45,7 @@ SELECT
     r.distance_m,
     r.moving_time_s,
     r.elapsed_time_s,
+    r.territory_reason,
     t.id AS t_id,
     t.area_m2 AS t_area_m2,
     t.claimed_at AS t_claimed_at,
