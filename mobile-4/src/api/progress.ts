@@ -1,11 +1,12 @@
 /**
- * Progress, XP, challenges, leaderboards and activity intake — the app's contract (routes under /v1).
+ * Progress, XP, leaderboards and activity intake — the app's contract (routes under /v1).
  *
  * ADR-032 cancelled the separate progress-service. Its endpoints are moving to their owners one by
  * one; each call goes to the service that serves it now:
  *   Run Module (EXPO_PUBLIC_API_URL):  GET /v1/progress, /daily, /weekly, /history, GET /v1/xp
  *   not served yet (EXPO_PUBLIC_PROGRESS_API_URL, never set, so these stay "not connected"):
- *     challenges + join/leave, leaderboards, POST /v1/activities
+ *     leaderboards, POST /v1/activities
+ * Challenges left this contract: Goals call the Run Module (api/runChallenges.ts).
  * Move a method to `runBase` (and its screen to `progressReadsLive`) as its endpoint goes live.
  *
  *
@@ -20,11 +21,7 @@
  *   GET  /v1/progress/history?days=N | from&to
  *   GET  /v1/xp                               GET /v1/xp/history
  *   POST /v1/activities { events: [...] }    GET /v1/activities
- *   GET  /v1/challenges?kind&status=current|ended|mine
- *   GET  /v1/challenges/{id}  /progress        POST /join  POST /leave
- *   POST /v1/challenges/head-to-head { opponentId, metric, durationHours }
  *   GET  /v1/leaderboards/{global|friends|campus}?period=daily|weekly|alltime
- *   GET  /v1/leaderboards/{challenge|group}?challengeId=
  * Errors are `{ code, detail }` (the shared client surfaces `detail`; `code` is on ApiError.body).
  */
 import { Platform } from 'react-native';
@@ -84,41 +81,6 @@ export type LifetimeProgress = {
 
 export type XpSummary = { totalXp: number; level: LevelInfo; today: number; week: number; bySource: Record<string, number> };
 
-export type ServerChallengeKind = 'daily' | 'head_to_head' | 'group' | 'special';
-export type ServerMetric = 'steps' | 'active_minutes' | 'workout_minutes' | 'workouts' | 'distance_km' | 'territory_km2';
-export type ParticipantStatus = 'invited' | 'active' | 'completed' | 'left' | 'won' | 'lost' | 'tied' | 'failed' | 'cancelled';
-export type ChallengeProgress = { current: number; target: number; progress: number | null; completed: boolean; status: ParticipantStatus | null };
-
-export type ServerChallenge = {
-  id: string;
-  kind: ServerChallengeKind;
-  title: string;
-  description: string;
-  icon: string | null;
-  metric: ServerMetric;
-  unit: string;
-  target: number;
-  xpReward: number;
-  startsAt: string;
-  endsAt: string;
-  endsInMinutes: number;
-  status: 'upcoming' | 'active' | 'completed' | 'ended' | 'cancelled';
-  participants: number;
-  maxParticipants: number | null;
-  rules: { minLevel?: number; campus?: string; [k: string]: unknown };
-  joined: boolean;
-  canJoin: boolean;
-  closedReason: string | null;
-  /** Why you can't join although it's open (level, campus, capacity); null when you can. */
-  ineligible: { code: 'not_eligible' | 'challenge_full'; detail: string } | null;
-  me: ChallengeProgress;
-  group?: { name: string | null; collective: number; members: number; completedAt: string | null };
-  xpRewardTie?: number;
-  opponent?: { userId: string; name: string | null; avatar: string | null; score: number; status: ParticipantStatus } | null;
-  winnerUserId?: string | null;
-  invited?: boolean;
-};
-
 export type BoardUser = { rank: number; userId: string; name: string | null; avatar: string | null; xp: number };
 export type XpBoard = {
   type: 'global' | 'friends' | 'campus';
@@ -152,7 +114,7 @@ export type ActivitiesResponse = { results: ActivityResult[]; progress: DailyPro
 
 /** The Run Module, which serves the progress reads and the XP summary. */
 const runBase = API_URL;
-/** Not served by anyone yet: challenges, leaderboards, activity intake. */
+/** Not served by anyone yet: leaderboards, activity intake. */
 const base = PROGRESS_API_URL;
 const q = (params: Record<string, string | number | undefined>) => {
   const s = Object.entries(params)
@@ -168,9 +130,6 @@ export const progressApi = {
   weekly: (weekStart?: string) => api<WeeklyProgress>(`/v1/progress/weekly${q({ weekStart })}`, { base: runBase }),
   history: (days: number) => api<ProgressHistory>(`/v1/progress/history${q({ days })}`, { base: runBase }),
   xp: () => api<XpSummary>('/v1/xp', { base: runBase }),
-  challenges: (status: 'current' | 'ended' | 'mine' = 'current') => api<{ challenges: ServerChallenge[] }>(`/v1/challenges${q({ status })}`, { base }),
-  join: (id: string) => api<ServerChallenge>(`/v1/challenges/${encodeURIComponent(id)}/join`, { base, method: 'POST' }),
-  leave: (id: string) => api<ServerChallenge>(`/v1/challenges/${encodeURIComponent(id)}/leave`, { base, method: 'POST' }),
   leaderboard: (kind: 'global' | 'friends' | 'campus', period: XpBoard['period'] = 'weekly', limit = 50) =>
     api<XpBoard>(`/v1/leaderboards/${kind}${q({ period, limit })}`, { base }),
   postActivities: (events: ActivityEventInput[]) => api<ActivitiesResponse>('/v1/activities', { base, body: { events } }),
@@ -180,7 +139,7 @@ export const progressApi = {
 export const PROGRESS_READS_CONFIGURED = API_CONFIGURED;
 /** Progress reads and XP can be fetched: the Run Module is configured and we're signed in. */
 export const progressReadsLive = (mode: string) => PROGRESS_READS_CONFIGURED && mode === 'live';
-/** Challenges, leaderboards and activity intake can be used: not served yet, so false in every real build. */
+/** Leaderboards and activity intake can be used: not served yet, so false in every real build. */
 export const progressLive = (mode: string) => PROGRESS_API_CONFIGURED && mode === 'live';
 
 /** The `code` from a progress-service error body (`{ code, detail }`). */
@@ -281,32 +240,4 @@ export function flushActivities(): Promise<FlushResult> {
     await store.set(INDEX_KEY, JSON.stringify(remaining));
     return { sent: items.filter((b) => done.has(b.id)).length, pending: remaining.length, response };
   });
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Human copy for challenge error codes (join/leave). */
-export function challengeErrorText(e: unknown): string {
-  const code = errorCode(e);
-  switch (code) {
-    case 'already_joined':
-      return "You're already in this challenge";
-    case 'already_completed':
-      return 'Already completed';
-    case 'challenge_expired':
-    case 'challenge_closed':
-      return 'This challenge has ended';
-    case 'challenge_not_started':
-      return "This challenge hasn't started yet";
-    case 'challenge_full':
-      return 'This challenge is full';
-    case 'not_eligible':
-      return e instanceof Error ? e.message : 'Not eligible for this challenge';
-    default:
-      if (e instanceof ApiError && e.status === 401) return 'Sign in again to take part';
-      if (e instanceof ApiError && e.status === 0) return "You're offline — try again when connected";
-      return e instanceof Error ? e.message : 'Something went wrong';
-  }
 }
