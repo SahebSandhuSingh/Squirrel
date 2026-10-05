@@ -120,3 +120,35 @@ export async function touchTerritoryAction(userId: string, q: Queryable) {
   await query('UPDATE users SET last_territory_action_at = now(), updated_at = now() WHERE id = $1', [userId], q);
   invalidateUserCache(userId);
 }
+
+export async function createMissingUsersFromSocial(userIds: string[], q?: Queryable): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (!bridgeEnabled() || !userIds.length) return map;
+
+  // UUIDs in this array are profile_ids that failed to resolve in resolveInboundIds.
+  // If we pass them to lookupBySubs, Social will provision them as new subs, which is wrong.
+  const validSubs = userIds.filter(id => !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+  if (!validSubs.length) return map;
+
+  const socialMap = await lookupBySubs(validSubs);
+  const toInsert: SocialPerson[] = [];
+  
+  for (const id of validSubs) {
+    const p = socialMap.get(id);
+    if (p) {
+      map.set(id, p.display_name);
+      toInsert.push(p);
+    }
+  }
+
+  if (toInsert.length > 0) {
+    await query(
+      `INSERT INTO users (id, display_name, avatar_url) 
+       SELECT * FROM unnest($1::text[], $2::text[], $3::text[])
+       ON CONFLICT (id) DO NOTHING`,
+      [toInsert.map(p => p.subject), toInsert.map(p => p.display_name), toInsert.map(p => p.avatar_url)],
+      q ?? getPool()
+    );
+  }
+  return map;
+}

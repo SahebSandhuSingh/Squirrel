@@ -84,18 +84,19 @@ describe.skipIf(!HAS_DB)('meetups (integration)', () => {
     expect(forwarded('meetup.accepted', 'u_mh2')).toEqual([expect.objectContaining({ actor_subject: 'u_mg3', title: 'Meetup accepted', body: '{actor} accepted your meetup invitation.', data: { meetup_id: created.body.id, status: 'accepted', route: `/meetup/${created.body.id}` } })]);
   });
 
-  it('every guest declining cancels the meetup and decline accepts no reason field', async () => {
+  it('every guest declining leaves the meetup open until host cancels it', async () => {
     await provision('u_mh3', 'u_mg4', 'u_mg5');
     const created = await createMeetup('u_mh3', ['u_mg4', 'u_mg5']);
     const id = created.body.id as string;
     expect((await api('POST', `/v1/meetups/${id}/decline`, 'u_mg4', { reason: 'private' })).status).toBe(422);
     expect((await api('POST', `/v1/meetups/${id}/decline`, 'u_mg4')).body.status).toBe('proposed');
-    expect((await api('POST', `/v1/meetups/${id}/decline`, 'u_mg5')).body.status).toBe('cancelled');
+    expect((await api('POST', `/v1/meetups/${id}/decline`, 'u_mg5')).body.status).toBe('proposed');
     const declines = forwarded('meetup.declined', 'u_mh3');
     expect(declines).toHaveLength(2);
     expect(declines.map((n) => n.actor_subject).sort()).toEqual(['u_mg4', 'u_mg5']);
     expect(declines.every((n) => Object.keys(n.data).sort().join(',') === 'meetup_id,route,status')).toBe(true);
-    expect(forwarded('meetup.cancelled', 'u_mh3')).toEqual([expect.objectContaining({ actor_subject: 'u_mg5', body: '{actor} declined or withdrew, so the meetup was cancelled.', data: { meetup_id: id, status: 'cancelled', route: `/meetup/${id}` } })]);
+    expect(forwarded('meetup.cancelled', 'u_mh3')).toHaveLength(0);
+    expect((await api('POST', `/v1/meetups/${id}/cancel`, 'u_mh3')).body.status).toBe('cancelled');
   });
 
   it('host cancellation cancels the meetup and guests can no longer accept', async () => {

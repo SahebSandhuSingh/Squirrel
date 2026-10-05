@@ -7,7 +7,7 @@ import { errors } from '../lib/errors.js';
 import { isUuid } from '../lib/ids.js';
 import { campusNotificationDedupeKey, notify } from '../notifications/service.js';
 import { isBlockedEitherWay, getFullBlockSet } from '../blocks/service.js';
-import { getPeopleLite } from '../users/repo.js';
+import { getPeopleLite, createMissingUsersFromSocial } from '../users/repo.js';
 
 type MeetupStatus = 'proposed' | 'confirmed' | 'cancelled' | 'completed';
 type MeetupRow = {
@@ -126,8 +126,17 @@ export async function meetupRoutes(app: FastifyInstance) {
     if (Date.parse(body.starts_at) <= Date.now()) throw errors.invalid('starts_at must be in the future.');
     if (body.invitee_ids.includes(host.id)) throw errors.invalid('You cannot invite yourself.');
     if (body.zone_id && !(await one(`SELECT 1 FROM zones WHERE id = $1 AND is_active`, [body.zone_id]))) throw errors.notFound('Zone');
-    const users = await many<{ id: string }>(`SELECT id FROM users WHERE id = ANY($1::text[]) AND NOT is_banned`, [body.invitee_ids]);
-    if (users.length !== body.invitee_ids.length) throw errors.notFound('Squirrel');
+    let users = await many<{ id: string }>(`SELECT id FROM users WHERE id = ANY($1::text[]) AND NOT is_banned`, [body.invitee_ids]);
+    if (users.length !== body.invitee_ids.length) {
+      const missingIds = body.invitee_ids.filter(id => !users.some(u => u.id === id));
+      const socialNames = await createMissingUsersFromSocial(missingIds);
+      users = await many<{ id: string }>(`SELECT id FROM users WHERE id = ANY($1::text[]) AND NOT is_banned`, [body.invitee_ids]);
+      if (users.length !== body.invitee_ids.length) {
+        const stillMissingIds = body.invitee_ids.filter(id => !users.some(u => u.id === id));
+        const missingLabels = stillMissingIds.map(id => socialNames.get(id) ?? `User ${id.slice(0, 6)}`);
+        throw errors.notFound(`${missingLabels.join(', ')} hasn't used the campus map yet`);
+      }
+    }
 
     const created = await withTransaction(async (tx) => {
       await lockPeople([host.id, ...body.invitee_ids], tx);
@@ -204,11 +213,6 @@ export async function meetupRoutes(app: FastifyInstance) {
             await query(`UPDATE meetups SET status = 'confirmed', updated_at = now() WHERE id = $1`, [id], tx);
           } else {
             await query(`UPDATE meetup_participants SET status = 'declined', responded_at = now() WHERE meetup_id = $1 AND user_id = $2`, [id, user.id], tx);
-            const pending = await one<{ n: number }>(`SELECT count(*)::int AS n FROM meetup_participants WHERE meetup_id = $1 AND role = 'guest' AND status <> 'declined'`, [id], tx);
-            if (!pending?.n) {
-              await query(`UPDATE meetups SET status = 'cancelled', updated_at = now() WHERE id = $1`, [id], tx);
-              cancelledByResponses = true;
-            }
           }
         } else if (action === 'cancel') {
           if (actor.role !== 'host') throw errors.notFound('Meetup');
@@ -218,11 +222,6 @@ export async function meetupRoutes(app: FastifyInstance) {
           if (actor.role !== 'guest') throw errors.notFound('Meetup');
           if (actor.status !== 'accepted') throw errors.conflict('meetup_participant_state', 'Only an accepted guest can leave.');
           await query(`UPDATE meetup_participants SET status = 'declined', responded_at = now() WHERE meetup_id = $1 AND user_id = $2`, [id, user.id], tx);
-          const remaining = await one<{ n: number }>(`SELECT count(*)::int AS n FROM meetup_participants WHERE meetup_id = $1 AND role = 'guest' AND status <> 'declined'`, [id], tx);
-          if (!remaining?.n) {
-            await query(`UPDATE meetups SET status = 'cancelled', updated_at = now() WHERE id = $1`, [id], tx);
-            cancelledByResponses = true;
-          }
         }
         return { row: (await loadMeetup(id, tx))!, parts: await participants(id, tx), cancelledByResponses };
       });
