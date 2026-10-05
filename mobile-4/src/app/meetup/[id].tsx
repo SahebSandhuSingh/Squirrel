@@ -1,17 +1,16 @@
 /**
- * MEETUP CHECK-IN. View the meetup, see who's coming / checked in, check in, and optionally ask
- * the backend to notify your safety contact. We only say a notification was sent when the API
- * returns status "sent".
- *
- * With campus-service configured (CAMPUS_MAP_ON_SERVICE) the meetup comes from campus-service (host +
- * invitees), which doesn't serve check-in yet: check-in is gated ('meetupCheckIn') and shown as not
- * live, and nobody is shown as checked in. On a dedicated campus backend it's live.
+ * MEETUP. Answer the invite (accept / decline with Undo / leave; the host cancels), see who's coming,
+ * check in, and optionally ask the backend to notify your safety contact. We only say a notification
+ * was sent when the API returns status "sent". What you can do is campus-service's rule
+ * (logic/meetups meetupActions); a decline waits DECLINE_UNDO_MS before it's sent, so Undo never
+ * needs the server (a lone guest's decline cancels the meetup there, and that can't be taken back).
  */
 import { useState } from 'react';
 import { StyleSheet, Switch, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Mascot } from '@/art/Mascot';
 import { campusApi, CAMPUS_MAP_ON_SERVICE, errorText, isEndpointAvailable, type CheckInResult, type Meetup } from '@/api/campus';
+import type { MeetupAction } from '@/api/campus/types';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
 import { MeetupRating } from '@/components/meetup/MeetupRating';
 import { ErrorState, LoadingRows, SourceBadge } from '@/components/campus/States';
@@ -19,7 +18,8 @@ import { Button, Card, Display, Header, Icon, Kicker, Screen, SectionHeader, tap
 import { formatEventDate } from '@/logic/format';
 import { invalidateCampus, useAction, useCampus, useConfig, useMe } from '@/hooks/useCampus';
 import { colors, fonts, radius } from '@/theme';
-import { checkInOpen } from '@/logic/meetups';
+import { checkInOpen, DECLINE_UNDO_MS, meetupActions } from '@/logic/meetups';
+import { useApp } from '@/state/AppState';
 
 const SAFETY_TEXT: Record<CheckInResult['safety_notification']['status'], string> = {
   sent: 'Your safety contact was notified.',
@@ -36,6 +36,9 @@ export default function MeetupScreen() {
   const [notify, setNotify] = useState(true);
   const [openedAt] = useState(() => Date.now());
   const check = useAction((n: boolean) => campusApi.checkIn(id, n));
+  const respond = useAction((a: MeetupAction) => campusApi.respondMeetup(id, a));
+  const { toast } = useApp();
+  const [confirm, setConfirm] = useState<MeetupAction | null>(null);
   const m = r.data;
   const safetyOn = !!config.data?.features.meetup_safety_notifications;
   const checkInLive = !CAMPUS_MAP_ON_SERVICE || isEndpointAvailable('meetupCheckIn');
@@ -51,6 +54,39 @@ export default function MeetupScreen() {
   const open = checkInOpen(m);
   const done = check.data ?? (m.my_check_in_at ? null : undefined);
   const checkedIn = !!check.data || !!m.my_check_in_at;
+  const actions = meetupActions(m);
+  const cancelled = m.status === 'cancelled';
+  const declined = m.my_rsvp === 'declined';
+  const host = m.attendees.find((a) => a.host);
+  const act = async (a: MeetupAction) => {
+    // Leaving and cancelling take a second tap.
+    if ((a === 'leave' || a === 'cancel') && confirm !== a) {
+      tap();
+      setConfirm(a);
+      return;
+    }
+    setConfirm(null);
+    tap('impact');
+    const res = await respond.run(a);
+    if (!res) return;
+    r.mutate(res);
+    invalidateCampus('meetup');
+    toast(a === 'accept' ? 'You’re going' : a === 'leave' ? 'You left the meetup' : 'Meetup cancelled', a === 'accept' ? 'check-circle' : 'close-circle', a === 'accept' ? colors.primary : colors.dim);
+  };
+  // Decline isn't sent until the Undo window has passed: Undo just stops it, nothing to reverse.
+  const decline = () => {
+    tap();
+    const send = setTimeout(async () => {
+      try {
+        await campusApi.respondMeetup(id, 'decline');
+        invalidateCampus('meetup');
+      } catch (e) {
+        toast(`Couldn’t decline: ${errorText(e)}`, 'alert-circle-outline', colors.coral);
+      }
+    }, DECLINE_UNDO_MS);
+    toast('Invite declined', 'close-circle', colors.dim, { ms: DECLINE_UNDO_MS, action: { label: 'Undo', onPress: () => { clearTimeout(send); toast('Still invited', 'undo', colors.primary); } } });
+    if (router.canGoBack()) router.back();
+  };
   const doCheckIn = async () => {
     tap('impact');
     const res = await check.run(safetyOn && notify && !!me.data?.safety_contact_configured);
@@ -72,7 +108,26 @@ export default function MeetupScreen() {
         <Icon name="map-marker" size={13} color={colors.primary} /> {m.location.name}
       </Text>
 
-      {checkedIn ? (
+      {cancelled ? (
+        <Card style={[styles.rsvp, { borderColor: colors.coral }]}>
+          <Text style={[styles.label, { color: colors.coral }]}>This meetup was cancelled</Text>
+        </Card>
+      ) : actions.length > 0 ? (
+        <Card style={styles.rsvp}>
+          <Text style={styles.label}>
+            {m.my_role === 'host' ? 'You’re hosting' : m.my_rsvp === 'invited' ? `${host?.display_name.split(' ')[0] ?? 'Someone'} invited you` : declined ? 'You declined' : 'You’re going'}
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {actions.includes('accept') && <Button label={declined ? 'Join after all' : 'Accept'} iconLeft="check" size="md" disabled={respond.status === 'loading'} onPress={() => act('accept')} style={{ flex: 1 }} />}
+            {actions.includes('decline') && <Button label="Decline" variant="secondary" size="md" disabled={respond.status === 'loading'} onPress={decline} style={{ flex: 1 }} />}
+            {actions.includes('leave') && <Button label={confirm === 'leave' ? 'Tap again to leave' : 'Leave meetup'} variant="secondary" size="md" disabled={respond.status === 'loading'} onPress={() => act('leave')} style={{ flex: 1 }} />}
+            {actions.includes('cancel') && <Button label={confirm === 'cancel' ? 'Tap again to cancel it' : 'Cancel meetup'} variant="secondary" size="md" disabled={respond.status === 'loading'} onPress={() => act('cancel')} style={{ flex: 1 }} />}
+          </View>
+          {respond.status === 'error' && <Text style={styles.err}>{errorText(respond.error)}</Text>}
+        </Card>
+      ) : null}
+
+      {cancelled || declined ? null : checkedIn ? (
         <Card style={styles.done}>
           <Mascot pose="celebrate" size={96} animated />
           <Text style={styles.doneTitle}>{openedAt > Date.parse(m.check_in_closes_at) ? 'You checked in' : 'You’re checked in'}</Text>
@@ -128,7 +183,7 @@ export default function MeetupScreen() {
           <View key={a.user_id} style={styles.row}>
             <PersonAvatar person={a} size={36} />
             <Text style={styles.name}>{a.user_id === me.data?.user_id ? 'You' : a.display_name}</Text>
-            {checkInLive && <Text style={[styles.status, { color: a.checked_in ? colors.green : colors.dim }]}>{a.checked_in ? 'Checked in' : 'Not yet'}</Text>}
+            {a.host ? <Text style={[styles.status, { color: colors.secondary }]}>Host</Text> : a.rsvp === 'invited' ? <Text style={[styles.status, { color: colors.dim }]}>Invited</Text> : checkInLive && <Text style={[styles.status, { color: a.checked_in ? colors.green : colors.dim }]}>{a.checked_in ? 'Checked in' : 'Not yet'}</Text>}
           </View>
         ))}
         {!m.attendees.length && <Text style={styles.small}>No one else yet.</Text>}
@@ -147,6 +202,7 @@ const styles = StyleSheet.create({
   label: { color: colors.text, fontFamily: fonts.label, fontSize: 15, letterSpacing: 0.6, textTransform: 'uppercase' },
   small: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, lineHeight: 17 },
   err: { color: colors.coral, fontFamily: fonts.medium, fontSize: 13, textAlign: 'center' },
+  rsvp: { marginTop: 14, gap: 10 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, padding: 10 },
   name: { flex: 1, color: colors.text, fontFamily: fonts.semibold, fontSize: 14 },
   status: { fontFamily: fonts.label, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },

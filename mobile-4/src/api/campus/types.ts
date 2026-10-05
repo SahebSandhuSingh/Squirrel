@@ -453,11 +453,20 @@ export type Meetup = {
   starts_at: string;
   location: { name: string; zone_id: string | null };
   event_id: string | null;
-  attendees: (PersonLite & { checked_in: boolean })[];
+  /** Everyone who hasn't declined; `rsvp` says who's confirmed and who's still only invited. */
+  attendees: (PersonLite & { checked_in: boolean; rsvp?: 'invited' | 'accepted'; host?: boolean })[];
   my_check_in_at: string | null;
   check_in_opens_at: string;
   check_in_closes_at: string;
+  /** campus-service: the meetup's state, and your part in it (what you may do: accept/decline/leave/cancel). */
+  status?: 'proposed' | 'confirmed' | 'cancelled' | 'completed';
+  my_role?: 'host' | 'guest' | null;
+  my_rsvp?: 'invited' | 'accepted' | 'declined' | null;
 };
+/** POST /v1/meetups: a zone and/or a place, a time in the future, 1–50 people (Social profile ids). */
+export type MeetupCreate = { zone_id?: string | null; place_text?: string | null; starts_at: string; invitee_ids: string[] };
+/** POST /v1/meetups/{id}/{action}: guests accept / decline / leave; the host cancels. */
+export type MeetupAction = 'accept' | 'decline' | 'leave' | 'cancel';
 
 export type SafetyNotification = {
   requested: boolean;
@@ -740,5 +749,7 @@ export interface CampusApi {
 
   meetups(): Promise<Meetup[]>;
   meetup(meetupId: string): Promise<Meetup>;
+  createMeetup(input: MeetupCreate): Promise<Meetup>;
+  respondMeetup(meetupId: string, action: MeetupAction): Promise<Meetup>;
   checkIn(meetupId: string, notifySafetyContact: boolean): Promise<CheckInResult>;
 }

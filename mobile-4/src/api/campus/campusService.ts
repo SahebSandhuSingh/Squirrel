@@ -112,6 +112,14 @@ export function makeCampusServiceApi(base: string): CampusServicePart {
       const [m, me] = await Promise.all([get<CampusMeetup>(`/v1/meetups/${id(meetupId)}`), meId()]);
       return meetupFromCampus(m, me);
     },
+    createMeetup: async (input) => {
+      const [m, me] = await Promise.all([send<CampusMeetup>('/v1/meetups', 'POST', input), meId()]);
+      return meetupFromCampus(m, me);
+    },
+    respondMeetup: async (meetupId, action) => {
+      const [m, me] = await Promise.all([send<CampusMeetup>(`/v1/meetups/${id(meetupId)}/${action}`, 'POST', {}), meId()]);
+      return meetupFromCampus(m, me);
+    },
     // 1 h before → 6 h after the start; checking in turns an invited guest into an attendee (which the
     // rating gate tests). Safety-contact semantics: features.meetup_safety_notifications.
     checkIn: (meetupId, notifySafetyContact) => send<T.CheckInResult>(`/v1/meetups/${id(meetupId)}/check-in`, 'POST', { notify_safety_contact: notifySafetyContact }),
