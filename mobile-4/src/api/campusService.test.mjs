@@ -103,15 +103,15 @@ test('me: Social profile with campus-service’s Open to Meet (Social’s when c
 });
 
 test('sharedZones and heatmap are gated unless campus-service opts them in; the rest stay gated', async () => {
-  const service = { sharedZones: async () => ({ people: [] }), heatmap: async () => ({ cells: [] }), joinSession: async () => ({}) };
-  const rules = { sharedZones: { capability: 'sharedZones' }, heatmap: { capability: 'heatmap' }, joinSession: { capability: 'sharedWorkout' } };
+  const service = { sharedZones: async () => ({ people: [] }), heatmap: async () => ({ cells: [] }), saveDetails: async () => ({}) };
+  const rules = { sharedZones: { capability: 'sharedZones' }, heatmap: { capability: 'heatmap' }, saveDetails: { capability: 'profileDetails' } };
   const gated = gateEndpoints(service, rules, new Set());
   await assert.rejects(gated.sharedZones(), (e) => isEndpointUnavailable(e));
   await assert.rejects(gated.heatmap('7d'), (e) => isEndpointUnavailable(e));
   const withCampus = gateEndpoints(service, rules, optedInWith(['sharedZones', 'heatmap'], new Set()));
   assert.deepEqual(await withCampus.sharedZones(), { people: [] });
   assert.deepEqual(await withCampus.heatmap('7d'), { cells: [] });
-  await assert.rejects(withCampus.joinSession(), (e) => isEndpointUnavailable(e) && e.capability === 'sharedWorkout');
+  await assert.rejects(withCampus.saveDetails(), (e) => isEndpointUnavailable(e) && e.capability === 'profileDetails');
   assert.deepEqual([...optedInWith(['heatmap'], new Set(['media']))].sort(), ['heatmap', 'media']);
 });
 

@@ -22,7 +22,7 @@ export type Capability =
   | 'meetupCheckIn' // POST /v1/meetups/{id}/check-in on campus-service (it serves meetups, not check-in yet)
   | 'ambassador' // GET | POST /v1/ambassador/application (built: Social)
   | 'profileDetails' // PATCH /v1/me with `profile_details`
-  | 'sharedWorkout'; // Exercise: /api/workout-sessions/* + /ws/workout-sessions/{id} (built; on once deployed)
+  | 'sharedWorkout'; // Exercise: /api/workout-sessions/* + /ws/workout-sessions/{id} (built, deployed)
 
 export const CAPABILITY_LABEL: Record<Capability, string> = {
   sharedZones: 'Shared zones',
@@ -36,7 +36,7 @@ export const CAPABILITY_LABEL: Record<Capability, string> = {
   sharedWorkout: 'Shared workouts',
 };
 
-/** Backend status in code. Squirrel Dates, photo uploads and ambassador applications are built (Social service). */
+/** Backend status in code. Built: Squirrel Dates, photo uploads and ambassador applications (Social); shared workouts (Exercise). */
 const BUILT: Record<Capability, boolean> = {
   sharedZones: false,
   heatmap: false,
@@ -46,7 +46,7 @@ const BUILT: Record<Capability, boolean> = {
   meetupCheckIn: false,
   ambassador: true,
   profileDetails: false,
-  sharedWorkout: false,
+  sharedWorkout: true,
 };
 
 /** Labels that read as one thing ("… isn’t live yet"); the rest are plural ("… aren’t live yet"). */

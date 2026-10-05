@@ -11,8 +11,8 @@ export const LOCKED = {
   mealWater: true,
   /** Events: /events, /event/[id], event cards, study-break walks, joining. Not launching yet. */
   events: true,
-  /** Partner Hunt: find a workout buddy. Every /partner-hunt route shows the locked screen. */
-  partnerHunt: true,
+  /** Partner Hunt: find a workout buddy (Exercise). Unlocked; set true to show the locked screen on every /partner-hunt route. */
+  partnerHunt: false,
   /** Story viewer (story bubbles on Social). Posting your own story via the composer still works. */
   stories: true,
 } as const;
