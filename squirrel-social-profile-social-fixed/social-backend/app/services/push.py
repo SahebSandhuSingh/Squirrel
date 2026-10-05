@@ -5,25 +5,40 @@ queues one message per live token on the database session, and they are sent onc
 commits, so a rolled-back request never pushes. Sending happens on a small thread pool: a slow Expo
 never slows the request. A token Expo reports as `DeviceNotRegistered` (app uninstalled) is
 disabled.
+
+Expo's answer to a send is only a ticket; whether Apple / Google took the message comes in a
+receipt, ready about 15 minutes later. Each ticket id is stored (`push_tickets`) and
+`check_receipts` fetches the receipts of tickets at least `RECEIPT_DELAY` old: a failed one is
+logged with its reason, and a `DeviceNotRegistered` one disables the token. It runs every
+`RECEIPT_INTERVAL_S` in `ReceiptLoop` and on POST /internal/v1/tasks/push-receipts (for a cron while
+the host sleeps). A ticket whose receipt never comes is dropped after `RECEIPT_GIVE_UP`.
 """
 
 from __future__ import annotations
 
 import logging
+import threading
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta
 from typing import Protocol
 
 import httpx
-from sqlalchemy import event, update
+from sqlalchemy import delete, event, select, update
 from sqlalchemy.orm import Session
 
 from app.db import Database, utcnow
-from app.models import PushToken
+from app.models import PushTicket, PushToken
 
 log = logging.getLogger(__name__)
 
 EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
+EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts"
 _BATCH = 100  # Expo accepts up to 100 messages per request
+_RECEIPT_BATCH = 1000  # and up to 1000 receipt ids
+_RECEIPTS_PER_RUN = 10_000
+RECEIPT_DELAY = timedelta(minutes=15)
+RECEIPT_GIVE_UP = timedelta(hours=24)  # Expo keeps receipts for a day
+RECEIPT_INTERVAL_S = 300
 
 
 class PushSender(Protocol):
@@ -47,6 +62,7 @@ class ExpoPush:
 
     def deliver(self, messages: list[dict]) -> None:
         dead: list[str] = []
+        tickets_sent: dict[str, str] = {}
         for start in range(0, len(messages), _BATCH):
             chunk = messages[start:start + _BATCH]
             try:
@@ -59,15 +75,104 @@ class ExpoPush:
                 log.warning("expo push answered %s: %s", res.status_code, res.text[:300])
                 continue
             for message, ticket in zip(chunk, tickets if isinstance(tickets, list) else []):
-                if not isinstance(ticket, dict) or ticket.get("status") != "error":
+                if not isinstance(ticket, dict):
+                    continue
+                if ticket.get("status") == "ok" and isinstance(ticket.get("id"), str) and len(ticket["id"]) <= 64:
+                    tickets_sent[ticket["id"]] = message["to"]
+                    continue
+                if ticket.get("status") != "error":
                     continue
                 details = ticket.get("details") if isinstance(ticket.get("details"), dict) else {}
+                log.warning("expo push rejected: %s (%s) token=%s", details.get("error") or "unknown",
+                            str(ticket.get("message", ""))[:200], _short(message["to"]))
                 if details.get("error") == "DeviceNotRegistered":
                     dead.append(message["to"])
-        if dead:
+        if dead or tickets_sent:
             with self.database.SessionLocal() as db:
-                db.execute(update(PushToken).where(PushToken.token.in_(dead)).values(disabled_at=utcnow()))
+                if tickets_sent:
+                    now = utcnow()
+                    db.add_all(PushTicket(id=i, token=t, created_at=now) for i, t in tickets_sent.items())
+                _disable(db, dead)
                 db.commit()
+
+    def check_receipts(self, now: datetime | None = None) -> int:
+        """Read the receipts of tickets at least RECEIPT_DELAY old. Returns how many were read."""
+        if not self.enabled:
+            return 0
+        now = now or utcnow()
+        read: list[str] = []
+        dead: list[str] = []
+        with self.database.SessionLocal() as db:
+            db.execute(delete(PushTicket).where(PushTicket.created_at < now - RECEIPT_GIVE_UP))
+            due = dict(db.execute(
+                select(PushTicket.id, PushTicket.token).where(PushTicket.created_at <= now - RECEIPT_DELAY)
+                .order_by(PushTicket.created_at).limit(_RECEIPTS_PER_RUN)
+            ).all())
+            ids = list(due)
+            for start in range(0, len(ids), _RECEIPT_BATCH):
+                chunk = ids[start:start + _RECEIPT_BATCH]
+                try:
+                    res = self._client.post(EXPO_RECEIPTS_URL, json={"ids": chunk}, headers=self._headers)
+                    receipts = res.json().get("data") if res.status_code < 400 else None
+                except (httpx.HTTPError, ValueError) as e:
+                    log.warning("expo receipts failed: %s", e)
+                    continue  # kept: the next run asks again
+                if not isinstance(receipts, dict):
+                    log.warning("expo receipts answered %s: %s", res.status_code, res.text[:300])
+                    continue
+                for ticket_id in chunk:
+                    receipt = receipts.get(ticket_id)
+                    if not isinstance(receipt, dict):
+                        continue  # not ready yet
+                    read.append(ticket_id)
+                    if receipt.get("status") != "error":
+                        continue
+                    details = receipt.get("details") if isinstance(receipt.get("details"), dict) else {}
+                    reason = details.get("error") or "unknown"
+                    log.warning("expo push receipt %s failed: %s (%s) token=%s", ticket_id, reason,
+                                str(receipt.get("message", ""))[:200], _short(due[ticket_id]))
+                    if reason == "DeviceNotRegistered":
+                        dead.append(due[ticket_id])
+            if read:
+                db.execute(delete(PushTicket).where(PushTicket.id.in_(read)))
+            _disable(db, dead)
+            db.commit()
+        return len(read)
+
+
+def _short(token: str) -> str:
+    """Enough of a token to find it in the table, not the whole thing in the logs."""
+    return token[:26] + "…" if len(token) > 26 else token
+
+
+def _disable(db: Session, tokens: list[str]) -> None:
+    if tokens:
+        db.execute(update(PushToken).where(PushToken.token.in_(tokens), PushToken.disabled_at.is_(None))
+                   .values(disabled_at=utcnow()))
+
+
+class ReceiptLoop:
+    """Runs `check_receipts` every RECEIPT_INTERVAL_S in a background thread of the service."""
+
+    def __init__(self, sender: ExpoPush):
+        self.sender = sender
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        if self._thread is None:
+            self._thread = threading.Thread(target=self._run, name="expo-receipts", daemon=True)
+            self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+
+    def _run(self) -> None:
+        while not self._stop.wait(RECEIPT_INTERVAL_S):
+            try:
+                self.sender.check_receipts()
+            except Exception:  # a database or network hiccup must not end the loop
+                log.exception("expo receipts failed")
 
 
 class RecordingPush:

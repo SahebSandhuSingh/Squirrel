@@ -1,7 +1,9 @@
 """Service-to-service routes — how the other modules publish into Social.
 
   POST /internal/v1/activities              Authorization: Bearer $SOCIAL_INTERNAL_TOKEN
-  POST /internal/v1/notifications           a territory steal (Run Module) → the in-app list + push
+  POST /internal/v1/notifications           a territory event (Run Module) or a campus event (campus-service)
+                                            → the in-app list + push; returns Social's notification id
+  POST /internal/v1/tasks/push-receipts     check Expo push receipts now (for an external cron)
   POST /internal/v1/tasks/event-reminders   send due event reminders now (for an external cron)
   POST /internal/v1/people/resolve          token subjects / profile ids → Social names, profile ids,
                                             avatar, hostel, level (campus-service); unseen subjects
@@ -35,7 +37,7 @@ from app.auth import bearer_token, get_or_create_user
 from app.db import utcnow
 from app.deps import DB, AppSettings, Storage
 from app.errors import ApiError, conflict
-from app.models import Activity, Crew, CrewMember, User, UserBlock, UserStats
+from app.models import Activity, Crew, CrewMember, Notification, User, UserBlock, UserStats
 from app.schemas import InternalActivityOut, InternalActivityIn
 from app.schemas_community import (
     InternalBlocksImportIn,
@@ -54,6 +56,7 @@ from app.schemas_community import (
     InternalPeopleResolveIn,
     InternalPeopleResolveOut,
     InternalPerson,
+    RUN_MODULE_KINDS,
 )
 from app.services import notify as notifications
 from app.services import badges, dates, reminders, social, xp_cache
@@ -154,8 +157,28 @@ def _territory_text(kind: str, actor: User | None, data: dict) -> tuple[str, str
     return "Your territory faded", "Run there again to claim it back."
 
 
-# Fields that point at the actor's own run: dropped when the actor is hidden.
-_ACTOR_DATA = {"run_id", "capture_event_id"}
+# Fields that identify the actor or point at their own run: dropped when the actor is hidden.
+_ACTOR_DATA = {"run_id", "capture_event_id", "user_id", "actor_id", "actor_subject"}
+
+# Where a tap opens when the caller sends no `data.route` (app screens, see mobile src/app/).
+_ROUTES = {"territory": "/territory", "zone": "/territory", "challenge": "/invites", "event": "/events",
+           "meetup": "/meetups", "activity": "/notifications"}
+
+
+def _route(kind: str, data: dict) -> str:
+    if kind in RUN_MODULE_KINDS:
+        return "/territory"
+    prefix = kind.split(".", 1)[0]
+    if prefix == "meetup" and isinstance(data.get("meetup_id"), str):
+        return f"/meetup/{data['meetup_id']}"
+    if prefix in ("territory", "zone") and isinstance(data.get("zone_id"), str):
+        return f"/zone/{data['zone_id']}"
+    return _ROUTES[prefix]
+
+
+def _fill_actor(text: str, actor: User | None, fallback: str) -> str:
+    """`{actor}` → the actor's name; plain replace, so nothing else in the text is interpreted."""
+    return text.replace("{actor}", actor.display_name if actor else fallback)
 
 
 @router.post("/notifications", response_model=InternalNotificationOut)
@@ -175,11 +198,19 @@ def ingest_notification(
         # Blocked either way: the notification still arrives, but never says who, or which run.
         actor = None
         data = {k: v for k, v in data.items() if k not in _ACTOR_DATA}
-    title, text = _territory_text(body.kind, actor, body.data)
-    created = notifications.notify(db, user.id, body.kind, title, text, data={"route": "/territory", **data},
+    if body.kind in RUN_MODULE_KINDS:
+        title, text = _territory_text(body.kind, actor, body.data)
+    else:
+        title = _fill_actor(body.title or "", actor, body.actor_fallback)
+        text = _fill_actor(body.body or "", actor, body.actor_fallback)
+    if not (isinstance(data.get("route"), str) and data["route"].startswith("/")):
+        data["route"] = _route(body.kind, data)
+    created = notifications.notify(db, user.id, body.kind, title, text, data=data,
                                    actor_id=actor.id if actor else None, dedupe_key=body.dedupe_key)
     db.commit()
-    return InternalNotificationOut(created=created > 0)
+    notification_id = db.scalar(select(Notification.id).where(
+        Notification.user_id == user.id, Notification.dedupe_key == body.dedupe_key))
+    return InternalNotificationOut(created=created > 0, notification_id=notification_id)
 
 
 @router.post("/tasks/event-reminders")
@@ -190,6 +221,17 @@ def run_event_reminders(
 ):
     _check_service_token(settings, authorization)
     return {"reminded_events": reminders.send_due(db, settings)}
+
+
+@router.post("/tasks/push-receipts")
+def run_push_receipts(
+    request: Request,
+    settings: AppSettings,
+    authorization: Annotated[str | None, Header()] = None,
+):
+    _check_service_token(settings, authorization)
+    check = getattr(request.app.state.push, "check_receipts", None)
+    return {"receipts_read": check() if check else 0}
 
 
 @router.post("/people/resolve", response_model=InternalPeopleResolveOut)

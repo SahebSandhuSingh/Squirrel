@@ -7,7 +7,7 @@ import uuid
 from datetime import date, datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app import rules
 from app.schemas import UserSummary
@@ -335,19 +335,47 @@ class PushTokenRequest(_In):
     platform: Literal["ios", "android", "web"]
 
 
+RUN_MODULE_KINDS = ("territory_lost", "territory_captured", "territory_expired")
+CAMPUS_KINDS = (
+    "territory.stolen", "territory.challenged", "territory.defended", "zone.claimed",
+    "challenge.invitation", "challenge.reminder", "challenge.updated",
+    "event.reminder", "meetup.check_in", "meetup.invited", "meetup.accepted", "meetup.declined", "meetup.cancelled",
+    "activity.verification_complete",
+)
+NotificationKind = Literal[RUN_MODULE_KINDS + CAMPUS_KINDS]  # type: ignore[valid-type]
+
+
 class InternalNotificationIn(_In):
-    """From the Run Module (territory steals) or another service. The text is written here, from
-    `kind` and the names Social knows."""
+    """From the Run Module (territory steals) or campus-service.
+
+    Run Module kinds: the text is written here, from `kind` and the names Social knows; `title` and
+    `body` must be left out. Campus kinds: the caller writes `title` (and optionally `body`) and may
+    put `{actor}` where the actor's name goes. Social fills it with the actor's display name, or with
+    `actor_fallback` when there is no actor, Social doesn't know them, or the two are blocked either
+    way."""
 
     user_subject: Annotated[str, Field(min_length=1, max_length=255)]
-    kind: Literal["territory_lost", "territory_captured", "territory_expired"]
+    kind: NotificationKind
     actor_subject: Annotated[str, Field(min_length=1, max_length=255)] | None = None
+    title: Annotated[str, Field(min_length=1, max_length=200)] | None = None
+    body: Annotated[str, Field(max_length=400)] | None = None
+    actor_fallback: Annotated[str, Field(min_length=1, max_length=40)] = "Someone"
     data: dict = {}
     dedupe_key: Annotated[str, Field(min_length=1, max_length=120)]
+
+    @model_validator(mode="after")
+    def _text_by_kind(self):
+        if self.kind in RUN_MODULE_KINDS:
+            if self.title is not None or self.body is not None:
+                raise ValueError("title and body are written by Social for Run Module kinds; leave them out.")
+        elif self.title is None:
+            raise ValueError("title is required for this kind.")
+        return self
 
 
 class InternalNotificationOut(BaseModel):
     created: bool
+    notification_id: uuid.UUID | None  # Social's id: the new one, or the existing one on a retry
 
 
 class InternalPeopleResolveIn(_In):

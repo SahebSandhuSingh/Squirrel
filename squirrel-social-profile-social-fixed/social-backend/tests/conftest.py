@@ -2,7 +2,8 @@
 
 * Schema is built by running the real Alembic migrations (not create_all), once per session.
 * Database: a temp SQLite file by default; set SOCIAL_TEST_DATABASE_URL to run the same suite on
-  PostgreSQL, e.g. postgresql+psycopg://social:social@localhost:5432/social_test
+  PostgreSQL, e.g. postgresql+psycopg://social:social@localhost:5432/social_test. TEST_DATABASE_URL
+  (the other services' name) alone stops the run instead of quietly testing on SQLite.
 * Tokens are real RS256 JWTs signed with a key generated for the session.
 * The Run Module and object storage are replaced by in-process doubles (the only external
   services); everything else — HTTP layer, auth, SQL — is the production code path.
@@ -149,8 +150,16 @@ class FakeStorage:
 
 # --------------------------------------------------------------------------- database
 
-TABLES = ["ambassador_applications", "date_dismissals", "zone_visits", "dates_prefs", "user_blocks", "push_tokens", "notifications", "social_challenges", "checkins", "event_rsvps", "events", "crew_vouches",
+TABLES = ["push_tickets", "ambassador_applications", "date_dismissals", "zone_visits", "dates_prefs", "user_blocks", "push_tokens", "notifications", "social_challenges", "checkins", "event_rsvps", "events", "crew_vouches",
           "crew_members", "crews", "members", "user_badges", "comments", "post_saves", "post_likes", "posts", "media", "activities", "follows", "user_stats", "users"]
+
+
+def pytest_configure(config):
+    if os.environ.get("TEST_DATABASE_URL") and not os.environ.get("SOCIAL_TEST_DATABASE_URL"):
+        raise pytest.UsageError(
+            "TEST_DATABASE_URL is set but this suite reads SOCIAL_TEST_DATABASE_URL; it would have run on "
+            "SQLite instead. Set SOCIAL_TEST_DATABASE_URL (or unset TEST_DATABASE_URL to use SQLite)."
+        )
 
 
 @pytest.fixture(scope="session")

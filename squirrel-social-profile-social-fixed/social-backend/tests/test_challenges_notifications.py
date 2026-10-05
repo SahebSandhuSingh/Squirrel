@@ -122,9 +122,12 @@ def test_a_territory_steal_from_the_run_module_notifies_and_pushes_once(client, 
     body = {"user_subject": victim, "kind": "territory_lost", "actor_subject": thief,
             "data": {"area_delta_m2": 1234.4, "territory_id": "t-1", "capture_event_id": "ce-1"}, "dedupe_key": "ce-1:territory_lost"}
     assert client.post("/internal/v1/notifications", json=body).status_code == 401
-    assert client.post("/internal/v1/notifications", json=body, headers=SVC).json() == {"created": True}
-    assert client.post("/internal/v1/notifications", json=body, headers=SVC).json() == {"created": False}  # a retry
+    first = client.post("/internal/v1/notifications", json=body, headers=SVC).json()
+    assert first["created"] is True
+    retry = client.post("/internal/v1/notifications", json=body, headers=SVC).json()
+    assert retry == {"created": False, "notification_id": first["notification_id"]}  # a retry: the same id
     [n] = notes(client, victim)
+    assert n["id"] == first["notification_id"]
     assert n["title"] == "Rhea stole your territory" and n["body"] == "1,234 m² taken. Run it back!"
     assert n["data"]["route"] == "/territory" and n["actor"]["display_name"] == "Rhea"
     assert [p["to"] for p in pushes.sent] == ["ExponentPushToken[victim]"]
@@ -141,7 +144,7 @@ def test_a_steal_by_someone_blocked_either_way_never_names_them(client, api):
         body = {"user_subject": victim, "kind": "territory_lost", "actor_subject": thief,
                 "data": {"area_delta_m2": 1234.4, "territory_id": "t-1", "run_id": "r-1", "capture_event_id": "ce-1"},
                 "dedupe_key": f"ce-{blocker}"}
-        assert client.post("/internal/v1/notifications", json=body, headers=SVC).json() == {"created": True}
+        assert client.post("/internal/v1/notifications", json=body, headers=SVC).json()["created"] is True
         n = notes(client, victim)[0]
         assert n["title"] == "Someone stole your territory" and n["actor"] is None
         assert "Rhea" not in str(n) and "run_id" not in n["data"] and "capture_event_id" not in n["data"]

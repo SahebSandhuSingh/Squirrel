@@ -21,7 +21,7 @@ from app.errors import ApiError, api_error_handler
 from app.ratelimit import RateLimiter
 from app.routers import ambassador, blocks, challenges, community, crews, dates, events, feed, follows, internal, media, notifications, posts, profiles
 from app.services.media import MediaStorage, make_storage
-from app.services.push import ExpoPush, PushSender
+from app.services.push import ExpoPush, PushSender, ReceiptLoop
 from app.services.reminders import ReminderLoop
 from app.services.route_points import RoutePoints, SqlRoutePoints
 from app.services.run_module import HttpRunModule, RunModule
@@ -41,11 +41,15 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        loop = ReminderLoop(app.state.db, settings, app.state.push) if settings.reminders_enabled else None
-        if loop:
+        loops = []
+        if settings.reminders_enabled:
+            loops.append(ReminderLoop(app.state.db, settings, app.state.push))
+        if settings.push_receipts_enabled and isinstance(app.state.push, ExpoPush) and app.state.push.enabled:
+            loops.append(ReceiptLoop(app.state.push))
+        for loop in loops:
             loop.start()
         yield
-        if loop:
+        for loop in loops:
             loop.stop()
 
     app = FastAPI(title="Squirrel Social — Profile & Social API", version="1.0.0", lifespan=lifespan)

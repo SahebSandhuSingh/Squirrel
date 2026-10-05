@@ -189,8 +189,9 @@ saves 120/min, follows 60/min, profile updates 20/min, username checks 60/min, u
 | `GET·POST /v1/challenges`, `POST …/{id}/accept\|decline\|cancel` | Head-to-head: most verified km or most workouts in 1–30 days |
 | `GET /v1/notifications`, `/unread-count`, `POST /v1/notifications/read` | The in-app list |
 | `POST /v1/me/push-tokens`, `DELETE /v1/me/push-tokens/{token}` | Expo push tokens; pushes go through Expo's service after the request commits (`app/services/push.py`) |
-| `POST /internal/v1/notifications` | Service token: the Run Module's territory captured / lost / expired events. When the actor and the recipient are blocked either way, the notification says "Someone" and drops the actor's run ids |
+| `POST /internal/v1/notifications` | Service token: `{ user_subject, kind, actor_subject?, title?, body?, actor_fallback?, data{}, dedupe_key }` → `{ created, notification_id }` (Social's id; a retry with the same `dedupe_key` returns the same id). **Run Module kinds** `territory_lost / territory_captured / territory_expired`: Social writes the text, so `title` / `body` must be left out. **Campus kinds** `territory.stolen / territory.challenged / territory.defended / zone.claimed / challenge.invitation / challenge.reminder / challenge.updated / event.reminder / meetup.check_in / meetup.invited / meetup.accepted / meetup.declined / meetup.cancelled / activity.verification_complete`: the caller sends `title` (required) and `body`, with `{actor}` where the actor's name goes; Social puts in the display name, or `actor_fallback` (default `Someone`) when there is no actor or Social doesn't know them. When the actor and the recipient are blocked either way, the notification never names them and drops `run_id`, `capture_event_id`, `user_id`, `actor_id` and `actor_subject` from `data`. A tap opens `data.route` when it is a path, otherwise one picked from the kind (`/meetup/{meetup_id}`, `/zone/{zone_id}`, `/invites`, `/events`, …) |
 | `POST /internal/v1/tasks/event-reminders` | Service token: send due event reminders (a cron, while the free plan sleeps) |
+| `POST /internal/v1/tasks/push-receipts` | Service token: `{ receipts_read }` — read the Expo receipts of pushes sent ≥15 min ago now (the service also does it every 5 min); failures are logged with Expo's reason and `DeviceNotRegistered` tokens disabled (a cron, while the free plan sleeps) |
 | `POST /internal/v1/people/resolve` | Service token (campus-service): `{ subjects[]≤200, profile_ids[]≤200 }` → `{ people: [{ subject, profile_id, username, display_name, avatar_url, hostel, level }] }`; unseen subjects are provisioned, unknown profile ids omitted, each person once. The only place a subject↔profile mapping leaves Social |
 | `GET /internal/v1/blocks/{subject}` | Service token (campus-service): `{ subject, blocked: [subject…], as_of }` — everyone blocked **either way** with that person. Never writes; an unseen subject has none. Callers cache ≤30 s and fail closed (ADR-032) |
 | `POST /internal/v1/blocks/import` | Service token: `{ blocks: [{ blocker, blocked }]≤1000 }` (subjects) → `{ imported, already, skipped }`. One-time copy of another service's own block table; safe to re-run; provisions unseen subjects; removes follows between the two, like an app block |
@@ -198,7 +199,7 @@ saves 120/min, follows 60/min, profile updates 20/min, username checks 60/min, u
 | `POST /internal/v1/crews/lookup` | Service token: `{ crew_ids[]≤200 }` → `{ crews: [{ id, name, interest, scope, hostel, members_count, members: [{ subject, role, joined_at }] }] }`; unknown ids are left out (never a 404) |
 
 | GET / POST /v1/ambassador/application | Ambassador applications, settings, and rate-limited form submission. |
-| GET /v1/admin/ambassador/applications / POST ./decision | Requires dmin role: list pending/reviewed applications and approve/reject with notifications. |
+| GET /v1/admin/ambassador/applications / POST ./decision | Requires `admin` role: list pending/reviewed applications and approve/reject with notifications. |
 
 **Moving existing blocks into Social (once):** `scripts/import_blocks.py` reads campus-service's `blocks` table (`--campus-db`) and/or a copy of the Exercise backend's `data/users/` folder (`--partner-hunt-dir`, Partner Hunt's `partner_blocks.json` files) and sends them to the import route. Dry run by default; `--apply` sends. The service token comes from `SOCIAL_INTERNAL_TOKEN` in the environment, never the command line. Safe to re-run.
 
@@ -299,6 +300,7 @@ This matches how the app already uses it, but it must be confirmed against the R
 | `SOCIAL_PARK_REGULAR_DAYS` | no | `5` | Park Regular: different days in the same zone |
 | `SOCIAL_PUSH` | no | `on` | `off` stores notifications without sending pushes |
 | `EXPO_ACCESS_TOKEN` | no | – | Only when the Expo project requires an access token for pushes |
+| `SOCIAL_PUSH_RECEIPTS` | no | `on` | `off` stops the in-process receipt check (`POST /internal/v1/tasks/push-receipts` still runs it) |
 | `SOCIAL_EVENT_REMINDERS`, `SOCIAL_EVENT_REMINDER_MINUTES` | no | `on`, `60` | The in-process reminder loop and how long before the start it reminds |
 | `SOCIAL_AMBASSADOR_OPEN` | no | `off` | When off, ambassador applications are closed with a default message |
 | `SOCIAL_AMBASSADOR_REAPPLY_DAYS` | no | `30` | Days to wait after a rejection before reapplying |
@@ -336,6 +338,9 @@ Docker: `docker build -t squirrel-social . && docker run -p 8100:8100 --env-file
 SOCIAL_TEST_DATABASE_URL=postgresql+psycopg://USER:PASS@localhost:5432/social_test \
   .venv/bin/python -m pytest -q                                 # same suite on PostgreSQL (+ concurrency test)
 ```
+
+`TEST_DATABASE_URL` (the name campus-service and Exercise use) is **not** read here: set on its own,
+it stops the run with an error rather than letting the suite quietly test SQLite.
 
 The Run Module and object storage are replaced by in-process doubles in tests. Everything else
 is the real code path: HTTP, JWT verification, SQL and migrations.

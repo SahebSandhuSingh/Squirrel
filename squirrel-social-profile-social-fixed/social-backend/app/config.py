@@ -101,6 +101,7 @@ class Settings:
     push_enabled: bool = True                # send Expo pushes (SOCIAL_PUSH=off to only store them)
     expo_access_token: str | None = None     # EXPO_ACCESS_TOKEN, when the Expo project requires one
     reminders_enabled: bool = True           # the in-process event-reminder loop
+    push_receipts_enabled: bool = True       # the in-process Expo receipt check (services/push.py)
     event_reminder_minutes: int = 60
 
     # --- ambassador ----------------------------------------------------------------------
@@ -164,6 +165,7 @@ def get_settings() -> Settings:
         push_enabled=os.environ.get("SOCIAL_PUSH", "on").lower() not in ("off", "0", "false"),
         expo_access_token=_opt("EXPO_ACCESS_TOKEN"),
         reminders_enabled=os.environ.get("SOCIAL_EVENT_REMINDERS", "on").lower() not in ("off", "0", "false"),
+        push_receipts_enabled=os.environ.get("SOCIAL_PUSH_RECEIPTS", "on").lower() not in ("off", "0", "false"),
         event_reminder_minutes=_int("SOCIAL_EVENT_REMINDER_MINUTES", 60),
         ambassador_open=os.environ.get("SOCIAL_AMBASSADOR_OPEN", "off").lower() not in ("off", "0", "false"),
         ambassador_reapply_days=_int("SOCIAL_AMBASSADOR_REAPPLY_DAYS", 30),

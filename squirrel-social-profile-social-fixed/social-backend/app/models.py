@@ -484,6 +484,20 @@ class PushToken(Base):
     )
 
 
+class PushTicket(Base):
+    """An Expo push ticket waiting for its receipt (services/push.py). Expo only says whether a
+    message reached Apple / Google in the receipt, fetched ~15 minutes after the send; the row is
+    deleted once its receipt is read, or after a day if Expo never has one."""
+
+    __tablename__ = "push_tickets"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)  # Expo's ticket id
+    token: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+
+    __table_args__ = (Index("ix_push_tickets_created", "created_at"),)
+
+
 class AmbassadorApplication(Base):
     """An application to become a Squirrel Ambassador."""
 
