@@ -14,7 +14,7 @@ type MeetupRow = {
   id: string; created_by: string; zone_id: string | null; place_text: string | null; starts_at: string;
   status: Exclude<MeetupStatus, 'completed'> | MeetupStatus; created_at: string; updated_at: string; zone_name?: string | null;
 };
-type ParticipantRow = { meetup_id: string; user_id: string; role: 'host' | 'guest'; status: 'invited' | 'accepted' | 'declined'; responded_at: string | null };
+type ParticipantRow = { meetup_id: string; user_id: string; role: 'host' | 'guest'; status: 'invited' | 'accepted' | 'declined'; responded_at: string | null; checked_in_at: string | null };
 
 const CreateBody = z.object({
   zone_id: z.string().trim().min(1).max(64).nullable().optional(),
@@ -73,7 +73,7 @@ async function loadMeetup(id: string, q: Queryable = getPool(), lock = false): P
 
 async function participants(meetupId: string, q: Queryable = getPool()) {
   return many<ParticipantRow>(
-    `SELECT meetup_id, user_id, role, status, responded_at FROM meetup_participants WHERE meetup_id = $1 ORDER BY role DESC, user_id`,
+    `SELECT meetup_id, user_id, role, status, responded_at, checked_in_at FROM meetup_participants WHERE meetup_id = $1 ORDER BY role DESC, user_id`,
     [meetupId], q,
   );
 }
@@ -89,21 +89,24 @@ async function blockedFromViewer(viewerId: string, parts: ParticipantRow[], q?: 
   return false;
 }
 
-async function serialize(row: MeetupRow, parts?: ParticipantRow[]) {
+async function serialize(row: MeetupRow, viewerId: string, parts?: ParticipantRow[]) {
   const rows = parts ?? await participants(row.id);
   const people = await many<{ id: string; display_name: string; avatar_url: string | null; hostel: string | null; open_to_meet: boolean; open_to_meet_until: string | null }>(
     `SELECT u.id, u.display_name, u.avatar_url, h.short_name AS hostel, u.open_to_meet, u.open_to_meet_until
      FROM users u LEFT JOIN hostels h ON h.id = u.hostel_id WHERE u.id = ANY($1::text[])`, [rows.map((p) => p.user_id)],
   );
   const personMap = new Map(people.map((p) => [p.id, p]));
+  const me = rows.find(p => p.user_id === viewerId);
   return {
     id: row.id, created_by: row.created_by, zone_id: row.zone_id,
     zone: row.zone_id ? { id: row.zone_id, name: row.zone_name ?? row.zone_id } : null,
     place_text: row.place_text, starts_at: row.starts_at, status: effectiveStatus(row),
     created_at: row.created_at, updated_at: row.updated_at,
+    my_check_in_at: me?.checked_in_at ?? null,
     participants: rows.map((p) => {
       const person = personMap.get(p.user_id);
       return { user_id: p.user_id, role: p.role, status: p.status, responded_at: p.responded_at,
+        checked_in: !!p.checked_in_at,
         person: person ? { user_id: person.id, display_name: person.display_name, avatar_url: person.avatar_url, hostel: person.hostel,
           // open_to_meet is exposed as a profile hint only; no meetup decision reads it.
           open_to_meet: person.open_to_meet && (!person.open_to_meet_until || Date.parse(person.open_to_meet_until) > Date.now()) } : null };
@@ -159,7 +162,7 @@ export async function meetupRoutes(app: FastifyInstance) {
       { meetup_id: created.id, route: `/meetup/${created.id}` }, host.id, campusNotificationDedupeKey('meetup.invited', created.id, id));
     reply.code(201);
     const fresh = await loadMeetup(created.id);
-    return serialize(fresh!);
+    return serialize(fresh!, host.id);
   });
 
   app.get('/v1/meetups', { preHandler: requireAuth }, async (req) => {
@@ -176,7 +179,7 @@ export async function meetupRoutes(app: FastifyInstance) {
       const parts = await participants(row.id);
       if (await blockedFromViewer(viewer.id, parts)) continue;
       if (status && effectiveStatus(row) !== status) continue;
-      out.push(await serialize(row, parts));
+      out.push(await serialize(row, viewer.id, parts));
     }
     return { meetups: out };
   });
@@ -184,7 +187,7 @@ export async function meetupRoutes(app: FastifyInstance) {
   app.get('/v1/meetups/:id', { preHandler: requireAuth }, async (req) => {
     const { id } = IdParams.parse(req.params);
     const { row, parts } = await requireVisibleParticipant(id, currentUser(req).id);
-    return serialize(row, parts);
+    return serialize(row, currentUser(req).id, parts);
   });
 
   for (const action of ['accept', 'decline', 'cancel', 'leave'] as const) {
@@ -244,7 +247,7 @@ export async function meetupRoutes(app: FastifyInstance) {
             campusNotificationDedupeKey('meetup.cancelled', id, p.user_id, `host_cancel:${result.row.updated_at}`));
         }
       }
-      return serialize(result.row, result.parts);
+      return serialize(result.row, user.id, result.parts);
     });
   }
 
@@ -280,7 +283,9 @@ export async function meetupRoutes(app: FastifyInstance) {
       }
       
       if (me.status === 'invited') {
-        await query(`UPDATE meetup_participants SET status = 'accepted', responded_at = now() WHERE meetup_id = $1 AND user_id = $2`, [id, viewer.id], tx);
+        await query(`UPDATE meetup_participants SET status = 'accepted', responded_at = now(), checked_in_at = now() WHERE meetup_id = $1 AND user_id = $2`, [id, viewer.id], tx);
+      } else {
+        await query(`UPDATE meetup_participants SET checked_in_at = now() WHERE meetup_id = $1 AND user_id = $2`, [id, viewer.id], tx);
       }
       
       const res = { 

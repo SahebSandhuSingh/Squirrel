@@ -169,4 +169,47 @@ describe.skipIf(!HAS_DB)('meetups (integration)', () => {
     expect(stored[0]!.status).toBe('confirmed');
     expect((await api('POST', `/v1/meetups/${id}/cancel`, 'u_mh9')).status).toBe(409);
   });
+
+  it('check-in visibility conforms to the four-viewer checklist', async () => {
+    await provision('u_check_h1', 'u_check_g1', 'u_check_g2', 'u_check_s1', 'u_check_b1');
+    const created = await createMeetup('u_check_h1', ['u_check_g1', 'u_check_g2']);
+    const id = created.body.id as string;
+    
+    await sql(`UPDATE meetups SET starts_at = now() WHERE id = $1`, [id]);
+    
+    // Guest 1 checks in
+    await api('POST', `/v1/meetups/${id}/check-in`, 'u_check_g1');
+    
+    // Viewer 1: Guest 1 (checked in) sees their own my_check_in_at and checked_in: true for themselves.
+    const resG1 = await api('GET', `/v1/meetups/${id}`, 'u_check_g1');
+    expect(typeof resG1.body.my_check_in_at).toBe('string');
+    const partsG1 = resG1.body.participants as any[];
+    expect(partsG1.find(p => p.user_id === 'u_check_g1').checked_in).toBe(true);
+    expect(partsG1.find(p => p.user_id === 'u_check_g2').checked_in).toBe(false);
+    
+    // Viewer 2: Guest 2 (not checked in) sees null for my_check_in_at, but sees Guest 1's checked_in.
+    const resG2 = await api('GET', `/v1/meetups/${id}`, 'u_check_g2');
+    expect(resG2.body.my_check_in_at).toBe(null);
+    const partsG2 = resG2.body.participants as any[];
+    expect(partsG2.find(p => p.user_id === 'u_check_g1').checked_in).toBe(true);
+    expect(partsG2.find(p => p.user_id === 'u_check_g2').checked_in).toBe(false);
+    
+    // Host checks in. Reopening (a second check-in) works.
+    await api('POST', `/v1/meetups/${id}/check-in`, 'u_check_h1');
+    await api('POST', `/v1/meetups/${id}/check-in`, 'u_check_h1');
+    const resH1 = await api('GET', `/v1/meetups/${id}`, 'u_check_h1');
+    expect(typeof resH1.body.my_check_in_at).toBe('string');
+    const partsH1 = resH1.body.participants as any[];
+    expect(partsH1.find(p => p.user_id === 'u_check_h1').checked_in).toBe(true);
+    
+    // Viewer 3: Stranger gets 404.
+    const resS1 = await api('GET', `/v1/meetups/${id}`, 'u_check_s1');
+    expect(resS1.status).toBe(404);
+    
+    // Viewer 4: Blocked pair gets 404.
+    await api('POST', '/v1/users/u_check_b1/block', 'u_check_h1');
+    const createdBlocked = await createMeetup('u_check_h1', ['u_check_g1']);
+    const resB1 = await api('GET', `/v1/meetups/${createdBlocked.body.id as string}`, 'u_check_b1');
+    expect(resB1.status).toBe(404);
+  });
 });
