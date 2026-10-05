@@ -27,7 +27,7 @@ export const config = {
   // Start-up tasks run by `node dist/index.js` before the API listens (single-service deploys, e.g. Render).
   startup: {
     migrateOnStart: bool('MIGRATE_ON_START', false),   // apply migrations/*.sql (each once) before listening
-    seedZonesOnStart: bool('SEED_ZONES_ON_START', false), // upsert hostels + placeholder zones only (never dev users/crews)
+    seedZonesOnStart: bool('SEED_ZONES_ON_START', false), // upsert hostels + placeholder zones only (never dev users)
   },
 
   // Identity bridge to the Social service. OFF unless BOTH are set: then every user id sent to clients is the

@@ -59,13 +59,13 @@ export function serializeTerritory(t: TerritoryRow, owner: PersonLite | null, cr
 }
 
 export async function serializeTerritories(rows: TerritoryRow[], q: Queryable = getPool()) {
-  const [people, crews] = await Promise.all([getPeopleLite(rows.map((r) => r.owner_id!).filter(Boolean), q), crewDisplays(rows.map((r) => r.crew_id), q)]);
+  const [people, crews] = await Promise.all([getPeopleLite(rows.map((r) => r.owner_id!).filter(Boolean), q), crewDisplays(rows.map((r) => r.crew_id))]);
   return rows.map((r) => serializeTerritory(r, r.owner_id ? people.get(r.owner_id) ?? null : null, crewOrPlaceholder(r.crew_id, crews)));
 }
 
 /** One territory with its owner (when not given) and crew looked up. */
 export async function territoryOut(t: TerritoryRow, owner?: PersonLite | null, q: Queryable = getPool()) {
-  const [who, crews] = await Promise.all([owner === undefined ? getPersonLite(t.owner_id) : Promise.resolve(owner), crewDisplays([t.crew_id], q)]);
+  const [who, crews] = await Promise.all([owner === undefined ? getPersonLite(t.owner_id) : Promise.resolve(owner), crewDisplays([t.crew_id])]);
   return serializeTerritory(t, who, crewOrPlaceholder(t.crew_id, crews));
 }
 

@@ -177,10 +177,9 @@ describe('Social notification forwarding', () => {
   });
 
   it('loads challenge crew display fields from Social, not the campus crew row', async () => {
-    await api('GET', '/v1/me', 'crew-challenge-creator');
-    const local = await api('POST', '/v1/crews', 'crew-challenge-creator', { name: 'Old Campus Name', color: '#ff0000', icon: 'star' });
-    const crewId = local.body.id as string;
+    const crewId = randomUUID();
     fake.crews.set(crewId, { id: crewId, name: 'Social Striders', interest: 'running', scope: 'campus', hostel: null, members_count: 1, members: [] });
+    await api('GET', '/v1/me', 'crew-challenge-creator');
     const created = await api('POST', '/v1/challenges', 'crew-challenge-creator', {
       type: 'group_activity', target: { type: 'crew', id: crewId },
       starts_at: new Date(Date.now() + 60 * 60_000).toISOString(),

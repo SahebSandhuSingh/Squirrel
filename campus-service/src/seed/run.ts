@@ -1,6 +1,6 @@
 /**
  * npm run seed — idempotent development seed: hostels, ~16 IISER Kolkata zones (placeholder geometry),
- * territory rows, and (outside production) a handful of dev users + one dev crew.
+ * territory rows, and (outside production) a handful of dev users.
  *
  * Zones only (hostels + zones + territory rows; never users or crews):
  *   npm run seed:zones · node dist/seed/run.js --zones-only · SEED_ZONES_ON_START=1 node dist/index.js
@@ -9,7 +9,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from '../config.js';
-import { closePool, getPool, query } from '../db/pool.js';
+import { closePool, query } from '../db/pool.js';
 import { HOSTELS, ROUTE_ZONE_PAD_M, ZONES, loadOsmZones, osmLineWkt, osmPolygonWkt, polygonWkt, lineWkt } from './zones.js';
 
 /**
@@ -98,9 +98,6 @@ export async function seedDevUsers() {
        VALUES ($1, $2, $3, $4, (SELECT id FROM hostels WHERE id = $5), true, true) ON CONFLICT (id) DO UPDATE SET hostel_id = EXCLUDED.hostel_id`,
       [u.id, u.name, u.email, u.email.split('@')[1], u.hostel]);
   }
-  await query(`INSERT INTO crews (name, description, color, owner_id) VALUES ('Nivedita Night Runners', 'Late-night loops.', '#D7FF1F', 'u_aanya') ON CONFLICT (name) DO NOTHING`);
-  await query(`INSERT INTO crew_members (crew_id, user_id, role) SELECT id, 'u_aanya', 'owner' FROM crews WHERE name = 'Nivedita Night Runners' ON CONFLICT DO NOTHING`);
-  await query(`INSERT INTO crew_members (crew_id, user_id, role) SELECT id, 'u_dev', 'member' FROM crews WHERE name = 'Nivedita Night Runners' ON CONFLICT DO NOTHING`);
 }
 
 export async function seed(opts: { zonesOnly?: boolean } = {}) {
@@ -114,4 +111,3 @@ export async function seed(opts: { zonesOnly?: boolean } = {}) {
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   seed({ zonesOnly: process.argv.includes('--zones-only') }).then(() => closePool()).catch((e) => { console.error(e); process.exit(1); });
 }
-void getPool;

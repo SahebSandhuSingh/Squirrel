@@ -103,7 +103,7 @@ async function serialize(rows: ChallengeRow[], viewerId: string) {
       direction: r.created_by === viewerId ? 'outgoing' : 'incoming',
       created_at: r.created_at, started_at: r.started_at, completed_at: r.completed_at,
       result: r.status === 'completed' ? { winner, summary: r.result_summary ?? '' } : null,
-      actions: allowedActions(r, {
+      actions: r.target_type === 'crew' && (membershipResult.unavailable || crewResult.unavailable) ? [] : allowedActions(r, {
         isCreator: r.created_by === viewerId,
         isTarget: respondsFor(r, viewerId, membershipResult.memberships),
         isParticipant: participantFor(r, viewerId, crewResult.crews),
@@ -142,12 +142,13 @@ export async function challengeRoutes(app: FastifyInstance) {
       const user = currentUser(req);
       const { box } = z.object({ box: z.enum(['incoming', 'outgoing', 'all']).default('all') }).parse(req.query);
       await expireStale();
-      const myCrews = ((await lookupCrewMemberships([user.id])).get(user.id) || []).map(c => c.id);
+      const membershipResult = await lookupCrewMembershipsWithStatus([user.id]);
+      const myCrews = (membershipResult.memberships.get(user.id) || []).map(c => c.id);
       const rows = await many<ChallengeRow>(
         `${SELECT} WHERE (
             ($2 IN ('outgoing','all') AND ch.created_by = $1) OR
-            ($2 IN ('incoming','all') AND (ch.target_user_id = $1 OR ch.target_crew_id = ANY($3::uuid[])))
-         ) ORDER BY ch.created_at DESC LIMIT 100`, [user.id, box, myCrews]);
+            ($2 IN ('incoming','all') AND (ch.target_user_id = $1 OR ch.target_crew_id = ANY($3::uuid[]) OR ($4::boolean AND ch.target_type = 'crew')))
+         ) ORDER BY ch.created_at DESC LIMIT 100`, [user.id, box, myCrews, membershipResult.unavailable]);
       return { invites: await serialize(rows, user.id), challenges: await serialize(rows, user.id) };
     });
 

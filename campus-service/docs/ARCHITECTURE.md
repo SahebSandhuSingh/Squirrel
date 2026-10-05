@@ -33,7 +33,7 @@ Revisit this decision as soon as a dedicated worker service exists. At that poin
 | table | purpose |
 |---|---|
 | `hostels`, `users` | JIT-provisioned profile rows keyed by JWT `sub`; `campus_xp`, `open_to_meet`, cooldown timestamp |
-| `crews`, `crew_members` | minimal crews so territory can carry a crew, and challenges can target one |
+| Social | owns crews and memberships; campus-service stores Social crew ids on territories and challenges |
 | `zones` | fixed polygons (SRID 4326, GiST), `zone_type` AREA/ROUTE, optional `required_route`, per-zone thresholds, `geometry_source` |
 | `territories` | **one row per zone (PK = zone_id)** — single owner by construction; `version` monotonic; shield; counts |
 | `territory_events` | append-only history: CLAIM/STEAL/DEFEND/RELEASE/DECAY with actor, previous owner, activity, XP, version |

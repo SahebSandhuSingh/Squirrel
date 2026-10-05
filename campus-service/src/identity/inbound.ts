@@ -47,7 +47,6 @@ export const INBOUND_USER_ID_FIELDS: Record<string, Extract[]> = {
   'POST /v1/meetups': [list('invitee_ids')],
   'POST /v1/challenge-invites': [challengeTarget],
   'POST /v1/challenges': [challengeTarget],
-  'POST /v1/crews/:id/leave': [field('body', 'transfer_to')],
 };
 
 export function registerInboundIdentity(app: FastifyInstance) {

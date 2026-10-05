@@ -93,16 +93,7 @@ Create or remove a directed block; both operations are idempotent. Self-blocking
 
 ## Crews
 
-### `POST /v1/crews` 🔒
-Body `{ "name", "description"?, "color"?, "icon"? }` → `201 Crew`. The creator is inserted as the owner in the same transaction. Crew names are unique.
-
-### `GET /v1/crews` 🔒 · `GET /v1/crews/:id` 🔒
-List crews the caller belongs to, or return one crew with its members. Non-members receive 404 for the detail route.
-
-### `POST /v1/crews/:id/join` · `POST /v1/crews/:id/leave` 🔒
-Joining is open and idempotent. A member can leave freely. An owner with other members must provide `{ "transfer_to": "user-id" }` naming an existing member; ownership transfer and departure are atomic. A last owner leaving deletes the crew.
-
-> ADR-032 assigns crews to the **Social** service. These routes remain until campus-service reads crew membership from Social and these tables are retired.
+Crews and crew membership are owned by Social. Campus endpoints that include crew information resolve it from Social; campus-service has no public `/v1/crews` routes or local crew storage.
 
 ## Meetups
 
@@ -347,7 +338,7 @@ Every transition emits `challenge.created|updated` (and app alias `invite.update
 
 > ADR-032: a board belongs to the owner of the number it ranks. The "zones held" boards are this service's; XP boards move to the Run Module's ledger once campus XP is reported there.
 
-### `GET /v1/campus/stats` (app) — users_total, users_active_now, zones_total, zones_claimed, crews_total, zones_claimed_today, territory_changes_today, activities_today, active_squirrels_today, challenges_today, challenges_open, meetups_today, founding_spots_left (null).
+### `GET /v1/campus/stats` (app) — users_total, users_active_now, zones_total, zones_claimed, crews_total, zones_claimed_today, territory_changes_today, activities_today, active_squirrels_today, challenges_today, challenges_open, meetups_today, founding_spots_left (null). `crews_total` comes from Social, is cached for 60 seconds, and uses the last known count during a Social outage (zero before the first successful lookup).
 ### `GET /v1/stats/daily` (spec) — `{ date, active_squirrels, zones_claimed_today, crews, activities, territory_changes, meetups, challenges, users_active_now }`.
 
 ---

@@ -175,26 +175,21 @@ describe.skipIf(!HAS_DB)('challenge allowed actions (integration)', () => {
     expect((await listFor(creator)).find((x) => x.id === id)?.actions).toEqual([]);
   });
 
-  it('Social unavailable is distinguishable from a confirmed empty action list', async () => {
-    const creator = `actions-outage-creator-${randomUUID()}`;
-    const created = await makeCrewChallenge(creator);
+  it('Social unavailable keeps crew challenges visible with no actions and a retry status', async () => {
+    const member = `actions-outage-member-${randomUUID()}`;
+    CREW_ROLES.set(member, 'member');
+    await api('GET', '/v1/me', member);
+    const created = await makeCrewChallenge(`actions-outage-creator-${randomUUID()}`);
+    const onlineRow = (await listFor(member, 'incoming')).find((x) => x.id === created.body.id)!;
+    expect(onlineRow).toMatchObject({ actions: [], actions_status: 'ready' });
+
     membershipUnavailable = true;
     lookupUnavailable = true;
     resetIdentityState();
     configureSocialBridge({ url: socialUrl, token: TOKEN, timeoutMs: 500, cacheTtlMs: 0 });
-    const outageRow = (await listFor(creator, 'outgoing')).find((x) => x.id === created.body.id)!;
-    expect(outageRow.actions_status).toBe('crew_role_unavailable');
-    expect(outageRow.actions).toContain('cancel'); // known from the local creator id
-
-    membershipUnavailable = false;
-    lookupUnavailable = false;
-    resetIdentityState();
-    configureSocialBridge({ url: socialUrl, token: TOKEN, timeoutMs: 500, cacheTtlMs: 0 });
-    const member = `actions-ordinary-member-${randomUUID()}`;
-    CREW_ROLES.set(member, 'member');
-    await api('GET', '/v1/me', member);
-    const memberInvite = await makeCrewChallenge(`actions-other-maker-${randomUUID()}`);
-    expect((await listFor(member, 'incoming')).find((x) => x.id === memberInvite.body.id)).toMatchObject({ actions: [], actions_status: 'ready' });
+    const outageRow = (await listFor(member, 'incoming')).find((x) => x.id === created.body.id);
+    expect(outageRow).toMatchObject({ actions: [], actions_status: 'crew_role_unavailable' });
+    expect((await api('POST', `${base}/${created.body.id}/accept`, member)).status).toBe(403);
   });
 
   it('all advertised actions can be executed, and actions omitted by role, state, or timing are refused', async () => {

@@ -3,15 +3,15 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { one } from '../db/pool.js';
+import { socialCrewCount } from '../crews/count.js';
 
 export async function campusStats() {
-  const r = await one<{ users_total: number; users_active_now: number; zones_total: number; zones_claimed: number; crews_total: number; zones_claimed_today: number; territory_changes_today: number; activities_today: number; active_squirrels_today: number; challenges_today: number; challenges_open: number; meetups_today: number }>(
+  const r = await one<{ users_total: number; users_active_now: number; zones_total: number; zones_claimed: number; zones_claimed_today: number; territory_changes_today: number; activities_today: number; active_squirrels_today: number; challenges_today: number; challenges_open: number; meetups_today: number }>(
     `SELECT
        (SELECT count(*) FROM users WHERE NOT is_banned)::int AS users_total,
        (SELECT count(*) FROM presence WHERE expires_at > now())::int AS users_active_now,
        (SELECT count(*) FROM zones WHERE is_active)::int AS zones_total,
        (SELECT count(*) FROM territories t JOIN zones z ON z.id = t.zone_id WHERE z.is_active AND t.owner_id IS NOT NULL)::int AS zones_claimed,
-       (SELECT count(*) FROM crews)::int AS crews_total,
        (SELECT count(*) FROM territory_events WHERE action IN ('CLAIM','STEAL') AND created_at >= date_trunc('day', now()))::int AS zones_claimed_today,
        (SELECT count(*) FROM territory_events WHERE created_at >= date_trunc('day', now()))::int AS territory_changes_today,
        (SELECT count(*) FROM activities WHERE started_at >= date_trunc('day', now()) AND verification_status <> 'RECORDING')::int AS activities_today,
@@ -21,7 +21,7 @@ export async function campusStats() {
        (SELECT count(*) FROM meetups WHERE created_at >= date_trunc('day', now()))::int AS meetups_today`,
     [],
   );
-  return { ...r!, founding_spots_left: null, updated_at: new Date().toISOString() };
+  return { ...r!, crews_total: await socialCrewCount(), founding_spots_left: null, updated_at: new Date().toISOString() };
 }
 
 export async function statsRoutes(app: FastifyInstance) {

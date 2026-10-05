@@ -14,7 +14,6 @@ import { presenceRoutes } from './presence/routes.js';
 import { challengeRoutes } from './challenges/routes.js';
 import { leaderboardRoutes } from './leaderboards/routes.js';
 import { statsRoutes } from './stats/routes.js';
-import { crewRoutes } from './crews/routes.js';
 import { blockRoutes } from './blocks/routes.js';
 import { meetupRoutes } from './meetups/routes.js';
 import { sharedZoneRoutes } from './shared-zones/routes.js';
@@ -68,7 +67,6 @@ export async function buildApp(opts: { logger?: boolean | object } = {}): Promis
   await app.register(activityRoutes);
   await app.register(presenceRoutes);
   await app.register(challengeRoutes);
-  await app.register(crewRoutes);
   await app.register(blockRoutes);
   await app.register(meetupRoutes);
   await app.register(sharedZoneRoutes);

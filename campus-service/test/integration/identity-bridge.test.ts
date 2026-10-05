@@ -104,24 +104,6 @@ describe.skipIf(!HAS_DB)('identity bridge to Social (integration)', () => {
     expect((await sql<{ display_name: string }>(`SELECT display_name FROM users WHERE id = 'u_ib_rename'`))[0]!.display_name).toBe('New Name');
   });
 
-  it('crew member list and crew owner carry profile ids and Social names', async () => {
-    const a = social.add('u_ib_ca', 'Crew Captain');
-    const b = social.add('u_ib_cb', 'Crew Buddy');
-    const crew = await api('POST', '/v1/crews', 'u_ib_ca', { name: 'Bridge Crew' });
-    expect(crew.status).toBe(201);
-    expect(crew.body.owner_id).toBe(a.profile_id);
-    await api('POST', `/v1/crews/${crew.body.id}/join`, 'u_ib_cb');
-    const detail = await api('GET', `/v1/crews/${crew.body.id}`, 'u_ib_ca');
-    const members = detail.body.members as { user_id: string; person: { user_id: string; display_name: string } }[];
-    expect(members.map((m) => m.user_id).sort()).toEqual([a.profile_id, b.profile_id].sort());
-    expect(members.find((m) => m.user_id === b.profile_id)!.person).toMatchObject({ user_id: b.profile_id, display_name: 'Crew Buddy' });
-    // leaving with transfer_to = a profile id
-    const left = await api('POST', `/v1/crews/${crew.body.id}/leave`, 'u_ib_ca', { transfer_to: b.profile_id });
-    expect(left.status).toBe(200);
-    expect(left.body.owner_id).toBe(b.profile_id);
-    expect((await sql<{ owner_id: string }>(`SELECT owner_id FROM crews WHERE id = $1`, [crew.body.id]))[0]!.owner_id).toBe('u_ib_cb');
-  });
-
   it('territory owner, history actor, steal notification (actor, data.user_id, text) and leaderboard use Social identity', async () => {
     const owner = social.add('u_ib_owner', 'Olivia Owner');
     const thief = social.add('u_ib_thief', 'Tariq Thief');

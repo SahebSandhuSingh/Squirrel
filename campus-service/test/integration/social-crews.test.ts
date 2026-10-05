@@ -104,17 +104,14 @@ describe.skipIf(!HAS_DB)('crews via Social (integration)', () => {
     expect(socialProfile.body.crews).toContainEqual(expect.objectContaining({ id: crewId }));
   });
 
-  it('a person in the local table but NOT in Social is NOT treated as a member', async () => {
+  it('a person absent from Social is not a member even when a territory names that Social crew', async () => {
     const crewId = crypto.randomUUID();
     social.crews.push({ id: crewId, name: 'Local Crew' });
 
     await api('GET', '/v1/me', 'u_dev');
     
     const zoneId = 'cc1';
-    // In local db, u_dev is in crew but not in social.
-    await sql(`INSERT INTO crews (id, name, owner_id) VALUES ($1, 'Local Crew', 'u_dev')`, [crewId]);
-    await sql(`INSERT INTO crew_members (crew_id, user_id, role) VALUES ($1, 'u_dev', 'member')`, [crewId]);
-
+    // Territory references the Social crew id; membership still comes only from Social.
     await sql(`UPDATE territories SET crew_id = $1, owner_id = NULL WHERE zone_id = $2`, [crewId, zoneId]);
 
     // Since u_dev is not in Social, they are NOT a member, meaning they cannot defend this territory
