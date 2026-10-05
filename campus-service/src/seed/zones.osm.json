@@ -1,0 +1,6 @@
+{
+ "source": null,
+ "note": "Empty until the campus is imported from OpenStreetMap: node scripts/campus-osm.mjs --fetch (or --in map.osm). Until then the app draws the hand-placed placeholder in campusBaseMap.ts.",
+ "zones": [],
+ "features": null
+}

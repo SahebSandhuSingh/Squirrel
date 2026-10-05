@@ -10,9 +10,41 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from '../config.js';
 import { closePool, getPool, query } from '../db/pool.js';
-import { HOSTELS, ZONES, polygonWkt, lineWkt } from './zones.js';
+import { HOSTELS, ZONES, loadOsmZones, osmPolygonWkt, polygonWkt, lineWkt } from './zones.js';
 
-export async function seedZones() {
+/**
+ * The OpenStreetMap campus (zones.osm.json), when imported: its halls and zones are written with
+ * geometry_source 'osm', replacing placeholder or earlier OSM geometry (never surveyed geometry), and
+ * placeholder zones it doesn't include are switched off. Returns false when there's nothing imported.
+ */
+async function seedOsmZones(): Promise<boolean> {
+  const zones = loadOsmZones();
+  if (!zones.length) return false;
+  for (const z of zones.filter((z) => z.kind === 'hostel')) {
+    await query(`INSERT INTO hostels (id, name, short_name) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, short_name = EXCLUDED.short_name`, [z.id, z.name, z.short_name ?? z.name]);
+  }
+  for (const z of zones) {
+    await query(
+      `INSERT INTO zones (id, name, short_name, description, kind, zone_type, geometry, centroid, required_route, qualify_threshold, hostel_id, geometry_source)
+       VALUES ($1, $2, $3, $4, $5, 'AREA', ST_GeomFromText($6, 4326), ST_Centroid(ST_GeomFromText($6, 4326)), NULL, NULL, $7, 'osm')
+       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, short_name = EXCLUDED.short_name, kind = EXCLUDED.kind, hostel_id = EXCLUDED.hostel_id, is_active = true,
+         geometry = CASE WHEN zones.geometry_source IN ('dev_placeholder', 'osm') THEN EXCLUDED.geometry ELSE zones.geometry END,
+         centroid = CASE WHEN zones.geometry_source IN ('dev_placeholder', 'osm') THEN EXCLUDED.centroid ELSE zones.centroid END,
+         zone_type = CASE WHEN zones.geometry_source IN ('dev_placeholder', 'osm') THEN 'AREA' ELSE zones.zone_type END,
+         required_route = CASE WHEN zones.geometry_source IN ('dev_placeholder', 'osm') THEN NULL ELSE zones.required_route END,
+         geometry_source = CASE WHEN zones.geometry_source = 'dev_placeholder' THEN 'osm' ELSE zones.geometry_source END,
+         updated_at = now()`,
+      [z.id, z.name, z.short_name, `${z.name} (OpenStreetMap).`, z.kind, osmPolygonWkt(z.polygon), z.kind === 'hostel' ? z.id : null],
+    );
+    await query(`INSERT INTO territories (zone_id) VALUES ($1) ON CONFLICT DO NOTHING`, [z.id]);
+  }
+  await query(`UPDATE zones SET is_active = false, updated_at = now() WHERE geometry_source = 'dev_placeholder' AND NOT (id = ANY($1::text[]))`, [zones.map((z) => z.id)]);
+  return true;
+}
+
+/** Returns where the zones came from, for the log line. */
+export async function seedZones(): Promise<'osm' | 'dev_placeholder'> {
+  if (await seedOsmZones()) return 'osm';
   for (const h of HOSTELS) await query(`INSERT INTO hostels (id, name, short_name) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, short_name = EXCLUDED.short_name`, [h.id, h.name, h.short]);
   for (const z of ZONES) {
     await query(
@@ -27,32 +59,34 @@ export async function seedZones() {
     );
     await query(`INSERT INTO territories (zone_id) VALUES ($1) ON CONFLICT DO NOTHING`, [z.id]);
   }
+  return 'dev_placeholder';
 }
 
 export const DEV_USERS = [
-  { id: 'u_aanya', name: 'Aanya Moves', email: 'aanya@iiserkol.ac.in', hostel: 'narmada' },
-  { id: 'u_rhea', name: 'Rhea Runs', email: 'rhea@iiserkol.ac.in', hostel: 'tapti' },
-  { id: 'u_kabir', name: 'Kabir Cycles', email: 'kabir@iiserkol.ac.in', hostel: 'godavari' },
-  { id: 'u_dev', name: 'Dev Squirrel', email: 'dev@iiserkol.ac.in', hostel: 'narmada' },
+  { id: 'u_aanya', name: 'Aanya Moves', email: 'aanya@iiserkol.ac.in', hostel: 'nivedita' },
+  { id: 'u_rhea', name: 'Rhea Runs', email: 'rhea@iiserkol.ac.in', hostel: 'nscb' },
+  { id: 'u_kabir', name: 'Kabir Cycles', email: 'kabir@iiserkol.ac.in', hostel: 'vidyasagar' },
+  { id: 'u_dev', name: 'Dev Squirrel', email: 'dev@iiserkol.ac.in', hostel: 'nivedita' },
 ];
 
 export async function seedDevUsers() {
   for (const u of DEV_USERS) {
     await query(
       `INSERT INTO users (id, display_name, email, email_domain, hostel_id, onboarding_completed, founding_member)
-       VALUES ($1, $2, $3, $4, $5, true, true) ON CONFLICT (id) DO UPDATE SET hostel_id = EXCLUDED.hostel_id`,
+       VALUES ($1, $2, $3, $4, (SELECT id FROM hostels WHERE id = $5), true, true) ON CONFLICT (id) DO UPDATE SET hostel_id = EXCLUDED.hostel_id`,
       [u.id, u.name, u.email, u.email.split('@')[1], u.hostel]);
   }
-  await query(`INSERT INTO crews (name, description, color, owner_id) VALUES ('Narmada Night Runners', 'Late-night loops.', '#D7FF1F', 'u_aanya') ON CONFLICT (name) DO NOTHING`);
-  await query(`INSERT INTO crew_members (crew_id, user_id, role) SELECT id, 'u_aanya', 'owner' FROM crews WHERE name = 'Narmada Night Runners' ON CONFLICT DO NOTHING`);
-  await query(`INSERT INTO crew_members (crew_id, user_id, role) SELECT id, 'u_dev', 'member' FROM crews WHERE name = 'Narmada Night Runners' ON CONFLICT DO NOTHING`);
+  await query(`INSERT INTO crews (name, description, color, owner_id) VALUES ('Nivedita Night Runners', 'Late-night loops.', '#D7FF1F', 'u_aanya') ON CONFLICT (name) DO NOTHING`);
+  await query(`INSERT INTO crew_members (crew_id, user_id, role) SELECT id, 'u_aanya', 'owner' FROM crews WHERE name = 'Nivedita Night Runners' ON CONFLICT DO NOTHING`);
+  await query(`INSERT INTO crew_members (crew_id, user_id, role) SELECT id, 'u_dev', 'member' FROM crews WHERE name = 'Nivedita Night Runners' ON CONFLICT DO NOTHING`);
 }
 
 export async function seed(opts: { zonesOnly?: boolean } = {}) {
-  await seedZones();
+  const source = await seedZones();
   const withUsers = !opts.zonesOnly && !config.isProd;
   if (withUsers) await seedDevUsers();
-  console.log(`seeded ${HOSTELS.length} hostels, ${ZONES.length} zones${withUsers ? `, ${DEV_USERS.length} dev users` : ''} (new zones: geometry_source = dev_placeholder)`);
+  const zones = source === 'osm' ? `${loadOsmZones().length} OpenStreetMap zones` : `${HOSTELS.length} hostels, ${ZONES.length} placeholder zones`;
+  console.log(`seeded ${zones}${withUsers ? `, ${DEV_USERS.length} dev users` : ''} (geometry_source = ${source})`);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {

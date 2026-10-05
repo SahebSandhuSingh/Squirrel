@@ -11,7 +11,7 @@ while it still has that marker, so replacing a polygon with real data is safe an
 | item | needed for | format | who can supply |
 |---|---|---|---|
 | **Campus centre + fence radius** (`CAMPUS_CENTER_LAT/LNG`, `CAMPUS_MAX_RADIUS_M`) | rejecting off-campus GPS, nearby search bias | decimal degrees; metres | a phone standing at the main gate / centre; confirm the campus fits in 4 km |
-| **Zone polygons (16 seeded, ~15 wanted)** — hostels (Narmada, Tapti, Godavari, Kaveri, Ganga…), Mess, CC1, Library, LHC, Admin lawn, Main gate boulevard, Research complex, Amphitheatre, Health centre, Sports ground, Lake | qualification, claims, map | closed WGS84 polygon (GeoJSON or KML), **valid** (no self-intersections), 5–30 vertices | walk the boundary with a GPS-tracing app (OSMAnd, Strava route, Google My Maps) or trace on satellite imagery |
+| **Zone polygons (14 seeded)** — the halls (Nivedita, Netaji Subhas Chandra Bose, Ishwar Chandra Vidyasagar), Mess, CC1, Library, LHC, Admin lawn, Main gate boulevard, Research complex, Amphitheatre, Health centre, Sports ground, Lake | qualification, claims, map | closed WGS84 polygon (GeoJSON or KML), **valid** (no self-intersections), 5–30 vertices | walk the boundary with a GPS-tracing app (OSMAnd, Strava route, Google My Maps) or trace on satellite imagery |
 | **Route lines for ROUTE zones** — Sports Ground Loop, Lake Walk (+ any other loops) | route_completion | WGS84 LineString following the actual path/track | trace by walking it once with the app in dev mode and exporting the `track` from `GET /v1/activities/:id` |
 | **Per-zone thresholds** (optional) | fairness | number 0–1 | product decision after a week of real runs; defaults 0.6 AREA / 0.8 ROUTE |
 | **Hostel list + names** | hostel leaderboard, profiles | id, full name, short name | admin |
@@ -24,7 +24,25 @@ while it still has that marker, so replacing a polygon with real data is safe an
 * Avoid overlapping zones unless intentional; overlapping zones qualify independently.
 * AREA zones smaller than ~4 000 m² are hard to hit 60 % coverage on with 15 m buffer — either lower the threshold or enlarge the zone.
 
-## How to load real data
+## Fastest: import from OpenStreetMap
+
+OpenStreetMap already maps the campus (the university outline is way 354549537; Nivedita Hall, the
+library and the grounds are on it). One command turns it into the app's base map and this seed:
+
+```bash
+cd mobile-4
+node scripts/campus-osm.mjs --fetch          # needs internet access to overpass-api.de
+# or: openstreetmap.org → Export → "Manually select a different area" around the campus → Export,
+#     then: node scripts/campus-osm.mjs --in ~/Downloads/map.osm
+```
+
+It writes `mobile-4/src/api/campus/campusOsm.json` (the app draws it) and `src/seed/zones.osm.json`
+(the next `npm run seed:zones` loads it with `geometry_source = 'osm'`, keeps surveyed zones as they
+are, and switches off placeholder zones OpenStreetMap doesn't have). The halls, library, LHC, gate,
+mess and lake keep the ids used everywhere else, so territory and hall choices carry over. Commit the
+two JSON files. Anything missing from OpenStreetMap stays missing: add it there, or survey it below.
+
+## How to load real data by hand
 
 ```sql
 UPDATE zones SET geometry = ST_GeomFromGeoJSON('{"type":"Polygon","coordinates":[[[lng,lat],…]]}'),

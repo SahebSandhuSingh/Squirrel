@@ -168,9 +168,9 @@ describe.skipIf(!HAS_DB)('territory flow (integration)', () => {
   });
 
   it('ROUTE zone qualifies by completing the required route, not by area coverage', async () => {
-    // Sports loop: required route is an oval of rx 120, ry 80 centred (-390, 70). Run the oval once.
-    const loop: [number, number][] = Array.from({ length: 25 }, (_, i) => { const a = (i / 24) * Math.PI * 2; return [-390 + Math.cos(a) * 120, 70 + Math.sin(a) * 80]; });
-    const id = await submitAndVerify('u_rhea', trackAlong([[-390, -150], ...loop, [-390, -150]], 3.2));
+    // Sports loop: required route is an oval of rx 110, ry 70 centred (-380, 230). Run the oval once.
+    const loop: [number, number][] = Array.from({ length: 25 }, (_, i) => { const a = (i / 24) * Math.PI * 2; return [-380 + Math.cos(a) * 110, 230 + Math.sin(a) * 70]; });
+    const id = await submitAndVerify('u_rhea', trackAlong([[-380, 100], ...loop, [-380, 100]], 3.2));
     const zones = await api('GET', `/v1/activities/${id}/zones`, 'u_rhea');
     const sports = (zones.body.zones as { zone_id: string; interaction: string; qualification: { status: string; metric: string; value: number } }[]).find((z) => z.zone_id === 'sports');
     expect(sports).toBeTruthy();
@@ -179,14 +179,14 @@ describe.skipIf(!HAS_DB)('territory flow (integration)', () => {
     expect(sports!.qualification.status).toBe('QUALIFIED');
     expect(sports!.interaction).toBe('looped');
     // Cutting straight across the oval does not complete the route
-    const id2 = await submitAndVerify('u_kabir', trackAlong([[-600, 70], [-390, 70], [-180, 70], [0, 70], [200, 70]], 3.2));
+    const id2 = await submitAndVerify('u_kabir', trackAlong([[-600, 230], [-380, 230], [-180, 230], [0, 230], [200, 230]], 3.2));
     const z2 = (await api('GET', `/v1/activities/${id2}/zones`, 'u_kabir')).body.zones as { zone_id: string; qualification: { status: string } }[];
     expect(z2.find((z) => z.zone_id === 'sports')?.qualification.status ?? 'NOT_QUALIFIED').toBe('NOT_QUALIFIED');
   });
 
   it('GET /v1/zones and /v1/territories reflect ownership; filters work', async () => {
     const all = await api('GET', '/v1/zones', null);
-    expect((all.body.zones as unknown[]).length).toBe(16);
+    expect((all.body.zones as unknown[]).length).toBe(14);
     const mine = await api('GET', '/v1/territories?ownedByMe=true', 'u_rhea');
     expect((mine.body.territories as { zone_id: string }[]).map((t) => t.zone_id)).toContain('cc1');
     const geo = await api('GET', '/v1/zones?format=geojson', null);
@@ -200,7 +200,7 @@ describe.skipIf(!HAS_DB)('territory flow (integration)', () => {
     expect((lb.body.entries as { user_id: string; xp: number }[]).length).toBeGreaterThan(0);
     expect((lb.body.entries as { xp: number }[])[0]!.xp).toBeGreaterThan(0);
     const hb = await api('GET', '/v1/leaderboards/hostels', null);
-    expect((hb.body.entries as unknown[]).length).toBe(5);
+    expect((hb.body.entries as unknown[]).length).toBe(3);
     const st = await api('GET', '/v1/stats/daily', null);
     expect(st.body.zones_claimed_today as number).toBeGreaterThan(0);
   });

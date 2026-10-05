@@ -122,14 +122,14 @@ describe('XP cache to Run Module (integration)', () => {
     
     const actId = randomUUID();
     await sql(`INSERT INTO activities (id, user_id, raw_track, verification_status, activity_type, started_at, updated_at) VALUES ('${actId}', '${actor}', ST_GeomFromText('LINESTRING(0 0, 1 1)', 4326), 'VERIFIED', 'run', now(), now())`);
-    await sql(`INSERT INTO qualification_results (id, user_id, zone_id, status, activity_id, expires_at, interaction, verified) VALUES ('${randomUUID()}', '${actor}', 'narmada', 'QUALIFIED', '${actId}', now() + interval '1 hour', 'visited', true)`);
+    await sql(`INSERT INTO qualification_results (id, user_id, zone_id, status, activity_id, expires_at, interaction, verified) VALUES ('${randomUUID()}', '${actor}', 'nivedita', 'QUALIFIED', '${actId}', now() + interval '1 hour', 'visited', true)`);
     
     runFakeState.offline = true;
     
-    const res = await api('POST', '/v1/zones/narmada/claim', actor, { idempotency_key: 'ik_xp_off' });
+    const res = await api('POST', '/v1/zones/nivedita/claim', actor, { idempotency_key: 'ik_xp_off' });
     expect(res.status).toBe(200); // STILL SUCCEEDS!
     
-    const owner = await sql(`SELECT owner_id FROM territories WHERE zone_id = 'narmada'`);
+    const owner = await sql(`SELECT owner_id FROM territories WHERE zone_id = 'nivedita'`);
     expect(owner[0].owner_id).toBe(actor);
   });
 
