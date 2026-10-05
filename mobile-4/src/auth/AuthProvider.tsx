@@ -13,9 +13,12 @@ import { accountApi, type TokenPair } from '@/auth/account';
 import { jwtSubject } from '@/auth/jwt';
 import { unregisterPush, usePushNotifications } from '@/notifications/push';
 import { resetTerritories } from '@/state/territoryStore';
+import { looksLikeEmail, normalizeIndianMobile, splitFullName } from '@/logic/accessSignup';
 
 /** Some backend that authenticates the bearer token is configured. */
 const BEARER_BACKEND = API_CONFIGURED || CAMPUS_API_CONFIGURED || PROGRESS_API_CONFIGURED || EXERCISE_API_CONFIGURED || SOCIAL_API_CONFIGURED;
+
+const NO_ACCOUNT_SERVER = 'No account server is configured. Set EXPO_PUBLIC_EXERCISE_API_URL, or explore the demo.';
 
 /** Campus sign-up is limited to institutional emails. The backend enforces the exact domains. */
 export const isAcademicEmail = (e: string) =>
@@ -206,7 +209,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = useCallback(
     async (em: string, password: string) => {
-      if (!AUTH_CONFIGURED) throw new Error('No account server is configured. Set EXPO_PUBLIC_EXERCISE_API_URL, or explore the demo.');
+      if (!AUTH_CONFIGURED) throw new Error(NO_ACCOUNT_SERVER);
       const pair = await accountApi.login(em.trim(), password);
       await savePair(pair);
       await rememberEmail(em.trim());
@@ -216,8 +219,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [savePair, rememberEmail, loadName],
   );
 
+  // Any address: an existing account (an access-code one too) gets a code whatever its domain, and
+  // the server refuses new addresses outside the campus allow-list with its own message.
   const requestEmailCode = useCallback(async (em: string) => {
-    if (!isAcademicEmail(em)) throw new Error('Use your institute email (it ends in .ac.in).');
+    if (!looksLikeEmail(em)) throw new Error('Enter your email address.');
     if (AUTH_CONFIGURED) {
       const r = await accountApi.emailStart(em.trim());
       return { newAccount: r.newAccount };
@@ -253,11 +258,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const signUpWithAccessCode = useCallback(async (details: { email: string; full_name: string; phone: string; access_code: string }) => {
-    if (!AUTH_CONFIGURED) throw new Error('Sign-up failed. Check your details and try again.');
-    const pair = await accountApi.accessCodeSignup(details);
+    if (!AUTH_CONFIGURED) throw new Error(NO_ACCOUNT_SERVER);
+    const email = details.email.trim();
+    const full_name = details.full_name.trim().replace(/\s+/g, ' ');
+    const pair = await accountApi.accessCodeSignup({ email, full_name, phone: normalizeIndianMobile(details.phone) ?? details.phone.trim(), access_code: details.access_code });
     await savePair(pair);
-    await rememberEmail(details.email.trim());
-    await rememberName({ first_name: details.full_name, last_name: '' });
+    await rememberEmail(email);
+    await rememberName(splitFullName(full_name));
     setMode('live');
   }, [savePair, rememberEmail, rememberName]);
 

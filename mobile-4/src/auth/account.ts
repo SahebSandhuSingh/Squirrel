@@ -13,6 +13,7 @@
  */
 import { ApiError, api } from '@/api/client';
 import { AUTH_URL } from '@/api/config';
+import { classifySignupError } from '@/logic/accessSignup';
 
 export type TokenPair = {
   user_id: string;
@@ -54,11 +55,14 @@ export const accountApi = {
       if (e instanceof ApiError && e.status === 400) throw new Error('That code didn’t work. Check it, or ask for a new one.');
       return explain(e, 'Sign-in failed.');
     }),
-  /** Separate non-campus registration; all four fields are required by the Exercise backend. */
+  /**
+   * Separate non-campus registration; all four fields are required by the Exercise backend.
+   * Failures are SignupErrors that name the field to fix, so the form can return to that step.
+   */
   accessCodeSignup: (details: { email: string; full_name: string; phone: string; access_code: string }) =>
     api<TokenPair>('/api/auth/signup/access-code', { body: details, base: AUTH_URL, anonymous: true }).catch((e) => {
-      if (e instanceof ApiError && e.status === 403) throw new Error('Sign-up failed. Check your details and try again.');
-      return explain(e, 'Sign-up failed. Check your details and try again.');
+      if (e instanceof ApiError) throw classifySignupError(e.status, e.body, e.message);
+      throw e instanceof Error ? e : new Error('Sign-up failed. Try again in a moment.');
     }),
   login: (email: string, password: string) => auth('/login', { email, password }).catch((e) => explain(e, 'Sign-in failed.')),
   register: (account: NewAccount) => auth('/register', account).catch((e) => explain(e, 'Could not create the account.')),
