@@ -73,13 +73,14 @@ const bySub = new Map<string, { person: SocialPerson; at: number }>();
 const subByProfile = new Map<string, { sub: string; at: number }>();
 const notAProfile = new Map<string, number>();
 let downUntil = 0;
+let notificationDownUntil = 0;
 
 const blocksCache = new Map<string, { blocked: Set<string>; at: number }>();
 
 export function resetIdentityState() {
   bySub.clear(); subByProfile.clear(); notAProfile.clear(); blocksCache.clear();
   crewMemCache.clear(); crewLookupCache.clear();
-  downUntil = 0;
+  downUntil = 0; notificationDownUntil = 0;
 }
 
 function bounded<K, V>(m: Map<K, V>) {
@@ -165,9 +166,38 @@ function available(): SocialSettings | null {
   return s;
 }
 
-function markDown(err: unknown) {
+function markDown(err: unknown, operation = 'people lookup') {
   downUntil = Date.now() + BACKOFF_MS;
-  log.warn({ err: (err as Error).message }, `Social people lookup failed; using campus data for ${BACKOFF_MS / 1000} s`);
+  log.warn({ err: (err as Error).message }, `Social ${operation} failed; backing off for ${BACKOFF_MS / 1000} s`);
+}
+
+export type SocialNotificationResult = { created: boolean; notification_id: string | null };
+
+/** Post to Social with the identity bridge's shared credentials, timeout, and back-off policy. */
+export async function postSocialNotification(payload: Record<string, unknown>): Promise<SocialNotificationResult | null> {
+  const s = socialSettings();
+  if (!s || Date.now() < notificationDownUntil) return null;
+  try {
+    const res = await fetch(`${s.url}/internal/v1/notifications`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${s.token}`, 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(s.timeoutMs),
+    });
+    if (!res.ok) {
+      await res.body?.cancel().catch(() => undefined);
+      throw new SocialUnavailable(`HTTP ${res.status}`);
+    }
+    const body = await res.json() as Record<string, unknown>;
+    if (typeof body.created !== 'boolean' || !(body.notification_id === null || typeof body.notification_id === 'string')) {
+      throw new SocialUnavailable('invalid notification response');
+    }
+    return { created: body.created, notification_id: body.notification_id };
+  } catch (err) {
+    notificationDownUntil = Date.now() + BACKOFF_MS;
+    log.warn({ err: (err as Error).message }, `Social notification forwarding failed; backing off for ${BACKOFF_MS / 1000} s`);
+    return null;
+  }
 }
 
 const chunks = <T,>(xs: T[]) => Array.from({ length: Math.ceil(xs.length / MAX_BATCH) }, (_, i) => xs.slice(i * MAX_BATCH, (i + 1) * MAX_BATCH));

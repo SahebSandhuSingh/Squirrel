@@ -8,7 +8,6 @@ import { getPool, many, one, withTransaction } from '../db/pool.js';
 import { errors } from '../lib/errors.js';
 import { requireAuth, currentUser } from '../auth/plugin.js';
 import { getUser, updateUser, type UserRow } from './repo.js';
-import { listNotifications, markRead, toApp } from '../notifications/service.js';
 import { getPeopleLite } from './repo.js';
 import { authConfigured } from '../auth/jwt.js';
 import { isBlockedEitherWay } from '../blocks/service.js';
@@ -164,16 +163,6 @@ export async function userRoutes(app: FastifyInstance) {
       ...crews.slice(0, 2).map((c) => ({ id: `crew-${c.id}`, kind: 'shared_crew', text: `You're both in ${c.name}.`, crew_id: c.id })),
     ];
     return { shared_zones: shared, shared_crews: crews, shared_events: [], icebreakers };
-  });
-
-  app.get('/v1/notifications', { preHandler: requireAuth }, async (req) => {
-    const { rows, unread } = await listNotifications(currentUser(req).id);
-    const people = await getPeopleLite(rows.map((r) => r.actor_id).filter((x): x is string => !!x), getPool());
-    return { items: rows.map((r) => ({ ...toApp(r), actor: r.actor_id ? people.get(r.actor_id) ?? null : null })), unread };
-  });
-  app.post('/v1/notifications/read', { preHandler: requireAuth }, async (req) => {
-    const { ids } = z.object({ ids: z.array(z.string().uuid()).max(200) }).parse(req.body ?? {});
-    return { unread: await markRead(currentUser(req).id, ids) };
   });
 
   app.get('/v1/me/badges', { preHandler: requireAuth }, async () => ({ badges: [] }));

@@ -13,11 +13,13 @@ import { api, app, HAS_DB, sql, submitAndVerify, tokenFor, useTestApp } from './
 
 const TOKEN = 'test-internal-token';
 type Person = { subject: string; profile_id: string; username: string; display_name: string; avatar_url: string | null; hostel: string | null; level: number };
+type NotificationRequest = { user_subject: string; kind: string; actor_subject?: string; title: string; body?: string; data: Record<string, unknown>; dedupe_key: string };
 
 const social = {
   people: new Map<string, Person>(),     // subject → person
   mode: 'ok' as 'ok' | 'error' | 'hang',
   calls: [] as { subjects?: string[]; profile_ids?: string[] }[],
+  notifications: [] as NotificationRequest[],
   byProfile(pid: string) { return [...this.people.values()].find((p) => p.profile_id === pid); },
   add(subject: string, display_name: string, extra: Partial<Person> = {}) {
     const p: Person = { subject, profile_id: randomUUID(), username: subject.replace(/^u_/, ''), display_name, avatar_url: `https://cdn.social.test/${subject}.png`, hostel: null, level: 3, ...extra };
@@ -47,6 +49,12 @@ function startFakeSocial() {
       }
       if (req.method === 'POST' && req.url === '/internal/v1/crews/lookup') {
         res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ crews: [] }));
+        return;
+      }
+      if (req.method === 'POST' && req.url === '/internal/v1/notifications') {
+        const body = JSON.parse(raw || '{}') as NotificationRequest;
+        social.notifications.push(body);
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ created: true, notification_id: randomUUID() }));
         return;
       }
       if (req.method !== 'POST' || req.url !== '/internal/v1/people/resolve') { res.writeHead(404).end(); return; }
@@ -117,6 +125,7 @@ describe.skipIf(!HAS_DB)('identity bridge to Social (integration)', () => {
   it('territory owner, history actor, steal notification (actor, data.user_id, text) and leaderboard use Social identity', async () => {
     const owner = social.add('u_ib_owner', 'Olivia Owner');
     const thief = social.add('u_ib_thief', 'Tariq Thief');
+    social.notifications = [];
     await submitAndVerify('u_ib_owner', cc1Sweep());
     const claimKey = key();
     const claim = await api('POST', '/v1/zones/cc1/claim', 'u_ib_owner', { idempotency_key: claimKey });
@@ -139,11 +148,11 @@ describe.skipIf(!HAS_DB)('identity bridge to Social (integration)', () => {
     const all = await api('GET', '/v1/territories', null);
     expect((all.body.territories as { zone_id: string; owner: { user_id: string } | null }[]).find((t) => t.zone_id === 'cc1')!.owner!.user_id).toBe(thief.profile_id);
 
-    const notes = (await api('GET', '/v1/notifications', 'u_ib_owner')).body.items as { backend_type: string; actor: { user_id: string; display_name: string }; text: string; data: { user_id: string } }[];
-    const stolen = notes.find((n) => n.backend_type === 'territory.stolen')!;
-    expect(stolen.actor).toMatchObject({ user_id: thief.profile_id, display_name: 'Tariq Thief' });
-    expect(stolen.data.user_id).toBe(thief.profile_id);
-    expect(stolen.text).toContain('Tariq Thief');
+    const stolen = social.notifications.find((n) => n.kind === 'territory.stolen' && n.user_subject === 'u_ib_owner')!;
+    expect(stolen).toMatchObject({ user_subject: 'u_ib_owner', actor_subject: 'u_ib_thief', title: '{actor} stole your territory' });
+    expect(stolen.body).toContain('yours to win back');
+    expect(stolen.data).toMatchObject({ zone_id: 'cc1', route: '/zone/cc1' });
+    expect(stolen.data).not.toHaveProperty('user_id');
 
     const board = await api('GET', '/v1/leaderboards/squirrels?period=alltime', 'u_ib_thief');
     const entries = board.body.entries as { user_id: string; display_name: string }[];
@@ -194,9 +203,9 @@ describe.skipIf(!HAS_DB)('identity bridge to Social (integration)', () => {
     expect(parts.find((p) => p.user_id === guest.profile_id)!.person.display_name).toBe('Gautam Guest');
     expect((await sql(`SELECT user_id FROM meetup_participants WHERE meetup_id = $1 ORDER BY user_id`, [created.body.id])).map((r) => r.user_id)).toEqual(['u_ib_guest', 'u_ib_host', 'u_ib_other']);
 
-    const invite = ((await api('GET', '/v1/notifications', 'u_ib_guest')).body.items as { backend_type: string; actor: { user_id: string }; text: string }[]).find((n) => n.backend_type === 'meetup.invited')!;
-    expect(invite.actor.user_id).toBe(host.profile_id);
-    expect(invite.text).toBe('Hema Host invited you to a meetup.');
+    const invite = social.notifications.find((n) => n.kind === 'meetup.invited' && n.user_subject === 'u_ib_guest')!;
+    expect(invite).toMatchObject({ actor_subject: 'u_ib_host', title: 'Meetup invitation', body: '{actor} invited you to a meetup.' });
+    expect(invite.data.route).toBe(`/meetup/${created.body.id}`);
 
     expect((await api('POST', '/v1/meetups', 'u_ib_host', { place_text: 'Cafe', starts_at: future(), invitee_ids: [host.profile_id] })).status).toBe(422); // yourself
     expect((await api('POST', '/v1/meetups', 'u_ib_host', { place_text: 'Cafe', starts_at: future(), invitee_ids: [guest.profile_id, 'u_ib_guest'] })).status).toBe(422); // same person twice
@@ -206,6 +215,9 @@ describe.skipIf(!HAS_DB)('identity bridge to Social (integration)', () => {
     expect(ch.status).toBe(201);
     expect(ch.body).toMatchObject({ from: { user_id: host.profile_id, display_name: 'Hema Host' }, target: { type: 'user', person: { user_id: guest.profile_id } } });
     expect((await sql(`SELECT target_user_id FROM challenges WHERE id = $1`, [ch.body.id]))[0]!.target_user_id).toBe('u_ib_guest');
+    const challengeInvite = social.notifications.find((n) => n.kind === 'challenge.invitation' && n.user_subject === 'u_ib_guest')!;
+    expect(challengeInvite).toMatchObject({ actor_subject: 'u_ib_host', title: '{actor} challenged you' });
+    expect(challengeInvite.data).toMatchObject({ zone_id: 'library', route: '/zone/library' });
   });
 
   it('realtime: auth.ok and territory frames carry profile ids', async () => {

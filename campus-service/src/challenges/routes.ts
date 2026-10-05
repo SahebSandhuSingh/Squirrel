@@ -19,7 +19,7 @@ import { errors } from '../lib/errors.js';
 import { isUuid } from '../lib/ids.js';
 import { requireAuth, currentUser } from '../auth/plugin.js';
 import { publish } from '../realtime/bus.js';
-import { notify } from '../notifications/service.js';
+import { campusNotificationDedupeKey, notify } from '../notifications/service.js';
 import { getPeopleLite, type UserRow } from '../users/repo.js';
 
 export const CHALLENGE_TYPES = [
@@ -133,7 +133,12 @@ export async function challengeRoutes(app: FastifyInstance) {
         [b.type, user.id, b.target.type, b.target.type === 'user' ? b.target.id : null, b.target.type === 'crew' ? b.target.id : null, b.zone_id ?? null, b.starts_at, b.ends_at ?? null, b.message ?? null]);
       const r = await load(row!.id);
       await emit(r, true);
-      for (const p of (await participants(r)).filter((p) => p !== user.id)) await notify(p, 'challenge.invitation', `${user.display_name} challenged you: ${typeInfo.label}${r.zone_name ? ` at ${r.zone_name}` : ''}.`, { invite_id: r.id, zone_id: r.zone_id }, user.id);
+      for (const p of (await participants(r)).filter((p) => p !== user.id)) {
+        const data = { invite_id: r.id, zone_id: r.zone_id, crew_id: r.target_crew_id,
+          route: r.zone_id ? `/zone/${r.zone_id}` : r.target_crew_id ? `/crew/${r.target_crew_id}` : '/invites' };
+        await notify(p, 'challenge.invitation', '{actor} challenged you', `{actor} challenged you to ${typeInfo.label}${r.zone_name ? ` at ${r.zone_name}` : ''}.`, data, user.id,
+          campusNotificationDedupeKey('challenge.invitation', r.id, p));
+      }
       reply.code(201);
       return (await serialize([r], user.id))[0];
     });
@@ -211,7 +216,13 @@ export async function challengeRoutes(app: FastifyInstance) {
         });
         await emit(fresh);
         const others = (await participants(fresh)).filter((p) => p !== user.id);
-        for (const p of others) await notify(p, 'challenge.updated', `${user.display_name} ${action === 'accept' ? 'accepted' : action === 'decline' ? 'declined' : action === 'cancel' ? 'cancelled' : action === 'start' ? 'started' : 'completed'} the challenge${fresh.zone_name ? ` at ${fresh.zone_name}` : ''}.`, { invite_id: fresh.id, zone_id: fresh.zone_id }, user.id);
+        for (const p of others) {
+          const verb = action === 'accept' ? 'accepted' : action === 'decline' ? 'declined' : action === 'cancel' ? 'cancelled' : action === 'start' ? 'started' : 'completed';
+          const data = { invite_id: fresh.id, zone_id: fresh.zone_id, crew_id: fresh.target_crew_id,
+            route: fresh.zone_id ? `/zone/${fresh.zone_id}` : fresh.target_crew_id ? `/crew/${fresh.target_crew_id}` : '/invites' };
+          await notify(p, 'challenge.updated', 'Challenge updated', `{actor} ${verb} the challenge${fresh.zone_name ? ` at ${fresh.zone_name}` : ''}.`, data, user.id,
+            campusNotificationDedupeKey('challenge.updated', fresh.id, p, `${action}:${fresh.updated_at}`));
+        }
         return (await serialize([fresh], user.id))[0];
       });
     }

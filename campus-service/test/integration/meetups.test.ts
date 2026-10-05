@@ -1,8 +1,47 @@
-import { describe, expect, it } from 'vitest';
+import { createServer, type Server } from 'node:http';
+import { randomUUID } from 'node:crypto';
+import type { AddressInfo } from 'node:net';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { configureSocialBridge } from '../../src/identity/index.js';
 import { api, HAS_DB, sql, useTestApp } from './setup.js';
 
 const future = () => new Date(Date.now() + 60 * 60_000).toISOString();
 const provision = async (...ids: string[]) => { for (const id of ids) await api('GET', '/v1/me', id); };
+
+type Forwarded = { user_subject: string; kind: string; actor_subject?: string; title: string; body?: string; data: Record<string, unknown>; dedupe_key: string };
+const social = { requests: [] as Forwarded[], ids: new Map<string, string>() };
+let socialServer: Server;
+let socialUrl = '';
+
+function startFakeSocial() {
+  socialServer = createServer((req, res) => {
+    let raw = '';
+    req.on('data', (chunk) => { raw += chunk; });
+    req.on('end', () => {
+      if (req.method === 'GET' && req.url?.startsWith('/internal/v1/blocks/')) {
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ blocked: [] })); return;
+      }
+      if (req.method === 'POST' && req.url === '/internal/v1/people/resolve') {
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ people: [] })); return;
+      }
+      if (req.method === 'POST' && (req.url === '/internal/v1/crews/memberships' || req.url === '/internal/v1/crews/lookup')) {
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ people: [], crews: [] })); return;
+      }
+      if (req.method !== 'POST' || req.url !== '/internal/v1/notifications') { res.writeHead(404).end(); return; }
+      const body = JSON.parse(raw || '{}') as Forwarded;
+      social.requests.push(body);
+      const old = social.ids.get(body.dedupe_key);
+      if (old) { res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ created: false, notification_id: old })); return; }
+      const id = randomUUID(); social.ids.set(body.dedupe_key, id);
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ created: true, notification_id: id }));
+    });
+  });
+  return new Promise<void>((resolve) => socialServer.listen(0, '127.0.0.1', () => {
+    socialUrl = `http://127.0.0.1:${(socialServer.address() as AddressInfo).port}`; resolve();
+  }));
+}
+
+const forwarded = (kind: string, recipient: string) => social.requests.filter((n) => n.kind === kind && n.user_subject === recipient);
 
 async function createMeetup(host: string, invitees: string[], extra: Record<string, unknown> = {}) {
   const created = await api('POST', '/v1/meetups', host, { place_text: 'Campus cafe', starts_at: future(), invitee_ids: invitees, ...extra });
@@ -11,6 +50,15 @@ async function createMeetup(host: string, invitees: string[], extra: Record<stri
 
 describe.skipIf(!HAS_DB)('meetups (integration)', () => {
   useTestApp();
+  beforeAll(startFakeSocial);
+  beforeEach(() => {
+    social.requests = []; social.ids.clear();
+    configureSocialBridge({ url: socialUrl, token: 'meetups-test-social-token', timeoutMs: 500 });
+  });
+  afterAll(async () => {
+    configureSocialBridge(null);
+    await new Promise<void>((resolve) => socialServer.close(() => resolve()));
+  });
 
   it('creates with two invitees: proposed, three participant rows, host accepted', async () => {
     await provision('u_mh1', 'u_mg1', 'u_mg2');
@@ -20,7 +68,7 @@ describe.skipIf(!HAS_DB)('meetups (integration)', () => {
     expect(created.body.participants).toHaveLength(3);
     expect((created.body.participants as { user_id: string; role: string; status: string }[])).toContainEqual(expect.objectContaining({ user_id: 'u_mh1', role: 'host', status: 'accepted' }));
     expect(await sql(`SELECT meetup_id FROM meetup_participants WHERE meetup_id = $1`, [created.body.id])).toHaveLength(3);
-    expect((await api('GET', '/v1/notifications', 'u_mg1')).body.items).toEqual(expect.arrayContaining([expect.objectContaining({ backend_type: 'meetup.invited' })]));
+    expect(forwarded('meetup.invited', 'u_mg1')).toEqual([expect.objectContaining({ actor_subject: 'u_mh1', title: 'Meetup invitation', body: '{actor} invited you to a meetup.', data: { meetup_id: created.body.id, route: `/meetup/${created.body.id}` } })]);
   });
 
   it('one guest accepts and status becomes confirmed; open_to_meet false does not gate invitation or acceptance', async () => {
@@ -33,7 +81,7 @@ describe.skipIf(!HAS_DB)('meetups (integration)', () => {
     const accepted = await api('POST', `/v1/meetups/${created.body.id}/accept`, 'u_mg3');
     expect(accepted.body.status).toBe('confirmed');
     expect((accepted.body.participants as { user_id: string; status: string }[]).find((p) => p.user_id === 'u_mg3')?.status).toBe('accepted');
-    expect((await api('GET', '/v1/notifications', 'u_mh2')).body.items).toEqual(expect.arrayContaining([expect.objectContaining({ backend_type: 'meetup.accepted' })]));
+    expect(forwarded('meetup.accepted', 'u_mh2')).toEqual([expect.objectContaining({ actor_subject: 'u_mg3', title: 'Meetup accepted', body: '{actor} accepted your meetup invitation.', data: { meetup_id: created.body.id, status: 'accepted', route: `/meetup/${created.body.id}` } })]);
   });
 
   it('every guest declining cancels the meetup and decline accepts no reason field', async () => {
@@ -43,11 +91,11 @@ describe.skipIf(!HAS_DB)('meetups (integration)', () => {
     expect((await api('POST', `/v1/meetups/${id}/decline`, 'u_mg4', { reason: 'private' })).status).toBe(422);
     expect((await api('POST', `/v1/meetups/${id}/decline`, 'u_mg4')).body.status).toBe('proposed');
     expect((await api('POST', `/v1/meetups/${id}/decline`, 'u_mg5')).body.status).toBe('cancelled');
-    const notices = (await api('GET', '/v1/notifications', 'u_mh3')).body.items as { backend_type: string; data: Record<string, unknown> }[];
-    const declines = notices.filter((n) => n.backend_type === 'meetup.declined');
+    const declines = forwarded('meetup.declined', 'u_mh3');
     expect(declines).toHaveLength(2);
-    expect(declines.every((n) => Object.keys(n.data).every((k) => ['meetup_id', 'status'].includes(k)))).toBe(true);
-    expect(notices).toEqual(expect.arrayContaining([expect.objectContaining({ backend_type: 'meetup.cancelled' })]));
+    expect(declines.map((n) => n.actor_subject).sort()).toEqual(['u_mg4', 'u_mg5']);
+    expect(declines.every((n) => Object.keys(n.data).sort().join(',') === 'meetup_id,route,status')).toBe(true);
+    expect(forwarded('meetup.cancelled', 'u_mh3')).toEqual([expect.objectContaining({ actor_subject: 'u_mg5', body: '{actor} declined or withdrew, so the meetup was cancelled.', data: { meetup_id: id, status: 'cancelled', route: `/meetup/${id}` } })]);
   });
 
   it('host cancellation cancels the meetup and guests can no longer accept', async () => {
@@ -56,7 +104,7 @@ describe.skipIf(!HAS_DB)('meetups (integration)', () => {
     const id = created.body.id as string;
     expect((await api('POST', `/v1/meetups/${id}/cancel`, 'u_mh4')).body.status).toBe('cancelled');
     expect((await api('POST', `/v1/meetups/${id}/accept`, 'u_mg6')).status).toBe(409);
-    expect((await api('GET', '/v1/notifications', 'u_mg6')).body.items).toEqual(expect.arrayContaining([expect.objectContaining({ backend_type: 'meetup.cancelled' })]));
+    expect(forwarded('meetup.cancelled', 'u_mg6')).toEqual([expect.objectContaining({ actor_subject: 'u_mh4', body: '{actor} cancelled the meetup.', data: { meetup_id: id, status: 'cancelled', route: `/meetup/${id}` } })]);
   });
 
   it('an accepted guest leaves and the meetup remains confirmed while another guest remains', async () => {
@@ -81,11 +129,11 @@ describe.skipIf(!HAS_DB)('meetups (integration)', () => {
     await provision('u_bh3', 'u_bg3');
     const created = await createMeetup('u_bh3', ['u_bg3']);
     const id = created.body.id as string;
+    expect(forwarded('meetup.invited', 'u_bg3')).toEqual([expect.objectContaining({ actor_subject: 'u_bh3', kind: 'meetup.invited', data: { meetup_id: id, route: `/meetup/${id}` } })]);
     await api('POST', '/v1/users/u_bh3/block', 'u_bg3');
     expect((await api('GET', '/v1/meetups', 'u_bg3')).body.meetups).toHaveLength(0);
     expect((await api('GET', `/v1/meetups/${id}`, 'u_bg3')).status).toBe(404);
     expect((await api('POST', `/v1/meetups/${id}/accept`, 'u_bg3')).status).toBe(404);
-    expect((await api('GET', '/v1/notifications', 'u_bg3')).body.items).not.toEqual(expect.arrayContaining([expect.objectContaining({ backend_type: 'meetup.invited' })]));
     expect((await api('POST', `/v1/meetups/${id}/cancel`, 'u_bh3')).body.status).toBe('cancelled');
   });
 

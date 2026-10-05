@@ -5,7 +5,7 @@ import type { Queryable } from '../db/pool.js';
 import { currentUser, requireAuth } from '../auth/plugin.js';
 import { errors } from '../lib/errors.js';
 import { isUuid } from '../lib/ids.js';
-import { notify } from '../notifications/service.js';
+import { campusNotificationDedupeKey, notify } from '../notifications/service.js';
 import { isBlockedEitherWay, getFullBlockSet } from '../blocks/service.js';
 import { getPeopleLite } from '../users/repo.js';
 
@@ -146,7 +146,8 @@ export async function meetupRoutes(app: FastifyInstance) {
       }
       return meetup!;
     });
-    for (const id of body.invitee_ids) await notify(id, 'meetup.invited', `${host.display_name} invited you to a meetup.`, { meetup_id: created.id }, host.id);
+    for (const id of body.invitee_ids) await notify(id, 'meetup.invited', 'Meetup invitation', '{actor} invited you to a meetup.',
+      { meetup_id: created.id, route: `/meetup/${created.id}` }, host.id, campusNotificationDedupeKey('meetup.invited', created.id, id));
     reply.code(201);
     const fresh = await loadMeetup(created.id);
     return serialize(fresh!);
@@ -224,14 +225,22 @@ export async function meetupRoutes(app: FastifyInstance) {
         return { row: (await loadMeetup(id, tx))!, parts: await participants(id, tx), cancelledByResponses };
       });
 
-      if (action === 'accept') await notify(result.row.created_by, 'meetup.accepted', `${user.display_name} accepted your meetup invitation.`, { meetup_id: id, status: 'accepted' }, user.id);
-      if (action === 'decline' || action === 'leave') await notify(result.row.created_by, 'meetup.declined', action === 'leave' ? 'A participant is no longer attending your meetup.' : `${user.display_name} declined your meetup invitation.`, { meetup_id: id, status: 'declined' }, user.id);
+      if (action === 'accept') await notify(result.row.created_by, 'meetup.accepted', 'Meetup accepted', '{actor} accepted your meetup invitation.',
+        { meetup_id: id, status: 'accepted', route: `/meetup/${id}` }, user.id,
+        campusNotificationDedupeKey('meetup.accepted', id, result.row.created_by, result.row.updated_at));
+      if (action === 'decline' || action === 'leave') await notify(result.row.created_by, 'meetup.declined', 'Meetup response', action === 'leave' ? '{actor} is no longer attending your meetup.' : '{actor} declined your meetup invitation.',
+        { meetup_id: id, status: 'declined', route: `/meetup/${id}` }, user.id,
+        campusNotificationDedupeKey('meetup.declined', id, result.row.created_by, `${action}:${result.row.updated_at}`));
       if ((action === 'decline' || action === 'leave') && result.cancelledByResponses) {
-        await notify(result.row.created_by, 'meetup.cancelled', 'The meetup was cancelled after all guests declined or withdrew.', { meetup_id: id, status: 'cancelled' }, user.id);
+        await notify(result.row.created_by, 'meetup.cancelled', 'Meetup cancelled', '{actor} declined or withdrew, so the meetup was cancelled.',
+          { meetup_id: id, status: 'cancelled', route: `/meetup/${id}` }, user.id,
+          campusNotificationDedupeKey('meetup.cancelled', id, result.row.created_by, `all_declined:${result.row.updated_at}`));
       }
       if (action === 'cancel') {
         for (const p of result.parts.filter((p) => p.role === 'guest' && p.status !== 'declined')) {
-          await notify(p.user_id, 'meetup.cancelled', `${user.display_name} cancelled the meetup.`, { meetup_id: id, status: 'cancelled' }, user.id);
+          await notify(p.user_id, 'meetup.cancelled', 'Meetup cancelled', '{actor} cancelled the meetup.',
+            { meetup_id: id, status: 'cancelled', route: `/meetup/${id}` }, user.id,
+            campusNotificationDedupeKey('meetup.cancelled', id, p.user_id, `host_cancel:${result.row.updated_at}`));
         }
       }
       return serialize(result.row, result.parts);

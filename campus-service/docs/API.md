@@ -138,11 +138,8 @@ Body `{ "ratings": [{ "user_id", "stars": 1-5, "tags": [key…] }], "idempotency
 
 **Individual ratings and rater identities are never returned to anyone**, including the person rated. Only the aggregate is exposed, and only to its owner. Ratings are deleted with the user.
 
-### `GET /v1/notifications` 🔒
-`{ "items": [{ id, type: "territory"|"invite"|"event"|…, backend_type: "territory.stolen", actor: Person|null, text, created_at, read, data }], "unread": n }` (latest 50).
-
-### `POST /v1/notifications/read` 🔒
-Body `{ "ids": [uuid…] }` → `{ "unread": n }`.
+### Notifications (Social-owned)
+Notifications are stored, listed, marked read, and pushed by Social. campus-service forwards campus events to Social's `POST /internal/v1/notifications`; it no longer serves `/v1/notifications` or `/v1/notifications/read`.
 
 ### `GET /v1/me/badges` 🔒 — `{ "badges": [] }` (badges are owned by the Social service — ADR-032).
 
@@ -379,11 +376,11 @@ Events fan out across API instances via Postgres `LISTEN/NOTIFY`; a page that mi
 
 ---
 
-## Notification catalogue (persisted in `notifications`, delivered via `notification.created`)
+## Notification catalogue (forwarded to Social)
 
 `territory.stolen` (to previous owner) · `territory.challenged` (to owner when a rival qualifies on an unshielded zone) · `territory.defended` (to repelled attackers) · `zone.claimed` (to crew mates) · `challenge.invitation` · `challenge.updated` · `meetup.invited` · `meetup.accepted` · `meetup.declined` (status only) · `meetup.cancelled` · `activity.verification_complete` · reserved: `challenge.reminder`, `event.reminder`, `meetup.check_in`.
 
-Notifications are filtered against the block set on delivery: a notification about a blocked person is not shown.
+Social resolves `{actor}` and anonymizes it when the actor is unknown or either person has blocked the other. campus-service publishes `notification.created` only after Social returns a non-null notification id, and that id matches Social's list entry.
 
 ## Rate limits
 Global 300 req/min per user (or IP when anonymous). Ownership writes 20/min. Point batches 60/min. Activity creation 50/day. Presence 10/min. Challenge creation 20/h. Exceeding → 429 `rate_limited`.

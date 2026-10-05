@@ -1,4 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { createServer, type Server } from 'node:http';
+import { randomUUID } from 'node:crypto';
+import type { AddressInfo } from 'node:net';
+import { afterAll, beforeAll, beforeEach, describe, it, expect } from 'vitest';
+import { configureSocialBridge } from '../../src/identity/index.js';
 import { HAS_DB, useTestApp, api, submitAndVerify, sql } from './setup.js';
 import { trackAlong, sweepRect } from '../helpers.js';
 
@@ -9,9 +13,43 @@ const cc1Sweep = () => trackAlong([[-100, -100], [CC1.x0, CC1.y0 + 5], ...sweepR
 // Passing through one corner of CC1 only
 const cc1Corner = () => trackAlong([[-200, -200], [80, 50], [110, 50], [300, 300], [600, 300]], 3.2);
 const key = () => `k-${Math.random().toString(36).slice(2)}`;
+const forwarded: { user_subject: string; kind: string; actor_subject?: string; title: string; body?: string; data: Record<string, unknown>; dedupe_key: string }[] = [];
+let socialServer: Server;
+let socialUrl = '';
+
+function startFakeSocial() {
+  socialServer = createServer((req, res) => {
+    let raw = '';
+    req.on('data', (chunk) => { raw += chunk; });
+    req.on('end', () => {
+      if (req.method === 'POST' && req.url === '/internal/v1/people/resolve') {
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ people: [] })); return;
+      }
+      if (req.method === 'GET' && req.url?.startsWith('/internal/v1/blocks/')) {
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ blocked: [] })); return;
+      }
+      if (req.method !== 'POST' || req.url !== '/internal/v1/notifications') { res.writeHead(404).end(); return; }
+      const body = JSON.parse(raw || '{}') as typeof forwarded[number];
+      forwarded.push(body);
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ created: true, notification_id: randomUUID() }));
+    });
+  });
+  return new Promise<void>((resolve) => socialServer.listen(0, '127.0.0.1', () => {
+    socialUrl = `http://127.0.0.1:${(socialServer.address() as AddressInfo).port}`; resolve();
+  }));
+}
 
 describe.skipIf(!HAS_DB)('territory flow (integration)', () => {
   useTestApp();
+  beforeAll(startFakeSocial);
+  beforeEach(() => {
+    forwarded.length = 0;
+    configureSocialBridge(null);
+  });
+  afterAll(async () => {
+    configureSocialBridge(null);
+    await new Promise<void>((resolve) => socialServer.close(() => resolve()));
+  });
 
   it('verified sweep of CC1 → qualified → claim succeeds → ownership + history recorded', async () => {
     const id = await submitAndVerify('u_aanya', cc1Sweep());
@@ -84,6 +122,7 @@ describe.skipIf(!HAS_DB)('territory flow (integration)', () => {
   });
 
   it('steal: blocked by shield, allowed once the shield lapses, blocked for unqualified users and for the owner', async () => {
+    configureSocialBridge({ url: socialUrl, token: 'territory-test-social-token', timeoutMs: 500 });
     await submitAndVerify('u_rhea', cc1Sweep());
     const shielded = await api('POST', '/v1/zones/cc1/steal', 'u_rhea', { idempotency_key: key() });
     expect(shielded.status).toBe(409);
@@ -106,8 +145,9 @@ describe.skipIf(!HAS_DB)('territory flow (integration)', () => {
     const ev = (steal.body.event as { action: string; previous_owner: { user_id: string } });
     expect(ev.action).toBe('STEAL');
     expect(ev.previous_owner.user_id).toBe('u_aanya');
-    const notif = await api('GET', '/v1/notifications', 'u_aanya');
-    expect((notif.body.items as { backend_type: string }[]).some((n) => n.backend_type === 'territory.stolen')).toBe(true);
+    const notif = forwarded.find((n) => n.kind === 'territory.stolen' && n.user_subject === 'u_aanya');
+    expect(notif).toMatchObject({ actor_subject: 'u_rhea', title: '{actor} stole your territory', data: { zone_id: 'cc1', route: '/zone/cc1' } });
+    expect(notif?.body).toContain('is yours to win back');
   });
 
   it('defend: only the owner, only under attack, spends the attackers eligibility', async () => {

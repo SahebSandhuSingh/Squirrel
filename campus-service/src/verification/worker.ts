@@ -7,7 +7,7 @@ import { config } from '../config.js';
 import { getPool, one, query, withTransaction } from '../db/pool.js';
 import { addHours } from '../lib/time.js';
 import { publish } from '../realtime/bus.js';
-import { notify } from '../notifications/service.js';
+import { campusNotificationDedupeKey, notify } from '../notifications/service.js';
 import { getActivity, loadPoints, publicVerification, type ActivityRow } from '../activities/repo.js';
 import { toLineStringWkt } from '../activities/gps.js';
 import { scoreActivity } from './anticheat.js';
@@ -70,9 +70,10 @@ export async function verifyActivity(activityId: string, log: Log = console): Pr
   const pub = publicVerification(fresh);
   publish({ type: 'activity.verified', user_ids: [a.user_id], data: { activity_id: activityId, status: fresh.verification_status, app_status: pub.app_status, zones: zoneResults.map((z) => ({ zone_id: z.zone_id, qualified: z.qualified })) } });
   const qualifiedZones = zoneResults.filter((z) => z.qualified);
-  await notify(a.user_id, 'activity.verification_complete',
+  await notify(a.user_id, 'activity.verification_complete', verified ? 'Activity verified' : 'Activity could not be verified',
     verified ? `Your ${a.activity_type} was verified${qualifiedZones.length ? ` — you can claim ${qualifiedZones.length} zone${qualifiedZones.length > 1 ? 's' : ''}` : ''}.` : `Your ${a.activity_type} could not be verified.`,
-    { activity_id: activityId, status: fresh.verification_status, qualified_zone_ids: qualifiedZones.map((z) => z.zone_id) });
+    { activity_id: activityId, status: fresh.verification_status, route: '/notifications' }, null,
+    campusNotificationDedupeKey('activity.verification_complete', activityId, a.user_id));
 
   // A rival now holds a live qualification on someone's territory → contested (once the shield lapses this is visible in reads).
   const actor = await getPersonLite(a.user_id);
@@ -83,7 +84,10 @@ export async function verifyActivity(activityId: string, log: Log = console): Pr
       const zone = await getZone(z.zone_id);
       if (!shielded) {
         publish({ type: 'territory.contested', zone_id: z.zone_id, data: { zone_id: z.zone_id, under_challenge: true } });
-        await notify(z.owner_id, 'territory.challenged', `${actor?.display_name ?? 'Someone'} is eligible to steal ${zone?.name ?? 'your zone'}. Defend it!`, { zone_id: z.zone_id, user_id: a.user_id }, a.user_id);
+        const zoneName = zone?.name ?? 'your territory';
+        await notify(z.owner_id, 'territory.challenged', 'Your territory is at risk', `{actor} qualified to challenge ${zoneName}. Defend it!`,
+          { zone_id: z.zone_id, route: `/zone/${z.zone_id}` }, a.user_id,
+          campusNotificationDedupeKey('territory.challenged', `${a.id}:${z.zone_id}`, z.owner_id));
       }
     }
   }

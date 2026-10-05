@@ -18,7 +18,7 @@ import { withTransaction, one, many, query } from '../db/pool.js';
 import { ApiError, errors } from '../lib/errors.js';
 import { addHours } from '../lib/time.js';
 import { publish } from '../realtime/bus.js';
-import { notify } from '../notifications/service.js';
+import { campusNotificationDedupeKey, notify } from '../notifications/service.js';
 import { isBlockedEitherWay } from '../blocks/service.js';
 import { getPersonLite, touchTerritoryAction, invalidateUserCache, type UserRow } from '../users/repo.js';
 import { getZone, type ZoneRow } from '../zones/repo.js';
@@ -193,15 +193,16 @@ export async function performTerritoryAction(user: UserRow, zoneId: string, acti
   const t = committed.result.territory;
   const eventType = action === 'defend' ? 'territory.defended' : action === 'steal' ? 'territory.stolen' : 'territory.claimed';
   publish({ type: eventType, zone_id: zoneId, data: t });
-  const actor = await getPersonLite(user.id);
   const zoneName = committed.zone.name;
   if (action === 'steal' && committed.previousOwnerId) {
-    await notify(committed.previousOwnerId, 'territory.stolen', `${actor?.display_name ?? 'Someone'} stole ${zoneName} from you.`, { zone_id: zoneId, user_id: user.id }, user.id);
+    await notify(committed.previousOwnerId, 'territory.stolen', '{actor} stole your territory', `${zoneName} is yours to win back.`, { zone_id: zoneId, route: `/zone/${zoneId}` }, user.id,
+      campusNotificationDedupeKey('territory.stolen', committed.event.id, committed.previousOwnerId));
   }
   if (action === 'defend') {
     // Everyone whose attack was repelled learns the zone was defended.
     const rivals = await many<{ user_id: string }>(`SELECT DISTINCT user_id FROM qualification_results WHERE zone_id = $1 AND status = 'EXPIRED' AND user_id <> $2 AND evaluated_at > now() - interval '48 hours'`, [zoneId, user.id]);
-    for (const r of rivals) await notify(r.user_id, 'territory.defended', `${actor?.display_name ?? 'The owner'} defended ${zoneName}.`, { zone_id: zoneId, user_id: user.id }, user.id);
+    for (const r of rivals) await notify(r.user_id, 'territory.defended', 'Your territory was defended', `{actor} defended ${zoneName}.`, { zone_id: zoneId, route: `/zone/${zoneId}` }, user.id,
+      campusNotificationDedupeKey('territory.defended', committed.event.id, r.user_id));
   }
   if (action === 'claim') {
     // Crew mates get a heads-up that the crew gained ground.
@@ -212,7 +213,8 @@ export async function performTerritoryAction(user: UserRow, zoneId: string, acti
         mates.push(...crewData.members.filter(m => m.subject !== user.id).map(m => ({ user_id: m.subject })));
       }
     }
-    for (const m of mates) await notify(m.user_id, 'zone.claimed', `${actor?.display_name ?? 'A crew mate'} claimed ${zoneName}.`, { zone_id: zoneId, user_id: user.id }, user.id);
+    for (const m of mates) await notify(m.user_id, 'zone.claimed', '{actor} claimed a crew zone', `${zoneName} is now held by your crew.`, { zone_id: zoneId, route: `/zone/${zoneId}` }, user.id,
+      campusNotificationDedupeKey('zone.claimed', committed.event.id, m.user_id));
   }
   return committed.result;
 }

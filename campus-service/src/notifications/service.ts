@@ -1,11 +1,7 @@
-/**
- * Backend notification events. Persisted per user and pushed over realtime as notification.created.
- * Delivery channels (push, email) are out of scope; a delivery worker can consume this table.
- */
-import { one, many, query, type Queryable, getPool } from '../db/pool.js';
+/** Forward campus notifications to Social, the owner of the in-app list and push delivery. */
+import { createHash } from 'node:crypto';
 import { publish } from '../realtime/bus.js';
-import { getPersonLite } from '../users/repo.js';
-import { isBlockedEitherWay } from '../blocks/service.js';
+import { postSocialNotification } from '../identity/index.js';
 
 export type NotificationType =
   | 'territory.stolen' | 'territory.challenged' | 'territory.defended' | 'zone.claimed'
@@ -13,47 +9,66 @@ export type NotificationType =
   | 'event.reminder' | 'meetup.check_in' | 'meetup.invited' | 'meetup.accepted' | 'meetup.declined' | 'meetup.cancelled'
   | 'activity.verification_complete';
 
-export type NotificationRow = {
-  id: string; user_id: string; type: string; actor_id: string | null; text: string; data: Record<string, unknown> | null; read: boolean; created_at: string;
-};
+export function campusNotificationDedupeKey(type: NotificationType, sourceId: string, recipientId: string, transition = ''): string {
+  const digest = createHash('sha256').update(`${type}\0${sourceId}\0${recipientId}\0${transition}`).digest('hex');
+  return `campus:${type}:${digest}`;
+}
 
-export async function notify(userId: string, type: NotificationType, text: string, data: Record<string, unknown> = {}, actorId: string | null = null, q: Queryable = getPool()) {
-  if (actorId && actorId === userId) return null; // never notify people about their own actions
-  const row = await one<NotificationRow>(
-    `INSERT INTO notifications (user_id, type, actor_id, text, data) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-    [userId, type, actorId, text, data], q,
-  );
-  if (row) {
-    const actor = await getPersonLite(actorId, q);
-    publish({ type: 'notification.created', user_ids: [userId], data: { ...toApp(row), actor } });
+function routeFor(type: NotificationType, data: Record<string, unknown>): string {
+  if (typeof data.route === 'string' && data.route.startsWith('/')) return data.route;
+  if (typeof data.zone_id === 'string') return `/zone/${encodeURIComponent(data.zone_id)}`;
+  if (typeof data.crew_id === 'string') return `/crew/${encodeURIComponent(data.crew_id)}`;
+  if (typeof data.meetup_id === 'string') return `/meetup/${encodeURIComponent(data.meetup_id)}`;
+  if (type.startsWith('challenge.')) return '/invites';
+  return '/notifications';
+}
+
+function appCategory(type: NotificationType): string {
+  if (type.startsWith('territory.') || type.startsWith('zone.')) return 'territory';
+  if (type.startsWith('challenge.')) return 'invite';
+  if (type.startsWith('meetup.') || type.startsWith('event.')) return 'event';
+  return type;
+}
+
+/** Best-effort Social delivery: a missing/down Social never rolls back the campus action. */
+export async function notify(
+  userId: string,
+  type: NotificationType,
+  title: string,
+  body: string | null,
+  data: Record<string, unknown>,
+  actorId: string | null,
+  dedupeKey: string,
+) {
+  const routedData = { ...data, route: routeFor(type, data) };
+  const result = await postSocialNotification({
+    user_subject: userId,
+    kind: type,
+    ...(actorId && actorId !== userId ? { actor_subject: actorId } : {}),
+    title,
+    ...(body === null ? {} : { body }),
+    actor_fallback: 'Someone',
+    data: routedData,
+    dedupe_key: dedupeKey,
+  });
+
+  // The app consumes this shape immediately, then reconciles it from Social's list. Never publish
+  // an id Social did not return, or replay a duplicate event when dedupe_key already existed.
+  if (result?.created && result.notification_id) {
+    const text = body ? `${title} · ${body}` : title;
+    publish({
+      type: 'notification.created',
+      user_ids: [userId],
+      data: {
+        id: result.notification_id,
+        type: appCategory(type),
+        actor: null,
+        text,
+        created_at: new Date().toISOString(),
+        read: false,
+        data: routedData,
+      },
+    });
   }
-  return row;
-}
-
-/** Shape expected by the mobile client's AppNotification. Types are mapped to its coarse categories. */
-export function toApp(n: NotificationRow) {
-  const category = n.type.startsWith('territory') || n.type.startsWith('zone') ? 'territory' : n.type.startsWith('challenge') ? 'invite' : n.type.startsWith('event') || n.type.startsWith('meetup') ? 'event' : n.type;
-  return { id: n.id, type: category, backend_type: n.type, actor: null as unknown, text: n.text, created_at: n.created_at, read: n.read, data: n.data };
-}
-
-export async function listNotifications(userId: string, limit = 50) {
-  const rows = await many<NotificationRow>(`SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2`, [userId, limit]);
-  const unreadRows = await many<NotificationRow>(`SELECT * FROM notifications WHERE user_id = $1 AND NOT read ORDER BY created_at DESC`, [userId]);
-  const visible = async (n: NotificationRow) => {
-    if (!n.type.startsWith('meetup.') || typeof n.data?.meetup_id !== 'string') return true;
-    const parts = await many<{ user_id: string }>(`SELECT user_id FROM meetup_participants WHERE meetup_id = $1`, [n.data.meetup_id]);
-    for (const p of parts) if (p.user_id !== userId && await isBlockedEitherWay(userId, p.user_id)) return false;
-    return true;
-  };
-  const [shown, shownUnread] = await Promise.all([
-    Promise.all(rows.map(async (n) => await visible(n) ? n : null)),
-    Promise.all(unreadRows.map(async (n) => await visible(n) ? n : null)),
-  ]);
-  return { rows: shown.filter((n): n is NotificationRow => n !== null), unread: shownUnread.filter((n) => n !== null).length };
-}
-
-export async function markRead(userId: string, ids: string[]) {
-  if (ids.length) await query(`UPDATE notifications SET read = true WHERE user_id = $1 AND id = ANY($2::uuid[])`, [userId, ids]);
-  const unread = await one<{ n: number }>(`SELECT count(*)::int AS n FROM notifications WHERE user_id = $1 AND NOT read`, [userId]);
-  return unread?.n ?? 0;
+  return result;
 }

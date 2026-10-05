@@ -42,7 +42,7 @@ Revisit this decision as soon as a dedicated worker service exists. At that poin
 | `idempotency_keys` | stored responses for ownership writes |
 | `jobs` | Postgres-backed queue |
 | `presence` | last fix per user (never exposed raw), TTL 15 min |
-| `challenges`, `notifications` | as named |
+| `challenges` | as named; notification records are owned by Social |
 
 ## The activity pipeline
 
@@ -108,4 +108,4 @@ Lock order (user → zone) is fixed, so concurrent actors never deadlock. Two ow
 * **New zone** — insert into `zones` (+ a `territories` row); the seed shows the shape. Geometry source should be `survey`/`osm`.
 * **New rule** — add to `config.rules`, thread through `computeActions` (pure) and its unit tests.
 * **New event** — add the type to `RealtimeEvent`, map it to a topic in `ws.ts`, publish from the service.
-* **Push delivery** — consume `notifications` (or subscribe to `notification.created`) in a delivery worker.
+* **Notifications and push delivery** — Social owns the list and Expo push delivery. campus-service forwards notification events and relays Social's id over realtime; its local notifications table is pending removal.

@@ -1,8 +1,37 @@
-import { describe, it, expect } from 'vitest';
+import { createServer, type Server } from 'node:http';
+import { randomUUID } from 'node:crypto';
+import type { AddressInfo } from 'node:net';
+import { afterAll, beforeAll, beforeEach, describe, it, expect } from 'vitest';
+import { configureSocialBridge } from '../../src/identity/index.js';
 import { HAS_DB, useTestApp, api, submitAndVerify, sql } from './setup.js';
 import { trackAlong, xyToLatLng, sweepRect } from '../helpers.js';
 
 const key = () => `k-${Math.random().toString(36).slice(2)}`;
+const forwarded: { user_subject: string; kind: string; actor_subject?: string; title: string; body?: string; data: Record<string, unknown>; dedupe_key: string }[] = [];
+let socialServer: Server;
+let socialUrl = '';
+
+function startFakeSocial() {
+  socialServer = createServer((req, res) => {
+    let raw = '';
+    req.on('data', (chunk) => { raw += chunk; });
+    req.on('end', () => {
+      if (req.method === 'POST' && req.url === '/internal/v1/people/resolve') {
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ people: [] })); return;
+      }
+      if (req.method === 'GET' && req.url?.startsWith('/internal/v1/blocks/')) {
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ blocked: [] })); return;
+      }
+      if (req.method !== 'POST' || req.url !== '/internal/v1/notifications') { res.writeHead(404).end(); return; }
+      const body = JSON.parse(raw || '{}') as typeof forwarded[number];
+      forwarded.push(body);
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ created: true, notification_id: randomUUID() }));
+    });
+  });
+  return new Promise<void>((resolve) => socialServer.listen(0, '127.0.0.1', () => {
+    socialUrl = `http://127.0.0.1:${(socialServer.address() as AddressInfo).port}`; resolve();
+  }));
+}
 
 async function giveVerifiedActivity(userId: string) {
   await api('GET', '/v1/me', userId);
@@ -11,6 +40,15 @@ async function giveVerifiedActivity(userId: string) {
 
 describe.skipIf(!HAS_DB)('GPS ingest, privacy, challenges (integration)', () => {
   useTestApp();
+  beforeAll(startFakeSocial);
+  beforeEach(() => {
+    forwarded.length = 0;
+    configureSocialBridge(null);
+  });
+  afterAll(async () => {
+    configureSocialBridge(null);
+    await new Promise<void>((resolve) => socialServer.close(() => resolve()));
+  });
 
   it('rejects malformed GPS payloads with 422 invalid_gps / invalid', async () => {
     const pts = trackAlong([[0, 0], [300, 0]], 3);
@@ -106,6 +144,7 @@ describe.skipIf(!HAS_DB)('GPS ingest, privacy, challenges (integration)', () => 
   });
 
   it('challenge lifecycle with server-decided result', async () => {
+    configureSocialBridge({ url: socialUrl, token: 'challenges-test-social-token', timeoutMs: 500 });
     const soon = new Date(Date.now() + 60_000).toISOString();
     const bad = await api('POST', '/v1/challenge-invites', 'u_aanya', { type: 'territory', target: { type: 'user', id: 'u_rhea' }, starts_at: soon });
     expect(bad.status).toBe(422); // territory needs a zone
@@ -128,8 +167,9 @@ describe.skipIf(!HAS_DB)('GPS ingest, privacy, challenges (integration)', () => 
     const done = await api('POST', `/v1/challenge-invites/${id}/complete`, 'u_aanya');
     expect(done.body.status).toBe('completed');
     expect((done.body.result as { winner: { user_id: string } }).winner.user_id).toBe('u_rhea');
-    const notif = await api('GET', '/v1/notifications', 'u_rhea');
-    expect((notif.body.items as { backend_type: string }[]).some((n) => n.backend_type === 'challenge.invitation')).toBe(true);
+    const notif = forwarded.find((n) => n.kind === 'challenge.invitation' && n.user_subject === 'u_rhea');
+    expect(notif).toMatchObject({ actor_subject: 'u_aanya', title: '{actor} challenged you', data: { invite_id: id, zone_id: 'cc1', route: '/zone/cc1' } });
+    expect(notif?.body).toContain('{actor} challenged you to Territory duel');
   });
 
   it('auth: missing/invalid token → 401; other users activities → 404; unknown routes → 404 JSON', async () => {
