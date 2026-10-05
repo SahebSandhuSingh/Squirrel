@@ -23,7 +23,7 @@ import { isBlockedEitherWay } from '../blocks/service.js';
 import { getPersonLite, touchTerritoryAction, invalidateUserCache, type UserRow } from '../users/repo.js';
 import { getZone, type ZoneRow } from '../zones/repo.js';
 import { computeActions, type ZoneActions } from './rules.js';
-import { getTerritory, serializeTerritory, serializeEvents, type TerritoryEventRow, type TerritoryRow } from './repo.js';
+import { getTerritory, serializeTerritory, territoryOut, serializeEvents, type TerritoryEventRow, type TerritoryRow } from './repo.js';
 
 export type TerritoryAction = 'claim' | 'steal' | 'defend';
 
@@ -170,7 +170,7 @@ export async function performTerritoryAction(user: UserRow, zoneId: string, acti
     const owner = await getPersonLite(fresh.owner_id, tx);
     const freshActions = await actionsFor({ ...actor, last_territory_action_at: now.toISOString() }, zone, fresh, tx);
     const [serializedEvent] = await serializeEvents([event!], tx);
-    const result: ActionResult = { territory: serializeTerritory(fresh, owner), actions: freshActions, event: serializedEvent ?? null };
+    const result: ActionResult = { territory: await territoryOut(fresh, owner), actions: freshActions, event: serializedEvent ?? null };
     await query(`INSERT INTO idempotency_keys (user_id, key, scope, status_code, response) VALUES ($1, $2, $3, 200, $4) ON CONFLICT DO NOTHING`, [actor.id, idempotencyKey, scope, result], tx);
     return { result, event: event!, previousOwnerId, zone };
   });

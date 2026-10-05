@@ -4,7 +4,7 @@ import { getPool, many, one } from '../db/pool.js';
 import { errors } from '../lib/errors.js';
 import { requireAuth, currentUser } from '../auth/plugin.js';
 import { getZone, listZones, serializeZone, zonesNear, type ZoneRow } from './repo.js';
-import { getTerritory, listTerritories, serializeTerritories, serializeTerritory, serializeEvents, zoneHistory, TERRITORY_SELECT, type TerritoryRow } from '../territory/repo.js';
+import { getTerritory, listTerritories, serializeTerritories, territoryOut, serializeEvents, zoneHistory, TERRITORY_SELECT, type TerritoryRow } from '../territory/repo.js';
 import { actionsFor, performTerritoryAction } from '../territory/service.js';
 import { getPersonLite, getPeopleLite } from '../users/repo.js';
 
@@ -97,7 +97,7 @@ export async function zoneRoutes(app: FastifyInstance) {
     const [owner, actions, stats, history] = await Promise.all([
       getPersonLite(territory.owner_id), actionsFor(req.user, zone, territory, getPool()), zoneStats(id, req.user?.id ?? null), zoneHistory(id, 10),
     ]);
-    return { zone: serializeZone(zone), territory: serializeTerritory(territory, owner), actions, stats, history: await serializeEvents(history) };
+    return { zone: serializeZone(zone), territory: await territoryOut(territory, owner), actions, stats, history: await serializeEvents(history) };
   });
 
   // GET /v1/zones/:id/territory
@@ -105,7 +105,7 @@ export async function zoneRoutes(app: FastifyInstance) {
     const { id } = idParam.parse(req.params);
     const [zone, territory] = await Promise.all([getZone(id), getTerritory(id)]);
     if (!zone || !territory) throw errors.notFound('Zone');
-    return { territory: serializeTerritory(territory, await getPersonLite(territory.owner_id)), actions: await actionsFor(req.user, zone, territory, getPool()) };
+    return { territory: await territoryOut(territory), actions: await actionsFor(req.user, zone, territory, getPool()) };
   });
 
   // GET /v1/zones/:id/history?limit
@@ -146,7 +146,7 @@ export async function zoneRoutes(app: FastifyInstance) {
     for (const t of rows) {
       const zone = await getZone(t.zone_id);
       if (!zone) continue;
-      out.push({ zone: serializeZone(zone), territory: serializeTerritory(t, await getPersonLite(t.owner_id)), actions: await actionsFor(user, zone, t, getPool()) });
+      out.push({ zone: serializeZone(zone), territory: await territoryOut(t), actions: await actionsFor(user, zone, t, getPool()) });
     }
     return { territories: out, as_of: new Date().toISOString() };
   });
@@ -162,7 +162,7 @@ export async function zoneRoutes(app: FastifyInstance) {
     const { id } = idParam.parse(req.params);
     const t = await getTerritory(id);
     if (!t) throw errors.notFound('Territory');
-    return { territory: serializeTerritory(t, await getPersonLite(t.owner_id)) };
+    return { territory: await territoryOut(t) };
   });
 }
 

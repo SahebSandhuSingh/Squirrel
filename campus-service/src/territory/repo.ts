@@ -1,5 +1,6 @@
 import { one, many, type Queryable, getPool } from '../db/pool.js';
-import { getPeopleLite, type PersonLite } from '../users/repo.js';
+import { getPeopleLite, getPersonLite, type PersonLite } from '../users/repo.js';
+import { crewDisplays, crewOrPlaceholder, type CrewDisplay } from '../crews/display.js';
 
 export type TerritoryRow = {
   zone_id: string; owner_id: string | null; owner_type: 'NONE' | 'USER' | 'CREW'; crew_id: string | null;
@@ -7,7 +8,6 @@ export type TerritoryRow = {
   claimed_at: string | null; last_defended_at: string | null; shield_until: string | null; version: number; updated_at: string;
   // derived
   under_challenge: boolean; in_active_challenge: boolean;
-  crew_name: string | null; crew_color: string | null; crew_icon: string | null;
 };
 
 /**
@@ -17,13 +17,12 @@ export type TerritoryRow = {
 export const TERRITORY_SELECT = `
   t.zone_id, t.owner_id, t.owner_type, t.crew_id, t.status, t.xp, t.claim_count, t.defense_count,
   t.claimed_at, t.last_defended_at, t.shield_until, t.version, t.updated_at,
-  c.name AS crew_name, c.color AS crew_color, c.icon AS crew_icon,
   (t.owner_id IS NOT NULL AND (t.shield_until IS NULL OR t.shield_until <= now()) AND EXISTS (
      SELECT 1 FROM qualification_results q
      WHERE q.zone_id = t.zone_id AND q.status = 'QUALIFIED' AND q.expires_at > now() AND q.user_id <> t.owner_id
   )) AS under_challenge,
   EXISTS (SELECT 1 FROM challenges ch WHERE ch.zone_id = t.zone_id AND ch.status IN ('accepted','active')) AS in_active_challenge
-  FROM territories t LEFT JOIN crews c ON c.id = t.crew_id`;
+  FROM territories t`;
 
 export async function getTerritory(zoneId: string, q: Queryable = getPool(), lock = false) {
   return one<TerritoryRow>(`SELECT ${TERRITORY_SELECT} WHERE t.zone_id = $1 ${lock ? 'FOR UPDATE OF t' : ''}`, [zoneId], q);
@@ -43,7 +42,8 @@ export type TerritoryOut = {
   control: number | null; xp: number;
 };
 
-export function serializeTerritory(t: TerritoryRow, owner: PersonLite | null): TerritoryOut {
+/** `crew`: the owning crew as shown (from Social; see crews/display.ts). Use territoryOut / serializeTerritories to look it up. */
+export function serializeTerritory(t: TerritoryRow, owner: PersonLite | null, crew: CrewDisplay | null = null): TerritoryOut {
   const owned = !!t.owner_id;
   const contested = owned && (t.under_challenge || t.in_active_challenge);
   const status: TerritoryOut['status'] = !owned ? 'neutral' : t.in_active_challenge ? 'contested' : t.under_challenge ? 'under_attack' : 'controlled';
@@ -51,7 +51,7 @@ export function serializeTerritory(t: TerritoryRow, owner: PersonLite | null): T
   const control = !owned ? null : Math.min(1, 0.5 + 0.1 * t.defense_count + (t.shield_until && Date.parse(t.shield_until) > Date.now() ? 0.2 : 0) - (t.under_challenge ? 0.25 : 0));
   return {
     zone_id: t.zone_id, owner, owner_type: t.owner_type,
-    crew: t.crew_id ? { id: t.crew_id, name: t.crew_name ?? '', color: t.crew_color, icon: t.crew_icon } : null,
+    crew: t.crew_id ? crew ?? { id: t.crew_id, name: '', color: null, icon: null } : null,
     claimed_at: t.claimed_at, defended_count: t.defense_count, claim_count: t.claim_count, last_defended_at: t.last_defended_at,
     under_challenge: t.under_challenge, shield_until: t.shield_until, version: t.version, updated_at: t.updated_at,
     status, state: !owned ? 'UNCLAIMED' : contested ? 'CONTESTED' : 'CLAIMED', control: control === null ? null : Math.max(0, Math.round(control * 100) / 100), xp: t.xp,
@@ -59,8 +59,14 @@ export function serializeTerritory(t: TerritoryRow, owner: PersonLite | null): T
 }
 
 export async function serializeTerritories(rows: TerritoryRow[], q: Queryable = getPool()) {
-  const people = await getPeopleLite(rows.map((r) => r.owner_id!).filter(Boolean), q);
-  return rows.map((r) => serializeTerritory(r, r.owner_id ? people.get(r.owner_id) ?? null : null));
+  const [people, crews] = await Promise.all([getPeopleLite(rows.map((r) => r.owner_id!).filter(Boolean), q), crewDisplays(rows.map((r) => r.crew_id), q)]);
+  return rows.map((r) => serializeTerritory(r, r.owner_id ? people.get(r.owner_id) ?? null : null, crewOrPlaceholder(r.crew_id, crews)));
+}
+
+/** One territory with its owner (when not given) and crew looked up. */
+export async function territoryOut(t: TerritoryRow, owner?: PersonLite | null, q: Queryable = getPool()) {
+  const [who, crews] = await Promise.all([owner === undefined ? getPersonLite(t.owner_id) : Promise.resolve(owner), crewDisplays([t.crew_id], q)]);
+  return serializeTerritory(t, who, crewOrPlaceholder(t.crew_id, crews));
 }
 
 export type TerritoryEventRow = {

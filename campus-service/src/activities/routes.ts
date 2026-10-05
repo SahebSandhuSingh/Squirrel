@@ -24,9 +24,8 @@ import { PointSchema, validatePoints, toLineStringWkt, type Point } from './gps.
 import { getActivity, insertPoints, lastPoint, listActivities, serializeActivity, publicVerification, type ActivityRow } from './repo.js';
 import { enqueueVerification } from '../verification/queue.js';
 import { getZone, serializeZone } from '../zones/repo.js';
-import { getTerritory, serializeTerritory } from '../territory/repo.js';
+import { getTerritory, territoryOut } from '../territory/repo.js';
 import { actionsFor } from '../territory/service.js';
-import { getPersonLite } from '../users/repo.js';
 import { touchPresenceActivity } from '../presence/service.js';
 
 const CreateBody = z.object({
@@ -194,7 +193,7 @@ export async function activityRoutes(app: FastifyInstance) {
         distance_in_zone_m: Math.round(qr.distance_in_zone_m), time_in_zone_s: qr.time_in_zone_s,
         qualification: { status: qr.status, metric: zone.zone_type === 'ROUTE' ? 'route_completion' : 'coverage', value: zone.zone_type === 'ROUTE' ? qr.route_completion : qr.coverage, threshold: qr.threshold, expires_at: qr.expires_at },
         zone: serializeZone(zone),
-        territory: serializeTerritory(territory, await getPersonLite(territory.owner_id)),
+        territory: await territoryOut(territory),
         actions: await actionsFor(user, zone, territory, getPool()), // live: ownership may have changed since the run
       });
     }

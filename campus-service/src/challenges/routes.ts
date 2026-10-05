@@ -15,6 +15,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { getPool, many, one, query, withTransaction } from '../db/pool.js';
 import { lookupCrewMemberships, lookupCrews } from '../identity/index.js';
+import { crewDisplays, crewOrPlaceholder } from '../crews/display.js';
 import { errors } from '../lib/errors.js';
 import { isUuid } from '../lib/ids.js';
 import { requireAuth, currentUser } from '../auth/plugin.js';
@@ -40,11 +41,6 @@ type ChallengeRow = {
 const SELECT = `SELECT ch.*, z.name AS zone_name
   FROM challenges ch LEFT JOIN zones z ON z.id = ch.zone_id`;
 
-const CREW_INTEREST_ICON: Record<string, string> = {
-  running: 'run', walking: 'walk', cycling: 'bike', yoga: 'yoga', hiit: 'lightning-bolt',
-  climbing: 'image-filter-hdr', nutrition: 'food-apple', other: 'account-group',
-};
-
 function challengeNotificationRoute(zoneId: string | null, crewId: string | null): string {
   if (zoneId) return `/zone/${zoneId}`;
   if (crewId) return `/crew/${crewId}`;
@@ -63,16 +59,10 @@ const CreateBody = z.object({
 
 async function serialize(rows: ChallengeRow[], viewerId: string) {
   const people = await getPeopleLite(rows.flatMap((r) => [r.created_by, r.target_user_id, r.winner_user_id]).filter((x): x is string => !!x), getPool());
-  const crews = await lookupCrews(rows.flatMap((r) => r.target_crew_id ? [r.target_crew_id] : []));
+  const crews = await crewDisplays(rows.map((r) => r.target_crew_id));
   return rows.map((r) => {
     const typeInfo = CHALLENGE_TYPES.find((t) => t.id === r.type);
-    const socialCrew = r.target_crew_id ? crews.get(r.target_crew_id) : undefined;
-    const crew = r.target_crew_id ? {
-      id: r.target_crew_id,
-      name: socialCrew?.name ?? '',
-      color: null,
-      icon: socialCrew ? CREW_INTEREST_ICON[socialCrew.interest] ?? null : null,
-    } : null;
+    const crew = crewOrPlaceholder(r.target_crew_id, crews);
     const winner = r.winner_user_id ? people.get(r.winner_user_id) ?? null : r.winner_crew_id ? crew : null;
     return {
       id: r.id, type: r.type, type_label: typeInfo?.label ?? r.type,
@@ -141,7 +131,7 @@ export async function challengeRoutes(app: FastifyInstance) {
       if (b.target.type === 'user') {
         if (b.target.id === user.id) throw errors.invalid("You can't challenge yourself");
         if (!(await one(`SELECT 1 FROM users WHERE id = $1 AND NOT is_banned`, [b.target.id]))) throw errors.notFound('Squirrel');
-      } else if (!isUuid(b.target.id) || !(await one(`SELECT 1 FROM crews WHERE id = $1`, [b.target.id]))) throw errors.notFound('Crew');
+      } else if (!isUuid(b.target.id) || !(await crewDisplays([b.target.id])).has(b.target.id)) throw errors.notFound('Crew');
       // One open challenge per (creator, target, zone) at a time.
       const dup = await one(`SELECT 1 FROM challenges WHERE created_by = $1 AND status IN ('pending','accepted','active') AND coalesce(target_user_id, target_crew_id::text) = $2 AND coalesce(zone_id, '') = coalesce($3, '')`, [user.id, b.target.id, b.zone_id ?? null]);
       if (dup) throw errors.conflict('challenge_conflict', 'You already have an open challenge with them here.');
