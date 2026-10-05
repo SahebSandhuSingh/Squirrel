@@ -121,4 +121,78 @@ describe("Progress API", () => {
       expect((await app.inject({ method: "GET", url })).statusCode).toBe(401);
     }
   });
+
+  it("a run-only user has matching workout count, active days, and streak", async () => {
+    const user = newUser();
+    await addRun(user, new Date(), 2000);
+
+    const lifetimeResponse = await app.inject({ method: "GET", url: "/v1/progress", headers: await bearer(user) });
+    expect(lifetimeResponse.statusCode).toBe(200);
+    const lifetime = lifetimeResponse.json();
+    const today = lifetime.today.date as string;
+    expect(lifetime.totalWorkouts).toBe(1);
+    expect(lifetime.totalWorkoutMinutes).toBe(30);
+    expect(lifetime.today.workouts).toBe(1);
+    expect(lifetime.streak.current).toBe(1);
+
+    const day = new Date(`${today}T00:00:00.000Z`);
+    day.setUTCDate(day.getUTCDate() - ((day.getUTCDay() + 6) % 7));
+    const weekStart = day.toISOString().slice(0, 10);
+    const weeklyResponse = await app.inject({ method: "GET", url: `/v1/progress/weekly?weekStart=${weekStart}`, headers: await bearer(user) });
+    expect(weeklyResponse.statusCode).toBe(200);
+    const weekly = weeklyResponse.json();
+    expect(weekly.activeDays).toBe(1);
+    expect(weekly.workouts).toBe(1);
+    expect(weekly.workoutMinutes).toBe(30);
+    expect(weekly.streak.current).toBe(1);
+  });
+
+  it("returns whole-minute values consistently in lifetime, daily, weekly, and history", async () => {
+    const user = newUser();
+    const now = new Date();
+    const runMetrics = { distance_m: 1000, moving_time_s: 740, timezone: "Asia/Kolkata" };
+    await pool.query(
+      `INSERT INTO activity_sessions (id, user_id, type, subtype, started_at, duration_s, metrics, source_module)
+       VALUES ($1, $2, 'run', 'territory_run', $3, 740, $4, 'run_module')`,
+      [crypto.randomUUID(), user, now, JSON.stringify(runMetrics)]);
+    await pool.query(
+      `INSERT INTO activity_sessions (id, user_id, type, subtype, started_at, duration_s, metrics, source_module)
+       VALUES ($1, $2, 'exercise', 'squat', $3, 745, $4, 'exercise_module')`,
+      [crypto.randomUUID(), user, now, JSON.stringify({ active_time_s: 745, timezone: "Asia/Kolkata" })]);
+
+    const lifetimeResponse = await app.inject({ method: "GET", url: "/v1/progress", headers: await bearer(user) });
+    expect(lifetimeResponse.statusCode).toBe(200);
+    const lifetime = lifetimeResponse.json();
+    const today = lifetime.today.date as string;
+    const dateValues = new Date(`${today}T00:00:00.000Z`);
+    dateValues.setUTCDate(dateValues.getUTCDate() - ((dateValues.getUTCDay() + 6) % 7));
+    const weekStart = dateValues.toISOString().slice(0, 10);
+
+    const dailyResponse = await app.inject({ method: "GET", url: `/v1/progress/daily?date=${today}`, headers: await bearer(user) });
+    const weeklyResponse = await app.inject({ method: "GET", url: `/v1/progress/weekly?weekStart=${weekStart}`, headers: await bearer(user) });
+    const historyResponse = await app.inject({ method: "GET", url: "/v1/progress/history?days=1", headers: await bearer(user) });
+    expect(dailyResponse.statusCode).toBe(200);
+    expect(weeklyResponse.statusCode).toBe(200);
+    expect(historyResponse.statusCode).toBe(200);
+    const daily = dailyResponse.json();
+    const weekly = weeklyResponse.json();
+    const history = historyResponse.json();
+
+    expect(lifetime.totalWorkoutMinutes).toBe(25);
+    expect(lifetime.totalActiveMinutes).toBe(25);
+    expect(lifetime.today.workoutMinutes).toBe(25);
+    expect(lifetime.today.activeMinutes).toBe(25);
+    expect(daily.workoutMinutes).toBe(25);
+    expect(daily.activeMinutes).toBe(25);
+    expect(weekly.workoutMinutes).toBe(25);
+    expect(weekly.activeMinutes).toBe(25);
+    expect(weekly.days.find((row: { date: string }) => row.date === today)).toMatchObject({ workoutMinutes: 25, activeMinutes: 25 });
+    expect(history.days[0]).toMatchObject({ date: today, workoutMinutes: 25, activeMinutes: 25 });
+    const minuteValues = [lifetime.totalWorkoutMinutes, lifetime.totalActiveMinutes, lifetime.today.workoutMinutes,
+      lifetime.today.activeMinutes, daily.workoutMinutes, daily.activeMinutes, weekly.workoutMinutes,
+      weekly.activeMinutes, weekly.previous.workoutMinutes, weekly.previous.activeMinutes,
+      ...weekly.days.flatMap((row: { workoutMinutes: number; activeMinutes: number }) => [row.workoutMinutes, row.activeMinutes]),
+      ...history.days.flatMap((row: { workoutMinutes: number; activeMinutes: number }) => [row.workoutMinutes, row.activeMinutes])];
+    expect(minuteValues.every(Number.isInteger)).toBe(true);
+  });
 });

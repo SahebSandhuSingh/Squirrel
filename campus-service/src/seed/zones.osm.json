@@ -305,6 +305,9 @@
     22.963739,
     88.527295
    ],
+   "zone_type": "AREA",
+   "route": null,
+   "threshold": null,
    "osm_id": "w1122313014"
   },
   {
@@ -379,13 +382,16 @@
     22.963796,
     88.525841
    ],
+   "zone_type": "AREA",
+   "route": null,
+   "threshold": null,
    "osm_id": "w354582719"
   },
   {
-   "id": "block-a-facultty-quarters",
-   "name": "Block A, Facultty Quarters",
-   "short_name": "Block A, Facultty ",
-   "kind": "academic",
+   "id": "block-a-faculty-quarters",
+   "name": "Block A, Faculty Quarters",
+   "short_name": "Block A, Faculty Q",
+   "kind": "landmark",
    "hostel": null,
    "polygon": [
     [
@@ -441,13 +447,16 @@
     22.962086,
     88.521714
    ],
+   "zone_type": "AREA",
+   "route": null,
+   "threshold": null,
    "osm_id": "w1122314031"
   },
   {
    "id": "block-b-faculty-quarters",
    "name": "Block B, Faculty Quarters",
    "short_name": "Block B, Faculty Q",
-   "kind": "academic",
+   "kind": "landmark",
    "hostel": null,
    "polygon": [
     [
@@ -503,13 +512,16 @@
     22.962072,
     88.521086
    ],
+   "zone_type": "AREA",
+   "route": null,
+   "threshold": null,
    "osm_id": "w1122313796"
   },
   {
    "id": "block-c-faculty-quarters",
    "name": "Block C, Faculty Quarters",
    "short_name": "Block C, Faculty Q",
-   "kind": "academic",
+   "kind": "landmark",
    "hostel": null,
    "polygon": [
     [
@@ -565,13 +577,16 @@
     22.961663,
     88.520564
    ],
+   "zone_type": "AREA",
+   "route": null,
+   "threshold": null,
    "osm_id": "w1122310933"
   },
   {
    "id": "block-d-faculty-quarters",
    "name": "Block D, Faculty Quarters",
    "short_name": "Block D, Faculty Q",
-   "kind": "academic",
+   "kind": "landmark",
    "hostel": null,
    "polygon": [
     [
@@ -627,6 +642,9 @@
     22.962296,
     88.518368
    ],
+   "zone_type": "AREA",
+   "route": null,
+   "threshold": null,
    "osm_id": "w1122310645"
   },
   {
@@ -717,6 +735,9 @@
     22.962785,
     88.520387
    ],
+   "zone_type": "AREA",
+   "route": null,
+   "threshold": null,
    "osm_id": "w966183560"
   },
   {
@@ -747,6 +768,9 @@
     22.96256,
     88.522619
    ],
+   "zone_type": "AREA",
+   "route": null,
+   "threshold": null,
    "osm_id": "w1122311514"
   },
   {
@@ -777,6 +801,9 @@
     22.962924,
     88.52475
    ],
+   "zone_type": "AREA",
+   "route": null,
+   "threshold": null,
    "osm_id": "w354559167"
   },
   {
@@ -807,6 +834,9 @@
     22.96325,
     88.521855
    ],
+   "zone_type": "AREA",
+   "route": null,
+   "threshold": null,
    "osm_id": "w1122313474"
   },
   {
@@ -921,6 +951,9 @@
     22.966369,
     88.528641
    ],
+   "zone_type": "AREA",
+   "route": null,
+   "threshold": null,
    "osm_id": "w1122306567"
   },
   {
@@ -1031,6 +1064,9 @@
     22.964744,
     88.523667
    ],
+   "zone_type": "AREA",
+   "route": null,
+   "threshold": null,
    "osm_id": "w354584328"
   },
   {
@@ -1061,6 +1097,9 @@
     22.961822,
     88.516071
    ],
+   "zone_type": "AREA",
+   "route": null,
+   "threshold": null,
    "osm_id": "w1122314304"
   },
   {
@@ -1091,6 +1130,30 @@
     22.963016,
     88.525696
    ],
+   "zone_type": "ROUTE",
+   "route": [
+    [
+     22.963167,
+     88.525299
+    ],
+    [
+     22.962826,
+     88.525332
+    ],
+    [
+     22.962863,
+     88.526076
+    ],
+    [
+     22.963201,
+     88.526065
+    ],
+    [
+     22.963167,
+     88.525299
+    ]
+   ],
+   "threshold": 0.75,
    "osm_id": "w1122313180"
   },
   {
@@ -1145,6 +1208,9 @@
     22.964882,
     88.525125
    ],
+   "zone_type": "AREA",
+   "route": null,
+   "threshold": null,
    "osm_id": "w354583122"
   },
   {
@@ -1175,6 +1241,9 @@
     22.964119,
     88.527266
    ],
+   "zone_type": "AREA",
+   "route": null,
+   "threshold": null,
    "osm_id": "w1122312901"
   },
   {
@@ -1253,6 +1322,9 @@
     22.964917,
     88.522803
    ],
+   "zone_type": "AREA",
+   "route": null,
+   "threshold": null,
    "osm_id": "w354584391"
   },
   {
@@ -1315,6 +1387,9 @@
     22.963852,
     88.520512
    ],
+   "zone_type": "AREA",
+   "route": null,
+   "threshold": null,
    "osm_id": "w1122309838"
   },
   {
@@ -1413,6 +1488,9 @@
     22.964455,
     88.522294
    ],
+   "zone_type": "AREA",
+   "route": null,
+   "threshold": null,
    "osm_id": "w354583987"
   },
   {
@@ -1443,6 +1521,9 @@
     22.961036,
     88.518724
    ],
+   "zone_type": "AREA",
+   "route": null,
+   "threshold": null,
    "osm_id": "w354584537"
   },
   {
@@ -1473,6 +1554,9 @@
     22.960886,
     88.518326
    ],
+   "zone_type": "AREA",
+   "route": null,
+   "threshold": null,
    "osm_id": "w354584772"
   },
   {
@@ -1503,6 +1587,9 @@
     22.960739,
     88.517881
    ],
+   "zone_type": "AREA",
+   "route": null,
+   "threshold": null,
    "osm_id": "w354584918"
   },
   {
@@ -1537,6 +1624,9 @@
     22.96613,
     88.524981
    ],
+   "zone_type": "AREA",
+   "route": null,
+   "threshold": null,
    "osm_id": "w1122306243"
   }
  ],
@@ -6123,7 +6213,7 @@
     ],
     "kind": "residential",
     "levels": null,
-    "label": "Block A, Facultty Quarters"
+    "label": "Block A, Faculty Quarters"
    },
    {
     "id": "b-w1122321311",
@@ -6946,5 +7036,5 @@
    }
   ]
  },
- "fetched_at": "2026-10-05T14:05:59.699Z"
+ "fetched_at": "2026-10-05T14:17:17.858Z"
 }

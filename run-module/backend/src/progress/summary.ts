@@ -69,6 +69,8 @@ export async function readProgress(userId: string): Promise<{ days: Map<string, 
       day.workoutMinutes += Math.max(0, number(metrics["active_time_s"] ?? row.duration_s)) / 60;
     }
     if (row.type === "run" && row.source_module === "run_module") {
+      day.workouts += 1;
+      day.workoutMinutes += Math.max(0, number(metrics["moving_time_s"] ?? row.duration_s)) / 60;
       day.distanceKm += Math.max(0, number(metrics["distance_m"])) / 1000;
       day.activeMinutes += Math.max(0, number(metrics["moving_time_s"] ?? row.duration_s)) / 60;
     } else if (row.type === "exercise" && row.source_module === "exercise_module") {
@@ -86,6 +88,11 @@ export async function readProgress(userId: string): Promise<{ days: Map<string, 
     challengeXpByDay[date] = (challengeXpByDay[date] ?? 0) + award.xp_awarded;
   }
   for (const [date, row] of days) row.xp = (xpSummary.byDay[date] ?? 0) + (challengeXpByDay[date] ?? 0);
+  // Round at the day bucket so daily, weekly, history, and lifetime views share identical minutes.
+  for (const row of days.values()) {
+    row.workoutMinutes = Math.round(row.workoutMinutes);
+    row.activeMinutes = Math.round(row.activeMinutes);
+  }
 
   // Daily goals have no agreed targets/reward rules yet (ADR-027), so return the contract's
   // empty-goals state instead of inventing goals or bonus XP.
