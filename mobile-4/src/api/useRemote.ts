@@ -6,9 +6,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  * `key = null` skips the request (e.g. not configured or no user yet).
  */
 const cache = new Map<string, unknown>();
+/** Mounted hooks, told when their key is invalidated so they refetch now (not on their next focus). */
+const listeners = new Set<(prefix: string) => void>();
 
+/** Forget every cached value under `prefix`, and have every mounted screen showing one refetch it. */
 export function invalidateRemote(prefix: string) {
   for (const k of cache.keys()) if (k.startsWith(prefix)) cache.delete(k);
+  listeners.forEach((l) => l(prefix));
 }
 
 type Settled<T> = { id: string; data?: T; error: string | null; cause?: unknown };
@@ -20,6 +24,16 @@ export function useRemote<T>(key: string | null, fetcher: () => Promise<T>) {
   useEffect(() => {
     fetchRef.current = fetcher;
   });
+
+  // Invalidated while mounted: refetch now. The last data stays on screen until the new data lands.
+  useEffect(() => {
+    if (!key) return;
+    const onInvalidate = (prefix: string) => key.startsWith(prefix) && setTick((t) => t + 1);
+    listeners.add(onInvalidate);
+    return () => {
+      listeners.delete(onInvalidate);
+    };
+  }, [key]);
 
   // One request per (key, reload tick). Loading is derived: the current id hasn't settled yet.
   const id = key ? `${key}#${tick}` : null;
@@ -40,7 +54,9 @@ export function useRemote<T>(key: string | null, fetcher: () => Promise<T>) {
   }, [key, id]);
 
   const current = settled != null && settled.id === id;
-  const data = (current && settled.data !== undefined ? settled.data : key ? (cache.get(key) as T | undefined) : undefined) ?? undefined;
+  // While refetching (a reload, or an invalidation that cleared the cache), keep showing this key's last data.
+  const last = settled && key && settled.id.startsWith(`${key}#`) ? settled.data : undefined;
+  const data = (current && settled.data !== undefined ? settled.data : key ? ((cache.get(key) as T | undefined) ?? last) : undefined) ?? undefined;
   const error = current ? settled.error : null;
   /** The thrown value behind `error` (e.g. an ApiError with its status), for choosing the right state. */
   const cause = current ? settled.cause : undefined;
