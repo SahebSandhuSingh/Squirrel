@@ -396,7 +396,16 @@ export type ChallengeInvite = {
   direction: 'incoming' | 'outgoing';
   created_at: string;
   result: { winner: PersonLite | CrewLite | null; summary: string } | null;
+  /** campus-service: when the battle ends, if it has a set end. */
+  ends_at?: string | null;
+  /** campus-service: what the viewer may do now, decided by the server (never inferred here). */
+  actions?: ChallengeAction[];
+  /** `crew_role_unavailable`: Social couldn't be asked about the viewer's crew role, so `actions`
+   *  may be missing some. Offer a retry rather than implying they lack permission. */
+  actions_status?: 'ready' | 'crew_role_unavailable';
 };
+
+export type ChallengeAction = 'accept' | 'decline' | 'cancel' | 'schedule' | 'start' | 'complete';
 
 export type ChallengeInviteCreate = {
   type: ChallengeTypeInfo['id'];

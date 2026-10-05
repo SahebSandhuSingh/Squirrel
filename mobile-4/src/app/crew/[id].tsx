@@ -1,9 +1,10 @@
-/** CREW PROFILE — members, crew territories, upcoming events, join / leave. */
+/** CREW PROFILE — members, crew territories, battles, upcoming events, join / leave. */
 import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Scene } from '@/art/Scene';
 import { campusApi, type CrewDetail } from '@/api/campus';
+import { BattleList } from '@/components/campus/BattleList';
 import { CrewJoinButton } from '@/components/campus/CrewJoin';
 import { EventRow } from '@/components/campus/EventRow';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
@@ -58,6 +59,8 @@ export default function CrewScreen() {
         <View style={{ marginTop: 16 }}>
           <CrewJoinButton crew={crew} onChanged={() => r.reload()} />
         </View>
+
+        <BattleList crewId={crew.id} newBattle={crew.my_membership == null ? { label: 'Challenge this crew', params: { crewId: crew.id } } : undefined} />
 
         <SectionHeader title="Members" />
         {crew.members.length ? (

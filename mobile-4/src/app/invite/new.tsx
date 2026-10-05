@@ -1,11 +1,17 @@
 /**
  * NEW CHALLENGE — type (from the backend's list), target (a person or a crew), zone (when the
  * type needs one), and a start time. Validation errors come back from the server and show inline.
+ *
+ * Opened from a zone or a crew it's a territory battle: campus-service's types and create call
+ * (group activity isn't offered: it has no screen yet), then back to that zone or crew. Opened
+ * from anywhere else it's a duel with Social, as on the Invites screen.
  */
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { campusApi, errorText, type ChallengeTypeInfo, type Crew, type PersonCard, type Zone } from '@/api/campus';
+import { battlesApi, BATTLES_CONFIGURED } from '@/api/campus/battles';
+import { BATTLE_TYPES, startSlots } from '@/logic/battles';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
 import { ErrorState, LoadingRows, SourceBadge } from '@/components/campus/States';
 import { Button, Header, Icon, PressScale, Screen, Segmented, tap } from '@/components/ui';
@@ -13,33 +19,13 @@ import { invalidateCampus, useAction, useCampus, useZones } from '@/hooks/useCam
 import { useApp } from '@/state/AppState';
 import { alpha, colors, fonts, radius } from '@/theme';
 
-/** Next few sensible slots: this evening, tomorrow morning/evening, Saturday morning. */
-function slots(): { label: string; at: Date }[] {
-  const out: { label: string; at: Date }[] = [];
-  const mk = (days: number, h: number, m = 0) => {
-    const d = new Date();
-    d.setDate(d.getDate() + days);
-    d.setHours(h, m, 0, 0);
-    return d;
-  };
-  const now = Date.now();
-  const cands = [
-    { label: 'Today · 6 PM', at: mk(0, 18) },
-    { label: 'Tomorrow · 6:30 AM', at: mk(1, 6, 30) },
-    { label: 'Tomorrow · 6 PM', at: mk(1, 18) },
-  ];
-  const sat = new Date();
-  sat.setDate(sat.getDate() + ((6 - sat.getDay() + 7) % 7 || 7));
-  sat.setHours(7, 0, 0, 0);
-  cands.push({ label: `Sat · 7 AM`, at: sat });
-  for (const c of cands) if (c.at.getTime() > now + 30 * 60_000) out.push(c);
-  return out;
-}
-
 export default function NewInvite() {
   const params = useLocalSearchParams<{ userId?: string; zoneId?: string; crewId?: string }>();
   const { toast } = useApp();
-  const types = useCampus<ChallengeTypeInfo[]>('challenge-types', () => campusApi.challengeTypes());
+  const battle = BATTLES_CONFIGURED && !!(params.zoneId || params.crewId);
+  const types = useCampus<ChallengeTypeInfo[]>(battle ? 'battle-types' : 'challenge-types', () =>
+    battle ? battlesApi.types().then((ts) => ts.filter((t) => BATTLE_TYPES.has(t.id))) : campusApi.challengeTypes(),
+  );
   const people = useCampus<PersonCard[]>('people:friends', () => campusApi.suggestedPeople('friends'));
   const crews = useCampus('crews:all:', () => campusApi.crews({ scope: 'all' }));
   const zones = useZones();
@@ -49,17 +35,23 @@ export default function NewInvite() {
   const [userId, setUserId] = useState<string | null>(params.userId ?? null);
   const [crewId, setCrewId] = useState<string | null>(params.crewId ?? null);
   const [zoneId, setZoneId] = useState<string | null>(params.zoneId || null);
-  const times = useMemo(() => slots(), []);
+  const times = useMemo(() => startSlots(), []);
   const [slot, setSlot] = useState(0);
   const [msg, setMsg] = useState('');
   const typeList = types.data ?? [];
-  const type = typeList.find((t) => t.id === typeId) ?? (params.zoneId ? typeList.find((t) => t.requires_zone) : typeList[0]) ?? null;
+  // Default: from a zone, a type played at a zone; from a crew, one that targets a crew without one (a weekend war).
+  const fallback = params.zoneId
+    ? typeList.find((t) => t.requires_zone)
+    : params.crewId
+      ? typeList.find((t) => t.targets.includes('crew') && !t.requires_zone) ?? typeList.find((t) => t.targets.includes('crew'))
+      : typeList[0];
+  const type = typeList.find((t) => t.id === typeId) ?? fallback ?? null;
   const allowedTargets = type?.targets ?? ['user', 'crew'];
   const kind = allowedTargets.includes(targetKind) ? targetKind : allowedTargets[0];
   const targetId = kind === 'user' ? userId : crewId;
   const ready = !!type && !!targetId && (!type.requires_zone || !!zoneId) && !!times[slot];
   const create = useAction(() =>
-    campusApi.createInvite({
+    (battle ? battlesApi.create : campusApi.createInvite)({
       type: type!.id,
       target: { type: kind, id: targetId! },
       zone_id: type!.requires_zone ? zoneId : null,
@@ -72,7 +64,7 @@ export default function NewInvite() {
   if (!types.data) {
     return (
       <Screen tabBar={false}>
-        <Header back title="New challenge" />
+        <Header back title={battle ? 'New battle' : 'New challenge'} />
         {types.error ? <ErrorState cause={types.cause} onRetry={types.reload} /> : <LoadingRows rows={4} />}
       </Screen>
     );
@@ -81,9 +73,10 @@ export default function NewInvite() {
   const submit = async () => {
     const r = await create.run();
     if (r) {
-      invalidateCampus('invites');
+      invalidateCampus(battle ? 'battles' : 'invites');
       toast(`${r.type_label} sent`, 'sword-cross', colors.secondary);
-      router.replace('/invites');
+      if (battle) router.back();
+      else router.replace('/invites');
     }
   };
 
@@ -93,7 +86,7 @@ export default function NewInvite() {
 
   return (
     <Screen tabBar={false}>
-      <Header back title="New challenge" right={<SourceBadge />} />
+      <Header back title={battle ? 'New battle' : 'New challenge'} right={<SourceBadge />} />
 
       <Text style={styles.label}>Type</Text>
       <View style={{ gap: 8 }}>

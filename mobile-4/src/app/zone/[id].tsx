@@ -1,12 +1,13 @@
 import { StyleSheet, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
+import { BattleList } from '@/components/campus/BattleList';
 import { CampusMap } from '@/components/campus/CampusMap';
 import { SourceBadge } from '@/components/campus/States';
 import { ZonePanel } from '@/components/campus/ZonePanel';
 import { Header, Screen } from '@/components/ui';
 import { useMe, useTerritorySync, useZones } from '@/hooks/useCampus';
 
-/** One zone: its place on the map, owner, status, history and the allowed action. */
+/** One zone: its place on the map, owner, status, history, the allowed action and its battles. */
 export default function ZoneScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const zones = useZones();
@@ -19,6 +20,7 @@ export default function ZoneScreen() {
       <View style={{ marginTop: 14 }}>
         <ZonePanel zoneId={id} meId={me.data?.user_id ?? null} />
       </View>
+      <BattleList zoneId={id} newBattle={{ label: 'New battle', params: { zoneId: id } }} />
     </Screen>
   );
 }
