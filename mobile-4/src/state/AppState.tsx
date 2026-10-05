@@ -10,7 +10,7 @@
  */
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AppState as RNAppState } from 'react-native';
-import { enqueueActivity, flushActivities, progressApi, progressReadsLive } from '@/api/progress';
+import { progressApi, progressReadsLive } from '@/api/progress';
 import { useAuth } from '@/auth/AuthProvider';
 import { exerciseXp, runXp, type XpLine } from '@/logic/xp';
 import type { Verdict } from '@/logic/track';
@@ -100,19 +100,16 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2600);
   }, []);
 
-  // ---- XP from the Run Module (GET /v1/xp), the XP authority, whenever it's configured and we're signed in.
-  // Queued activity is flushed (idempotently) on sign-in, on foreground and after each workout —
-  // a no-op until activity intake is served — then XP / today's XP are re-read from the server so
-  // nothing here is client-decided.
+  // ---- XP from the Run Module (GET /v1/xp), the XP authority, whenever it's configured and we're signed in:
+  // read on sign-in, on foreground and after each workout, so nothing here is client-decided.
   const live = progressReadsLive(mode);
   const syncProgress = useCallback(async () => {
     try {
-      await flushActivities();
       const x = await progressApi.xp();
       setServerXp(x.totalXp);
       setXpToday(x.today);
     } catch {
-      // offline or signed out: the queue keeps the events; try again on the next trigger
+      // offline or signed out: try again on the next trigger
     }
   }, [setServerXp]);
   useEffect(() => {
@@ -186,19 +183,10 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       (c: CompletedExercise) => {
         const minutes = Math.max(1, Math.round(c.activeSeconds / 60));
         setExerciseToday((t) => ({ sessions: t.sessions + 1, minutes: t.minutes + minutes, kcal: t.kcal + c.kcal }));
-        // The estimate for this session's summary; the progress-service decides the real XP.
+        // The estimate for this session's summary. Nothing is reported from here: the camera workout
+        // already reached the server through Exercise's own session row, which decides the real XP.
         const x = exerciseXp(c.reps, c.timedSeconds);
-        if (live) {
-          // The key is fixed per session, so a retried or replayed report is recognised as a duplicate.
-          const startedAt = activeExerciseRef.current?.startedAt ?? Date.now();
-          void enqueueActivity({
-            idempotencyKey: `exercise:${startedAt}:${c.key}`,
-            type: 'WORKOUT_COMPLETED',
-            value: Math.min(300, Math.max(0.1, +(c.activeSeconds / 60).toFixed(2))),
-            occurredAt: new Date().toISOString(),
-            metadata: { exercise: c.slug, ...(c.reps > 0 ? { reps: c.reps } : {}), ...(c.kcal > 0 ? { calories: Math.round(c.kcal) } : {}), sessionId: String(startedAt) },
-          }).then(syncProgress);
-        }
+        if (live) void syncProgress();
         return { xp: x.total, lines: x.lines, leveledUp: false };
       },
       [live, syncProgress],
