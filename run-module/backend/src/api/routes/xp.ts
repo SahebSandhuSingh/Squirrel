@@ -19,6 +19,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { requireAuth, requireService } from "../../auth/verify-jwt.js";
 import { getUserXp, getXpBoard, meetsXpGate, type XpBoardWindow } from "../../xp/query.js";
+import { xpCompatibilitySummary } from "../../progress/summary.js";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_MIN_XP = 1_000_000;
@@ -32,6 +33,36 @@ const line = {
 
 // eslint-disable-next-line @typescript-eslint/require-await -- Fastify plugins are async by contract
 export const xpRoutes: FastifyPluginAsync = async (fastify) => {
+  fastify.get(
+    "/v1/xp",
+    {
+      onRequest: [requireAuth],
+      schema: {
+        response: {
+          200: {
+            type: "object",
+            required: ["totalXp", "level", "today", "week", "bySource"],
+            properties: {
+              totalXp: { type: "integer" },
+              level: {
+                type: "object",
+                required: ["level", "currentXP", "xpForCurrentLevel", "xpForNextLevel", "progress"],
+                properties: {
+                  level: { type: "integer" }, currentXP: { type: "integer" },
+                  xpForCurrentLevel: { type: "integer" }, xpForNextLevel: { type: "integer" }, progress: { type: "number" },
+                },
+              },
+              today: { type: "integer" },
+              week: { type: "integer" },
+              bySource: { type: "object", additionalProperties: { type: "integer" } },
+            },
+          },
+        },
+      },
+    },
+    async (request) => xpCompatibilitySummary(request.userId),
+  );
+
   fastify.get(
     "/v1/users/me/xp",
     {

@@ -1,6 +1,6 @@
 import { pool } from "../db/pool.js";
 import { getUserXp, xpTimeZone } from "../xp/query.js";
-import { xpDay, validTimeZone, type ActivityRow } from "../xp/rules.js";
+import { xpDay, validTimeZone, type ActivityRow, type XpLine } from "../xp/rules.js";
 
 export type DayRow = {
   date: string; xp: number; steps: number; workouts: number; workoutMinutes: number;
@@ -41,7 +41,7 @@ function blankDay(date: string): DayRow {
     calories: 0, challengesCompleted: 0, goalsCompleted: 0 };
 }
 
-export async function readProgress(userId: string): Promise<{ days: Map<string, DayRow>; streak: Streak; timezone: string; xp: number; byDay: Record<string, number> }> {
+export async function readProgress(userId: string): Promise<{ days: Map<string, DayRow>; streak: Streak; timezone: string; xp: number; byDay: Record<string, number>; xpBreakdown: XpLine[] }> {
   const timezone = xpTimeZone();
   const [activityResult, xpSummary, challengeResult] = await Promise.all([
     pool.query<ProgressActivity>(
@@ -115,7 +115,7 @@ export async function readProgress(userId: string): Promise<{ days: Map<string, 
   const lastQualifyingDate = activeDates.at(-1) ?? null;
   const streak: Streak = { current, longest, lastQualifyingDate,
     todayStatus: active.has(today) ? "done" : active.has(yesterday) ? "at_risk" : "none" };
-  return { days, streak, timezone, xp: xpSummary.xp, byDay: xpSummary.byDay };
+  return { days, streak, timezone, xp: xpSummary.xp, byDay: xpSummary.byDay, xpBreakdown: xpSummary.breakdown };
 }
 
 export function progressDay(data: Awaited<ReturnType<typeof readProgress>>, date: string, isToday: boolean): DayRow & {
@@ -148,6 +148,32 @@ export function levelForXp(totalXp: number) {
   const xpForNextLevel = level * 2000;
   return { level, currentXP: totalXp, xpForCurrentLevel, xpForNextLevel,
     progress: (totalXp - xpForCurrentLevel) / (xpForNextLevel - xpForCurrentLevel) };
+}
+
+function xpBySource(lines: XpLine[]): Record<string, number> {
+  const bySource: Record<string, number> = { run: 0, exercise: 0, campus: 0, challenge: 0 };
+  for (const line of lines) {
+    const source = line.reason.startsWith("run_") || line.reason === "territory_captured" ? "run"
+      : line.reason.startsWith("exercise_") ? "exercise"
+        : line.reason === "challenge completed" ? "challenge" : "campus";
+    bySource[source] = (bySource[source] ?? 0) + line.xp;
+  }
+  return bySource;
+}
+
+/** Compatibility shape consumed by mobile-4 at startup; all totals come from the shared progress derivation. */
+export async function xpCompatibilitySummary(userId: string) {
+  const data = await readProgress(userId);
+  const today = xpDay(new Date(), data.timezone);
+  const start = weekStartFor(today);
+  const weekDays = Array.from({ length: 7 }, (_, i) => dayRow(data, shiftDay(start, i)));
+  return {
+    totalXp: data.xp,
+    level: levelForXp(data.xp),
+    today: data.days.get(today)?.xp ?? data.byDay[today] ?? 0,
+    week: progressTotals(weekDays).xp,
+    bySource: xpBySource(data.xpBreakdown),
+  };
 }
 
 export async function lifetimeProgress(userId: string) {
