@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { classifySignupError, looksLikeEmail, normalizeIndianMobile, splitFullName, STEP_OF } from './accessSignup.ts';
+import { classifySignupError, emailStartRefused, looksLikeEmail, NoAccountError, normalizeIndianMobile, splitFullName, STEP_OF } from './accessSignup.ts';
 
 test('phone numbers are normalised the way people type them', () => {
   for (const raw of ['9830041275', '98300 41275', '98300-41275', '+91 98300 41275', '+919830041275', '919830041275', '09830041275', ' (983) 004-1275 ']) {
@@ -41,4 +41,15 @@ test('server errors send the person back to the right step', () => {
   assert.equal(slow.field, null);
   assert.match(slow.message, /Too many attempts/);
   assert.equal(classifySignupError(0, undefined, 'Network error').field, null);
+});
+
+test('a refused code request for a non-campus address says no account matched', () => {
+  const gmail = emailStartRefused(' johndoe@gmail.com ', 'Sign-up is open to .ac.in email addresses only.');
+  assert.ok(gmail instanceof NoAccountError);
+  assert.match(gmail.message, /No account uses johndoe@gmail\.com\./);
+  assert.ok(!/\.ac\.in/.test(gmail.message), 'no campus-only wording for someone signing in');
+
+  const campus = emailStartRefused('asha@iitb.ac.in', 'Sign-up is open to iiserkol.ac.in email addresses only.');
+  assert.ok(!(campus instanceof NoAccountError));
+  assert.equal(campus.message, 'Sign-up is open to iiserkol.ac.in email addresses only.');
 });

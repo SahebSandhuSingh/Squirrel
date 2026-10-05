@@ -12,6 +12,27 @@ export const STEP_OF: Record<SignupField, SignupStep> = { email: 1, full_name: 2
 /** A plausible email shape. The server applies the exact rules. */
 export const looksLikeEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
 
+/** Campus sign-up is limited to institutional emails. The backend enforces the exact domains. */
+export const isAcademicEmail = (e: string) =>
+  /^[^\s@]+@([a-z0-9-]+\.)*[a-z0-9-]+\.ac\.in$/i.test(e.trim()) ||
+  /^[^\s@]+@squirrelsocial\.in$/i.test(e.trim());
+
+/** Asking for a sign-in code found no account for a non-campus address. */
+export class NoAccountError extends Error {}
+
+/**
+ * `POST /api/auth/email/start` answered 403: the address has no account and isn't on the campus
+ * allow-list, so the server refused it as a new sign-up. For a campus address its message ("open to
+ * … only") is right. Anyone else was trying to sign in, so say so: account lookups are exact, and
+ * john.doe@gmail.com and johndoe@gmail.com are different accounts here.
+ */
+export function emailStartRefused(email: string, serverMessage: string): Error {
+  if (isAcademicEmail(email)) return new Error(serverMessage || 'Use your college email (ending in .ac.in).');
+  return new NoAccountError(
+    `No account uses ${email.trim()}. Check it’s exactly the address you signed up with — dots and anything after a + count. New here without a campus email? Sign up with an access code.`,
+  );
+}
+
 /**
  * An Indian mobile number as `+91XXXXXXXXXX`, or null. Accepts what people actually type:
  * spaces, dashes, dots and brackets, with or without a `+91`, `91` or `0` prefix.

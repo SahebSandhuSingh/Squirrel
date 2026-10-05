@@ -12,7 +12,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { campusApi, CAMPUS_SOURCE } from '@/api/campus';
 import { isAcademicEmail, useAuth } from '@/auth/AuthProvider';
-import { looksLikeEmail, normalizeIndianMobile, SignupError, STEP_OF, type SignupStep } from '@/logic/accessSignup';
+import { looksLikeEmail, NoAccountError, normalizeIndianMobile, SignupError, STEP_OF, type SignupStep } from '@/logic/accessSignup';
 import { Wordmark } from '@/components/Brand';
 import { Button, Display, IconButton, Kicker, Tagline, tap } from '@/components/ui';
 import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
@@ -57,6 +57,8 @@ export default function SignIn() {
   const [signupExisting, setSignupExisting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** The last code request found no account for a non-campus address: offer the access-code sign-up. */
+  const [noAccount, setNoAccount] = useState(false);
   // Any address may ask for a code: existing accounts (access-code ones included) sign in whatever
   // their domain, and the server refuses new non-campus addresses with its own message.
   const emailOk = looksLikeEmail(email);
@@ -170,6 +172,7 @@ export default function SignIn() {
             onChangeText={(v) => {
               setEmail(v);
               setCodeSent(false);
+              setNoAccount(false);
             }}
             placeholder="you@iiserkol.ac.in"
             placeholderTextColor={colors.mute}
@@ -186,7 +189,11 @@ export default function SignIn() {
               disabled={busy || !emailOk}
               onPress={() =>
                 run(async () => {
-                  const r = await auth.requestEmailCode(email);
+                  setNoAccount(false);
+                  const r = await auth.requestEmailCode(email).catch((e: unknown) => {
+                    if (e instanceof NoAccountError) setNoAccount(true);
+                    throw e;
+                  });
                   setNewAccount(!!r.newAccount);
                   setCodeSent(true);
                 }, false)
@@ -217,7 +224,7 @@ export default function SignIn() {
           )}
           {error && <Text style={styles.error} accessibilityRole="alert">{error}</Text>}
           {auth.notice && !error && <Text style={styles.sent}>{auth.notice}</Text>}
-          {joining && (
+          {(joining || noAccount) && (
             <Text style={styles.link} onPress={openAccessSignup} accessibilityRole="button">
               No campus email? Sign up with an access code
             </Text>

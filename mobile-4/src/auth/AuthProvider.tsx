@@ -20,10 +20,7 @@ const BEARER_BACKEND = API_CONFIGURED || CAMPUS_API_CONFIGURED || PROGRESS_API_C
 
 const NO_ACCOUNT_SERVER = 'No account server is configured. Set EXPO_PUBLIC_EXERCISE_API_URL, or explore the demo.';
 
-/** Campus sign-up is limited to institutional emails. The backend enforces the exact domains. */
-export const isAcademicEmail = (e: string) =>
-  /^[^\s@]+@([a-z0-9-]+\.)*[a-z0-9-]+\.ac\.in$/i.test(e.trim()) ||
-  /^[^\s@]+@squirrelsocial\.in$/i.test(e.trim());
+export { isAcademicEmail } from '@/logic/accessSignup';
 /**
  * Authentication. One Squirrel Social account (Exercise backend, /api/auth) signs in to every
  * backend: the Run Module and the Social service accept the same bearer token, and the Exercise

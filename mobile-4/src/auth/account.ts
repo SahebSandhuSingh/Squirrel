@@ -13,7 +13,7 @@
  */
 import { ApiError, api } from '@/api/client';
 import { AUTH_URL } from '@/api/config';
-import { classifySignupError } from '@/logic/accessSignup';
+import { classifySignupError, emailStartRefused } from '@/logic/accessSignup';
 
 export type TokenPair = {
   user_id: string;
@@ -48,7 +48,10 @@ export const accountApi = {
   emailStart: (email: string) =>
     api<{ sent: boolean; expires_in_s: number; new_account: boolean }>('/api/auth/email/start', { body: { email }, base: AUTH_URL, anonymous: true })
       .then((r) => ({ expiresInS: r.expires_in_s, newAccount: r.new_account }))
-      .catch((e) => explain(e, 'Could not send the code.')),
+      .catch((e) => {
+        if (e instanceof ApiError && e.status === 403) throw emailStartRefused(email, e.message);
+        return explain(e, 'Could not send the code.');
+      }),
   /** The code for tokens. A new address needs `name` (first name at least). */
   emailVerify: (email: string, code: string, name?: { first_name: string; last_name: string }) =>
     api<CodeSignIn>('/api/auth/email/verify', { body: { email, code, ...(name ?? {}) }, base: AUTH_URL, anonymous: true }).catch((e) => {
