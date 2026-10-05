@@ -9,6 +9,7 @@ const U1 = crypto.randomUUID();
 const U2 = crypto.randomUUID();
 const U3 = crypto.randomUUID();
 const LIST_USERS = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()] as const;
+const EXTRA_ACTIVITY_USERS: string[] = [];
 
 beforeAll(async () => {
 });
@@ -18,6 +19,9 @@ afterAll(async () => {
   await pool.query('DELETE FROM challenges WHERE created_by IN ($1, $2, $3)', [U1, U2, U3]);
   await pool.query('DELETE FROM activity_sessions WHERE user_id = ANY($1::uuid[])', [LIST_USERS]);
   await pool.query('DELETE FROM challenges WHERE created_by = ANY($1::uuid[])', [LIST_USERS]);
+  if (EXTRA_ACTIVITY_USERS.length) {
+    await pool.query('DELETE FROM activity_sessions WHERE user_id = ANY($1::uuid[])', [EXTRA_ACTIVITY_USERS]);
+  }
 });
 
 test('GOALS-2: mine list progress matches the challenge detail route', async () => {
@@ -49,7 +53,7 @@ test('GOALS-2: mine list reports zero progress when the user has no activity', a
   expect(listed?.myProgress).not.toBeNull();
 });
 
-test('GOALS-2: mine list preserves every challenge field and adds only myProgress', async () => {
+test('GOALS-2: mine list preserves every challenge field and GOALS-3 only adds its documented fields', async () => {
   const userId = LIST_USERS[2];
   const starts = new Date(Date.now() - 3600000);
   const ends = new Date(Date.now() + 3600000);
@@ -58,8 +62,85 @@ test('GOALS-2: mine list preserves every challenge field and adds only myProgres
   const listed = (await listMyChallenges(userId)).find((item) => item.id === challenge.id)!;
   const originalKeys = Object.keys(raw.rows[0]).sort();
 
-  expect(Object.keys(listed).sort()).toEqual([...originalKeys, 'myProgress'].sort());
+  expect(Object.keys(listed).sort()).toEqual([
+    ...originalKeys,
+    'participantStatus', 'isWinner', 'xpAwarded', 'myProgress', 'groupProgress', 'groupMemberCount'
+  ].sort());
   for (const key of originalKeys) expect(listed[key as keyof typeof listed]).toEqual(raw.rows[0][key]);
+  expect(listed.groupProgress).toBeNull();
+  expect(listed.groupMemberCount).toBeNull();
+});
+
+test('GOALS-3: mine list returns participant status and unresolved result fields distinctly', async () => {
+  const userId = LIST_USERS[0];
+  const starts = new Date(Date.now() - 3600000);
+  const ends = new Date(Date.now() + 3600000);
+  const challenge = await createChallenge(userId, 'daily', 'status and pending result', 'runs_completed', 'gte', 1, starts, ends, 100);
+  await pool.query("UPDATE challenge_participants SET status = 'declined' WHERE challenge_id = $1 AND user_id = $2", [challenge.id, userId]);
+  const dbParticipant = await pool.query(
+    'SELECT status, is_winner, xp_awarded FROM challenge_participants WHERE challenge_id = $1 AND user_id = $2',
+    [challenge.id, userId]
+  );
+
+  const listed = (await listMyChallenges(userId)).find((item) => item.id === challenge.id)!;
+  expect(listed.participantStatus).toBe(dbParticipant.rows[0].status);
+  expect(listed.participantStatus).toBe('declined');
+  expect(listed.participantStatus).not.toBe('accepted');
+  expect(listed.isWinner).toBeNull();
+  expect(listed.xpAwarded).toBeNull();
+});
+
+test('GOALS-3: resolved participant results match the XP awarded to winner and loser', async () => {
+  const winnerId = LIST_USERS[1];
+  const loserId = crypto.randomUUID();
+  EXTRA_ACTIVITY_USERS.push(loserId);
+  const starts = new Date(Date.now() - 3600000);
+  const ends = new Date(Date.now() - 1000);
+  const reward = 125;
+  const challenge = await createChallenge(winnerId, 'head_to_head', 'resolved result fields', 'distance_m', 'gte', 100, starts, ends, reward);
+  await inviteUser(challenge.id, winnerId, loserId);
+  await acceptInvite(challenge.id, loserId);
+  await pool.query(
+    'INSERT INTO activity_sessions (id, user_id, type, subtype, started_at, duration_s, metrics) VALUES ($1, $2, $3, $4, $5, 1000, $6)',
+    [crypto.randomUUID(), winnerId, 'run', 'territory_run', new Date(starts.getTime() + 1000), JSON.stringify({ distance_m: 500 })]
+  );
+  await pool.query(
+    'INSERT INTO activity_sessions (id, user_id, type, subtype, started_at, duration_s, metrics) VALUES ($1, $2, $3, $4, $5, 1000, $6)',
+    [crypto.randomUUID(), loserId, 'run', 'territory_run', new Date(starts.getTime() + 1000), JSON.stringify({ distance_m: 250 })]
+  );
+
+  await resolveChallengesBatch();
+  const winner = (await listMyChallenges(winnerId)).find((item) => item.id === challenge.id)!;
+  const loser = (await listMyChallenges(loserId)).find((item) => item.id === challenge.id)!;
+  expect(winner.isWinner).toBe(true);
+  expect(winner.xpAwarded).toBe(reward);
+  expect(loser.isWinner).toBe(false);
+  expect(loser.xpAwarded).toBe(0);
+});
+
+test('GOALS-3: group list returns accepted members’ shared progress and member count', async () => {
+  const userId = LIST_USERS[2];
+  const secondMember = crypto.randomUUID();
+  const invited = crypto.randomUUID();
+  EXTRA_ACTIVITY_USERS.push(secondMember);
+  const starts = new Date(Date.now() - 3600000);
+  const ends = new Date(Date.now() + 3600000);
+  const challenge = await createChallenge(userId, 'group', 'shared progress', 'distance_m', 'gte', 1000, starts, ends, 100);
+  await pool.query('INSERT INTO challenge_participants (challenge_id, user_id, status) VALUES ($1, $2, $3)', [challenge.id, secondMember, 'accepted']);
+  await pool.query('INSERT INTO challenge_participants (challenge_id, user_id, status) VALUES ($1, $2, $3)', [challenge.id, invited, 'invited']);
+  await pool.query('UPDATE challenges SET state = $1 WHERE id = $2', ['active', challenge.id]);
+  for (const [member, distance] of [[userId, 350], [secondMember, 650]] as const) {
+    await pool.query(
+      'INSERT INTO activity_sessions (id, user_id, type, subtype, started_at, duration_s, metrics) VALUES ($1, $2, $3, $4, $5, 1000, $6)',
+      [crypto.randomUUID(), member, 'run', 'territory_run', new Date(starts.getTime() + 1000), JSON.stringify({ distance_m: distance })]
+    );
+  }
+
+  const listed = (await listMyChallenges(userId)).find((item) => item.id === challenge.id)!;
+  expect(listed.myProgress).toBe(350);
+  expect(listed.groupProgress).toBe(1000);
+  expect(listed.groupMemberCount).toBe(2);
+  expect(listed.participantStatus).toBe('accepted');
 });
 
 test('H1: Daily challenge target met', async () => {

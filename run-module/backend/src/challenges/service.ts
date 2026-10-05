@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pool } from '../db/pool.js';
 import crypto from 'node:crypto';
-import { Challenge, ChallengeType, Comparator, ChallengeState, ChallengeParticipant } from './types.js';
+import { Challenge, ChallengeType, Comparator, ChallengeState, ChallengeParticipant, ParticipantStatus } from './types.js';
 import { Metric } from './metrics.js';
 import { computeProgress } from './progress.js';
 
@@ -200,7 +200,14 @@ export async function getChallenge(challengeId: string, userId: string): Promise
   };
 }
 
-export async function listMyChallenges(userId: string): Promise<Array<Challenge & { myProgress: number }>> {
+export async function listMyChallenges(userId: string): Promise<Array<Challenge & {
+  participantStatus: ParticipantStatus;
+  isWinner: boolean | null;
+  xpAwarded: number | null;
+  myProgress: number;
+  groupProgress: number | null;
+  groupMemberCount: number | null;
+}>> {
   const res = await pool.query(LIST_MY_CHALLENGES!, [userId]);
   return res.rows;
 }
