@@ -42,6 +42,12 @@ are, and switches off placeholder zones OpenStreetMap doesn't have). The halls, 
 mess and lake keep the ids used everywhere else, so territory and hall choices carry over. Commit the
 two JSON files. Anything missing from OpenStreetMap stays missing: add it there, or survey it below.
 
+The sports loop (or any `leisure=track`) and the lake come in as ROUTE zones: you qualify by going
+round. The lake's loop is the footpath around it when OSM has one, else the shore, and each ROUTE
+zone's outline reaches 25 m beyond its loop so the path is inside it. Spelling mistakes in OSM names
+are corrected on import (`NAME_FIXES` in the script; fix them on openstreetmap.org too). A zone an
+earlier import had but a new one doesn't (renamed or removed in OSM) is switched off, not deleted.
+
 ## How to load real data by hand
 
 ```sql

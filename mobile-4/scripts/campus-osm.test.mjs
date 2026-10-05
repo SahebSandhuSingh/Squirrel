@@ -27,6 +27,9 @@ way(501, box(22.9625, 88.5262, 0.0003, 0.0004), {}); // the lake's outer way (ta
 way(502, [node(22.9605, 88.5239), node(22.9637, 88.5239), node(22.9665, 88.5239)], { highway: 'service', name: 'Spine road' });
 way(503, box(22.9700, 88.5300, 0.0002, 0.0002), { building: 'yes', name: 'Off-campus shop' });
 way(504, box(22.9630, 88.5230, 0.00003, 0.00003), { building: 'yes', name: 'Tiny kiosk' }); // too small for a zone
+way(505, box(22.9625, 88.5262, 0.00045, 0.0006), { highway: 'footway', name: 'Lake Walk' }); // the path round the lake
+way(506, box(22.9655, 88.5205, 0.0004, 0.0007), { leisure: 'track', name: 'Running Track' });
+way(507, box(22.9615, 88.5280, 0.0003, 0.0004), { building: 'residential', name: 'Block A, Facultty Quarters' }); // OSM's typo
 node(22.9601, 88.5239, { barrier: 'gate', name: 'Main Gate' });
 const relation = { type: 'relation', id: 9001, members: [{ type: 'way', ref: 501, role: 'outer' }], tags: { type: 'multipolygon', natural: 'water', name: 'RC Lake' } };
 
@@ -46,7 +49,9 @@ test('the OSM export file and the Overpass download give the same campus', () =>
 test('named campus areas become zones, with the ids the rest of the system uses', () => {
   const geo = buildCampusGeo(parseOverpassJson(overpass));
   const byName = Object.fromEntries(geo.zones.map((z) => [z.name, z]));
-  assert.deepEqual(Object.keys(byName).sort(), ['Football Ground', 'IISER Kolkata Library', 'Nivedita Hall', 'RC Lake']);
+  assert.deepEqual(Object.keys(byName).sort(), ['Block A, Faculty Quarters', 'Football Ground', 'IISER Kolkata Library', 'Nivedita Hall', 'RC Lake', 'Running Track']);
+  assert.equal(byName['Block A, Faculty Quarters'].id, 'block-a-faculty-quarters', 'OSM spelling fixed, in the id too');
+  assert.equal(byName['Block A, Faculty Quarters'].kind, 'landmark');
 
   assert.equal(byName['Nivedita Hall'].kind, 'hostel');
   assert.equal(byName['Nivedita Hall'].id, 'nivedita', 'the same id as the placeholder, so territory carries over');
@@ -68,12 +73,35 @@ test('only what is on campus is drawn; roads are kept up to the fence', () => {
   assert.ok(labels.includes('Nivedita Hall') && labels.includes('Tiny kiosk'));
   assert.ok(!labels.includes('Off-campus shop'));
   assert.equal(geo.features.buildings.find((b) => b.label === 'Nivedita Hall').levels, 5);
-  assert.deepEqual(geo.features.terrain.map((t) => t.kind).sort(), ['field', 'water']);
-  assert.equal(geo.features.roads.length, 1);
-  assert.equal(geo.features.roads[0].kind, 'road');
+  assert.deepEqual(geo.features.terrain.map((t) => t.kind).sort(), ['field', 'track', 'water']);
+  assert.deepEqual(geo.features.roads.map((r) => r.kind).sort(), ['path', 'road']);
+  assert.ok(labels.includes('Block A, Faculty Quarters') && !labels.some((l) => /Facultty/.test(l ?? '')));
   assert.deepEqual(geo.features.pois.map((p) => [p.name, p.kind]), [['Main Gate', 'gate']]);
   for (const b of geo.features.buildings) assert.ok(insideRing(b.polygon[0], geo.boundary) || b.label === 'Tiny kiosk');
   assert.equal(geo.source, 'osm');
+});
+
+test('the sports loop and the lake are ROUTE zones you complete by going round', () => {
+  const geo = buildCampusGeo(parseOverpassJson(overpass));
+  const byId = Object.fromEntries(geo.zones.map((z) => [z.id, z]));
+  const closed = (r) => r.length >= 5 && r[0][0] === r.at(-1)[0] && r[0][1] === r.at(-1)[1];
+
+  assert.equal(byId.sports.name, 'Running Track');
+  assert.equal(byId.sports.zone_type, 'ROUTE');
+  assert.equal(byId.sports.threshold, 0.8);
+  assert.ok(closed(byId.sports.route));
+
+  // The lake's route is the footpath round it, not the shoreline.
+  assert.equal(byId.lake.zone_type, 'ROUTE');
+  assert.equal(byId.lake.threshold, 0.75);
+  assert.ok(closed(byId.lake.route));
+  const lats = byId.lake.route.map(([lat]) => lat);
+  assert.ok(Math.abs(Math.min(...lats) - (22.9625 - 0.00045)) < 1e-6 && Math.abs(Math.max(...lats) - (22.9625 + 0.00045)) < 1e-6);
+
+  for (const z of geo.zones.filter((z) => !['sports', 'lake'].includes(z.id))) {
+    assert.equal(z.zone_type, 'AREA', z.id);
+    assert.equal(z.route, null, z.id);
+  }
 });
 
 test('data without the campus outline is refused with a clear message', () => {

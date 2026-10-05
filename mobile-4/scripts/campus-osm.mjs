@@ -15,7 +15,10 @@
  *     centre lies inside it
  *   - every named area of 800 m² or more becomes a zone (hostels, library, grounds, lake…), its kind
  *     read from the OSM tags; well-known places keep the ids the rest of the system already uses
+ *   - the sports loop (or any running track) and the lake are ROUTE zones: you qualify by going
+ *     round them. The lake's route is the footpath around it when OSM has one, else its shore
  *   - all buildings, roads/paths, green/water/sports areas and named points become the drawn map
+ *   - known spelling mistakes in OSM names are corrected (NAME_FIXES)
  * Nothing is invented: a place missing from OpenStreetMap is missing here too.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -25,6 +28,10 @@ import { fileURLToPath } from 'node:url';
 export const CAMPUS_WAY_ID = 354549537;
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
 const MIN_ZONE_M2 = 800;
+
+/** Spelling mistakes in OpenStreetMap's names, corrected on import until they're fixed upstream. */
+export const NAME_FIXES = [[/\bFacultty\b/g, 'Faculty']];
+const fixName = (name) => NAME_FIXES.reduce((n, [re, to]) => n.replace(re, to), name);
 
 // --- parsing ------------------------------------------------------------------------------------
 
@@ -213,6 +220,7 @@ function zoneKind(tags, name) {
   if (['dormitory', 'hostel'].includes(b) || tags.tourism === 'hostel' || /\b(hall|hostel)\b/i.test(name) && !/lecture|auditor|dining/i.test(name)) return 'hostel';
   if (['restaurant', 'cafe', 'fast_food', 'food_court', 'canteen'].includes(tags.amenity) || /\b(mess|canteen|cafeteria|dining)\b/i.test(name)) return 'food';
   if (tags.leisure && ['pitch', 'track', 'sports_centre', 'stadium', 'swimming_pool', 'fitness_centre'].includes(tags.leisure)) return 'sports';
+  if (['house', 'residential', 'apartments', 'detached', 'terrace'].includes(b) || /quarters|housing|residen/i.test(name)) return 'landmark';
   if (['university', 'college', 'school'].includes(b) || /lecture|lab|research|department|complex|block|centre|center/i.test(name)) return 'academic';
   return 'landmark';
 }
@@ -259,10 +267,15 @@ export function buildCampusGeo(osm, { campusWayId = CAMPUS_WAY_ID } = {}) {
   if (!campusRing) throw new Error(`The campus outline (OSM way ${campusWayId}) isn't in the data. Export an area that covers the whole campus.`);
   const boundary = open(campusRing);
   const onCampus = (pt) => insideRing(pt, boundary);
+  for (const els of [osm.nodes, osm.ways, osm.relations]) {
+    for (const el of els.values()) if (el.tags?.name) el.tags = { ...el.tags, name: fixName(el.tags.name) };
+  }
 
   const areas = [];
   for (const [id, way] of osm.ways) {
     if (id === campusWayId || !isClosed(way)) continue;
+    // A closed road or footpath is a loop, not an area (unless tagged area=yes, like a plaza).
+    if (way.tags.highway && way.tags.area !== 'yes') continue;
     const pts = wayCoords(osm, way);
     if (pts) areas.push({ osmId: `w${id}`, tags: way.tags, ring: open(pts) });
   }
@@ -284,6 +297,28 @@ export function buildCampusGeo(osm, { campusWayId = CAMPUS_WAY_ID } = {}) {
     return id;
   };
 
+  // Closed paths and roads, for the walk around the lake.
+  const loopPaths = [];
+  for (const way of osm.ways.values()) {
+    const h = way.tags.highway;
+    if (!h || !(ROADS.has(h) || PATHS.has(h)) || !isClosed(way)) continue;
+    const pts = wayCoords(osm, way);
+    if (pts) loopPaths.push(open(pts));
+  }
+  /** ROUTE zones: the loop to complete, closed, or null for an AREA zone. */
+  const routeFor = (a, id) => {
+    if (a.tags.leisure !== 'track' && id !== 'sports' && id !== 'lake') return null;
+    let ring = a.ring;
+    if (id === 'lake' || terrainKind(a.tags) === 'water') {
+      const c = centroid(a.ring);
+      const area = areaM2(a.ring);
+      const around = loopPaths.filter((r) => insideRing(c, r) && areaM2(r) >= area && areaM2(r) <= 4 * area).sort((x, y) => areaM2(x) - areaM2(y))[0];
+      if (around) ring = around;
+    }
+    const line = simplify(ring, 2);
+    return { route: [...line, line[0]], threshold: id === 'lake' ? 0.75 : 0.8 };
+  };
+
   // Named areas → zones, biggest first so a well-known id goes to the main feature.
   for (const a of [...campusAreas].sort((x, y) => areaM2(y.ring) - areaM2(x.ring))) {
     const name = a.tags.name?.trim();
@@ -292,6 +327,7 @@ export function buildCampusGeo(osm, { campusWayId = CAMPUS_WAY_ID } = {}) {
     const kind = zoneKind(a.tags, name);
     const id = uniqueId(known ? known[1] : slug(name));
     const ring = zoneRing(a.ring);
+    const route = routeFor(a, id);
     zones.push({
       id,
       name,
@@ -300,6 +336,9 @@ export function buildCampusGeo(osm, { campusWayId = CAMPUS_WAY_ID } = {}) {
       hostel: kind === 'hostel' ? id : null,
       polygon: ring,
       centroid: centroid(ring).map(round),
+      zone_type: route ? 'ROUTE' : 'AREA',
+      route: route?.route ?? null,
+      threshold: route?.threshold ?? null,
       osm_id: a.osmId,
     });
   }

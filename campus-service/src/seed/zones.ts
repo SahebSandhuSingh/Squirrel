@@ -59,10 +59,22 @@ export const polygonWkt = (xy: XY[]) => { const ring = [...xy, xy[0]!].map(toLng
 export const lineWkt = (xy: XY[]) => `LINESTRING(${xy.map(toLngLat).map(([lng, lat]) => `${lng} ${lat}`).join(',')})`;
 
 /** zones.osm.json as written by mobile-4/scripts/campus-osm.mjs; empty until the campus is imported. */
-export type OsmZone = { id: string; name: string; short_name: string | null; kind: ZoneSeed['kind']; hostel: string | null; polygon: [number, number][] };
+export type OsmZone = {
+  id: string; name: string; short_name: string | null; kind: ZoneSeed['kind']; hostel: string | null; polygon: [number, number][];
+  /** ROUTE zones (the sports loop, the lake) carry the closed loop to complete and their threshold. */
+  zone_type?: 'AREA' | 'ROUTE'; route?: [number, number][] | null; threshold?: number | null;
+};
 export function loadOsmZones(data: unknown = osmFile): OsmZone[] {
   const d = data as { source?: string | null; zones?: OsmZone[] };
   return d.source === 'osm' && Array.isArray(d.zones) ? d.zones : [];
 }
+/** A route of [lat, lng] as a WKT line (lng first). */
+export const osmLineWkt = (pts: [number, number][]) => `LINESTRING(${pts.map(([lat, lng]) => `${lng} ${lat}`).join(',')})`;
+/**
+ * How far a ROUTE zone's outline reaches beyond its loop. A zone is only checked when the track
+ * enters it, and people walk beside a lake, not on it: this keeps the path inside the zone and is
+ * wider than the route-matching tolerance (ROUTE_MATCH_TOLERANCE_M, 20 m by default).
+ */
+export const ROUTE_ZONE_PAD_M = 25;
 /** An OSM ring of [lat, lng] as WKT (closed, lng first). */
 export const osmPolygonWkt = (ring: [number, number][]) => `POLYGON((${[...ring, ring[0]!].map(([lat, lng]) => `${lng} ${lat}`).join(',')}))`;
