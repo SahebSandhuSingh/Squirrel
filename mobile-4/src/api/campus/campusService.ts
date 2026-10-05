@@ -12,11 +12,9 @@
  *                 `blocked` / `blocks_unreachable` → nothing shared),
  *                 submitActivity (fixes the server's ingest check would refuse are dropped first),
  *                 meetups / meetup (GET /v1/meetups, GET /v1/meetups/{id}: host + invitees → Meetup)
- *   not served    checkIn (POST /v1/meetups/{id}/check-in), meetupRating / rateMeetup
- *   yet           (GET /v1/meetups/{id}/rating, POST /v1/meetups/{id}/ratings): campus-service owns them
- *                 (ADR-032) but has no such routes yet (its meetup router has only create, list, get and
- *                 accept / decline / cancel / leave), so they're gated in api/campus/index.ts
- *                 ('meetupCheckIn', 'meetupRating') and never called until it serves them.
+ *   same shape    meetupRating / rateMeetup (GET /v1/meetups/{id}/rating, POST /v1/meetups/{id}/ratings)
+ *   not served    checkIn (POST /v1/meetups/{id}/check-in): campus-service owns it (ADR-032) but has no
+ *   yet           such route, so it's gated in api/campus/index.ts ('meetupCheckIn') and never called.
  */
 import { ApiError } from '@/api/client';
 import { restClient } from '@/api/campus/http';
@@ -116,7 +114,6 @@ export function makeCampusServiceApi(base: string): CampusServicePart {
     // Not served by campus-service yet: gated as 'meetupCheckIn' (index.ts), so this isn't called until
     // it ships POST /v1/meetups/{id}/check-in. Safety-contact semantics (features.meetup_safety_notifications).
     checkIn: (meetupId, notifySafetyContact) => send<T.CheckInResult>(`/v1/meetups/${id(meetupId)}/check-in`, 'POST', { notify_safety_contact: notifySafetyContact }),
-    // Not served by campus-service yet: gated as 'meetupRating' (index.ts) until it ships these two routes.
     meetupRating: (meetupId) => get<T.MeetupRatingState>(`/v1/meetups/${id(meetupId)}/rating`),
     rateMeetup: (meetupId, input, key) => send<T.MeetupRatingResult>(`/v1/meetups/${id(meetupId)}/ratings`, 'POST', { ...input, idempotency_key: key }),
   };

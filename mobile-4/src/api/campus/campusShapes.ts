@@ -28,8 +28,8 @@ export const CAMPUS_SERVICE_METHODS = [
   'sharedZones',
   'heatmap',
   'sharedContext',
-  // meetups + post-meetup rating (ADR-032). campus-service serves GET /v1/meetups and /v1/meetups/{id};
-  // check-in and rating are routed there too but stay gated (api/campus/index.ts) until it serves them.
+  // meetups + post-meetup rating (ADR-032). campus-service serves the meetup list, one meetup and its
+  // rating; check-in is routed there too but stays gated (api/campus/index.ts) until it serves it.
   'meetups',
   'meetup',
   'checkIn',

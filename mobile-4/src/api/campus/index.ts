@@ -57,7 +57,7 @@ const sourceApi: CampusApi =
       : offApi;
 
 /** Capabilities campus-service serves on top of the env opt-ins; undefined (the env default) otherwise. */
-const OPTED: Set<Capability> | undefined = CAMPUS_MAP_ON_SERVICE ? optedInWith(['sharedZones', 'heatmap']) : undefined;
+const OPTED: Set<Capability> | undefined = CAMPUS_MAP_ON_SERVICE ? optedInWith(['sharedZones', 'heatmap', 'meetupRating']) : undefined;
 
 /** Method → capability for every endpoint that isn't built yet. Everything unlisted passes through. */
 export const campusApi: CampusApi = gateEndpoints(sourceApi, {
@@ -67,8 +67,8 @@ export const campusApi: CampusApi = gateEndpoints(sourceApi, {
   dismissDateSuggestion: { capability: 'dateSuggestions' },
   dateSettings: { capability: 'dateSuggestions' },
   setDateSettings: { capability: 'dateSuggestions' },
-  // Routed to campus-service when it's configured (it owns meetups + rating, ADR-032), but it doesn't
-  // serve GET /v1/meetups/{id}/rating or POST /v1/meetups/{id}/ratings yet: opt in once it does.
+  // campus-service serves GET /v1/meetups/{id}/rating and POST …/ratings (it owns meetups + rating,
+  // ADR-032), so it's on there (OPTED above); other sources stay gated until they serve them.
   meetupRating: { capability: 'meetupRating' },
   rateMeetup: { capability: 'meetupRating' },
   // campus-service serves meetups but no POST /v1/meetups/{id}/check-in yet; other sources' check-in is live.

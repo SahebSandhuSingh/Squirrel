@@ -1,5 +1,5 @@
 /**
- * POST-MEETUP RATING. Eligibility (ended, you checked in, window open, not yet rated), who can be
+ * POST-MEETUP RATING. Eligibility (ended, you were in it, not yet rated), who can be
  * rated (other attendees — never yourself), the optional feedback dimensions and any trust score
  * all come from Dev A's API. Ratings are private; this screen never shows anyone else's.
  */

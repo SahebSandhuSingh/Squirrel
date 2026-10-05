@@ -315,13 +315,18 @@ test('meetups list hides cancelled meetups and ones you declined', () => {
   assert.deepEqual(meetupsFromCampus(undefined, 'me'), []);
 });
 
-test('check-in and rating are gated (campus-service serves neither yet); other check-ins pass', async () => {
+test('on campus-service rating is served and check-in stays gated; other sources: rating gated, check-in passes', async () => {
   let called = false;
-  const svc = { checkIn: async () => { called = true; return {}; }, meetupRating: async () => { called = true; return {}; } };
-  const onService = gateEndpoints(svc, { checkIn: { capability: 'meetupCheckIn', when: () => true }, meetupRating: { capability: 'meetupRating' } }, optedInWith(['sharedZones', 'heatmap'], new Set()));
+  let rated = false;
+  const svc = { checkIn: async () => { called = true; return {}; }, meetupRating: async () => { rated = true; return {}; } };
+  const gates = { checkIn: { capability: 'meetupCheckIn', when: () => true }, meetupRating: { capability: 'meetupRating' } };
+  const onService = gateEndpoints(svc, gates, optedInWith(['sharedZones', 'heatmap', 'meetupRating'], new Set()));
   await assert.rejects(onService.checkIn('m1', false), (e) => isEndpointUnavailable(e) && e.code === 'meetupCheckIn_unavailable' && /isn’t live yet/.test(e.message));
-  await assert.rejects(onService.meetupRating('m1'), (e) => isEndpointUnavailable(e) && e.capability === 'meetupRating');
   assert.equal(called, false);
+  await onService.meetupRating('m1');
+  assert.equal(rated, true);
+  const noService = gateEndpoints(svc, gates, new Set());
+  await assert.rejects(noService.meetupRating('m1'), (e) => isEndpointUnavailable(e) && e.capability === 'meetupRating');
   const elsewhere = gateEndpoints(svc, { checkIn: { capability: 'meetupCheckIn', when: () => false } }, new Set());
   await elsewhere.checkIn('m1', false);
   assert.equal(called, true);
