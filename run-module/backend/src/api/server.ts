@@ -34,6 +34,7 @@ import { territoriesRoutes } from './routes/territories.js';
 import tilesRoutes from './routes/tiles.js';
 import { leaderboardRoutes } from './routes/leaderboard.js';
 import { xpRoutes } from './routes/xp.js';
+import { progressRoutes } from './routes/progress.js';
 import { liveRoutes } from './routes/live.js';
 import { challengesRoutes } from './routes/challenges.js';
 import { rateLimitPlugin } from './rate-limit.js';
@@ -61,6 +62,7 @@ await fastify.register(territoriesRoutes, { prefix: '/v1/territories' });
 await fastify.register(tilesRoutes);
 await fastify.register(leaderboardRoutes, { prefix: '/v1/leaderboard' });
 await fastify.register(xpRoutes);
+await fastify.register(progressRoutes);
 await fastify.register(liveRoutes);
 await fastify.register(challengesRoutes, { prefix: '/v1/challenges' });
 
