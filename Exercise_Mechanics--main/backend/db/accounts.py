@@ -63,6 +63,19 @@ def gmail_alias_exists(canonical_email: str) -> bool:
     return bool(row[0])
 
 
+def gmail_alias_credentials(canonical_email: str) -> list[dict]:
+    """Return every account matching a Gmail alias key, so callers can reject ambiguity."""
+    with pooled() as conn:
+        rows = conn.execute(
+            "SELECT user_id, password_hash, created_at FROM user_accounts WHERE "
+            "CASE WHEN lower(split_part(email, '@', 2)) IN ('gmail.com', 'googlemail.com') "
+            "THEN replace(split_part(lower(split_part(email, '@', 1)), '+', 1), '.', '') || '@gmail.com' "
+            "ELSE lower(email) END = %s ORDER BY user_id",
+            (canonical_email,),
+        ).fetchall()
+    return [{"user_id": row[0], "password_hash": row[1], "created_at": row[2].isoformat()} for row in rows]
+
+
 def verify_email_and_revoke_sessions(user_id: str, verified_at: str) -> bool:
     """Atomically mark first verification, bump access-token version, and delete refresh tokens."""
     with pooled() as conn, conn.transaction():

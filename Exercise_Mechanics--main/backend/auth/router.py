@@ -35,6 +35,7 @@ from backend.auth.store import (
     register_account,
     normalize_email,
     signup_email_taken,
+    read_credential_for_email_code,
     session_version,
 )
 from backend.auth import email_codes, throttle
@@ -278,7 +279,7 @@ def _send(email: str, request: Request, *, any_domain: bool = False) -> int:
 def email_start(body: EmailCodeBody, request: Request) -> dict:
     """A code to sign in with. An existing account gets one whatever its domain (it may predate the
     allow-list); a new address must be an allowed one. `new_account` tells the app to ask for a name."""
-    exists = read_credential(body.email) is not None
+    exists = read_credential_for_email_code(body.email) is not None
     if not exists and not email_codes.domain_allowed(body.email):
         raise domain_error()
     ttl = _send(body.email, request, any_domain=exists)
@@ -287,7 +288,7 @@ def email_start(body: EmailCodeBody, request: Request) -> dict:
 
 @router.post("/email/verify")
 def email_verify(body: EmailVerifyBody, request: Request) -> dict:
-    credential = read_credential(body.email)
+    credential = read_credential_for_email_code(body.email)
     if credential is None:
         # Check everything that doesn't spend the code first, so a missing name costs no attempt.
         if not body.first_name or not body.first_name.strip():

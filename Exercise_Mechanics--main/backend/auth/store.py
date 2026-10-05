@@ -69,6 +69,35 @@ def signup_email_taken(email: str) -> bool:
     return False
 
 
+def read_credential_for_email_code(email: str) -> dict | None:
+    """Resolve email-code sign-in exactly first, then a unique Gmail mailbox alias."""
+    exact = read_credential(email)
+    if exact is not None:
+        return exact
+    normalized = normalize_email(email)
+    _, separator, domain = normalized.rpartition("@")
+    if not separator or domain not in {"gmail.com", "googlemail.com"}:
+        return None
+    canonical = normalize_signup_email(normalized)
+    if connection.enabled():
+        matches = db_accounts.gmail_alias_credentials(canonical)
+    else:
+        matches_by_id: dict[str, dict] = {}
+        for path in config.USERS_DIR.glob(f"*/{PROFILE_FILENAME}"):
+            try:
+                with open(path, encoding="utf-8") as profile_file:
+                    stored_email = json.load(profile_file).get("email")
+            except (OSError, ValueError, AttributeError):
+                continue
+            if not isinstance(stored_email, str) or normalize_signup_email(stored_email) != canonical:
+                continue
+            credential = read_credential(stored_email)
+            if credential is not None:
+                matches_by_id[credential["user_id"]] = credential
+        matches = list(matches_by_id.values())
+    return matches[0] if len(matches) == 1 else None
+
+
 def _credential_path(email: str) -> Path:
     return config.AUTH_DIR / "credentials" / f"{hashlib.sha256(normalize_email(email).encode()).hexdigest()}.json"
 

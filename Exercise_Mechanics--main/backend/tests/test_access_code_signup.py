@@ -116,6 +116,65 @@ def test_existing_ac_in_email_code_signup_route_still_works(app, monkeypatch):
     assert _count_accounts() == 1
 
 
+def test_gmail_alias_email_code_sign_in_finds_same_account_and_sends_to_typed_alias(app, monkeypatch):
+    sent = []
+    monkeypatch.setattr(mailer, "send_email", lambda to, subject, text: sent.append((to, text)))
+    user_id = register_account("john.doe@gmail.com", "not-a-login-password", "John", "Doe")
+
+    alias = "JohnDoe+x@googlemail.com"
+    started = call(app, "POST", "/api/auth/email/start", json={"email": alias})
+    assert started.status == 202 and started.json()["new_account"] is False
+    assert sent[-1][0] == "johndoe+x@googlemail.com"
+    code = re.search(r"\b(\d{6})\b", sent[-1][1]).group(1)
+
+    verified = call(app, "POST", "/api/auth/email/verify", json={"email": alias, "code": code})
+    assert verified.status == 200
+    assert verified.json()["new_account"] is False
+    assert verified.json()["user_id"] == user_id
+
+
+def test_ambiguous_gmail_alias_falls_back_without_selecting_an_existing_account(app, monkeypatch):
+    sent = []
+    monkeypatch.setattr(mailer, "send_email", lambda to, subject, text: sent.append((to, text)))
+    first = register_account("john.doe@gmail.com", "not-a-login-password", "John", "Doe")
+    second = register_account("johndoe+old@googlemail.com", "not-a-login-password", "Other", "Person")
+    assert first != second
+
+    started = call(app, "POST", "/api/auth/email/start", json={"email": "JohnDoe@gmail.com"})
+    assert started.status == 202
+    assert started.json()["new_account"] is True
+    assert sent[-1][0] == "johndoe@gmail.com"
+    code = re.search(r"\b(\d{6})\b", sent[-1][1]).group(1)
+    fallback = call(app, "POST", "/api/auth/email/verify", json={
+        "email": "JohnDoe@gmail.com", "code": code, "first_name": "John",
+    })
+    assert fallback.status == 200 and fallback.json()["new_account"] is True
+    assert fallback.json()["user_id"] not in {first, second}
+
+
+def test_exact_email_match_wins_even_when_an_alias_is_also_present(app, monkeypatch):
+    sent = []
+    monkeypatch.setattr(mailer, "send_email", lambda to, subject, text: sent.append((to, text)))
+    exact_id = register_account("john.doe@gmail.com", "not-a-login-password", "John", "Doe")
+    register_account("johndoe+other@gmail.com", "not-a-login-password", "Other", "Person")
+
+    started = call(app, "POST", "/api/auth/email/start", json={"email": "john.doe@gmail.com"})
+    assert started.status == 202 and started.json()["new_account"] is False
+    code = re.search(r"\b(\d{6})\b", sent[-1][1]).group(1)
+    verified = call(app, "POST", "/api/auth/email/verify", json={"email": "john.doe@gmail.com", "code": code})
+    assert verified.status == 200 and verified.json()["user_id"] == exact_id
+
+
+def test_non_gmail_domains_are_not_folded_for_email_code_sign_in(app, monkeypatch):
+    sent = []
+    monkeypatch.setattr(mailer, "send_email", lambda to, subject, text: sent.append(to))
+    register_account("j.ohn@company.example", "not-a-login-password", "John", "Doe")
+    started = call(app, "POST", "/api/auth/email/start", json={"email": "john@company.example"})
+    assert started.status == 202
+    assert started.json()["new_account"] is True
+    assert sent[-1] == "john@company.example"
+
+
 def test_access_code_signup_per_ip_limit_counts_only_failed_attempts(app):
     successful = [call(app, "POST", "/api/auth/signup/access-code",
                        json=_payload(email=f"eventuser{i}@gmail.com")) for i in range(6)]
