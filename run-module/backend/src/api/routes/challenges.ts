@@ -26,6 +26,52 @@ export const challengesRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/', writeLimit, async (request, reply) => {
     const userId = request.userId;
     const body = request.body as any;
+
+    if (!body || typeof body !== 'object') {
+      return reply.code(400).send({ error: 'Body must be an object' });
+    }
+
+    const ALLOWED_METRICS = ['distance_m', 'duration_s', 'runs_completed', 'territory_area_m2', 'territories_captured'];
+    if (!ALLOWED_METRICS.includes(body.metric)) {
+      return reply.code(400).send({ error: `Invalid metric. Allowed values: ${ALLOWED_METRICS.join(', ')}` });
+    }
+
+    const ALLOWED_TYPES = ['daily', 'head_to_head', 'group'];
+    if (!ALLOWED_TYPES.includes(body.type)) {
+      return reply.code(400).send({ error: `Invalid type. Allowed values: ${ALLOWED_TYPES.join(', ')}` });
+    }
+
+    const ALLOWED_COMPARATORS = ['gte', 'lte'];
+    if (!ALLOWED_COMPARATORS.includes(body.comparator)) {
+      return reply.code(400).send({ error: `Invalid comparator. Allowed values: ${ALLOWED_COMPARATORS.join(', ')}` });
+    }
+
+    if (typeof body.threshold !== 'number' || !Number.isFinite(body.threshold)) {
+      return reply.code(400).send({ error: 'threshold must be a valid number' });
+    }
+
+    if (typeof body.xp_reward !== 'number' || !Number.isInteger(body.xp_reward) || body.xp_reward < 0) {
+      return reply.code(400).send({ error: 'xp_reward must be a positive integer' });
+    }
+
+    if (typeof body.title !== 'string' || body.title.trim() === '') {
+      return reply.code(400).send({ error: 'title must be a non-empty string' });
+    }
+
+    const startsAt = new Date(body.starts_at);
+    if (Number.isNaN(startsAt.getTime())) {
+      return reply.code(400).send({ error: 'starts_at must be a valid date string' });
+    }
+
+    const endsAt = new Date(body.ends_at);
+    if (Number.isNaN(endsAt.getTime())) {
+      return reply.code(400).send({ error: 'ends_at must be a valid date string' });
+    }
+
+    if (endsAt <= startsAt) {
+      return reply.code(400).send({ error: 'ends_at must be after starts_at' });
+    }
+
     const ch = await createChallenge(
       userId,
       body.type as ChallengeType,
@@ -33,8 +79,8 @@ export const challengesRoutes: FastifyPluginAsync = async (fastify) => {
       body.metric as Metric,
       body.comparator as Comparator,
       body.threshold,
-      new Date(body.starts_at),
-      new Date(body.ends_at),
+      startsAt,
+      endsAt,
       body.xp_reward
     );
     return reply.code(201).send(ch);
