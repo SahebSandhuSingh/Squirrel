@@ -108,6 +108,10 @@ Return meetups the caller participates in. A non-participant or participant bloc
 ### `POST /v1/meetups/:id/accept` · `/decline` · `/cancel` · `/leave` 🔒
 Guests accept or decline (decline has no reason field); the host is notified of response status only. The host may cancel before completion. An accepted guest may leave. A block created after invitation hides the meetup from the blocked pair and prevents acceptance.
 
+### `POST /v1/meetups/:id/check-in` 🔒
+Body `{ "notify_safety_contact": boolean }` → `{ "meetup_id", "checked_in_at", "safety_notification": { "requested", "status", "contact_label" } }`.
+Participants (invited or accepted) and hosts can check in. The check-in window opens 1 hour before `starts_at` and closes 6 hours after. It changes an invited guest to `accepted`. The same request replays safely without creating duplicate check-ins. If `notify_safety_contact` is requested, the status currently returns `not_configured`.
+
 ### `GET /v1/meetups/:id/rating` 🔒
 ```json
 { "can_rate": true, "reason": null, "already_rated": false,
