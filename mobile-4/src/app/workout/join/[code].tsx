@@ -6,36 +6,41 @@ import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { errorKind, errorText, featureUnavailable } from '@/api/campus';
-import type { SharedWorkoutSession } from '@/api/campus/types';
-import { sharedWorkoutApi } from '@/api/sharedWorkout';
+import { useAuth } from '@/auth/AuthProvider';
+import { existingSessionId, sharedWorkoutApi, sharedWorkoutErrorCode } from '@/api/sharedWorkout';
 import { LoadingRows } from '@/components/campus/States';
-import { ExerciseHeader, Participants, seatOf, SharedEnded, SharedTag } from '@/components/workout/SharedWorkout';
+import { ExerciseHeader, Participants, seatOf, SharedEnded, SharedTag, type EndedKind } from '@/components/workout/SharedWorkout';
 import { Button, Display, Header, Screen, tap } from '@/components/ui';
 import { EXERCISE_LIBRARY } from '@/data/exercises';
 import { useMe } from '@/hooks/useCampus';
+import { durationLabel, livePhase, type SharedWorkoutSession } from '@/logic/sharedWorkout';
 import { useApp } from '@/state/AppState';
 import { colors } from '@/theme';
 
 export default function JoinSharedWorkout() {
   const { code } = useLocalSearchParams<{ code: string }>();
+  const { mode } = useAuth();
+  const signedIn = mode === 'live';
   const me = useMe();
-  const meId = me.data?.user_id ?? null;
   const { toast } = useApp();
   const [s, setS] = useState<SharedWorkoutSession | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [joining, setJoining] = useState(false);
+  const [refused, setRefused] = useState<EndedKind | null>(null);
   const home = () => router.replace('/home');
 
+  // Wait for the saved token: an invite link often cold-starts the app.
   useEffect(() => {
+    if (!signedIn) return;
     let off = false;
     sharedWorkoutApi.previewInvite(code).then((x) => !off && setS(x), (e) => !off && setError(e));
     return () => {
       off = true;
     };
-  }, [code]);
+  }, [code, signedIn]);
 
   // Already part of it (e.g. the host opened their own link): go straight in.
-  const mine = !!s && !!meId && (s.host.user.user_id === meId || s.partner?.user.user_id === meId);
+  const mine = !!s?.you;
   useEffect(() => {
     if (mine && s) router.replace({ pathname: '/workout/[id]', params: { id: s.session_id } });
   }, [mine, s]);
@@ -48,34 +53,49 @@ export default function JoinSharedWorkout() {
       router.replace({ pathname: '/workout/[id]', params: { id: joined.session_id } });
     } catch (e) {
       setJoining(false);
+      const existing = existingSessionId(e);
+      if (existing) {
+        toast('You’re already in a shared workout', 'account-multiple', colors.gold);
+        router.replace({ pathname: '/workout/[id]', params: { id: existing } });
+        return;
+      }
+      const code = sharedWorkoutErrorCode(e);
+      if (code === 'session_full') return setRefused('full');
+      if (code === 'not_joinable') return setRefused('already_completed');
+      if (errorKind(e) === 'not_found') return setRefused('not_found');
       toast(errorText(e), 'alert-circle-outline', colors.coral);
     }
   };
 
   const ex = s ? EXERCISE_LIBRARY.find((e) => e.key === s.exercise.key) : undefined;
   const host = s?.host.user.display_name.split(' ')[0] ?? 'Someone';
+  // The preview's phase, ticked at expires_at (a link opened just as it runs out).
+  const phase = s ? livePhase(s, Date.parse(s.server_time)) : null;
 
   return (
     <Screen tabBar={false}>
       <Header back title="" />
-      {error ? (
+      {mode === 'signed-out' || mode === 'demo' ? (
+        <SharedEnded kind="signed_out" primary="Sign in" onPrimary={() => router.push('/sign-in')} secondary="Back to Home" onSecondary={home} />
+      ) : error ? (
         <SharedEnded kind={featureUnavailable(error) ? 'unavailable' : errorKind(error) === 'not_found' ? 'not_found' : 'error'} detail={featureUnavailable(error) || errorKind(error) === 'not_found' ? undefined : errorText(error)} primary="Back to Home" onPrimary={home} />
-      ) : !s ? (
+      ) : refused ? (
+        <SharedEnded kind={refused} primary="Back to Home" onPrimary={home} />
+      ) : !s || mine ? (
         <LoadingRows rows={3} height={84} />
-      ) : s.status === 'expired' ? (
+      ) : phase === 'expired' ? (
         <SharedEnded kind="expired" primary="Back to Home" onPrimary={home} />
-      ) : s.status === 'completed' || s.status === 'cancelled' ? (
+      ) : phase !== 'lobby' ? (
         <SharedEnded kind="already_completed" primary="Back to Home" onPrimary={home} />
-      ) : s.partner && !mine ? (
-        <SharedEnded kind="error" detail="This session already has two people." primary="Back to Home" onPrimary={home} />
+      ) : s.partner ? (
+        <SharedEnded kind="full" primary="Back to Home" onPrimary={home} />
       ) : (
         <View style={{ gap: 16 }}>
           <SharedTag status="invite" />
           <Display size={36}>{host} wants to{'\n'}work out with you</Display>
-          <ExerciseHeader name={s.exercise.name} icon={ex?.icon} blurb={ex?.blurb} plan={s.exercise.target != null ? `${s.exercise.target} reps · together` : undefined} />
+          <ExerciseHeader name={s.exercise.name} icon={ex?.icon} blurb={ex?.blurb} plan={`${durationLabel(s.duration_s)} race · most reps wins`} />
           <Participants you={{ ...seatOf(null, 'You'), person: me.data ?? null }} partner={{ ...seatOf(s.host, 'Host') }} />
-          <Button label={joining ? 'Joining…' : 'Join workout'} icon="arrow-right" disabled={joining || !meId} onPress={join} />
-          {!meId && <Button label="Sign in to join" variant="secondary" size="md" onPress={() => router.push('/sign-in')} />}
+          <Button label={joining ? 'Joining…' : 'Join workout'} icon="arrow-right" disabled={joining} onPress={join} />
         </View>
       )}
     </Screen>

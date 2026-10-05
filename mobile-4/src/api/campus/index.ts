@@ -106,8 +106,12 @@ export function errorKind(e: unknown): ErrorKind {
 }
 
 export function errorCode(e: unknown): string | null {
-  const b = e instanceof ApiError ? (e.body as { code?: unknown } | undefined) : undefined;
-  return typeof b?.code === 'string' ? b.code : null;
+  const b = e instanceof ApiError ? (e.body as { code?: unknown; detail?: { code?: unknown } | unknown } | undefined) : undefined;
+  if (typeof b?.code === 'string') return b.code;
+  // Exercise puts it in detail: { detail: { code, message } }. Without this, its 404 not_found reads
+  // as "route not deployed" (featureUnavailable) instead of "not found".
+  const d = b?.detail as { code?: unknown } | null | undefined;
+  return d && typeof d === 'object' && typeof d.code === 'string' ? d.code : null;
 }
 
 /**

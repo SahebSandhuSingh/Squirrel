@@ -1,67 +1,51 @@
 /**
- * One shared workout session, as the server sees it. The screen renders `phase`; nothing here
- * decides on its own that the partner joined, got ready or did a rep — those only arrive from
- * the backend (socket or poll). Your own rep count is yours (you tap it) and is reported up.
+ * One shared workout session, as the server sees it (Exercise). Nothing here decides on its own
+ * that the partner joined, got ready or did a rep — those only arrive from the server (socket, or a
+ * 2 s poll while it's down). Your own rep count is yours (you tap it) and is reported up with a
+ * per-session `seq` that goes up on every tap and undo, so retries and undo are both safe.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { errorKind, featureUnavailable } from '@/api/campus';
-import type { SharedWorkoutSession, WorkoutParticipant } from '@/api/campus/types';
-import { clockOffset, sharedWorkoutApi, subscribeSession } from '@/api/sharedWorkout';
+import { ApiError } from '@/api/client';
+import { sharedWorkoutApi, sharedWorkoutErrorCode, subscribeSession } from '@/api/sharedWorkout';
+import { applyReps, clockOffset, mySeat, secondsUntil, theirSeat, type LinkState, type SharedWorkoutSession } from '@/logic/sharedWorkout';
 
 export type Connection = 'connecting' | 'live' | 'reconnecting' | 'lost';
 
-export type SharedPhase =
-  | 'loading'
-  | 'unavailable'
-  | 'not_found'
-  | 'error'
-  | 'waiting' // host: invite sent, nobody joined yet
-  | 'lobby' // both here; ready up
-  | 'countdown'
-  | 'active'
-  | 'complete'
-  | 'partner_left_before_start'
-  | 'partner_left_during'
-  | 'you_left'
-  | 'expired'
-  | 'already_completed';
-
 const LOST_AFTER_MS = 15_000;
+const REPORT_EVERY_MS = 500;
 
-export function derivePhase(s: SharedWorkoutSession | null, meId: string | null, serverNow: number, finishedLocally: boolean, loadError: unknown): SharedPhase {
-  if (!s) {
-    if (!loadError) return 'loading';
-    if (featureUnavailable(loadError)) return 'unavailable';
-    return errorKind(loadError) === 'not_found' ? 'not_found' : 'error';
-  }
-  const mine = s.host.user.user_id === meId ? s.host : s.partner?.user.user_id === meId ? s.partner : null;
-  if (s.status === 'expired') return 'expired';
-  if (s.status === 'cancelled') {
-    const iLeft = (s.end_reason === 'host_left' && mine?.role === 'host') || (s.end_reason === 'partner_left' && mine?.role === 'partner');
-    if (iLeft) return 'you_left';
-    return s.starts_at && Date.parse(s.starts_at) <= serverNow ? 'partner_left_during' : 'partner_left_before_start';
-  }
-  if (s.status === 'completed') return finishedLocally || mine?.finished_at ? 'complete' : 'already_completed';
-  if (mine?.finished_at || finishedLocally) return 'complete';
-  if (s.status === 'waiting_for_partner') return 'waiting';
-  if (s.status === 'lobby') return 'lobby';
-  if (s.starts_at && Date.parse(s.starts_at) > serverNow) return 'countdown';
-  if (s.status === 'countdown' || s.status === 'active') return 'active';
-  return 'lobby';
-}
-
-export function useSharedWorkout(sessionId: string, meId: string | null, initial?: SharedWorkoutSession | null) {
-  const [session, setSession] = useState<SharedWorkoutSession | null>(initial ?? null);
+/** `enabled`: false until the signed-in token has loaded (a cold start from an invite link mustn't race it). */
+export function useSharedWorkout(sessionId: string, enabled = true) {
+  const [session, setSession] = useState<SharedWorkoutSession | null>(null);
   const [loadError, setLoadError] = useState<unknown>(null);
   const [conn, setConn] = useState<Connection>('connecting');
-  const [offset, setOffset] = useState(initial ? clockOffset(initial) : 0);
+  const [offset, setOffset] = useState(0);
   const [now, setNow] = useState(() => Date.now());
-  const failingSince = useRef<number | null>(null);
+  const [myReps, setMyReps] = useState(0);
+  const seq = useRef(0);
+  const repsRef = useRef(0);
+  const troubleSince = useRef<number | null>(null);
 
   const accept = useCallback((s: SharedWorkoutSession) => {
     setSession(s);
     setOffset(clockOffset(s));
-    failingSince.current = null;
+    // Reopened mid-race: carry on from what the server already holds for you.
+    const me = mySeat(s);
+    if (me) {
+      seq.current = Math.max(seq.current, me.seq);
+      if (me.reps > repsRef.current && seq.current === me.seq) {
+        repsRef.current = me.reps;
+        setMyReps(me.reps);
+      }
+    }
+  }, []);
+
+  const trouble = useCallback(() => {
+    troubleSince.current ??= Date.now();
+    setConn(Date.now() - troubleSince.current > LOST_AFTER_MS ? 'lost' : 'reconnecting');
+  }, []);
+  const healthy = useCallback(() => {
+    troubleSince.current = null;
     setConn('live');
   }, []);
 
@@ -69,13 +53,14 @@ export function useSharedWorkout(sessionId: string, meId: string | null, initial
     try {
       accept(await sharedWorkoutApi.get(sessionId));
       setLoadError(null);
+      healthy();
     } catch (e) {
       setLoadError(e);
     }
-  }, [accept, sessionId]);
+  }, [accept, healthy, sessionId]);
 
   useEffect(() => {
-    if (initial) return;
+    if (!enabled) return;
     let off = false;
     sharedWorkoutApi.get(sessionId).then(
       (x) => !off && accept(x),
@@ -84,86 +69,88 @@ export function useSharedWorkout(sessionId: string, meId: string | null, initial
     return () => {
       off = true;
     };
-  }, [initial, sessionId, accept]);
+  }, [sessionId, accept, enabled]);
 
-  // Live updates from the server only.
+  // Live updates, once the session has loaded (so a capability that's off never opens a socket).
+  const loaded = !!session;
   useEffect(() => {
-    if (!session) return;
-    return subscribeSession(
-      sessionId,
-      (u) => {
-        if (u.kind === 'session') accept(u.session);
-        else
-          setSession((s) => {
-            if (!s) return s;
-            const patch = (p: WorkoutParticipant | null) => (p && p.user.user_id === u.userId ? { ...p, reps: Math.max(p.reps, u.reps) } : p);
-            return { ...s, host: patch(s.host)!, partner: patch(s.partner) };
-          });
-      },
-      () => {
-        failingSince.current ??= Date.now();
-        setConn(Date.now() - failingSince.current > LOST_AFTER_MS ? 'lost' : 'reconnecting');
-      },
-    );
-    // Re-subscribe only when the session appears, not on every update.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, !!session, accept]);
+    if (!loaded) return;
+    const onState = (st: LinkState) => (st === 'trouble' ? trouble() : st === 'connecting' ? setConn('connecting') : healthy());
+    return subscribeSession(sessionId, (u) => (u.kind === 'session' ? accept(u.session) : setSession((s) => (s ? applyReps(s, u.update) : s))), onState);
+  }, [sessionId, loaded, accept, trouble, healthy]);
 
-  // A 250 ms clock for the countdown (server-aligned via `offset`).
+  // A 250 ms clock, read against the server's (offset from server_time).
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(t);
   }, []);
 
-  // Throttled rep reports: the latest count at most every 500 ms.
-  const pending = useRef<number | null>(null);
+  // Rep reports: the latest total, at most every 500 ms, with the seq it was tapped at.
   const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const reportReps = useCallback(
-    (reps: number) => {
-      pending.current = reps;
-      if (flushTimer.current) return;
-      flushTimer.current = setTimeout(async () => {
-        flushTimer.current = null;
-        const r = pending.current;
-        pending.current = null;
-        if (r == null) return;
-        try {
-          await sharedWorkoutApi.reportReps(sessionId, r);
-          failingSince.current = null;
-          setConn('live');
-        } catch {
-          failingSince.current ??= Date.now();
-          setConn(Date.now() - failingSince.current > LOST_AFTER_MS ? 'lost' : 'reconnecting');
-          pending.current ??= r; // retry with the next report
-        }
-      }, 500);
-    },
-    [sessionId],
-  );
+  const dirty = useRef(false);
+  const flush = useCallback(async () => {
+    flushTimer.current = null;
+    if (!dirty.current) return;
+    dirty.current = false;
+    const [reps, at] = [repsRef.current, seq.current];
+    try {
+      await sharedWorkoutApi.reportReps(sessionId, reps, at);
+      healthy();
+    } catch (e) {
+      if (e instanceof ApiError && sharedWorkoutErrorCode(e) === 'not_racing') return; // over (or you finished/left): nothing to resend
+      trouble();
+      if (seq.current === at) dirty.current = true; // nothing newer since: send this one again next time
+      flushTimer.current ??= setTimeout(() => void flush(), REPORT_EVERY_MS);
+    }
+  }, [sessionId, healthy, trouble]);
   useEffect(() => () => { if (flushTimer.current) clearTimeout(flushTimer.current); }, []);
 
-  const act = useCallback(async (fn: () => Promise<SharedWorkoutSession>) => {
-    const s = await fn();
-    accept(s);
-    return s;
-  }, [accept]);
+  /** +1 for a rep, -1 for undo. Every change gets its own seq, undo included. */
+  const tapRep = useCallback(
+    (delta: 1 | -1) => {
+      const next = Math.max(0, repsRef.current + delta);
+      if (next === repsRef.current) return false;
+      repsRef.current = next;
+      seq.current += 1;
+      setMyReps(next);
+      dirty.current = true;
+      flushTimer.current ??= setTimeout(() => void flush(), REPORT_EVERY_MS);
+      return true;
+    },
+    [flush],
+  );
+
+  const act = useCallback(
+    async (fn: () => Promise<SharedWorkoutSession>) => {
+      const s = await fn();
+      accept(s);
+      return s;
+    },
+    [accept],
+  );
 
   const serverNow = now + offset;
-  const me = session ? (session.host.user.user_id === meId ? session.host : session.partner?.user.user_id === meId ? session.partner : null) : null;
-  const partner = session && me ? (me.role === 'host' ? session.partner : session.host) : null;
-
   return {
     session,
     loadError,
     reload: load,
     conn,
     serverNow,
-    me,
-    partner,
-    secondsToStart: session?.starts_at ? Math.max(0, Math.ceil((Date.parse(session.starts_at) - serverNow) / 1000)) : null,
+    me: mySeat(session),
+    partner: theirSeat(session),
+    myReps,
+    secondsToStart: session ? secondsUntil(session.starts_at, serverNow) : null,
+    secondsLeft: session ? secondsUntil(session.ends_at, serverNow) : null,
+    tapRep,
     setReady: (ready: boolean) => act(() => sharedWorkoutApi.setReady(sessionId, ready)),
-    reportReps,
-    complete: (reps: number) => act(() => sharedWorkoutApi.complete(sessionId, reps)),
+    /** Your final count: sent now (not throttled), and it ends your race. */
+    finish: () => {
+      if (flushTimer.current) clearTimeout(flushTimer.current);
+      flushTimer.current = null;
+      dirty.current = false;
+      seq.current += 1;
+      return act(() => sharedWorkoutApi.complete(sessionId, repsRef.current, seq.current));
+    },
     leave: () => act(() => sharedWorkoutApi.leave(sessionId)),
   };
 }

@@ -6,7 +6,8 @@
 import { useEffect, useState } from 'react';
 import { Animated, Easing, Platform, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import type { PersonLite, WorkoutParticipant } from '@/api/campus/types';
+import type { PersonLite } from '@/api/campus/types';
+import { clock, type RaceResult, type WorkoutParticipant } from '@/logic/sharedWorkout';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
 import type { Connection } from '@/hooks/useSharedWorkout';
 import { Button, Card, Display, FadeIn, Icon, NATIVE, PressScale, ProgressBar, Pulse, tap } from '@/components/ui';
@@ -65,7 +66,7 @@ export function InvitePanel({ url, code, exerciseName }: { url: string; code: st
         <Button label="Share link" iconLeft="share-variant" size="md" onPress={share} style={{ flex: 1 }} />
         <Button label="Copy" iconLeft="content-copy" size="md" variant="secondary" onPress={copy} style={{ flex: 1 }} />
       </View>
-      <Text style={styles.fine}>Code {code} · the link expires if nobody joins.</Text>
+      <Text style={styles.fine}>Code {code} · the invite runs out after 10 minutes if nobody joins.</Text>
     </View>
   );
 }
@@ -148,29 +149,30 @@ export function ConnectionPill({ conn }: { conn: Connection }) {
   );
 }
 
-/** The race: your reps (you tap them) vs your partner's (from the server), and the progress bar. */
-export function ActiveShared({ exercise, target, myReps, partnerReps, partnerName, conn, paused, onRep, onUndo, onPause, onFinish, onExit }: { exercise: string; target: number | null; myReps: number; partnerReps: number | null; partnerName: string; conn: Connection; paused: boolean; onRep: () => void; onUndo: () => void; onPause: () => void; onFinish: () => void; onExit: () => void }) {
-  const goal = target ?? Math.max(10, myReps, partnerReps ?? 0);
+/** The race: the clock, your reps (you tap them) vs your partner's (from the server). */
+export function ActiveShared({ exercise, secondsLeft, myReps, partnerReps, partnerName, partnerLeft, conn, onRep, onUndo, onFinish, onExit }: { exercise: string; secondsLeft: number; myReps: number; partnerReps: number | null; partnerName: string; partnerLeft: boolean; conn: Connection; onRep: () => void; onUndo: () => void; onFinish: () => void; onExit: () => void }) {
+  const top = Math.max(10, myReps, partnerReps ?? 0);
   const lead = partnerReps == null ? 0 : myReps - partnerReps;
-  const line = paused ? 'Paused — your partner keeps going' : target != null && myReps >= target ? 'Target hit! Finish when you’re done' : lead > 2 ? 'You’re ahead — keep it up' : lead < -2 ? 'Catch up!' : 'Keep going';
+  const line = partnerLeft ? `${partnerName} left — keep going` : lead > 2 ? 'You’re ahead — keep it up' : lead < -2 ? 'Catch up!' : 'Keep going';
   return (
     <View style={{ gap: 14 }}>
       <View style={styles.activeTop}>
         <SharedTag />
         <ConnectionPill conn={conn} />
       </View>
-      <Display size={40} style={{ textAlign: 'center' }}>{exercise}</Display>
+      <Display size={34} style={{ textAlign: 'center' }}>{exercise}</Display>
+      <Text style={[styles.timer, secondsLeft <= 10 && { color: colors.coral }]} accessibilityRole="timer" accessibilityLabel={`${secondsLeft} seconds left`}>{clock(secondsLeft)}</Text>
       <View style={styles.scores}>
         <Score who="You" reps={myReps} color={colors.primary} />
-        <Score who={partnerName} reps={partnerReps} color={colors.secondary} />
+        <Score who={partnerName} reps={partnerReps} color={partnerLeft ? colors.dim : colors.secondary} />
       </View>
       <View style={{ gap: 6 }}>
-        <ProgressBar progress={Math.min(1, myReps / goal)} color={colors.primary} height={10} />
-        {partnerReps != null && <ProgressBar progress={Math.min(1, partnerReps / goal)} color={colors.secondary} height={6} />}
-        <Text style={[styles.fine, { textAlign: 'center' }]}>{target != null ? `Target ${target} reps` : 'Free reps'}</Text>
+        <ProgressBar progress={Math.min(1, myReps / top)} color={colors.primary} height={10} />
+        {partnerReps != null && <ProgressBar progress={Math.min(1, partnerReps / top)} color={partnerLeft ? colors.dim : colors.secondary} height={6} />}
+        <Text style={[styles.fine, { textAlign: 'center' }]}>Most reps when time runs out wins</Text>
       </View>
       <Text style={styles.cheer} accessibilityLiveRegion="polite">{line}</Text>
-      <PressScale onPress={paused ? undefined : onRep} disabled={paused} style={[styles.repPad, paused && { opacity: 0.5 }]} scaleTo={0.96} accessibilityRole="button" accessibilityLabel={`Add a rep. You have ${myReps}`}>
+      <PressScale onPress={onRep} style={styles.repPad} scaleTo={0.96} accessibilityRole="button" accessibilityLabel={`Add a rep. You have ${myReps}`}>
         <Icon name="plus" size={34} color={colors.onPrimary} />
         <Text style={styles.repPadText}>Tap each rep</Text>
       </PressScale>
@@ -179,11 +181,7 @@ export function ActiveShared({ exercise, target, myReps, partnerReps, partnerNam
           <Icon name="undo" size={18} color={myReps === 0 ? colors.mute : colors.text} />
           <Text style={styles.ctlText}>Undo</Text>
         </Pressable>
-        <Pressable onPress={onPause} style={styles.ctl} accessibilityRole="button" accessibilityLabel={paused ? 'Resume' : 'Pause'}>
-          <Icon name={paused ? 'play' : 'pause'} size={18} color={colors.text} />
-          <Text style={styles.ctlText}>{paused ? 'Resume' : 'Pause'}</Text>
-        </Pressable>
-        <Pressable onPress={onFinish} disabled={myReps === 0} style={styles.ctl} accessibilityRole="button" accessibilityLabel="Finish">
+        <Pressable onPress={onFinish} disabled={myReps === 0} style={styles.ctl} accessibilityRole="button" accessibilityLabel="Finish now">
           <Icon name="flag-checkered" size={18} color={myReps === 0 ? colors.mute : colors.primary} />
           <Text style={styles.ctlText}>Finish</Text>
         </Pressable>
@@ -204,37 +202,51 @@ function Score({ who, reps, color }: { who: string; reps: number | null; color: 
   );
 }
 
-export function SharedComplete({ myReps, partnerReps, partnerName, partnerStillGoing, xp, onHome, onProgress }: { myReps: number; partnerReps: number | null; partnerName: string; partnerStillGoing: boolean; xp: number | null; onHome: () => void; onProgress: () => void }) {
+const OUTCOME: Record<RaceResult['outcome'], { title: string; accent: string }> = {
+  won: { title: 'You won', accent: 'the race.' },
+  lost: { title: 'Close one', accent: 'next time.' },
+  draw: { title: 'Dead', accent: 'heat.' },
+  solo: { title: 'Race', accent: 'done.' },
+};
+/** The result: who won by reps (or "waiting for your partner" while they're still racing). No XP for hand-tapped races. */
+export function SharedResult({ result, partnerName, partnerStillGoing, handTapped, onHome, onAgain }: { result: RaceResult; partnerName: string; partnerStillGoing: boolean; handTapped: boolean; onHome: () => void; onAgain: () => void }) {
+  const o = partnerStillGoing ? { title: 'You’re', accent: 'done.' } : OUTCOME[result.outcome];
   return (
     <FadeIn style={{ gap: 14 }}>
-      <SharedTag status="complete" />
-      <Display size={40}>Done <Text style={{ color: colors.primary }}>together.</Text></Display>
+      <SharedTag status={partnerStillGoing ? 'waiting for result' : 'finished'} />
+      <Display size={40}>{o.title} <Text style={{ color: colors.primary }}>{o.accent}</Text></Display>
       <View style={styles.scores}>
-        <Score who="Your reps" reps={myReps} color={colors.primary} />
-        <Score who={`${partnerName}'s reps`} reps={partnerReps} color={colors.secondary} />
+        <Score who="Your reps" reps={result.mine} color={colors.primary} />
+        <Score who={`${partnerName}'s reps`} reps={result.theirs} color={colors.secondary} />
       </View>
       <Card style={{ gap: 6 }}>
-        <Text style={styles.row}><Text style={styles.rowK}>Shared total  </Text>{myReps + (partnerReps ?? 0)} reps</Text>
-        {partnerStillGoing && <Text style={styles.fine}>{partnerName} is still going — their final count lands when they finish.</Text>}
-        {xp != null && <Text style={styles.row}><Text style={styles.rowK}>XP earned  </Text>+{xp} XP</Text>}
+        {partnerStillGoing ? (
+          <Text style={styles.fine}>{partnerName} is still racing. The result lands when they finish or time runs out.</Text>
+        ) : result.outcome === 'draw' ? (
+          <Text style={styles.row}>Level on reps.</Text>
+        ) : result.outcome !== 'solo' ? (
+          <Text style={styles.row}>{result.outcome === 'won' ? 'You' : partnerName} did more reps.</Text>
+        ) : null}
+        {handTapped && <Text style={styles.fine}>No XP for this one: reps were tapped by hand. XP comes once the camera counts them.</Text>}
       </Card>
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <Button label="Home" size="md" variant="secondary" onPress={onHome} style={{ flex: 1 }} />
-        <Button label="Your progress" size="md" onPress={onProgress} style={{ flex: 1 }} />
+        <Button label="Race again" size="md" onPress={onAgain} style={{ flex: 1 }} />
       </View>
     </FadeIn>
   );
 }
 
-export type EndedKind = 'partner_left_before_start' | 'partner_left_during' | 'you_left' | 'expired' | 'unavailable' | 'connection_lost' | 'already_completed' | 'not_found' | 'error';
+export type EndedKind = 'signed_out' | 'closed' | 'you_left' | 'expired' | 'unavailable' | 'connection_lost' | 'already_completed' | 'full' | 'not_found' | 'error';
 const ENDED: Record<EndedKind, { icon: React.ComponentProps<typeof Icon>['name']; title: string; body: string; color: string }> = {
-  partner_left_before_start: { icon: 'account-remove', title: 'Your partner left', body: 'They left before the start. Invite someone else, or go solo.', color: colors.gold },
-  partner_left_during: { icon: 'account-remove', title: 'Your partner left', body: 'They dropped out mid-set. Your reps so far still count.', color: colors.gold },
-  you_left: { icon: 'exit-run', title: 'You left the session', body: 'No worries — start another one any time.', color: colors.dim },
-  expired: { icon: 'timer-sand-complete', title: 'Invite expired', body: 'Nobody joined in time. Create a new session to try again.', color: colors.dim },
+  signed_out: { icon: 'account-lock-outline', title: 'Sign in first', body: 'Shared workouts use your account, so your partner sees who they’re racing.', color: colors.dim },
+  closed: { icon: 'flag-checkered', title: 'This session ended', body: 'Start a new one any time.', color: colors.dim },
+  you_left: { icon: 'exit-run', title: 'You left the race', body: 'Your reps stopped where they were. Start another one any time.', color: colors.dim },
+  expired: { icon: 'timer-sand-complete', title: 'This invite ran out', body: 'Nobody started within 10 minutes. Create a new session to try again.', color: colors.dim },
   unavailable: { icon: 'progress-wrench', title: 'Shared workouts aren’t live yet', body: 'Workout-with-a-partner switches on when its backend is ready. You can still train solo.', color: colors.violet },
   connection_lost: { icon: 'access-point-off', title: 'Connection lost', body: 'We couldn’t reach the session for a while. Check your connection and rejoin.', color: colors.coral },
-  already_completed: { icon: 'flag-checkered', title: 'Session already finished', body: 'This shared workout has ended.', color: colors.dim },
+  already_completed: { icon: 'flag-checkered', title: 'This race can’t be joined', body: 'It has already started or finished.', color: colors.dim },
+  full: { icon: 'account-multiple-check', title: 'This race is full', body: 'Someone else has already joined.', color: colors.dim },
   not_found: { icon: 'link-variant-off', title: 'Session not found', body: 'The link may be wrong or the session was removed.', color: colors.dim },
   error: { icon: 'alert-circle-outline', title: 'Something went wrong', body: 'We couldn’t load this session.', color: colors.coral },
 };
@@ -278,6 +290,7 @@ const styles = StyleSheet.create({
   countWrap: { alignItems: 'center', paddingVertical: 30 },
   starting: { color: colors.secondary, fontFamily: fonts.labelBold, fontSize: 16, letterSpacing: 2, textTransform: 'uppercase' },
   countNum: { color: colors.primary, fontFamily: fonts.display, fontSize: 140, lineHeight: 160 },
+  timer: { color: colors.text, fontFamily: fonts.display, fontSize: 72, lineHeight: 80, textAlign: 'center' },
   activeTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   conn: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
   connText: { fontFamily: fonts.labelBold, fontSize: 12, letterSpacing: 0.8, textTransform: 'uppercase' },

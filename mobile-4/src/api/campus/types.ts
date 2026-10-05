@@ -641,48 +641,6 @@ export type AmbassadorApplication = { id: string; status: AmbassadorStatus; subm
 export type AmbassadorState = { open: boolean; closed_reason: string | null; application: AmbassadorApplication | null; fields: AmbassadorField[] };
 
 // ---------------------------------------------------------------------------
-// Shared workout sessions ("Workout with partner") — expected contract, backend not built yet
-// ---------------------------------------------------------------------------
-
-/**
- * Lifecycle, decided by the server:
- *   waiting_for_partner → (partner joins) → lobby → (both ready) → countdown → active → completed
- *   any point → cancelled (someone left) | expired (invite ran out)
- */
-export type WorkoutSessionStatus = 'waiting_for_partner' | 'lobby' | 'countdown' | 'active' | 'completed' | 'cancelled' | 'expired';
-export type WorkoutParticipant = {
-  user: PersonLite;
-  role: 'host' | 'partner';
-  ready: boolean;
-  /** Presence on the realtime channel, as seen by the server. */
-  connected: boolean;
-  /** Reps as last reported by that participant's device and accepted by the server. */
-  reps: number;
-  finished_at: string | null;
-  left_at: string | null;
-};
-export type SharedWorkoutSession = {
-  session_id: string;
-  invite_code: string;
-  /** Link to share; opens the app at /workout/join/{code} (universal link or squirrelsocial://). */
-  invite_url: string;
-  exercise: { key: string; name: string; measure: 'reps' | 'time'; target: number | null; sets: number | null };
-  host: WorkoutParticipant;
-  partner: WorkoutParticipant | null;
-  status: WorkoutSessionStatus;
-  created_at: string;
-  expires_at: string;
-  /** Server time when the shared countdown ends and both devices start together. */
-  starts_at: string | null;
-  completed_at: string | null;
-  end_reason: 'completed' | 'host_left' | 'partner_left' | 'expired' | null;
-  /** Server clock at response time, so devices can align their countdown. */
-  server_time: string;
-  /** Only when the backend awards it. */
-  xp_awarded?: { user_id: string; xp: number }[] | null;
-};
-
-// ---------------------------------------------------------------------------
 // Realtime
 // ---------------------------------------------------------------------------
 
@@ -696,9 +654,7 @@ export type RealtimeMessage =
   | { type: 'relationship.updated'; data: Relationship }
   | { type: 'friendship.created'; data: { friend: PersonLite & { level: number; xp: number }; relationship: Relationship } }
   | { type: 'notification.created'; data: AppNotification }
-  | { type: 'players.updated'; data: { as_of: string } }
-  | { type: 'workout.session.updated'; data: SharedWorkoutSession }
-  | { type: 'workout.reps.updated'; data: { session_id: string; user_id: string; reps: number; at: string } };
+  | { type: 'players.updated'; data: { as_of: string } };
 
 // ---------------------------------------------------------------------------
 // The service interface both implementations satisfy

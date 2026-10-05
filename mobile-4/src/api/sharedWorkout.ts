@@ -1,77 +1,73 @@
 /**
- * Shared workout sessions ("Workout with partner") — the frontend service. Everything that
- * makes two phones agree (who's in, who's ready, when to start, each other's reps) is the
- * backend's job; this module only calls it and listens for its updates.
+ * Workout with Partner — Exercise's shared workout sessions (EXPO_PUBLIC_EXERCISE_API_URL).
+ * Everything that makes two phones agree (who's in, who's ready, when it starts and ends, each
+ * other's reps) is the server's; this module only calls it and listens for its updates.
  *
- * Expected routes (not built yet — see README):
- *   POST /v1/workout-sessions                       { exercise_key, target, sets }
- *   GET  /v1/workout-sessions/{id}
- *   GET  /v1/workout-sessions/invites/{code}        (preview before joining)
- *   POST /v1/workout-sessions/invites/{code}/join
- *   PUT  /v1/workout-sessions/{id}/ready            { ready }
- *   POST /v1/workout-sessions/{id}/reps             { reps, client_time }
- *   POST /v1/workout-sessions/{id}/complete         { reps }
- *   POST /v1/workout-sessions/{id}/leave
- *   WS   workout.session.updated · workout.reps.updated (the campus realtime channel)
+ *   POST /api/workout-sessions                        { exercise_key, duration_s }   → Session (201)
+ *   GET  /api/workout-sessions/{id}
+ *   GET  /api/workout-sessions/invites/{code}         preview before joining
+ *   POST /api/workout-sessions/invites/{code}/join
+ *   PUT  /api/workout-sessions/{id}/ready             { ready }
+ *   POST /api/workout-sessions/{id}/reps              { reps, seq }                   → { accepted, reps, seq }
+ *   POST /api/workout-sessions/{id}/complete          { reps, seq }
+ *   POST /api/workout-sessions/{id}/leave
+ *   WS   /ws/workout-sessions/{id}?token=…            workout.session.updated · workout.reps.updated
+ * Errors: { detail: { code, message } } (the message is safe to show).
  *
- * There is NO local stand-in: until the backend ships (api/availability.ts, capability
- * 'sharedWorkout') every call rejects with EndpointUnavailableError, so the
- * UI shows "not live yet" instead of pretending two people are connected.
+ * Gated by the 'sharedWorkout' capability (api/availability.ts): until it's on, every call rejects
+ * with EndpointUnavailableError and the screens say "not live yet". No local stand-in.
  */
 import { EndpointUnavailableError, isEndpointAvailable } from '@/api/availability';
-import { api } from '@/api/client';
-import { CAMPUS_API_URL } from '@/api/config';
-import { CAMPUS_SOURCE, realtimeMode, subscribeRealtime } from '@/api/campus';
-import type { SharedWorkoutSession } from '@/api/campus/types';
+import { api, ApiError, getApiToken, refreshApiToken } from '@/api/client';
+import { EXERCISE_API_CONFIGURED, EXERCISE_API_URL } from '@/api/config';
+import { sessionSocketUrl, startSessionLink, type LinkDeps, type LinkState, type RaceDuration, type SessionUpdate, type SharedWorkoutSession } from '@/logic/sharedWorkout';
 
-const base = CAMPUS_API_URL;
-/** Needs a real backend: the capability opted in AND a live campus API. */
+/** Needs the capability switched on AND an Exercise backend configured. */
+export const sharedWorkoutLive = () => isEndpointAvailable('sharedWorkout') && EXERCISE_API_CONFIGURED;
+
 const call = <R,>(path: string, init: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown } = {}): Promise<R> =>
-  isEndpointAvailable('sharedWorkout') && CAMPUS_SOURCE === 'live'
-    ? api<R>(path, { base, method: init.method ?? (init.body !== undefined ? 'POST' : 'GET'), body: init.body })
+  sharedWorkoutLive()
+    ? api<R>(path, { base: EXERCISE_API_URL, method: init.method ?? (init.body !== undefined ? 'POST' : 'GET'), body: init.body })
     : Promise.reject(new EndpointUnavailableError('sharedWorkout'));
 const id = encodeURIComponent;
+const base = '/api/workout-sessions';
 
 export const sharedWorkoutApi = {
-  create: (exercise: { key: string; target: number | null; sets: number | null }) => call<SharedWorkoutSession>('/v1/workout-sessions', { body: { exercise_key: exercise.key, target: exercise.target, sets: exercise.sets } }),
-  get: (sessionId: string) => call<SharedWorkoutSession>(`/v1/workout-sessions/${id(sessionId)}`),
-  previewInvite: (code: string) => call<SharedWorkoutSession>(`/v1/workout-sessions/invites/${id(code)}`),
-  join: (code: string) => call<SharedWorkoutSession>(`/v1/workout-sessions/invites/${id(code)}/join`, { method: 'POST', body: {} }),
-  setReady: (sessionId: string, ready: boolean) => call<SharedWorkoutSession>(`/v1/workout-sessions/${id(sessionId)}/ready`, { method: 'PUT', body: { ready } }),
-  reportReps: (sessionId: string, reps: number) => call<{ accepted: boolean }>(`/v1/workout-sessions/${id(sessionId)}/reps`, { body: { reps, client_time: new Date().toISOString() } }),
-  complete: (sessionId: string, reps: number) => call<SharedWorkoutSession>(`/v1/workout-sessions/${id(sessionId)}/complete`, { body: { reps } }),
-  leave: (sessionId: string) => call<SharedWorkoutSession>(`/v1/workout-sessions/${id(sessionId)}/leave`, { method: 'POST', body: {} }),
+  create: (exerciseKey: string, durationS: RaceDuration) => call<SharedWorkoutSession>(base, { body: { exercise_key: exerciseKey, duration_s: durationS } }),
+  get: (sessionId: string) => call<SharedWorkoutSession>(`${base}/${id(sessionId)}`),
+  previewInvite: (code: string) => call<SharedWorkoutSession>(`${base}/invites/${id(code)}`),
+  join: (code: string) => call<SharedWorkoutSession>(`${base}/invites/${id(code)}/join`, { body: {} }),
+  setReady: (sessionId: string, ready: boolean) => call<SharedWorkoutSession>(`${base}/${id(sessionId)}/ready`, { method: 'PUT', body: { ready } }),
+  reportReps: (sessionId: string, reps: number, seq: number) => call<{ accepted: boolean; reps: number; seq: number }>(`${base}/${id(sessionId)}/reps`, { body: { reps, seq } }),
+  complete: (sessionId: string, reps: number, seq: number) => call<SharedWorkoutSession>(`${base}/${id(sessionId)}/complete`, { body: { reps, seq } }),
+  leave: (sessionId: string) => call<SharedWorkoutSession>(`${base}/${id(sessionId)}/leave`, { body: {} }),
 };
 
-export type SessionUpdate = { kind: 'session'; session: SharedWorkoutSession } | { kind: 'reps'; userId: string; reps: number; at: string };
-
-/**
- * Live updates for one session: the realtime socket when the backend announces one; otherwise a
- * short poll while the screen is open (2 s — enough for a lobby and a rep race, never a tight loop).
- */
-export function subscribeSession(sessionId: string, onUpdate: (u: SessionUpdate) => void, onPollError: (e: unknown) => void): () => void {
-  if (realtimeMode() === 'socket') {
-    return subscribeRealtime((m) => {
-      if (m.type === 'workout.session.updated' && m.data.session_id === sessionId) onUpdate({ kind: 'session', session: m.data });
-      else if (m.type === 'workout.reps.updated' && m.data.session_id === sessionId) onUpdate({ kind: 'reps', userId: m.data.user_id, reps: m.data.reps, at: m.data.at });
-    });
-  }
-  let stopped = false;
-  const tick = async () => {
-    if (stopped) return;
-    try {
-      onUpdate({ kind: 'session', session: await sharedWorkoutApi.get(sessionId) });
-    } catch (e) {
-      onPollError(e);
-    }
-    if (!stopped) timer = setTimeout(tick, 2000);
-  };
-  let timer = setTimeout(tick, 2000);
-  return () => {
-    stopped = true;
-    clearTimeout(timer);
-  };
+/** Exercise's machine-readable error code (`detail.code`), e.g. already_in_session, session_full. */
+export function sharedWorkoutErrorCode(e: unknown): string | null {
+  const d = e instanceof ApiError ? (e.body as { detail?: { code?: unknown } } | undefined)?.detail : undefined;
+  return typeof d?.code === 'string' ? d.code : null;
+}
+/** The session an `already_in_session` refusal points at. */
+export function existingSessionId(e: unknown): string | null {
+  const d = e instanceof ApiError ? (e.body as { detail?: { session_id?: unknown } } | undefined)?.detail : undefined;
+  return sharedWorkoutErrorCode(e) === 'already_in_session' && typeof d?.session_id === 'string' ? d.session_id : null;
 }
 
-/** Milliseconds to add to Date.now() to read the server's clock (from `server_time`). */
-export const clockOffset = (s: SharedWorkoutSession) => Date.parse(s.server_time) - Date.now();
+/** Live updates for one session: its socket, polling every 2 s while the socket is down. */
+export function subscribeSession(sessionId: string, onUpdate: (u: SessionUpdate) => void, onState: (s: LinkState) => void): () => void {
+  return startSessionLink(
+    {
+      // The platform WebSocket has the handful of members the link uses (onopen/onmessage/onclose, send, close).
+      openSocket: (url) => new WebSocket(url) as unknown as ReturnType<LinkDeps['openSocket']>,
+      socketUrl: (token) => sessionSocketUrl(EXERCISE_API_URL, sessionId, token),
+      getToken: getApiToken,
+      refreshToken: refreshApiToken,
+      poll: () => sharedWorkoutApi.get(sessionId),
+      setTimer: (fn, ms) => setTimeout(fn, ms),
+      clearTimer: (t) => clearTimeout(t as ReturnType<typeof setTimeout>),
+    },
+    onUpdate,
+    onState,
+  );
+}
