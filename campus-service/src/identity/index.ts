@@ -347,10 +347,10 @@ export type SocialCrew = { id: string; name: string; interest: string; members_c
 const crewMemCache = new Map<string, { crews: SocialCrewRef[]; at: number }>();
 const crewLookupCache = new Map<string, { crew: SocialCrew; at: number }>();
 
-export async function lookupCrewMemberships(subs: string[]): Promise<Map<string, SocialCrewRef[]>> {
+export async function lookupCrewMembershipsWithStatus(subs: string[]): Promise<{ memberships: Map<string, SocialCrewRef[]>; unavailable: boolean }> {
   const s = socialSettings();
   const out = new Map<string, SocialCrewRef[]>();
-  if (!s) return out;
+  if (!s) return { memberships: out, unavailable: subs.some(Boolean) };
 
   const now = Date.now();
   const need: string[] = [];
@@ -364,7 +364,10 @@ export async function lookupCrewMemberships(subs: string[]): Promise<Map<string,
     }
   }
 
-  if (need.length && available()) {
+  let unavailable = false;
+  const canFetch = need.length > 0 && available();
+  if (need.length && !canFetch) unavailable = true;
+  if (canFetch) {
     try {
       for (const chunk of chunks(need)) {
         const res = await fetch(`${s.url}/internal/v1/crews/memberships`, {
@@ -384,6 +387,7 @@ export async function lookupCrewMemberships(subs: string[]): Promise<Map<string,
         }
       }
     } catch (err) {
+      unavailable = true;
       markDown(err);
     }
   }
@@ -395,13 +399,17 @@ export async function lookupCrewMemberships(subs: string[]): Promise<Map<string,
     }
   }
   
-  return out;
+  return { memberships: out, unavailable };
 }
 
-export async function lookupCrews(crewIds: string[]): Promise<Map<string, SocialCrew>> {
+export async function lookupCrewMemberships(subs: string[]): Promise<Map<string, SocialCrewRef[]>> {
+  return (await lookupCrewMembershipsWithStatus(subs)).memberships;
+}
+
+export async function lookupCrewsWithStatus(crewIds: string[]): Promise<{ crews: Map<string, SocialCrew>; unavailable: boolean }> {
   const s = socialSettings();
   const out = new Map<string, SocialCrew>();
-  if (!s) return out;
+  if (!s) return { crews: out, unavailable: crewIds.some(Boolean) };
 
   const now = Date.now();
   const need: string[] = [];
@@ -415,7 +423,10 @@ export async function lookupCrews(crewIds: string[]): Promise<Map<string, Social
     }
   }
 
-  if (need.length && available()) {
+  let unavailable = false;
+  const canFetch = need.length > 0 && available();
+  if (need.length && !canFetch) unavailable = true;
+  if (canFetch) {
     try {
       for (const chunk of chunks(need)) {
         const res = await fetch(`${s.url}/internal/v1/crews/lookup`, {
@@ -435,6 +446,7 @@ export async function lookupCrews(crewIds: string[]): Promise<Map<string, Social
         }
       }
     } catch (err) {
+      unavailable = true;
       markDown(err);
     }
   }
@@ -446,5 +458,9 @@ export async function lookupCrews(crewIds: string[]): Promise<Map<string, Social
     }
   }
   
-  return out;
+  return { crews: out, unavailable };
+}
+
+export async function lookupCrews(crewIds: string[]): Promise<Map<string, SocialCrew>> {
+  return (await lookupCrewsWithStatus(crewIds)).crews;
 }

@@ -14,14 +14,14 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { getPool, many, one, query, withTransaction } from '../db/pool.js';
-import { lookupCrewMemberships, lookupCrews } from '../identity/index.js';
+import { lookupCrewMemberships, lookupCrewMembershipsWithStatus, lookupCrews, lookupCrewsWithStatus, type SocialCrewRef, type SocialCrew } from '../identity/index.js';
 import { crewDisplays, crewOrPlaceholder } from '../crews/display.js';
 import { errors } from '../lib/errors.js';
 import { isUuid } from '../lib/ids.js';
 import { requireAuth, currentUser } from '../auth/plugin.js';
 import { publish } from '../realtime/bus.js';
 import { campusNotificationDedupeKey, notify } from '../notifications/service.js';
-import { getPeopleLite, type UserRow } from '../users/repo.js';
+import { getPeopleLite } from '../users/repo.js';
 
 export const CHALLENGE_TYPES = [
   { id: 'territory', label: 'Territory duel', description: 'Whoever holds the zone when time runs out wins.', requires_zone: true, targets: ['user', 'crew'] },
@@ -41,6 +41,31 @@ type ChallengeRow = {
 const SELECT = `SELECT ch.*, z.name AS zone_name
   FROM challenges ch LEFT JOIN zones z ON z.id = ch.zone_id`;
 
+export type ChallengeAction = 'accept' | 'decline' | 'cancel' | 'schedule' | 'start' | 'complete';
+type ActionFacts = { isCreator: boolean; isTarget: boolean; isParticipant: boolean };
+
+/** Single source of truth for the action list and the action routes. */
+function allowedActions(r: ChallengeRow, facts: ActionFacts, now: number): ChallengeAction[] {
+  const actions: ChallengeAction[] = [];
+  if (facts.isTarget && r.status === 'pending') actions.push('accept', 'decline');
+  if (facts.isCreator && ['pending', 'accepted'].includes(r.status)) actions.push('cancel');
+  if (facts.isCreator && ['pending', 'accepted'].includes(r.status)) actions.push('schedule');
+  if (facts.isParticipant && r.status === 'accepted' && Date.parse(r.starts_at) <= now + 15 * 60_000) actions.push('start');
+  if (facts.isParticipant && r.status === 'active' && (!r.ends_at || Date.parse(r.ends_at) <= now)) actions.push('complete');
+  return actions;
+}
+
+function respondsFor(r: ChallengeRow, viewerId: string, memberships: Map<string, SocialCrewRef[]>): boolean {
+  if (r.target_type === 'user') return r.target_user_id === viewerId;
+  const targetCrew = (memberships.get(viewerId) ?? []).find((c) => c.id === r.target_crew_id);
+  return !!targetCrew && (targetCrew.role === 'owner' || targetCrew.role === 'admin');
+}
+
+function participantFor(r: ChallengeRow, viewerId: string, crews: Map<string, SocialCrew>): boolean {
+  if (r.created_by === viewerId || r.target_user_id === viewerId) return true;
+  return !!r.target_crew_id && !!crews.get(r.target_crew_id)?.members.some((m) => m.subject === viewerId);
+}
+
 function challengeNotificationRoute(zoneId: string | null, crewId: string | null): string {
   if (zoneId) return `/zone/${zoneId}`;
   if (crewId) return `/crew/${crewId}`;
@@ -59,6 +84,11 @@ const CreateBody = z.object({
 
 async function serialize(rows: ChallengeRow[], viewerId: string) {
   const people = await getPeopleLite(rows.flatMap((r) => [r.created_by, r.target_user_id, r.winner_user_id]).filter((x): x is string => !!x), getPool());
+  const crewIds = rows.map((r) => r.target_crew_id).filter((x): x is string => !!x);
+  const [membershipResult, crewResult] = await Promise.all([
+    lookupCrewMembershipsWithStatus([viewerId]),
+    lookupCrewsWithStatus(crewIds),
+  ]);
   const crews = await crewDisplays(rows.map((r) => r.target_crew_id));
   return rows.map((r) => {
     const typeInfo = CHALLENGE_TYPES.find((t) => t.id === r.type);
@@ -73,6 +103,13 @@ async function serialize(rows: ChallengeRow[], viewerId: string) {
       direction: r.created_by === viewerId ? 'outgoing' : 'incoming',
       created_at: r.created_at, started_at: r.started_at, completed_at: r.completed_at,
       result: r.status === 'completed' ? { winner, summary: r.result_summary ?? '' } : null,
+      actions: allowedActions(r, {
+        isCreator: r.created_by === viewerId,
+        isTarget: respondsFor(r, viewerId, membershipResult.memberships),
+        isParticipant: participantFor(r, viewerId, crewResult.crews),
+      }, Date.now()),
+      actions_status: r.target_type === 'crew' && (membershipResult.unavailable || crewResult.unavailable)
+        ? 'crew_role_unavailable' : 'ready',
     };
   });
 }
@@ -87,20 +124,15 @@ async function participants(r: ChallengeRow): Promise<string[]> {
   return [...ids];
 }
 
-/** Can `user` respond (accept/decline) on behalf of the target? A user target: themselves. A crew target: owner/admin. */
-async function canRespond(user: UserRow, r: ChallengeRow) {
-  if (r.target_type === 'user') return r.target_user_id === user.id;
-  const crews = (await lookupCrewMemberships([user.id])).get(user.id) || [];
-  const m = crews.find(c => c.id === r.target_crew_id);
-  return !!m && (m.role === 'owner' || m.role === 'admin');
-}
-
 export async function challengeRoutes(app: FastifyInstance) {
   const IdParam = z.object({ id: z.string().refine(isUuid, 'invalid id') });
   const load = async (id: string) => { const r = await one<ChallengeRow>(`${SELECT} WHERE ch.id = $1`, [id]); if (!r) throw errors.notFound('Challenge'); return r; };
   const emit = async (r: ChallengeRow, created = false) => {
-    const [data] = await serialize([r], r.created_by);
-    publish({ type: created ? 'challenge.created' : 'challenge.updated', user_ids: await participants(r), data });
+    // `actions` is viewer-specific, so realtime events must serialize once per participant.
+    for (const userId of await participants(r)) {
+      const [data] = await serialize([r], userId);
+      publish({ type: created ? 'challenge.created' : 'challenge.updated', user_ids: [userId], data });
+    }
   };
 
   for (const base of ['/v1/challenge-invites', '/v1/challenges']) {
@@ -157,8 +189,15 @@ export async function challengeRoutes(app: FastifyInstance) {
       const { id } = IdParam.parse(req.params);
       const b = z.object({ starts_at: z.string().datetime({ offset: true }), ends_at: z.string().datetime({ offset: true }).nullable().optional() }).parse(req.body ?? {});
       const r = await load(id);
-      if (r.created_by !== user.id) throw errors.forbidden('Only the creator can reschedule.');
-      if (!['pending', 'accepted'].includes(r.status)) throw errors.conflict('challenge_conflict', `Cannot reschedule a ${r.status} challenge.`);
+      const canSchedule = allowedActions(r, {
+        isCreator: r.created_by === user.id,
+        isTarget: false,
+        isParticipant: false,
+      }, Date.now()).includes('schedule');
+      if (!canSchedule) {
+        if (r.created_by !== user.id) throw errors.forbidden('Only the creator can reschedule.');
+        throw errors.conflict('challenge_conflict', `Cannot reschedule a ${r.status} challenge.`);
+      }
       await query(`UPDATE challenges SET starts_at = $2, ends_at = $3, updated_at = now() WHERE id = $1`, [id, b.starts_at, b.ends_at ?? null]);
       const fresh = await load(id); await emit(fresh);
       return (await serialize([fresh], user.id))[0];
@@ -172,32 +211,47 @@ export async function challengeRoutes(app: FastifyInstance) {
           const r = await one<ChallengeRow>(`${SELECT} WHERE ch.id = $1 FOR UPDATE OF ch`, [id], tx);
           if (!r) throw errors.notFound('Challenge');
           const isCreator = r.created_by === user.id;
-          const isTarget = await canRespond(user, r);
+          const membershipResult = await lookupCrewMembershipsWithStatus([user.id]);
+          const isTarget = respondsFor(r, user.id, membershipResult.memberships);
           const parts = await participants(r);
+          const allowed = allowedActions(r, {
+            isCreator,
+            isTarget,
+            isParticipant: parts.includes(user.id),
+          }, Date.now());
+          if (!allowed.includes(action)) {
+            switch (action) {
+              case 'accept':
+                if (!isTarget) throw errors.forbidden('Only the invited side can accept.');
+                throw errors.conflict('challenge_conflict', `Challenge is ${r.status}.`);
+              case 'decline':
+                if (!isTarget) throw errors.forbidden('Only the invited side can decline.');
+                throw errors.conflict('challenge_conflict', `Challenge is ${r.status}.`);
+              case 'cancel':
+                if (!isCreator) throw errors.forbidden('Only the creator can cancel.');
+                throw errors.conflict('challenge_conflict', `Cannot cancel a ${r.status} challenge.`);
+              case 'start':
+                if (!parts.includes(user.id)) throw errors.forbidden();
+                if (r.status !== 'accepted') throw errors.conflict('challenge_conflict', 'Only accepted challenges can start.');
+                throw errors.conflict('challenge_conflict', 'Too early — starts later.');
+              case 'complete':
+                if (!parts.includes(user.id)) throw errors.forbidden();
+                if (r.status !== 'active') throw errors.conflict('challenge_conflict', 'Only active challenges can be completed.');
+                throw errors.conflict('challenge_conflict', 'The challenge has not ended yet.');
+            }
+          }
           let next: ChallengeRow['status'];
           const sets: Record<string, unknown> = {};
           switch (action) {
             case 'accept':
-              if (!isTarget) throw errors.forbidden('Only the invited side can accept.');
-              if (r.status !== 'pending') throw errors.conflict('challenge_conflict', `Challenge is ${r.status}.`);
               next = 'accepted'; sets.responded_by = user.id; sets.responded_at = new Date(); break;
             case 'decline':
-              if (!isTarget) throw errors.forbidden('Only the invited side can decline.');
-              if (r.status !== 'pending') throw errors.conflict('challenge_conflict', `Challenge is ${r.status}.`);
               next = 'declined'; sets.responded_by = user.id; sets.responded_at = new Date(); break;
             case 'cancel':
-              if (!isCreator) throw errors.forbidden('Only the creator can cancel.');
-              if (!['pending', 'accepted'].includes(r.status)) throw errors.conflict('challenge_conflict', `Cannot cancel a ${r.status} challenge.`);
               next = 'cancelled'; break;
             case 'start':
-              if (!parts.includes(user.id)) throw errors.forbidden();
-              if (r.status !== 'accepted') throw errors.conflict('challenge_conflict', 'Only accepted challenges can start.');
-              if (Date.parse(r.starts_at) > Date.now() + 15 * 60_000) throw errors.conflict('challenge_conflict', 'Too early — starts later.');
               next = 'active'; sets.started_at = new Date(); break;
             case 'complete': {
-              if (!parts.includes(user.id)) throw errors.forbidden();
-              if (r.status !== 'active') throw errors.conflict('challenge_conflict', 'Only active challenges can be completed.');
-              if (r.ends_at && Date.parse(r.ends_at) > Date.now()) throw errors.conflict('challenge_conflict', 'The challenge has not ended yet.');
               next = 'completed'; sets.completed_at = new Date();
               // Server decides the winner from territory state — never from the request body.
               if (r.zone_id && (r.type === 'territory' || r.type === 'zone_race')) {

@@ -320,11 +320,14 @@ All routes exist under both `/v1/challenge-invites` and `/v1/challenges`.
 ```jsonc
 Challenge { "id", "type", "type_label", "from": Person, "target": { "type": "user", "person": Person } | { "type": "crew", "crew": {…} },
             "zone": { id, name }|null, "starts_at", "ends_at", "message", "status", "direction": "incoming"|"outgoing",
-            "created_at", "started_at", "completed_at", "result": { "winner": Person|Crew|null, "summary" }|null }
+            "created_at", "started_at", "completed_at", "result": { "winner": Person|Crew|null, "summary" }|null,
+            "actions": ["accept"|"decline"|"cancel"|"schedule"|"start"|"complete"],
+            "actions_status": "ready"|"crew_role_unavailable" }
 ```
+`actions` lists the actions this caller may take now; it is also enforced by the action routes. `actions_status: "crew_role_unavailable"` means Social could not confirm crew membership, so role-dependent actions may be missing; retry after Social is reachable. This keeps the client from treating unavailable role data as a confirmed lack of permission.
 ### `POST …` 🔒 — rate limit 20/h
 Body `{ "type", "target": { "type": "user"|"crew", "id" }, "zone_id"?, "starts_at": iso, "ends_at"?: iso, "message"? }` → `201 Challenge`. 422 on bad combos (self-challenge, missing zone, past start), 404 unknown target/zone, 409 `challenge_conflict` if an open challenge already exists for the same target+zone. A block in either direction prevents creating one, and fails closed (503 `blocks_unreachable`) when the block set cannot be read.
-### `PATCH …/:id/schedule` 🔒 — creator only; body `{ "starts_at", "ends_at"? }`.
+### `PATCH …/:id/schedule` 🔒 — creator only while `pending|accepted`; body `{ "starts_at", "ends_at"? }`.
 ### `POST …/:id/accept` · `/decline` 🔒 — invited side only (crew: owner/admin). 403 otherwise, 409 unless `pending`.
 ### `POST …/:id/cancel` 🔒 — creator only; `pending|accepted`.
 ### `POST …/:id/start` 🔒 — any participant; `accepted` and within 15 min of `starts_at` (accepted challenges also auto-activate at `starts_at`).
