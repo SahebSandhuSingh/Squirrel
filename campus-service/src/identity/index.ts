@@ -174,9 +174,9 @@ function markDown(err: unknown, operation = 'people lookup') {
 export type SocialNotificationResult = { created: boolean; notification_id: string | null };
 
 /** Post to Social with the identity bridge's shared credentials, timeout, and back-off policy. */
-export async function postSocialNotification(payload: Record<string, unknown>): Promise<SocialNotificationResult | null> {
+export async function postSocialNotification(payload: Record<string, unknown>, options: { bypassBackoff?: boolean } = {}): Promise<SocialNotificationResult | null> {
   const s = socialSettings();
-  if (!s || Date.now() < notificationDownUntil) return null;
+  if (!s || (!options.bypassBackoff && Date.now() < notificationDownUntil)) return null;
   try {
     const res = await fetch(`${s.url}/internal/v1/notifications`, {
       method: 'POST',
@@ -342,7 +342,7 @@ export async function lookupBlocks(sub: string): Promise<Set<string>> {
 
 export type SocialCrewRef = { id: string; name: string; role: string; joined_at: string };
 export type SocialCrewMember = { subject: string; role: string; joined_at: string };
-export type SocialCrew = { id: string; name: string; members_count: number; members: SocialCrewMember[] };
+export type SocialCrew = { id: string; name: string; interest: string; members_count: number; members: SocialCrewMember[] };
 
 const crewMemCache = new Map<string, { crews: SocialCrewRef[]; at: number }>();
 const crewLookupCache = new Map<string, { crew: SocialCrew; at: number }>();

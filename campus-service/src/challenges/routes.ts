@@ -34,11 +34,23 @@ type ChallengeRow = {
   status: 'pending' | 'accepted' | 'declined' | 'cancelled' | 'expired' | 'active' | 'completed';
   starts_at: string; ends_at: string | null; message: string | null; responded_by: string | null; responded_at: string | null; started_at: string | null; completed_at: string | null;
   winner_user_id: string | null; winner_crew_id: string | null; result_summary: string | null; result: unknown; created_at: string; updated_at: string;
-  zone_name: string | null; crew_name: string | null; crew_color: string | null; crew_icon: string | null;
+  zone_name: string | null;
 };
 
-const SELECT = `SELECT ch.*, z.name AS zone_name, c.name AS crew_name, c.color AS crew_color, c.icon AS crew_icon
-  FROM challenges ch LEFT JOIN zones z ON z.id = ch.zone_id LEFT JOIN crews c ON c.id = ch.target_crew_id`;
+const SELECT = `SELECT ch.*, z.name AS zone_name
+  FROM challenges ch LEFT JOIN zones z ON z.id = ch.zone_id`;
+
+const CREW_INTEREST_ICON: Record<string, string> = {
+  running: 'run', walking: 'walk', cycling: 'bike', yoga: 'yoga', hiit: 'lightning-bolt',
+  climbing: 'image-filter-hdr', nutrition: 'food-apple', other: 'account-group',
+};
+
+function challengeNotificationRoute(zoneId: string | null, crewId: string | null): string {
+  if (zoneId) return `/zone/${zoneId}`;
+  if (crewId) return `/crew/${crewId}`;
+  // Temporary until group activity challenges have their own screen; Invites contains Social duels only.
+  return '/notifications';
+}
 
 const CreateBody = z.object({
   type: z.enum(['territory', 'weekend_war', 'zone_race', 'group_activity']),
@@ -51,9 +63,16 @@ const CreateBody = z.object({
 
 async function serialize(rows: ChallengeRow[], viewerId: string) {
   const people = await getPeopleLite(rows.flatMap((r) => [r.created_by, r.target_user_id, r.winner_user_id]).filter((x): x is string => !!x), getPool());
+  const crews = await lookupCrews(rows.flatMap((r) => r.target_crew_id ? [r.target_crew_id] : []));
   return rows.map((r) => {
     const typeInfo = CHALLENGE_TYPES.find((t) => t.id === r.type);
-    const crew = r.target_crew_id ? { id: r.target_crew_id, name: r.crew_name ?? '', color: r.crew_color, icon: r.crew_icon } : null;
+    const socialCrew = r.target_crew_id ? crews.get(r.target_crew_id) : undefined;
+    const crew = r.target_crew_id ? {
+      id: r.target_crew_id,
+      name: socialCrew?.name ?? '',
+      color: null,
+      icon: socialCrew ? CREW_INTEREST_ICON[socialCrew.interest] ?? null : null,
+    } : null;
     const winner = r.winner_user_id ? people.get(r.winner_user_id) ?? null : r.winner_crew_id ? crew : null;
     return {
       id: r.id, type: r.type, type_label: typeInfo?.label ?? r.type,
@@ -135,7 +154,7 @@ export async function challengeRoutes(app: FastifyInstance) {
       await emit(r, true);
       for (const p of (await participants(r)).filter((p) => p !== user.id)) {
         const data = { invite_id: r.id, zone_id: r.zone_id, crew_id: r.target_crew_id,
-          route: r.zone_id ? `/zone/${r.zone_id}` : r.target_crew_id ? `/crew/${r.target_crew_id}` : '/invites' };
+          route: challengeNotificationRoute(r.zone_id, r.target_crew_id) };
         await notify(p, 'challenge.invitation', '{actor} challenged you', `{actor} challenged you to ${typeInfo.label}${r.zone_name ? ` at ${r.zone_name}` : ''}.`, data, user.id,
           campusNotificationDedupeKey('challenge.invitation', r.id, p));
       }
@@ -197,11 +216,12 @@ export async function challengeRoutes(app: FastifyInstance) {
                 if (owner && parts.includes(owner)) { sets.winner_user_id = owner; sets.result_summary = `${owner === r.created_by ? 'Challenger' : 'Defender'} holds ${r.zone_name} at the end.`; }
                 else sets.result_summary = `Nobody in the challenge holds ${r.zone_name} at the end — draw.`;
               } else if (r.type === 'weekend_war' && r.target_crew_id) {
+                const targetCrew = (await lookupCrews([r.target_crew_id])).get(r.target_crew_id);
                 const c = await one<{ n: number }>(`SELECT count(*)::int AS n FROM territories WHERE crew_id = $1`, [r.target_crew_id], tx);
                 const mineCrewIds = ((await lookupCrewMemberships([r.created_by])).get(r.created_by) || []).map(c => c.id);
                 const mine = mineCrewIds.length ? await one<{ n: number }>(`SELECT count(*)::int AS n FROM territories WHERE crew_id = ANY($1::uuid[])`, [mineCrewIds], tx) : { n: 0 };
                 const a = mine?.n ?? 0, b2 = c?.n ?? 0;
-                if (b2 > a) { sets.winner_crew_id = r.target_crew_id; sets.result_summary = `${r.crew_name} holds ${b2} zones vs ${a}.`; }
+                if (b2 > a) { sets.winner_crew_id = r.target_crew_id; sets.result_summary = `${targetCrew?.name ?? 'The crew'} holds ${b2} zones vs ${a}.`; }
                 else if (a > b2) { sets.winner_user_id = r.created_by; sets.result_summary = `Challenger's crew holds ${a} zones vs ${b2}.`; }
                 else sets.result_summary = `Tied at ${a} zones each.`;
               } else {
@@ -219,7 +239,7 @@ export async function challengeRoutes(app: FastifyInstance) {
         for (const p of others) {
           const verb = action === 'accept' ? 'accepted' : action === 'decline' ? 'declined' : action === 'cancel' ? 'cancelled' : action === 'start' ? 'started' : 'completed';
           const data = { invite_id: fresh.id, zone_id: fresh.zone_id, crew_id: fresh.target_crew_id,
-            route: fresh.zone_id ? `/zone/${fresh.zone_id}` : fresh.target_crew_id ? `/crew/${fresh.target_crew_id}` : '/invites' };
+            route: challengeNotificationRoute(fresh.zone_id, fresh.target_crew_id) };
           await notify(p, 'challenge.updated', 'Challenge updated', `{actor} ${verb} the challenge${fresh.zone_name ? ` at ${fresh.zone_name}` : ''}.`, data, user.id,
             campusNotificationDedupeKey('challenge.updated', fresh.id, p, `${action}:${fresh.updated_at}`));
         }

@@ -19,7 +19,10 @@ function routeFor(type: NotificationType, data: Record<string, unknown>): string
   if (typeof data.zone_id === 'string') return `/zone/${encodeURIComponent(data.zone_id)}`;
   if (typeof data.crew_id === 'string') return `/crew/${encodeURIComponent(data.crew_id)}`;
   if (typeof data.meetup_id === 'string') return `/meetup/${encodeURIComponent(data.meetup_id)}`;
-  if (type.startsWith('challenge.')) return '/invites';
+  if (type.startsWith('challenge.')) {
+    // Temporary until group activity challenges have their own screen; Invites contains Social duels only.
+    return '/notifications';
+  }
   return '/notifications';
 }
 
@@ -28,6 +31,42 @@ function appCategory(type: NotificationType): string {
   if (type.startsWith('challenge.')) return 'invite';
   if (type.startsWith('meetup.') || type.startsWith('event.')) return 'event';
   return type;
+}
+
+type NotificationEvent = { userId: string; type: NotificationType; title: string; body: string | null; data: Record<string, unknown>; retry?: boolean };
+
+function publishAccepted(result: { created: boolean; notification_id: string | null }, event: NotificationEvent) {
+  if (!result.notification_id || (!result.created && !event.retry)) return;
+  const text = event.body ? `${event.title} · ${event.body}` : event.title;
+  publish({
+    type: 'notification.created',
+    user_ids: [event.userId],
+    data: {
+      id: result.notification_id,
+      type: appCategory(event.type),
+      actor: null,
+      text,
+      created_at: new Date().toISOString(),
+      read: false,
+      data: event.data,
+    },
+  });
+}
+
+function scheduleRetry(payload: Record<string, unknown>, event: NotificationEvent, attempt: 1 | 2) {
+  const delayMs = attempt === 1 ? 1_000 : 5_000;
+  const timer = setTimeout(() => {
+    void (async () => {
+      const result = await postSocialNotification(payload, { bypassBackoff: true });
+      if (result) {
+        publishAccepted(result, { ...event, retry: true });
+      } else if (attempt === 1) {
+        scheduleRetry(payload, event, 2);
+      }
+    })();
+  }, delayMs);
+  // This is best-effort, in-memory delivery. A retry must never keep the service alive by itself.
+  timer.unref?.();
 }
 
 /** Best-effort Social delivery: a missing/down Social never rolls back the campus action. */
@@ -41,7 +80,7 @@ export async function notify(
   dedupeKey: string,
 ) {
   const routedData = { ...data, route: routeFor(type, data) };
-  const result = await postSocialNotification({
+  const payload = {
     user_subject: userId,
     kind: type,
     ...(actorId && actorId !== userId ? { actor_subject: actorId } : {}),
@@ -50,25 +89,13 @@ export async function notify(
     actor_fallback: 'Someone',
     data: routedData,
     dedupe_key: dedupeKey,
-  });
+  };
+  const event = { userId, type, title, body, data: routedData };
+  const result = await postSocialNotification(payload);
 
-  // The app consumes this shape immediately, then reconciles it from Social's list. Never publish
-  // an id Social did not return, or replay a duplicate event when dedupe_key already existed.
-  if (result?.created && result.notification_id) {
-    const text = body ? `${title} · ${body}` : title;
-    publish({
-      type: 'notification.created',
-      user_ids: [userId],
-      data: {
-        id: result.notification_id,
-        type: appCategory(type),
-        actor: null,
-        text,
-        created_at: new Date().toISOString(),
-        read: false,
-        data: routedData,
-      },
-    });
-  }
+  // The initial attempt is best effort; bounded retries happen asynchronously and cannot delay
+  // the caller's response. Social's dedupe key makes replay safe after ambiguous network failures.
+  if (result) publishAccepted(result, event);
+  else scheduleRetry(payload, event, 1);
   return result;
 }
