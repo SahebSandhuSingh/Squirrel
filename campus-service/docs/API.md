@@ -307,7 +307,7 @@ States: `pending → accepted → active → completed`; `pending → declined |
 All routes exist under both `/v1/challenge-invites` and `/v1/challenges`.
 
 ### `GET …/types` — `{ "types": [{ id, label, description, requires_zone, targets }] }`
-### `GET …?box=incoming|outgoing|all` 🔒 — `{ "invites": [Challenge…], "challenges": [same] }`
+### `GET …?box=incoming|outgoing|all` 🔒 — `{ "invites": [Challenge…], "challenges": [same], "crew_battles_unavailable": boolean }`
 ```jsonc
 Challenge { "id", "type", "type_label", "from": Person, "target": { "type": "user", "person": Person } | { "type": "crew", "crew": {…} },
             "zone": { id, name }|null, "starts_at", "ends_at", "message", "status", "direction": "incoming"|"outgoing",
@@ -316,6 +316,7 @@ Challenge { "id", "type", "type_label", "from": Person, "target": { "type": "use
             "actions_status": "ready"|"crew_role_unavailable" }
 ```
 `actions` lists the actions this caller may take now; it is also enforced by the action routes. `actions_status: "crew_role_unavailable"` means Social could not confirm crew membership, so role-dependent actions may be missing; retry after Social is reachable. This keeps the client from treating unavailable role data as a confirmed lack of permission.
+Crew-targeted rows are returned only when the caller's membership is known (from a fresh or stale cached lookup); membership is never guessed during an outage. On a cold start with no cached membership, crew rows are omitted and `crew_battles_unavailable` is `true`, so the client can show a retry state without exposing another crew's challenge or message.
 ### `POST …` 🔒 — rate limit 20/h
 Body `{ "type", "target": { "type": "user"|"crew", "id" }, "zone_id"?, "starts_at": iso, "ends_at"?: iso, "message"? }` → `201 Challenge`. 422 on bad combos (self-challenge, missing zone, past start), 404 unknown target/zone, 409 `challenge_conflict` if an open challenge already exists for the same target+zone. A block in either direction prevents creating one, and fails closed (503 `blocks_unreachable`) when the block set cannot be read.
 ### `PATCH …/:id/schedule` 🔒 — creator only while `pending|accepted`; body `{ "starts_at", "ends_at"? }`.

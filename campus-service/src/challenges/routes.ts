@@ -103,12 +103,12 @@ async function serialize(rows: ChallengeRow[], viewerId: string) {
       direction: r.created_by === viewerId ? 'outgoing' : 'incoming',
       created_at: r.created_at, started_at: r.started_at, completed_at: r.completed_at,
       result: r.status === 'completed' ? { winner, summary: r.result_summary ?? '' } : null,
-      actions: r.target_type === 'crew' && (membershipResult.unavailable || crewResult.unavailable) ? [] : allowedActions(r, {
+      actions: r.target_type === 'crew' && (membershipResult.statuses.get(viewerId) === 'unknown' || membershipResult.unavailable || crewResult.unavailable) ? [] : allowedActions(r, {
         isCreator: r.created_by === viewerId,
         isTarget: respondsFor(r, viewerId, membershipResult.memberships),
         isParticipant: participantFor(r, viewerId, crewResult.crews),
       }, Date.now()),
-      actions_status: r.target_type === 'crew' && (membershipResult.unavailable || crewResult.unavailable)
+      actions_status: r.target_type === 'crew' && (membershipResult.statuses.get(viewerId) === 'unknown' || membershipResult.unavailable || crewResult.unavailable)
         ? 'crew_role_unavailable' : 'ready',
     };
   });
@@ -146,10 +146,16 @@ export async function challengeRoutes(app: FastifyInstance) {
       const myCrews = (membershipResult.memberships.get(user.id) || []).map(c => c.id);
       const rows = await many<ChallengeRow>(
         `${SELECT} WHERE (
-            ($2 IN ('outgoing','all') AND ch.created_by = $1) OR
-            ($2 IN ('incoming','all') AND (ch.target_user_id = $1 OR ch.target_crew_id = ANY($3::uuid[]) OR ($4::boolean AND ch.target_type = 'crew')))
-         ) ORDER BY ch.created_at DESC LIMIT 100`, [user.id, box, myCrews, membershipResult.unavailable]);
-      return { invites: await serialize(rows, user.id), challenges: await serialize(rows, user.id) };
+            ($2 IN ('outgoing','all') AND ch.created_by = $1 AND (ch.target_type <> 'crew' OR ch.target_crew_id = ANY($3::uuid[]))) OR
+            ($2 IN ('incoming','all') AND (ch.target_user_id = $1 OR ch.target_crew_id = ANY($3::uuid[])))
+         ) ORDER BY CASE WHEN ch.target_type = 'user' THEN 0 ELSE 1 END, ch.created_at DESC LIMIT 100`, [user.id, box, myCrews]);
+      const challenges = await serialize(rows, user.id);
+      const callerCrewStatus = membershipResult.statuses.get(user.id) ?? 'unknown';
+      return {
+        invites: challenges,
+        challenges,
+        crew_battles_unavailable: callerCrewStatus === 'unknown',
+      };
     });
 
     app.post(base, { preHandler: requireAuth, config: { rateLimit: { max: 20, timeWindow: '1 hour' } } }, async (req, reply) => {

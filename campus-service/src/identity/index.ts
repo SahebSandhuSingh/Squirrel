@@ -347,10 +347,26 @@ export type SocialCrew = { id: string; name: string; interest: string; members_c
 const crewMemCache = new Map<string, { crews: SocialCrewRef[]; at: number }>();
 const crewLookupCache = new Map<string, { crew: SocialCrew; at: number }>();
 
-export async function lookupCrewMembershipsWithStatus(subs: string[]): Promise<{ memberships: Map<string, SocialCrewRef[]>; unavailable: boolean }> {
+export type CrewMembershipStatus = 'fresh' | 'stale' | 'unknown';
+
+export async function lookupCrewMembershipsWithStatus(subs: string[]): Promise<{
+  memberships: Map<string, SocialCrewRef[]>;
+  statuses: Map<string, CrewMembershipStatus>;
+  unavailable: boolean;
+}> {
   const s = socialSettings();
   const out = new Map<string, SocialCrewRef[]>();
-  if (!s) return { memberships: out, unavailable: subs.some(Boolean) };
+  const statuses = new Map<string, CrewMembershipStatus>();
+  if (!s) {
+    for (const sub of new Set(subs.filter(Boolean))) {
+      const cached = crewMemCache.get(sub);
+      if (cached) {
+        out.set(sub, cached.crews);
+        statuses.set(sub, 'stale');
+      } else statuses.set(sub, 'unknown');
+    }
+    return { memberships: out, statuses, unavailable: subs.some(Boolean) };
+  }
 
   const now = Date.now();
   const need: string[] = [];
@@ -359,6 +375,7 @@ export async function lookupCrewMembershipsWithStatus(subs: string[]): Promise<{
     const c = crewMemCache.get(sub);
     if (c && now - c.at < s.cacheTtlMs) {
       out.set(sub, c.crews);
+      statuses.set(sub, 'fresh');
     } else {
       need.push(sub);
     }
@@ -384,6 +401,7 @@ export async function lookupCrewMembershipsWithStatus(subs: string[]): Promise<{
         for (const person of data.people) {
           crewMemCache.set(person.subject, { crews: person.crews, at: Date.now() });
           out.set(person.subject, person.crews);
+          statuses.set(person.subject, 'fresh');
         }
       }
     } catch (err) {
@@ -393,13 +411,16 @@ export async function lookupCrewMembershipsWithStatus(subs: string[]): Promise<{
   }
   
   for (const sub of need) {
-    if (!out.has(sub)) {
+    if (!statuses.has(sub)) {
       const c = crewMemCache.get(sub);
-      out.set(sub, c ? c.crews : []);
+      if (c) {
+        out.set(sub, c.crews);
+        statuses.set(sub, 'stale');
+      } else statuses.set(sub, 'unknown');
     }
   }
   
-  return { memberships: out, unavailable };
+  return { memberships: out, statuses, unavailable };
 }
 
 export async function lookupCrewMemberships(subs: string[]): Promise<Map<string, SocialCrewRef[]>> {

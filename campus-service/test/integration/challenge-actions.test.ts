@@ -70,7 +70,24 @@ async function makeCrewChallenge(creator: string) {
 
 async function listFor(userId: string, box: 'incoming' | 'outgoing' | 'all' = 'all') {
   const response = await api('GET', `${base}?box=${box}`, userId);
-  return response.body.challenges as Array<{ id: string; actions: string[]; actions_status: string; status: string }>;
+  return response.body.challenges as Array<{ id: string; actions: string[]; actions_status: string; status: string; message?: string | null }>;
+}
+
+async function listBodyFor(userId: string, box: 'incoming' | 'outgoing' | 'all' = 'all') {
+  return (await api('GET', `${base}?box=${box}`, userId)).body as {
+    challenges: Array<{ id: string; actions: string[]; actions_status: string; status: string; message?: string | null }>;
+    crew_battles_unavailable: boolean;
+  };
+}
+
+async function insertCrewBattle(creator: string, crewId: string, message: string) {
+  await api('GET', '/v1/me', creator);
+  const rows = await sql<{ id: string }>(
+    `INSERT INTO challenges (type, created_by, target_type, target_crew_id, starts_at, message)
+     VALUES ('weekend_war', $1, 'crew', $2, now() + interval '1 day', $3) RETURNING id`,
+    [creator, crewId, message],
+  );
+  return rows[0]!.id;
 }
 
 describe.skipIf(!HAS_DB)('challenge allowed actions (integration)', () => {
@@ -175,21 +192,56 @@ describe.skipIf(!HAS_DB)('challenge allowed actions (integration)', () => {
     expect((await listFor(creator)).find((x) => x.id === id)?.actions).toEqual([]);
   });
 
-  it('Social unavailable keeps crew challenges visible with no actions and a retry status', async () => {
-    const member = `actions-outage-member-${randomUUID()}`;
+  it('Social down with stale known memberships shows only the caller\'s crew battles and hides their messages from others', async () => {
+    const member = `actions-stale-member-${randomUUID()}`;
+    const creator = `actions-stale-creator-${randomUUID()}`;
+    const outsideCrewId = randomUUID();
     CREW_ROLES.set(member, 'member');
-    await api('GET', '/v1/me', member);
-    const created = await makeCrewChallenge(`actions-outage-creator-${randomUUID()}`);
-    const onlineRow = (await listFor(member, 'incoming')).find((x) => x.id === created.body.id)!;
-    expect(onlineRow).toMatchObject({ actions: [], actions_status: 'ready' });
+    const ownId = await insertCrewBattle(creator, CREW.id, 'known-crew-private-message');
+    const outsideId = await insertCrewBattle(creator, outsideCrewId, 'outside-crew-secret-message');
 
+    // A successful lookup primes the caller's membership cache. Leave it intact when Social fails.
+    expect((await listFor(member, 'incoming')).some((row) => row.id === ownId)).toBe(true);
     membershipUnavailable = true;
     lookupUnavailable = true;
-    resetIdentityState();
-    configureSocialBridge({ url: socialUrl, token: TOKEN, timeoutMs: 500, cacheTtlMs: 0 });
-    const outageRow = (await listFor(member, 'incoming')).find((x) => x.id === created.body.id);
-    expect(outageRow).toMatchObject({ actions: [], actions_status: 'crew_role_unavailable' });
-    expect((await api('POST', `${base}/${created.body.id}/accept`, member)).status).toBe(403);
+
+    const body = await listBodyFor(member, 'incoming');
+    const ownRow = body.challenges.find((row) => row.id === ownId);
+    expect(ownRow).toMatchObject({ actions: [], actions_status: 'crew_role_unavailable' });
+    expect(body.challenges.some((row) => row.id === outsideId)).toBe(false);
+    expect(JSON.stringify(body)).not.toContain('outside-crew-secret-message');
+    expect(body.crew_battles_unavailable).toBe(false);
+  });
+
+  it('Social down with unknown memberships hides all crew battles and reports that they are unavailable', async () => {
+    const caller = `actions-cold-caller-${randomUUID()}`;
+    await insertCrewBattle(`actions-cold-other-${randomUUID()}`, randomUUID(), 'cold-start-private-message');
+    await insertCrewBattle(`actions-cold-visible-creator-${randomUUID()}`, CREW.id, 'cold-start-visible-only-to-members');
+    membershipUnavailable = true;
+    lookupUnavailable = true;
+
+    const body = await listBodyFor(caller, 'all');
+    expect(body.challenges.some((row) => row.message?.startsWith('cold-start-'))).toBe(false);
+    expect(JSON.stringify(body)).not.toContain('cold-start-private-message');
+    expect(body.crew_battles_unavailable).toBe(true);
+  });
+
+  it('one-to-one challenges stay in the list ahead of more than 100 crew battles', async () => {
+    const caller = `actions-priority-caller-${randomUUID()}`;
+    const creator = `actions-priority-creator-${randomUUID()}`;
+    CREW_ROLES.set(caller, 'member');
+    const direct = await makeUserChallenge(creator, caller);
+    const callerId = direct.body.target.person.user_id as string;
+    const directId = direct.body.id as string;
+    await sql(
+      `INSERT INTO challenges (type, created_by, target_type, target_crew_id, starts_at, message, created_at)
+       SELECT 'weekend_war', $1, 'crew', $2, now() + interval '1 day', 'crew-row', now() + g * interval '1 millisecond'
+       FROM generate_series(1, 105) AS g`,
+      [creator, CREW.id],
+    );
+    const body = await listBodyFor(callerId, 'incoming');
+    expect(body.challenges).toHaveLength(100);
+    expect(body.challenges.some((row) => row.id === directId)).toBe(true);
   });
 
   it('all advertised actions can be executed, and actions omitted by role, state, or timing are refused', async () => {
