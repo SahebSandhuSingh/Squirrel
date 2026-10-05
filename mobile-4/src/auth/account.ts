@@ -54,6 +54,12 @@ export const accountApi = {
       if (e instanceof ApiError && e.status === 400) throw new Error('That code didn’t work. Check it, or ask for a new one.');
       return explain(e, 'Sign-in failed.');
     }),
+  /** Separate non-campus registration; all four fields are required by the Exercise backend. */
+  accessCodeSignup: (details: { email: string; full_name: string; phone: string; access_code: string }) =>
+    api<TokenPair>('/api/auth/signup/access-code', { body: details, base: AUTH_URL, anonymous: true }).catch((e) => {
+      if (e instanceof ApiError && e.status === 403) throw new Error('Sign-up failed. Check your details and try again.');
+      return explain(e, 'Sign-up failed. Check your details and try again.');
+    }),
   login: (email: string, password: string) => auth('/login', { email, password }).catch((e) => explain(e, 'Sign-in failed.')),
   register: (account: NewAccount) => auth('/register', account).catch((e) => explain(e, 'Could not create the account.')),
   /** Emails a 6-digit sign-up code; resolves to how long it works (seconds). */

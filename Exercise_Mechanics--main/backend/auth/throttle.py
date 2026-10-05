@@ -42,6 +42,7 @@ class Limit:
 LOGIN_EMAIL = Limit("login-email", 5, 15 * 60)
 LOGIN_IP = Limit("login-ip", 50, 15 * 60)
 SIGNUP_IP = Limit("signup-ip", 20, 60 * 60)
+ACCESS_CODE_SIGNUP_IP = Limit("access-code-signup-ip", 5, 15 * 60)
 REFRESH_IP = Limit("refresh-ip", 1000, 15 * 60)
 EMAIL_CODE_EMAIL = Limit("email-code-email", 5, 60 * 60)
 EMAIL_CODE_IP = Limit("email-code-ip", 30, 60 * 60)

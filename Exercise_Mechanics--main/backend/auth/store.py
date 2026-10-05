@@ -34,7 +34,12 @@ class EmailTaken(Exception):
 
 
 def normalize_email(email: str) -> str:
-    return email.strip().lower()
+    value = email.strip().lower()
+    local, separator, domain = value.rpartition("@")
+    if separator and domain == "gmail.com":
+        local = local.split("+", 1)[0].replace(".", "")
+        return f"{local}@{domain}"
+    return value
 
 
 def _credential_path(email: str) -> Path:

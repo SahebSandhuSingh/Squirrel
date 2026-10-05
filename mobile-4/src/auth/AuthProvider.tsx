@@ -52,6 +52,7 @@ type AuthState = {
   requestEmailCode: (email: string) => Promise<{ newAccount?: boolean }>;
   /** `invite`: a friend's invite code, claimed on a new account (best effort). */
   verifyEmailCode: (email: string, code: string, name?: Name, invite?: string) => Promise<{ newAccount: boolean }>;
+  signUpWithAccessCode: (details: { email: string; full_name: string; phone: string; access_code: string }) => Promise<void>;
   signInWithToken: (token: string) => Promise<void>;
   continueDemo: () => void;
   signOut: () => Promise<void>;
@@ -251,6 +252,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [savePair, rememberEmail, rememberName, loadName],
   );
 
+  const signUpWithAccessCode = useCallback(async (details: { email: string; full_name: string; phone: string; access_code: string }) => {
+    if (!AUTH_CONFIGURED) throw new Error('Sign-up failed. Check your details and try again.');
+    const pair = await accountApi.accessCodeSignup(details);
+    await savePair(pair);
+    await rememberEmail(details.email.trim());
+    await rememberName({ first_name: details.full_name, last_name: '' });
+    setMode('live');
+  }, [savePair, rememberEmail, rememberName]);
+
   const signInWithToken = useCallback(
     async (t: string) => {
       await store.set(KEY, t);
@@ -287,6 +297,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signIn,
         requestEmailCode,
         verifyEmailCode,
+        signUpWithAccessCode,
         signInWithToken,
         continueDemo: () => setMode('demo'),
         signOut,

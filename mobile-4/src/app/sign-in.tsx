@@ -42,6 +42,12 @@ export default function SignIn() {
   const [password, setPassword] = useState('');
   const [token, setToken] = useState('');
   const [showMore, setShowMore] = useState(false);
+  const [accessSignup, setAccessSignup] = useState(false);
+  const [signupEmail, setSignupEmail] = useState('');
+  const [signupName, setSignupName] = useState('');
+  const [signupPhone, setSignupPhone] = useState('');
+  const [signupCode, setSignupCode] = useState('');
+  const [signupStep, setSignupStep] = useState(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const emailOk = isAcademicEmail(email);
@@ -70,13 +76,14 @@ export default function SignIn() {
 
         <Kicker style={{ marginTop: 28 }}>{joining ? 'Join your campus' : 'Welcome back'}</Kicker>
         <Display size={44} style={{ marginTop: 6, lineHeight: 46 }}>
-          {joining ? 'Get in with your' : 'Back in'}
+          {joining ? (accessSignup ? 'Create your' : 'Get in with your') : 'Back in'}
           {'\n'}
-          <Text style={{ color: colors.primary }}>{joining ? '.ac.in email' : 'the game.'}</Text>
+          <Text style={{ color: colors.primary }}>{joining ? (accessSignup ? 'account.' : '.ac.in email') : 'the game.'}</Text>
         </Display>
-        <Text style={styles.lead}>Squirrel Social is campus-only. We’ll send a one-time code to your institute inbox — no password needed.</Text>
+        <Text style={styles.lead}>{accessSignup ? 'Create an account with your email, full name, and phone number.' : 'Squirrel Social is campus-only. We’ll send a one-time code to your institute inbox — no password needed.'}</Text>
 
         <View style={{ gap: 10, marginTop: 18 }}>
+          {!accessSignup ? <>
           <TextInput
             style={[styles.input, email.length > 4 && !emailOk && { borderColor: colors.coral }]}
             value={email}
@@ -130,6 +137,33 @@ export default function SignIn() {
           )}
           {error && <Text style={styles.error} accessibilityRole="alert">{error}</Text>}
           {auth.notice && !error && <Text style={styles.sent}>{auth.notice}</Text>}
+          <Text style={styles.link} onPress={() => { setAccessSignup(true); setError(null); }}>
+            Sign up with an access code
+          </Text>
+          </> : <>
+            <Text style={styles.lead}>Create an account · Step {signupStep} of 4</Text>
+            {signupStep === 1 && <TextInput style={styles.input} value={signupEmail} onChangeText={setSignupEmail} placeholder="Email address" placeholderTextColor={colors.mute} autoCapitalize="none" keyboardType="email-address" autoComplete="email" accessibilityLabel="Email address" />}
+            {signupStep === 2 && <TextInput style={styles.input} value={signupName} onChangeText={setSignupName} placeholder="Full name" placeholderTextColor={colors.mute} autoComplete="name" maxLength={120} accessibilityLabel="Full name" />}
+            {signupStep === 3 && <TextInput style={styles.input} value={signupPhone} onChangeText={setSignupPhone} placeholder="Indian mobile number" placeholderTextColor={colors.mute} keyboardType="phone-pad" maxLength={13} accessibilityLabel="Phone number" />}
+            {signupStep === 4 && <>
+              <Text style={styles.lead}>Enter your six-digit access code.</Text>
+              <TextInput style={[styles.input, styles.code]} value={signupCode} onChangeText={(v) => setSignupCode(v.replace(/[^0-9]/g, '').slice(0, 6))} placeholder="6-digit code" placeholderTextColor={colors.mute} keyboardType="number-pad" maxLength={6} accessibilityLabel="Six-digit access code" />
+            </>}
+            {error && <Text style={styles.error} accessibilityRole="alert">{error}</Text>}
+            <Button
+              label={busy ? (signupStep === 4 ? 'Creating…' : 'Checking…') : signupStep === 4 ? 'Create account' : 'Continue'}
+              icon="arrow-right"
+              disabled={busy || (signupStep === 1 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signupEmail.trim())) || (signupStep === 2 && (!signupName.trim() || signupName.length > 120)) || (signupStep === 3 && !/^(?:\+91)?[6-9][0-9]{9}$/.test(signupPhone.trim())) || (signupStep === 4 && signupCode.length !== 6)}
+              onPress={() => {
+                if (signupStep < 4) { setSignupStep((n) => n + 1); setError(null); return; }
+                run(async () => {
+                  await auth.signUpWithAccessCode({ email: signupEmail.trim(), full_name: signupName, phone: signupPhone.trim(), access_code: signupCode });
+                  return { newAccount: true };
+                });
+              }}
+            />
+            <Text style={styles.link} onPress={() => { setAccessSignup(false); setError(null); }}>Back to institute email sign-in</Text>
+          </>}
         </View>
 
         <View style={styles.or}>

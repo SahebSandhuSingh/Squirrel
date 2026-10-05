@@ -17,6 +17,8 @@ the emailed code while config.email_verification_required() is on.
 
 from __future__ import annotations
 
+import os
+
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -31,6 +33,7 @@ from backend.auth.store import (
     issue_refresh_token,
     read_credential,
     register_account,
+    normalize_email,
 )
 from backend.auth import email_codes, throttle
 from backend.auth.tokens import burn_password_check, issue_access_token, public_jwks, verify_password
@@ -38,6 +41,7 @@ from backend.auth.tokens import burn_password_check, issue_access_token, public_
 router = APIRouter(prefix="/api/auth")
 
 _EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+_ACCESS_EMAIL_PATTERN = r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$"
 
 
 class RegisterBody(BaseModel):
@@ -65,6 +69,15 @@ class EmailVerifyBody(BaseModel):
     # Needed only when the address has no account yet (the reply to /email/start says which).
     first_name: str | None = Field(default=None, min_length=1, max_length=80)
     last_name:  str | None = Field(default=None, max_length=80)
+
+
+class AccessCodeSignupBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=3, max_length=200, pattern=_ACCESS_EMAIL_PATTERN)
+    full_name: str = Field(min_length=1, max_length=120)
+    phone: str = Field(min_length=10, max_length=13, pattern=r"^(?:\+91)?[6-9][0-9]{9}$")
+    access_code: str = Field(min_length=6, max_length=6, pattern=r"^[0-9]{6}$")
 
 
 class LoginBody(BaseModel):
@@ -107,6 +120,15 @@ def count_sign_up(request: Request) -> None:
     throttle.hit(throttle.SIGNUP_IP, address)
 
 
+def count_access_code_signup(request: Request) -> None:
+    address = throttle.client_address(request)
+    try:
+        throttle.check(throttle.ACCESS_CODE_SIGNUP_IP, address)
+    except throttle.Throttled as exc:
+        raise throttle.too_many(exc) from None
+    throttle.hit(throttle.ACCESS_CODE_SIGNUP_IP, address)
+
+
 def domain_error() -> HTTPException:
     return HTTPException(status_code=403, detail=f"Sign-up is open to {email_codes.allowed_domains_text()} "
                                                  "email addresses only.")
@@ -145,6 +167,46 @@ def register(body: RegisterBody, request: Request) -> dict:
     except EmailTaken:
         raise HTTPException(status_code=409, detail="an account with this email already exists") from None
     return token_pair(user_id, verified=verified)
+
+
+@router.post("/signup/access-code", status_code=status.HTTP_201_CREATED)
+def access_code_signup(body: AccessCodeSignupBody, request: Request) -> dict:
+    """Create a complete non-campus account using the operator-provided access code."""
+    count_access_code_signup(request)
+    email = body.email.strip()
+    normalized = normalize_email(email)
+    domain = normalized.rsplit("@", 1)[-1]
+    if domain == "ac.in" or domain.endswith(".ac.in"):
+        raise HTTPException(status_code=403, detail="Use the institute email sign-in option.")
+    if not body.full_name.strip():
+        raise HTTPException(status_code=422, detail="Enter your full name.")
+
+    # Fail closed unless a six-digit secret is configured. Compare fixed-width bytes in constant time.
+    expected = os.environ.get("SIGNUP_ACCESS_CODE", "")
+    configured_ok = len(expected) == 6 and expected.isascii() and expected.isdigit()
+    supplied = body.access_code.encode("ascii")
+    expected_bytes = expected.encode("ascii") if configured_ok else b"000000"
+    matches = secrets.compare_digest(expected_bytes, supplied)
+    if not configured_ok or not matches:
+        raise HTTPException(status_code=403, detail="Sign-up failed. Check your details and try again.")
+
+    try:
+        user_id = register_account(
+            email,
+            secrets.token_urlsafe(32),
+            body.full_name,
+            "",
+            profile={
+                "full_name": body.full_name,
+                "email_as_entered": email,
+                "phone_number_unverified": body.phone,
+                "signup_method": "access_code",
+            },
+            email_verified=False,
+        )
+    except EmailTaken:
+        raise HTTPException(status_code=409, detail="An account with this email already exists. Sign in instead.") from None
+    return token_pair(user_id, verified=False)
 
 
 @router.post("/login")
