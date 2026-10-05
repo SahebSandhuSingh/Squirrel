@@ -73,9 +73,10 @@ describe("Progress API", () => {
     expect(response.statusCode).toBe(200);
     const body = response.json();
     expect(body.totalXp).toBe(155); // run 70 + exercise 50 + campus 25 + challenge 10
-    expect(body.totalWorkouts).toBe(1);
+    // Runs now count as workouts alongside exercise sessions.
+    expect(body.totalWorkouts).toBe(2);
     expect(body.totalDistanceKm).toBeCloseTo(2);
-    expect(body.totalWorkoutMinutes).toBe(10);
+    expect(body.totalWorkoutMinutes).toBe(40);
     expect(body.challengesCompleted).toBe(1);
     expect(body.today.xp).toBe(155);
   });
