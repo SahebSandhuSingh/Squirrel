@@ -10,7 +10,7 @@
  */
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AppState as RNAppState } from 'react-native';
-import { enqueueActivity, flushActivities, progressApi, progressLive } from '@/api/progress';
+import { enqueueActivity, flushActivities, progressApi, progressReadsLive } from '@/api/progress';
 import { useAuth } from '@/auth/AuthProvider';
 import { exerciseXp, runXp, type XpLine } from '@/logic/xp';
 import type { Verdict } from '@/logic/track';
@@ -100,10 +100,11 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2600);
   }, []);
 
-  // ---- progress-service: the XP authority when configured and signed in.
-  // Queued activity is flushed (idempotently) on sign-in, on foreground and after each workout,
-  // then XP / today's XP are re-read from the server so nothing here is client-decided.
-  const live = progressLive(mode);
+  // ---- XP from the Run Module (GET /v1/xp), the XP authority, whenever it's configured and we're signed in.
+  // Queued activity is flushed (idempotently) on sign-in, on foreground and after each workout —
+  // a no-op until activity intake is served — then XP / today's XP are re-read from the server so
+  // nothing here is client-decided.
+  const live = progressReadsLive(mode);
   const syncProgress = useCallback(async () => {
     try {
       await flushActivities();

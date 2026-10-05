@@ -12,15 +12,11 @@ import { ActiveNowStrip, CampusNotLive, CampusTerritoryCard, HomeEvents, HomeLea
 import { ErrorState, LoadingRows, NotConnected } from '@/components/campus/States';
 import { TopBar } from '@/components/TopBar';
 import { Card, Display, FadeIn, Icon, OverlayKicker, OverlaySub, PressScale, Ring, RowSub, RowTitle, Screen, SectionHeader, Tagline } from '@/components/ui';
-import { useAuth } from '@/auth/AuthProvider';
 import { Tape } from '@/components/Brand';
-import { PROGRESS_API_CONFIGURED } from '@/api/config';
-import { xpApi } from '@/api/endpoints';
 import { useConfig, useMe } from '@/hooks/useCampus';
 import { useDailyProgress } from '@/hooks/useDailyProgress';
 import { goalTargets } from '@/logic/progressStats';
 import { useApp } from '@/state/AppState';
-import { useEffect } from 'react';
 import { alpha, colors, fonts, radius } from '@/theme';
 
 /**
@@ -35,21 +31,13 @@ const greeting = () => {
 };
 
 export default function Home() {
-  const { me, syncServerXp, exerciseToday } = useApp();
+  const { me, exerciseToday } = useApp();
   const profile = useMe();
-  const { mode } = useAuth();
   const config = useConfig();
   const campus = config.data?.campus.name ?? null;
   const daily = useDailyProgress();
   const locks = useLocks();
   const eventsLocked = locks.locked('events');
-  // Signed in without the progress-service: the Run Module's XP total (AppState syncs XP from the
-  // progress-service itself when that's configured — it's the XP authority).
-  useEffect(() => {
-    if (mode !== 'live' || PROGRESS_API_CONFIGURED) return;
-    xpApi.me().then((r) => syncServerXp(r.xp)).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
   const d = daily.data;
   const goals = d?.goals ?? [];
   const targets = goalTargets(goals);

@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { progressApi, progressLive, type LifetimeProgress, type ProgressHistory, type WeeklyProgress, type XpBoard } from '@/api/progress';
+import { PROGRESS_READS_CONFIGURED, progressApi, progressReadsLive, type LifetimeProgress, type ProgressHistory, type WeeklyProgress, type XpBoard } from '@/api/progress';
 import { useRemote } from '@/api/useRemote';
 import { useAuth } from '@/auth/AuthProvider';
-import { PROGRESS_API_CONFIGURED } from '@/api/config';
 import { AnimatedNumber, Button, Card, Display, EmptyState, FadeIn, Header, Icon, Kicker, PressScale, ProgressBar, Ring, Screen, Segmented, tap } from '@/components/ui';
 import { liveHeatmap, liveStats, type Period, type Stat } from '@/logic/progressStats';
 import { alpha, colors, fonts, radius } from '@/theme';
@@ -22,7 +21,7 @@ const loadLive = async (): Promise<LiveData> => {
     progressApi.lifetime(),
     progressApi.weekly(),
     progressApi.history(366),
-    progressApi.leaderboard('campus', 'weekly', 1).catch(() => null), // 409 until a campus is set
+    progressApi.leaderboard('campus', 'weekly', 1).catch(() => null), // not served yet; 409 until a campus is set
   ]);
   return { lifetime, weekly, history, campus };
 };
@@ -39,7 +38,7 @@ const HEAT = [alpha(colors.text, 0.06), alpha(colors.primary, 0.25), alpha(color
 
 export default function Progress() {
   const { mode } = useAuth();
-  const live = progressLive(mode);
+  const live = progressReadsLive(mode);
   const remote = useRemote(live ? 'progress:screen' : null, loadLive);
   const L = live ? remote.data : undefined;
   const [period, setPeriod] = useState<Period>('Week');
@@ -73,10 +72,10 @@ export default function Progress() {
       <Screen tabBar={false}>
         {header}
         <EmptyState
-          title={PROGRESS_API_CONFIGURED ? 'Sign in to see your progress' : 'Progress isn’t connected'}
-          body={PROGRESS_API_CONFIGURED ? 'Your goals, streak, XP and history come from your account.' : 'Your progress comes from the progress service, which isn’t connected to this build yet (EXPO_PUBLIC_PROGRESS_API_URL).'}
-          action={PROGRESS_API_CONFIGURED ? 'Sign in' : undefined}
-          onAction={PROGRESS_API_CONFIGURED ? () => router.push('/sign-in') : undefined}
+          title={PROGRESS_READS_CONFIGURED ? 'Sign in to see your progress' : 'Progress isn’t connected'}
+          body={PROGRESS_READS_CONFIGURED ? 'Your goals, streak, XP and history come from your account.' : 'Your progress comes from the Run Module, which isn’t connected to this build yet (EXPO_PUBLIC_API_URL).'}
+          action={PROGRESS_READS_CONFIGURED ? 'Sign in' : undefined}
+          onAction={PROGRESS_READS_CONFIGURED ? () => router.push('/sign-in') : undefined}
         />
       </Screen>
     );

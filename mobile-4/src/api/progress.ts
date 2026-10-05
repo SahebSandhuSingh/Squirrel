@@ -1,5 +1,13 @@
 /**
- * progress-service — REST contract (source of truth: ../progress-service, routes under /v1).
+ * Progress, XP, challenges, leaderboards and activity intake — the app's contract (routes under /v1).
+ *
+ * ADR-032 cancelled the separate progress-service. Its endpoints are moving to their owners one by
+ * one; each call goes to the service that serves it now:
+ *   Run Module (EXPO_PUBLIC_API_URL):  GET /v1/progress, /daily, /weekly, /history, GET /v1/xp
+ *   not served yet (EXPO_PUBLIC_PROGRESS_API_URL, never set, so these stay "not connected"):
+ *     challenges + join/leave, leaderboards, POST /v1/activities
+ * Move a method to `runBase` (and its screen to `progressReadsLive`) as its endpoint goes live.
+ *
  *
  * The server owns XP, levels, streaks, challenge progress/completion and leaderboards. The app
  * only *reports* activity (bounded STEP_COUNT / WORKOUT_COMPLETED events with an idempotency
@@ -22,7 +30,7 @@
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { api, ApiError, hasApiToken } from '@/api/client';
-import { PROGRESS_API_CONFIGURED, PROGRESS_API_URL } from '@/api/config';
+import { API_CONFIGURED, API_URL, PROGRESS_API_CONFIGURED, PROGRESS_API_URL } from '@/api/config';
 
 // ---------------------------------------------------------------------------
 // Types (exact response shapes)
@@ -142,6 +150,9 @@ export type ActivitiesResponse = { results: ActivityResult[]; progress: DailyPro
 // Endpoints
 // ---------------------------------------------------------------------------
 
+/** The Run Module, which serves the progress reads and the XP summary. */
+const runBase = API_URL;
+/** Not served by anyone yet: challenges, leaderboards, activity intake. */
 const base = PROGRESS_API_URL;
 const q = (params: Record<string, string | number | undefined>) => {
   const s = Object.entries(params)
@@ -152,11 +163,11 @@ const q = (params: Record<string, string | number | undefined>) => {
 };
 
 export const progressApi = {
-  lifetime: () => api<LifetimeProgress>('/v1/progress', { base }),
-  daily: (date?: string) => api<DailyProgress>(`/v1/progress/daily${q({ date })}`, { base }),
-  weekly: (weekStart?: string) => api<WeeklyProgress>(`/v1/progress/weekly${q({ weekStart })}`, { base }),
-  history: (days: number) => api<ProgressHistory>(`/v1/progress/history${q({ days })}`, { base }),
-  xp: () => api<XpSummary>('/v1/xp', { base }),
+  lifetime: () => api<LifetimeProgress>('/v1/progress', { base: runBase }),
+  daily: (date?: string) => api<DailyProgress>(`/v1/progress/daily${q({ date })}`, { base: runBase }),
+  weekly: (weekStart?: string) => api<WeeklyProgress>(`/v1/progress/weekly${q({ weekStart })}`, { base: runBase }),
+  history: (days: number) => api<ProgressHistory>(`/v1/progress/history${q({ days })}`, { base: runBase }),
+  xp: () => api<XpSummary>('/v1/xp', { base: runBase }),
   challenges: (status: 'current' | 'ended' | 'mine' = 'current') => api<{ challenges: ServerChallenge[] }>(`/v1/challenges${q({ status })}`, { base }),
   join: (id: string) => api<ServerChallenge>(`/v1/challenges/${encodeURIComponent(id)}/join`, { base, method: 'POST' }),
   leave: (id: string) => api<ServerChallenge>(`/v1/challenges/${encodeURIComponent(id)}/leave`, { base, method: 'POST' }),
@@ -165,7 +176,11 @@ export const progressApi = {
   postActivities: (events: ActivityEventInput[]) => api<ActivitiesResponse>('/v1/activities', { base, body: { events } }),
 };
 
-/** Live = the service is configured and we're signed in (the service authenticates the same bearer token). */
+/** The progress reads and XP (Run Module) are reachable in this build. */
+export const PROGRESS_READS_CONFIGURED = API_CONFIGURED;
+/** Progress reads and XP can be fetched: the Run Module is configured and we're signed in. */
+export const progressReadsLive = (mode: string) => PROGRESS_READS_CONFIGURED && mode === 'live';
+/** Challenges, leaderboards and activity intake can be used: not served yet, so false in every real build. */
 export const progressLive = (mode: string) => PROGRESS_API_CONFIGURED && mode === 'live';
 
 /** The `code` from a progress-service error body (`{ code, detail }`). */
