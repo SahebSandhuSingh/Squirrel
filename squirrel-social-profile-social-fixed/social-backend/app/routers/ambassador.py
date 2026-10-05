@@ -66,7 +66,7 @@ def get_ambassador_application(db: DB, viewer: CurrentViewer, settings: AppSetti
     if not member or not member.email_verified:
         return AmbassadorState(
             open=False, 
-            closed_reason="Verify your college email to apply.", 
+            closed_reason="Verify your email to apply.", 
             application=_serialize_app(app), 
             fields=[]
         )
@@ -133,7 +133,7 @@ def create_ambassador_application(body: CreateAmbassadorApplication, db: DB, vie
 
     member = db.get(Member, viewer.id)
     if not member or not member.email_verified:
-        raise forbidden("Verify your college email to apply.")
+        raise forbidden("Verify your email to apply.")
 
     last_app = db.scalar(select(AmbassadorApplication).where(AmbassadorApplication.user_id == viewer.id).order_by(AmbassadorApplication.submitted_at.desc()).limit(1))
     if last_app and last_app.status == "rejected" and last_app.decided_at:

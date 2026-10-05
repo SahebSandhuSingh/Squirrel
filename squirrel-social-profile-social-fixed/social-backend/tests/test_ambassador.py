@@ -21,7 +21,7 @@ def test_unverified_member(client, settings):
     assert r.status_code == 200
     data = r.json()
     assert data["open"] is False
-    assert "Verify your college email" in data["closed_reason"]
+    assert "Verify your email to apply" in data["closed_reason"]
 
 def test_ambassador_open_off(client, settings):
     # with SOCIAL_AMBASSADOR_OPEN off: open:false
@@ -217,7 +217,7 @@ def test_post_gate_unverified(client, settings, database):
     sub = new_sub()
     r = client.post("/v1/ambassador/application", json={"answers": {"why": "x", "ideas": "y", "role": "Student"}, "idempotency_key": "x"}, headers={"Authorization": f"Bearer {make_token(sub, ev=False)}"})
     assert r.status_code == 403
-    assert "Verify your college email" in r.json()["detail"]
+    assert "Verify your email to apply" in r.json()["detail"]
     
     # Assert row count
     from sqlalchemy import select, func
