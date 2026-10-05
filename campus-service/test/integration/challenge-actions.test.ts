@@ -70,12 +70,12 @@ async function makeCrewChallenge(creator: string) {
 
 async function listFor(userId: string, box: 'incoming' | 'outgoing' | 'all' = 'all') {
   const response = await api('GET', `${base}?box=${box}`, userId);
-  return response.body.challenges as Array<{ id: string; actions: string[]; actions_status: string; status: string; message?: string | null }>;
+  return response.body.challenges as Array<{ id: string; actions: string[]; actions_status: string; status: string; direction?: string; message?: string | null }>;
 }
 
 async function listBodyFor(userId: string, box: 'incoming' | 'outgoing' | 'all' = 'all') {
   return (await api('GET', `${base}?box=${box}`, userId)).body as {
-    challenges: Array<{ id: string; actions: string[]; actions_status: string; status: string; message?: string | null }>;
+    challenges: Array<{ id: string; actions: string[]; actions_status: string; status: string; direction?: string; message?: string | null }>;
     crew_battles_unavailable: boolean;
   };
 }
@@ -226,6 +226,19 @@ describe.skipIf(!HAS_DB)('challenge allowed actions (integration)', () => {
     expect(body.crew_battles_unavailable).toBe(true);
   });
 
+  it('a creator outside the target crew sees their outgoing crew challenge with Social up and during an outage', async () => {
+    const creator = `actions-outgoing-crew-creator-${randomUUID()}`;
+    const created = await makeCrewChallenge(creator);
+    const challengeId = created.body.id as string;
+    const online = (await listBodyFor(creator, 'outgoing')).challenges.find((row) => row.id === challengeId);
+    expect(online?.direction).toBe('outgoing');
+
+    membershipUnavailable = true;
+    lookupUnavailable = true;
+    const outage = (await listBodyFor(creator, 'outgoing')).challenges.find((row) => row.id === challengeId);
+    expect(outage).toMatchObject({ direction: 'outgoing', actions: [], actions_status: 'crew_role_unavailable' });
+  });
+
   it('one-to-one challenges stay in the list ahead of more than 100 crew battles', async () => {
     const caller = `actions-priority-caller-${randomUUID()}`;
     const creator = `actions-priority-creator-${randomUUID()}`;
@@ -242,6 +255,27 @@ describe.skipIf(!HAS_DB)('challenge allowed actions (integration)', () => {
     const body = await listBodyFor(callerId, 'incoming');
     expect(body.challenges).toHaveLength(100);
     expect(body.challenges.some((row) => row.id === directId)).toBe(true);
+  });
+
+  it('a live crew battle stays in the 100-row list ahead of 100 old finished direct challenges', async () => {
+    await sql('DELETE FROM challenges');
+    const member = `actions-live-crew-member-${randomUUID()}`;
+    const creator = `actions-live-crew-creator-${randomUUID()}`;
+    CREW_ROLES.set(member, 'member');
+    await api('GET', '/v1/me', member);
+    await api('GET', '/v1/me', creator);
+    const liveCrewId = await insertCrewBattle(creator, CREW.id, 'current crew battle');
+    await sql(
+      `INSERT INTO challenges (type, created_by, target_type, target_user_id, status, starts_at, message, created_at)
+       SELECT 'group_activity', $1, 'user', $2, 'completed', now() - interval '10 days', 'old finished direct', now() - g * interval '1 day'
+       FROM generate_series(1, 100) AS g`,
+      [creator, member],
+    );
+
+    const body = await listBodyFor(member, 'incoming');
+    expect(body.challenges).toHaveLength(100);
+    expect(body.challenges[0]?.id).toBe(liveCrewId);
+    expect(body.challenges.some((row) => row.status === 'completed')).toBe(true);
   });
 
   it('all advertised actions can be executed, and actions omitted by role, state, or timing are refused', async () => {

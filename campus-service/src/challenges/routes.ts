@@ -145,10 +145,17 @@ export async function challengeRoutes(app: FastifyInstance) {
       const membershipResult = await lookupCrewMembershipsWithStatus([user.id]);
       const myCrews = (membershipResult.memberships.get(user.id) || []).map(c => c.id);
       const rows = await many<ChallengeRow>(
-        `${SELECT} WHERE (
-            ($2 IN ('outgoing','all') AND ch.created_by = $1 AND (ch.target_type <> 'crew' OR ch.target_crew_id = ANY($3::uuid[]))) OR
-            ($2 IN ('incoming','all') AND (ch.target_user_id = $1 OR ch.target_crew_id = ANY($3::uuid[])))
-         ) ORDER BY CASE WHEN ch.target_type = 'user' THEN 0 ELSE 1 END, ch.created_at DESC LIMIT 100`, [user.id, box, myCrews]);
+        `SELECT * FROM (
+           ${SELECT} WHERE (
+             ($2 IN ('outgoing','all') AND ch.created_by = $1) OR
+             ($2 IN ('incoming','all') AND (ch.target_user_id = $1 OR ch.target_crew_id = ANY($3::uuid[])))
+           )
+           ORDER BY (ch.status IN ('pending','accepted','active')) DESC,
+                    CASE WHEN ch.target_type = 'user' THEN 0 ELSE 1 END,
+                    ch.created_at DESC
+           LIMIT 100
+         ) prioritized
+         ORDER BY created_at DESC`, [user.id, box, myCrews]);
       const challenges = await serialize(rows, user.id);
       const callerCrewStatus = membershipResult.statuses.get(user.id) ?? 'unknown';
       return {
