@@ -53,20 +53,38 @@ test('GOALS-2: mine list reports zero progress when the user has no activity', a
   expect(listed?.myProgress).not.toBeNull();
 });
 
-test('GOALS-2: mine list preserves every challenge field and GOALS-3 only adds its documented fields', async () => {
+test('GOALS-2/4: mine list preserves challenge values with camelCase fields and GOALS-3 additions', async () => {
   const userId = LIST_USERS[2];
   const starts = new Date(Date.now() - 3600000);
   const ends = new Date(Date.now() + 3600000);
   const challenge = await createChallenge(userId, 'daily', 'shape check', 'runs_completed', 'gte', 1, starts, ends, 100);
   const raw = await pool.query('SELECT * FROM challenges WHERE id = $1', [challenge.id]);
   const listed = (await listMyChallenges(userId)).find((item) => item.id === challenge.id)!;
-  const originalKeys = Object.keys(raw.rows[0]).sort();
-
-  expect(Object.keys(listed).sort()).toEqual([
-    ...originalKeys,
+  const fieldMap = {
+    id: 'id',
+    type: 'type',
+    title: 'title',
+    metric: 'metric',
+    comparator: 'comparator',
+    threshold: 'threshold',
+    startsAt: 'starts_at',
+    endsAt: 'ends_at',
+    xpReward: 'xp_reward',
+    state: 'state',
+    createdBy: 'created_by',
+    createdAt: 'created_at',
+    resolvedAt: 'resolved_at',
+  } as const;
+  const expectedKeys = [
+    ...Object.keys(fieldMap),
     'participantStatus', 'isWinner', 'xpAwarded', 'myProgress', 'groupProgress', 'groupMemberCount'
-  ].sort());
-  for (const key of originalKeys) expect(listed[key as keyof typeof listed]).toEqual(raw.rows[0][key]);
+  ].sort();
+
+  expect(Object.keys(listed).sort()).toEqual(expectedKeys);
+  expect(Object.keys(listed).every((key) => !key.includes('_'))).toBe(true);
+  for (const [responseField, databaseField] of Object.entries(fieldMap)) {
+    expect(listed[responseField as keyof typeof listed]).toEqual(raw.rows[0][databaseField]);
+  }
   expect(listed.groupProgress).toBeNull();
   expect(listed.groupMemberCount).toBeNull();
 });

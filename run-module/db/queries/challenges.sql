@@ -84,7 +84,19 @@ group_totals AS (
   FROM participant_progress
   GROUP BY challenge_id
 )
-SELECT c.*,
+SELECT c.id,
+       c.type,
+       c.title,
+       c.metric,
+       c.comparator,
+       c.threshold,
+       c.starts_at AS "startsAt",
+       c.ends_at AS "endsAt",
+       c.xp_reward AS "xpReward",
+       c.state,
+       c.created_by AS "createdBy",
+       c.created_at AS "createdAt",
+       c.resolved_at AS "resolvedAt",
        mc.participant_status AS "participantStatus",
        mc.is_winner AS "isWinner",
        mc.xp_awarded AS "xpAwarded",
