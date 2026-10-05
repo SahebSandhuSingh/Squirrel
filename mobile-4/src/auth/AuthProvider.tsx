@@ -10,7 +10,7 @@ import { exerciseApi, type ExerciseUser } from '@/api/exercise';
 import { invalidateRemote } from '@/api/useRemote';
 import { profileApi } from '@/api/social';
 import { accountApi, type TokenPair } from '@/auth/account';
-import { jwtSubject } from '@/auth/jwt';
+import { jwtEmailVerified, jwtSubject } from '@/auth/jwt';
 import { unregisterPush, usePushNotifications } from '@/notifications/push';
 import { resetTerritories } from '@/state/territoryStore';
 import { looksLikeEmail, normalizeIndianMobile, splitFullName } from '@/logic/accessSignup';
@@ -45,11 +45,17 @@ type AuthState = {
   email: string | null;
   /** Signed-in user's id (JWT `sub`, a UUID), when live. */
   userId: string | null;
+  /**
+   * The account has proved its email (the token's `ev` claim). Access-code accounts start without
+   * it and get it the first time they sign in with an emailed code. False when signed out.
+   */
+  emailVerified: boolean;
   apiConfigured: boolean;
   authConfigured: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   /**
-   * Email-code sign-in for .ac.in addresses: request sends a code, verify exchanges it for tokens.
+   * Email-code sign-in: request sends a code, verify exchanges it for tokens (and marks the email
+   * verified, so a signed-in access-code account can verify in place).
    * `newAccount`: the address has no account yet, so verify needs a name. There is no simulated code.
    */
   requestEmailCode: (email: string) => Promise<{ newAccount?: boolean }>;
@@ -98,6 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [mode, setMode] = useState<Mode>('loading');
   const [email, setEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [emailVerified, setEmailVerified] = useState(false);
   const [name, setName] = useState<Name | null>(null);
   const [lastEmail, setLastEmail] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -118,6 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     forgetCachedData(null);
     setApiToken(null);
     setUserId(null);
+    setEmailVerified(false);
     setEmail(null);
     setName(null);
   }, [forgetCachedData]);
@@ -128,6 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       forgetCachedData(sub);
       setApiToken(access);
       setUserId(sub);
+      setEmailVerified(jwtEmailVerified(access));
     },
     [forgetCachedData],
   );
@@ -299,6 +308,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         mode,
         email,
         userId,
+        emailVerified,
         apiConfigured: BEARER_BACKEND,
         authConfigured: AUTH_CONFIGURED,
         signIn,
