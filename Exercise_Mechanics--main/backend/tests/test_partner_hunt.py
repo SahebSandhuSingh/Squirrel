@@ -19,7 +19,7 @@ from datetime import date
 import pytest
 from fastapi import FastAPI
 
-from backend import config, social_blocks
+from backend import card_ids, config, social_blocks
 from backend.auth import tokens
 from backend.partners import store
 from backend.partners.matching import (
@@ -397,6 +397,10 @@ def _request(app: FastAPI, method: str, path: str, payload: dict | None = None) 
     return start["status"], json.loads(raw)
 
 
+def _card(viewer: str, other: str) -> str:
+    return card_ids.card_id(card_ids.PARTNER_HUNT, viewer, other)
+
+
 def _user(first: str, *, gender="female", dob="1994-05-10", level="intermediate") -> str:
     user_id = create_user_record({
         "first_name": first.capitalize(), "last_name": "Tester", "gender": gender, "height_cm": 170.0,
@@ -492,18 +496,21 @@ def test_two_unlocked_compatible_users_see_each_other_and_nothing_private():
     status, body = _request(app, "GET", f"/api/users/{ana}/partner-hunt/matches")
     assert status == 200 and body["min_xp"] == 100
     [card] = body["matches"]
-    assert card["user_id"] == ben and card["display_name"] == "Ben T." and card["score"] == 100
-    # The card carries only what a stranger needs to decide. None of the profile's personal fields.
+    assert card["card_id"] == _card(ana, ben) and card["display_name"] == "Ben T." and card["score"] == 100
+    # The card carries only what a stranger needs to decide. None of the profile's personal fields,
+    # and not the account id: it spells the full name ("ben-tester-…") and is the login subject.
     assert set(card) == {
-        "user_id", "display_name", "age_band", "fitness_level", "shared_activities",
+        "card_id", "display_name", "age_band", "fitness_level", "shared_activities",
         "shared_times", "meet", "city", "score", "reasons",
     }
-    serialized = json.dumps(card)
-    for private in ("9990001111", "@example.test", "1994-05-10", "Tester", "170", "65"):
+    serialized = json.dumps(body)
+    for private in ("9990001111", "@example.test", "1994-05-10", "Tester", "tester", "170", "65", ben, ana):
         assert private not in serialized
 
     status, body = _request(app, "GET", f"/api/users/{ben}/partner-hunt/matches")
-    assert [card["user_id"] for card in body["matches"]] == [ana]
+    assert [card["card_id"] for card in body["matches"]] == [_card(ben, ana)]
+    # Opaque and per viewer: nobody else's id for Ana matches Ben's.
+    assert _card(ben, ana) != _card(_user("cat"), ana)
 
 
 def test_a_candidate_below_100_xp_does_not_appear():
@@ -594,8 +601,8 @@ def test_blocking_hides_both_people_from_each_other_immediately(social):
     assert _request(app, "GET", f"/api/users/{ben}/partner-hunt/matches")[1]["matches"]
 
     # Both answers were cached a moment ago; the block still applies to both boards at once.
-    status, body = _request(app, "POST", f"/api/users/{ben}/partner-hunt/blocks", {"user_id": ana})
-    assert status == 200 and body == {"blocked_user_id": ana}
+    status, body = _request(app, "POST", f"/api/users/{ben}/partner-hunt/blocks", {"card_id": _card(ben, ana)})
+    assert status == 200 and body == {"blocked_card_id": _card(ben, ana)}
     assert _request(app, "GET", f"/api/users/{ana}/partner-hunt/matches")[1]["matches"] == []
     assert _request(app, "GET", f"/api/users/{ben}/partner-hunt/matches")[1]["matches"] == []
 
@@ -604,7 +611,7 @@ def test_blocking_hides_both_people_from_each_other_immediately(social):
     assert social.pairs == {(ben, ana)}
 
     # Blocking twice is harmless, and saving preferences afterwards does not lift the block.
-    assert _request(app, "POST", f"/api/users/{ben}/partner-hunt/blocks", {"user_id": ana})[0] == 200
+    assert _request(app, "POST", f"/api/users/{ben}/partner-hunt/blocks", {"card_id": _card(ben, ana)})[0] == 200
     _request(app, "PUT", f"/api/users/{ben}/partner-hunt/preferences", prefs(mode="remote"))
     assert social.pairs == {(ben, ana)}
     assert not (config.user_dir(ben) / "partner_blocks.json").exists()  # nothing kept here
@@ -619,18 +626,21 @@ def test_a_block_made_in_the_app_hides_the_pair_both_ways(social, who_blocked):
     # Made with the app's Block button (Social), never through Partner Hunt.
     social.block(*((ana, ben) if who_blocked == "viewer" else (ben, ana)))
 
-    assert [m["user_id"] for m in _request(app, "GET", f"/api/users/{ana}/partner-hunt/matches")[1]["matches"]] == [cat]
-    assert [m["user_id"] for m in _request(app, "GET", f"/api/users/{ben}/partner-hunt/matches")[1]["matches"]] == [cat]
+    assert [m["card_id"] for m in _request(app, "GET", f"/api/users/{ana}/partner-hunt/matches")[1]["matches"]] == [_card(ana, cat)]
+    assert [m["card_id"] for m in _request(app, "GET", f"/api/users/{ben}/partner-hunt/matches")[1]["matches"]] == [_card(ben, cat)]
     # One lookup per board, for the viewer only: their either-way set covers every candidate.
     assert social.lookups() == [ana, ben]
 
 
-def test_block_rejects_self_unknown_and_malformed_ids():
-    ana = _user("ana")
+def test_block_needs_a_card_this_viewer_was_shown():
+    ana, ben, cat = _user("ana"), _user("ben", gender="male"), _user("cat")
     app = _app(RecordingGate())
-    assert _request(app, "POST", f"/api/users/{ana}/partner-hunt/blocks", {"user_id": ana})[0] == 400
-    assert _request(app, "POST", f"/api/users/{ana}/partner-hunt/blocks", {"user_id": "nobody-000000"})[0] == 404
-    assert _request(app, "POST", f"/api/users/{ana}/partner-hunt/blocks", {"user_id": "../etc"})[0] == 400
+    url = f"/api/users/{ana}/partner-hunt/blocks"
+    for card in (_card(ana, ana),          # yourself: there is no such card
+                 _card(cat, ben),          # Ben's card as Cat sees it: not Ana's to use
+                 "A" * 22, "../etc", ben): # made up, malformed, or an account id
+        assert _request(app, "POST", url, {"card_id": card})[0] == 404
+    assert _request(app, "POST", url, {"user_id": ben})[0] == 422   # the old body is refused outright
 
 
 @pytest.mark.parametrize("failure", ["down", "timeout", 404, 401, 500, "garbage"])
@@ -645,7 +655,7 @@ def test_when_social_cannot_be_asked_the_board_is_withheld(social, failure):
     status, body = _request(app, "GET", f"/api/users/{ana}/partner-hunt/matches")
     assert status == 503 and body["detail"]["code"] == "blocks_unreachable"
     # A block is refused, with nothing written anywhere.
-    status, body = _request(app, "POST", f"/api/users/{ana}/partner-hunt/blocks", {"user_id": ben})
+    status, body = _request(app, "POST", f"/api/users/{ana}/partner-hunt/blocks", {"card_id": _card(ana, ben)})
     assert status == 503 and body["detail"]["code"] == "blocks_unreachable"
     assert social.pairs == set()
     # Status needs no blocks, so it still answers.
@@ -682,7 +692,7 @@ def test_without_social_configured_partner_hunt_stays_closed(social, monkeypatch
         _request(app, "PUT", f"/api/users/{uid}/partner-hunt/preferences", prefs())
     status, body = _request(app, "GET", f"/api/users/{ana}/partner-hunt/matches")
     assert status == 503 and body["detail"]["code"] == "blocks_unreachable"
-    assert _request(app, "POST", f"/api/users/{ana}/partner-hunt/blocks", {"user_id": ben})[0] == 503
+    assert _request(app, "POST", f"/api/users/{ana}/partner-hunt/blocks", {"card_id": _card(ana, ben)})[0] == 503
     assert social.requests == [] and "SOCIAL_API_URL and SOCIAL_INTERNAL_TOKEN" in caplog.text
 
 

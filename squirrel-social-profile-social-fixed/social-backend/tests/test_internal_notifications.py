@@ -131,11 +131,11 @@ def test_a_partner_accept_names_the_accepter_unless_blocked(client, api):
     them_id = api.user(them, display_name="Ben Kumar")["id"]
     body = {"user_subject": me, "kind": "partner.accepted", "actor_subject": them,
             "title": "{actor} accepted your Partner Hunt request", "body": "You can see each other's profiles now.",
-            "data": {"route": "/partner-hunt/buddy/r1", "request_id": "r1"}, "dedupe_key": "partner.accepted:r1"}
+            "data": {"route": "/partner-hunt/connect/r1", "request_id": "r1"}, "dedupe_key": "partner.accepted:r1"}
     assert client.post(URL, json=body, headers=SVC).json()["created"] is True
     [n] = notes(client, me)
     assert n["title"] == "Ben Kumar accepted your Partner Hunt request" and n["actor"]["display_name"] == "Ben Kumar"
-    assert n["data"]["route"] == "/partner-hunt/buddy/r1"
+    assert n["data"]["route"] == "/partner-hunt/connect/r1"
     client.post(f"/v1/users/{them_id}/block", headers=auth(me))
     assert client.post(URL, json={**body, "dedupe_key": "partner.accepted:r2"}, headers=SVC).json()["created"] is True
     blocked = notes(client, me)[0]

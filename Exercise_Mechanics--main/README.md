@@ -367,6 +367,15 @@ Each report records who reported, whom or what, the category, a description, whe
 
 ## Partner Hunt: options and Connect
 
+**Cards carry a `card_id`, never an account id.** The Exercise account id spells the member's full
+name (`priya-sharma-3f2a1c`) and is their login `sub`, so a card that says "Priya S." can't carry it.
+Every anonymous card (Partner Hunt's board, requests and connections, and activity matching) names
+its member by `card_id`: an HMAC of the viewer, the member and the feature under a key derived from
+the signing secret (`backend/card_ids.py`). It is opaque, different for every viewer and feature,
+and stable for one viewer across refreshes. Connect (`{ card_id }`) and both Block routes
+(`{ card_id }` → `{ blocked_card_id }`) take it, and the server resolves it only among the people
+that viewer could have been shown; an account id sent instead is simply unknown (404).
+
 `GET /api/users/{id}/partner-hunt` carries `options`: every vocabulary the preferences form needs
 (activities, times, modes, genders, each `{ key, label }`), the partner age range and the minimum
 XP, all from `backend/partners/policy.py`, so the app keeps no copy of them.
@@ -374,7 +383,7 @@ XP, all from `backend/partners/policy.py`, so the app keeps no copy of them.
 **Connect** (`backend/partners/connect.py`) lets you ask someone on your board to train together.
 
 - **Anonymous until both say yes.** A request shows the board's card: first name and last initial,
-  age band, level, and what you share. No photo, no full name, no profile link. Once it's
+  age band, level, and what you share. No photo, no full name, no profile link, and no account id. Once it's
   accepted, each side gets the other's Social profile id (`social_profile_id`), and nothing more.
 - **Sending** needs every board check, and the person must be on your board right now; otherwise
   `404 not_on_board`, which is also what a block gives.
@@ -388,10 +397,12 @@ XP, all from `backend/partners/policy.py`, so the app keeps no copy of them.
   too_soon` with `retry_after`); 10 new requests a day (`429 daily_limit`); 20 waiting
   (`429 too_many_pending`).
 - **Notifications** through Social: `partner.request` to the recipient, naming nobody to Social
-  (the card name is in the title), and `partner.accepted` to the sender, naming the accepter.
+  (the card name is in the title; opens `/partner-hunt`), and `partner.accepted` to the sender,
+  naming the accepter (opens `/partner-hunt/connect/{request_id}`, the screen that loads the
+  requests and finds that connection).
 
 Routes, under `/api/users/{id}/partner-hunt/requests`: `GET` (`{ incoming, outgoing, connections }`),
-`POST` (`{ to_user_id }`), `POST /{request_id}/accept`, `POST /{request_id}/decline` (204),
+`POST` (`{ card_id }`), `POST /{request_id}/accept`, `POST /{request_id}/decline` (204),
 `DELETE /{request_id}` (204, the sender takes it back).
 
 **Not built yet: disconnecting.** Once connected, the only way apart today is a block, which is a
@@ -411,14 +422,15 @@ city and no meeting preferences. The frontend doesn't show it yet.
   20% (same, one apart, two apart); workout times 20%, used only when both share their habits.
   Scores are symmetric, and each match comes with plain-language reasons.
 - **A match card shows only** first name and last initial, age band, fitness level, the shared
-  activities, the score and the reasons. Never gender, body data, contact details, location or
-  interest scores.
+  activities, the score and the reasons, named by an opaque per-viewer `card_id` (see Partner Hunt
+  above). Never the account id, gender, body data, contact details, location or interest scores.
 - **Blocking** is Social's, the same block as the app's Block button and Partner Hunt's, and works
   both ways. Anyone whose consent can't be read is left out, never shown; if Social can't be asked,
   no matches are shown at all (`503 blocks_unreachable`).
 
 Routes: `GET /api/users/{id}/activity-matching` (status, and exactly what matches see),
-`GET /api/users/{id}/activity-matches`, `POST /api/users/{id}/activity-matches/blocks`.
+`GET /api/users/{id}/activity-matches`, `POST /api/users/{id}/activity-matches/blocks`
+(`{ card_id }` → `{ blocked_card_id }`).
 
 ## Workout with Partner (shared workouts)
 

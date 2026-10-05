@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from backend import config, social_blocks
+from backend import card_ids, config, social_blocks
 from backend.auth.tokens import issue_access_token
 from backend.main import app
 from backend.partners import connect
@@ -23,7 +23,7 @@ from backend.tests.asgi_client import call
 from backend.users.store import create_user_record, write_profile, read_profile, write_skill
 
 T0 = datetime(2026, 10, 5, 9, 0, tzinfo=timezone.utc)
-CARD_KEYS = {"user_id", "display_name", "age_band", "fitness_level", "shared_activities", "shared_times", "meet", "city"}
+CARD_KEYS = {"card_id", "display_name", "age_band", "fitness_level", "shared_activities", "shared_times", "meet", "city"}
 
 
 class Clock:
@@ -76,8 +76,13 @@ def api(method: str, user: str, path: str = "", body=None, *, owner: str | None 
     return call(app, method, url, json=body, headers={"Authorization": f"Bearer {issue_access_token(user)[0]}"})
 
 
+def card(viewer: str, other: str) -> str:
+    return card_ids.card_id(card_ids.PARTNER_HUNT, viewer, other)
+
+
 def send(sender: str, to: str):
-    return api("POST", sender, "", {"to_user_id": to})
+    """Ask `to` by the card_id their board card carries for `sender`."""
+    return api("POST", sender, "", {"card_id": card(sender, to)})
 
 
 def lists(user: str) -> dict:
@@ -102,11 +107,16 @@ def test_a_request_carries_only_the_anonymous_card(people, fake_social):
     assert set(req["person"]) == CARD_KEYS
     assert req["person"]["display_name"] == "Ben T." and req["person"]["age_band"] == "25–34"
     assert req["person"]["shared_activities"] == ["running", "yoga"] and req["person"]["city"] == "Pune"
+    assert req["person"]["card_id"] == card(ana, ben)          # the same id as on Ana's board
     for user, key in ((ben, "incoming"), (ana, "outgoing")):
         mine = lists(user)
         assert len(mine[key]) == 1 and mine["connections"] == []
         assert set(mine[key][0]["person"]) == CARD_KEYS
-        assert fake_social.profile_id(ana) not in json.dumps(mine) and fake_social.profile_id(ben) not in json.dumps(mine)
+        raw = json.dumps(mine).lower()
+        # Neither Social profile ids nor account ids (they spell the full name, "ana-tester-…").
+        for leak in (fake_social.profile_id(ana), fake_social.profile_id(ben), ana, ben, "tester"):
+            assert leak not in raw
+    assert lists(ben)["incoming"][0]["person"]["card_id"] == card(ben, ana)
     assert lists(ben)["incoming"][0]["person"]["display_name"] == "Ana T."
     assert lists(people["Cy"]) == {"incoming": [], "outgoing": [], "connections": []}
 
@@ -131,11 +141,14 @@ def test_only_people_on_your_board_can_be_asked(people, fake_social):
     ana = people["Ana"]
     hidden = member("Hid", visible=False)
     nothing_shared = member("Far", activities=["cycling"])
-    for target in (hidden, nothing_shared, "no-such-member"):
+    for target in (hidden, nothing_shared, "no-such-member", ana):
         r = send(ana, target)
         assert r.status == 404 and code_of(r) == "not_on_board"
-    assert code_of(send(ana, ana)) == "invalid_request"
-    assert send(ana, "BAD ID").status == 400
+    for raw in (card(people["Cy"], people["Ben"]), people["Ben"], "A" * 22, "../etc"):
+        # Someone else's card for Ben, Ben's account id, a made-up id, a malformed one: all unknown.
+        r = api("POST", ana, "", {"card_id": raw})
+        assert r.status == 404 and code_of(r) == "not_on_board"
+    assert api("POST", ana, "", {"to_user_id": people["Ben"]}).status == 422   # the old body is refused
 
 
 @pytest.mark.parametrize("direction", ["sender_blocked", "recipient_blocked"])
@@ -185,6 +198,7 @@ def test_accepting_reveals_each_social_profile_to_the_other(people, fake_social,
     assert conn["accepted_at"] == "2026-10-05T12:00:00Z"
     assert conn["person"]["social_profile_id"] == fake_social.profile_id(ana)
     assert set(conn["person"]) == CARD_KEYS | {"social_profile_id"}
+    assert conn["person"]["card_id"] == card(ben, ana)
     seen_by_ana = lists(ana)
     assert seen_by_ana["outgoing"] == [] and seen_by_ana["incoming"] == []
     assert seen_by_ana["connections"][0]["person"]["social_profile_id"] == fake_social.profile_id(ben)
@@ -193,7 +207,7 @@ def test_accepting_reveals_each_social_profile_to_the_other(people, fake_social,
     note = fake_social.notifications[-1]
     assert note["kind"] == "partner.accepted" and note["user_subject"] == ana and note["actor_subject"] == ben
     assert note["title"] == "{actor} accepted your Partner Hunt request"
-    assert note["data"] == {"route": f"/partner-hunt/buddy/{request_id}", "request_id": request_id}
+    assert note["data"] == {"route": f"/partner-hunt/connect/{request_id}", "request_id": request_id}
     again = api("POST", ben, f"/{request_id}/accept")
     assert again.status == 200 and again.json() == conn
     assert len(fake_social.notifications) == 2

@@ -26,9 +26,9 @@ import re
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from backend import social_blocks, social_notify, social_people
+from backend import card_ids, social_blocks, social_notify, social_people
 from backend.partners import requests_store, service
-from backend.partners.matching import Person, display_name, is_age_eligible, score
+from backend.partners.matching import Person, age_band, display_name, is_age_eligible, score
 from backend.partners.policy import (
     MAX_NEW_REQUESTS_PER_DAY,
     MAX_PENDING_OUTGOING,
@@ -77,12 +77,12 @@ def list_requests(user_id: str) -> dict:
     }
 
 
-def send_request(user_id: str, to_user_id: str, gate: XPGate) -> dict:
-    if to_user_id == user_id:
-        raise PartnerHuntError(400, "invalid_request", "You can't send a request to yourself.")
-    # Every board check, in the board's own order and with its own errors; then they must be on it.
-    board = service.find_matches(user_id, gate)
-    if to_user_id not in {m["user_id"] for m in board}:
+def send_request(user_id: str, card_id: str, gate: XPGate) -> dict:
+    # Every board check, in the board's own order and with its own errors; then the card must be on
+    # it (its id is only ever resolved among the people on this viewer's board right now).
+    board = service.board(user_id, gate)
+    to_user_id = card_ids.resolve(card_ids.PARTNER_HUNT, user_id, card_id, [m.user_id for m in board])
+    if to_user_id is None:
         raise _not_on_board()
     me = _eligible_person(user_id)
     them = service._load_person(to_user_id, None)
@@ -154,7 +154,7 @@ def accept(user_id: str, request_id: str) -> dict:
         user_subject=sender, kind="partner.accepted", actor_subject=user_id,
         title="{actor} accepted your Partner Hunt request",
         body="You can see each other's profiles now.",
-        data={"route": f"/partner-hunt/buddy/{request_id}", "request_id": request_id},
+        data={"route": f"/partner-hunt/connect/{request_id}", "request_id": request_id},
         dedupe_key=f"partner.accepted:{request_id}",
     )
     return _connection_item(row, me, them, profile_id)
@@ -209,15 +209,16 @@ def _people(user_ids: set[str]) -> dict[str, Person]:
 
 
 def _card(viewer: Person, other: Person) -> dict:
-    """The board's card for `other`, as `viewer` sees it, without the score."""
+    """The board's card for `other`, as `viewer` sees it, without the score: the same card_id as on
+    the board, never the account id."""
     if viewer.preferences is not None and other.preferences is not None:
-        card = score(viewer, other).to_dict()
+        card = service.public_card(viewer.user_id, score(viewer, other).to_dict())
         card.pop("score")
         card.pop("reasons")
         return card
     # Someone has since cleared their preferences: who they are, but nothing shared to show.
-    from backend.partners.matching import age_band
-    return {"user_id": other.user_id, "display_name": display_name(other.first_name, other.last_name),
+    return {"card_id": card_ids.card_id(card_ids.PARTNER_HUNT, viewer.user_id, other.user_id),
+            "display_name": display_name(other.first_name, other.last_name),
             "age_band": age_band(other.age), "fitness_level": other.fitness_level,
             "shared_activities": [], "shared_times": [], "meet": [], "city": None}
 

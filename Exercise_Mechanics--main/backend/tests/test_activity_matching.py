@@ -14,10 +14,11 @@ from datetime import date
 import pytest
 from fastapi import FastAPI
 
-from backend import config
+from backend import card_ids, config
 from backend.activity_matching import scoring
 from backend.activity_matching.features import MatchingProfile
 from backend.activity_matching.router import router as matching_router
+from backend.partners import store as partners_store
 from backend.profiles import store as profile_store
 from backend.profiles.router import router as profiles_router
 from backend.tests.storage import corrupt_profile_data
@@ -89,8 +90,17 @@ def matches(uid: str) -> list[dict]:
     return body["matches"]
 
 
+def who(viewer: str, card: dict) -> str:
+    """The member behind a card, recovered the way the server does (cards carry no account id)."""
+    return card_ids.resolve(card_ids.ACTIVITY_MATCHING, viewer, card["card_id"], partners_store.list_user_ids())
+
+
 def ids(uid: str) -> list[str]:
-    return [m["user_id"] for m in matches(uid)]
+    return [who(uid, m) for m in matches(uid)]
+
+
+def card_id(viewer: str, other: str) -> str:
+    return card_ids.card_id(card_ids.ACTIVITY_MATCHING, viewer, other)
 
 
 @pytest.fixture(autouse=True)
@@ -110,7 +120,7 @@ def test_two_runners_are_suggested_to_each_other_with_the_same_score():
     ana = member("Ana", {"running": 5})
     ben = member("Ben", {"running": 4, "yoga": 2})
     [for_ana], [for_ben] = matches(ana), matches(ben)
-    assert for_ana["user_id"] == ben and for_ben["user_id"] == ana
+    assert who(ana, for_ana) == ben and who(ben, for_ben) == ana
     assert for_ana["score"] == for_ben["score"]
     assert for_ana["shared_activities"] == [{"activity": "running", "label": "Running"}]
     assert "You both do running." in for_ana["reasons"]
@@ -167,7 +177,7 @@ def test_closer_fitness_level_ranks_first():
     same = member("Ben", {"strength_training": 4}, level="beginner")
     far = member("Cat", {"strength_training": 4}, level="advanced")
     ranked = matches(ana)
-    assert [m["user_id"] for m in ranked] == [same, far]
+    assert [who(ana, m) for m in ranked] == [same, far]
     assert "You're both beginner." in ranked[0]["reasons"]
 
 
@@ -176,7 +186,7 @@ def test_workout_times_count_only_when_both_share_them():
     early = member("Ben", {"running": 5}, times=["morning"])
     late = member("Cat", {"running": 5}, times=["night"])
     private = member("Dev", {"running": 5})
-    ranked = {m["user_id"]: m for m in matches(ana)}
+    ranked = {who(ana, m): m for m in matches(ana)}
     assert "You both like to train in the morning." in ranked[early]["reasons"]
     assert ranked[early]["score"] > ranked[private]["score"] > ranked[late]["score"]
     assert not any("train in" in r for r in ranked[private]["reasons"])
@@ -187,9 +197,9 @@ def test_sharing_several_activities_helps_and_is_listed_strongest_first():
     both = member("Ben", {"running": 3, "yoga": 5, "cycling": 4})
     one = member("Cat", {"yoga": 5})
     ranked = matches(ana)
-    assert ranked[0]["user_id"] == both
+    assert who(ana, ranked[0]) == both
     assert [a["activity"] for a in ranked[0]["shared_activities"]] == ["yoga", "cycling", "running"]
-    assert ranked[0]["score"] > next(m for m in ranked if m["user_id"] == one)["score"]
+    assert ranked[0]["score"] > next(m for m in ranked if who(ana, m) == one)["score"]
 
 
 def _profile(uid: str, interests: dict, level: str, times) -> MatchingProfile:
@@ -224,8 +234,8 @@ def test_ties_are_ordered_stably_and_the_list_is_capped():
 def test_a_block_hides_both_people_from_each_other_and_is_a_social_block(social):
     ana, ben = member("Ana", {"running": 5}), member("Ben", {"running": 5})
     assert ids(ana) == [ben] and ids(ben) == [ana]
-    status, _ = _request("POST", f"/api/users/{ana}/activity-matches/blocks", {"user_id": ben})
-    assert status == 200
+    status, body = _request("POST", f"/api/users/{ana}/activity-matches/blocks", {"card_id": card_id(ana, ben)})
+    assert status == 200 and body == {"blocked_card_id": card_id(ana, ben)}
     assert matches(ana) == [] and matches(ben) == []
     # Made in Social, so Partner Hunt and the rest of the app honour it too.
     assert social.pairs == {(ana, ben)}
@@ -239,10 +249,14 @@ def test_a_block_made_in_the_app_hides_the_pair_both_ways(social, who_blocked):
     assert social.lookups() == [ana, ben]  # the viewer's either-way set: one call per board
 
 
-def test_blocking_yourself_or_nobody_is_refused():
-    ana = member("Ana", {"running": 5})
-    assert _request("POST", f"/api/users/{ana}/activity-matches/blocks", {"user_id": ana})[0] == 400
-    assert _request("POST", f"/api/users/{ana}/activity-matches/blocks", {"user_id": "nobody-123456"})[0] == 404
+def test_blocking_needs_a_card_this_viewer_was_shown():
+    ana, ben, cat = (member(n, {"running": 5}) for n in ("Ana", "Ben", "Cat"))
+    url = f"/api/users/{ana}/activity-matches/blocks"
+    for card in (card_id(ana, ana),            # yourself: there is no such card
+                 card_id(cat, ben),            # Ben's card as Cat sees it: not Ana's to use
+                 "A" * 22, "../etc", ben):     # made up, malformed, or an account id
+        assert _request("POST", url, {"card_id": card})[0] == 404
+    assert _request("POST", url, {"user_id": ben})[0] == 422   # the old body is refused outright
 
 
 def test_unreadable_data_fails_closed(social):
@@ -261,17 +275,25 @@ def test_when_social_cannot_be_asked_no_matches_are_shown_and_nobody_is_blocked(
     social.failure = failure
     status, body = _request("GET", f"/api/users/{ana}/activity-matches")
     assert status == 503 and body["detail"]["code"] == "blocks_unreachable"
-    status, body = _request("POST", f"/api/users/{ana}/activity-matches/blocks", {"user_id": ben})
+    status, body = _request("POST", f"/api/users/{ana}/activity-matches/blocks", {"card_id": card_id(ana, ben)})
     assert status == 503 and body["detail"]["code"] == "blocks_unreachable"
     assert social.pairs == set()
 
 
 def test_a_match_card_reveals_nothing_beyond_the_matching_view():
     ana = member("Ana", {"running": 5})
-    member("Ben", {"running": 4, "yoga": 5})
-    [card] = matches(ana)
-    assert set(card) == {"user_id", "display_name", "age_band", "fitness_level", "score",
+    ben = member("Ben", {"running": 4, "yoga": 5})
+    cat = member("Cat", {"running": 3})
+    status, body = _request("GET", f"/api/users/{ana}/activity-matches")
+    card = next(m for m in body["matches"] if who(ana, m) == ben)
+    assert set(card) == {"card_id", "display_name", "age_band", "fitness_level", "score",
                          "shared_activities", "reasons"}
+    # The account id spells the full name ("ben-tester-…"): it must appear nowhere in the answer.
+    raw = json.dumps(body).lower()
+    assert ben not in raw and cat not in raw and "tester" not in raw
+    # Opaque, and different for every viewer: Cat sees Ben under another id than Ana does.
+    assert card["card_id"] == card_id(ana, ben) != card_id(cat, ben)
+    assert [m["card_id"] for m in matches(ana)] == [m["card_id"] for m in body["matches"]]   # stable
     assert card["display_name"] == "Ben T." and card["age_band"] == "25–34"
     # Only the activities they share with Ana — not Ben's yoga, and never his interest scores.
     assert card["shared_activities"] == [{"activity": "running", "label": "Running"}]

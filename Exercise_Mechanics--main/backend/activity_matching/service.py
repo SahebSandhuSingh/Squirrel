@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from backend import social_blocks
+from backend import card_ids, social_blocks
 from backend.activity_matching import scoring
 from backend.activity_matching.features import MatchingProfile, matching_profile
 from backend.partners import store as partners_store
@@ -92,17 +92,17 @@ def find_matches(user_id: str, *, today: date | None = None) -> list[dict]:
         if other is None or not other.opted_in:
             continue
         candidates.append((other, frozenset()))
-    return [m.to_dict() for m in scoring.rank(viewer, candidates, viewer_blocks)]
+    return [m.to_dict(user_id) for m in scoring.rank(viewer, candidates, viewer_blocks)]
 
 
-def block(user_id: str, blocked_user_id: str) -> None:
-    """Block someone: a Social block (ADR-032), so it covers Partner Hunt and the rest of the app too."""
-    if blocked_user_id == user_id:
-        raise ActivityMatchingError(400, "invalid_block", "You cannot block yourself.")
+def block(user_id: str, card_id: str) -> None:
+    """Block the member on a card, by its card_id: a Social block (ADR-032), so it covers Partner
+    Hunt and the rest of the app too."""
     if read_profile(user_id) is None:
         raise ActivityMatchingError(404, "user_not_found", "No such user.")
-    if read_profile(blocked_user_id) is None:
-        raise ActivityMatchingError(404, "user_not_found", "That user does not exist.")
+    blocked_user_id = card_ids.resolve(card_ids.ACTIVITY_MATCHING, user_id, card_id, partners_store.list_user_ids())
+    if blocked_user_id is None or read_profile(blocked_user_id) is None:
+        raise ActivityMatchingError(404, "user_not_found", "That member doesn't exist.")
     try:
         social_blocks.block(user_id, blocked_user_id)
     except social_blocks.BlocksUnreachable as exc:

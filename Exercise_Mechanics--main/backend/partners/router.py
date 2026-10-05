@@ -6,9 +6,12 @@
     GET  /api/users/{id}/partner-hunt/matches      the board — only once every access check passes
     POST /api/users/{id}/partner-hunt/blocks       block someone, both directions, immediately (in Social)
 
+Cards never carry an account id (it spells the member's full name): each carries a `card_id`, opaque
+and per viewer (backend/card_ids.py), and the routes that act on a card take that.
+
     Connect (connect.py): anonymous until both say yes, then each gets the other's Social profile id
     GET    /api/users/{id}/partner-hunt/requests                       { incoming, outgoing, connections }
-    POST   /api/users/{id}/partner-hunt/requests                       { to_user_id } → request (201)
+    POST   /api/users/{id}/partner-hunt/requests                       { card_id } → request (201)
     POST   /api/users/{id}/partner-hunt/requests/{request_id}/accept   → connection
     POST   /api/users/{id}/partner-hunt/requests/{request_id}/decline  → 204, silent
     DELETE /api/users/{id}/partner-hunt/requests/{request_id}          → 204, the sender takes it back
@@ -82,14 +85,10 @@ class PartnerPreferences(BaseModel):
         return self
 
 
-class BlockRequest(BaseModel):
+class CardRequest(BaseModel):
+    """Blocking and Connect name the member by the card_id on their card."""
     model_config = ConfigDict(extra="forbid")
-    user_id: str
-
-
-class ConnectRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    to_user_id: str
+    card_id: str = Field(min_length=1, max_length=64)
 
 
 @lru_cache(maxsize=1)
@@ -116,12 +115,9 @@ def get_partner_matches(user_id: str, gate: XPGate = Depends(get_xp_gate)) -> di
 
 
 @router.post("/users/{user_id}/partner-hunt/blocks")
-def post_partner_block(user_id: str, body: BlockRequest) -> dict:
-    target = body.user_id
-    if not is_valid_user_id(target):
-        raise HTTPException(status_code=400, detail={"code": "invalid_user_id", "message": "Invalid user id."})
-    _call(service.block_user, _checked(user_id), target)
-    return {"blocked_user_id": target}
+def post_partner_block(user_id: str, body: CardRequest) -> dict:
+    _call(service.block_user, _checked(user_id), body.card_id)
+    return {"blocked_card_id": body.card_id}
 
 
 @router.get("/users/{user_id}/partner-hunt/requests")
@@ -130,10 +126,8 @@ def get_partner_requests(user_id: str) -> dict:
 
 
 @router.post("/users/{user_id}/partner-hunt/requests", status_code=201)
-def post_partner_request(user_id: str, body: ConnectRequest, gate: XPGate = Depends(get_xp_gate)) -> dict:
-    if not is_valid_user_id(body.to_user_id):
-        raise HTTPException(status_code=400, detail={"code": "invalid_user_id", "message": "Invalid user id."})
-    return _call(connect.send_request, _checked(user_id), body.to_user_id, gate)
+def post_partner_request(user_id: str, body: CardRequest, gate: XPGate = Depends(get_xp_gate)) -> dict:
+    return _call(connect.send_request, _checked(user_id), body.card_id, gate)
 
 
 @router.post("/users/{user_id}/partner-hunt/requests/{request_id}/accept")

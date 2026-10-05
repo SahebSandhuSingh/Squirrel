@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from backend import card_ids
 from backend.activity_matching.features import MatchingProfile
 from backend.partners.matching import age_band, display_name
 from backend.partners.policy import MIN_AGE
@@ -38,9 +39,11 @@ class ActivityMatch:
     shared_activities: tuple[str, ...]  # strongest shared interest first
     reasons: tuple[str, ...]
 
-    def to_dict(self) -> dict:
+    def to_dict(self, viewer_id: str) -> dict:
+        """The card as `viewer_id` sees it: named by an opaque card_id, never the account id (which
+        spells the member's full name; see backend/card_ids.py)."""
         return {
-            "user_id": self.user_id,
+            "card_id": card_ids.card_id(card_ids.ACTIVITY_MATCHING, viewer_id, self.user_id),
             "display_name": self.display_name,
             "age_band": self.age_band,
             "fitness_level": self.fitness_level,

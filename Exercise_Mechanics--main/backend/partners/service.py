@@ -17,7 +17,7 @@ import logging
 from dataclasses import replace
 from datetime import date, datetime, timezone
 
-from backend import social_blocks
+from backend import card_ids, social_blocks
 from backend.partners import store
 from backend.partners.matching import Person, Preferences, age_on, is_age_eligible, normalise_gender, rank
 from backend.partners.policy import (
@@ -95,6 +95,20 @@ def save_preferences(user_id: str, preferences: dict, *, today: date | None = No
 
 
 def find_matches(user_id: str, gate: XPGate, *, today: date | None = None) -> list[dict]:
+    """The board as the app sees it: cards named by card_id, never by account id."""
+    return [public_card(user_id, match.to_dict()) for match in board(user_id, gate, today=today)]
+
+
+def public_card(viewer_id: str, card: dict) -> dict:
+    """A card for the app: the member's account id (it spells their full name, and is their login
+    `sub`) is replaced by an opaque id only this viewer's requests can be resolved with."""
+    card = dict(card)
+    other = card.pop("user_id")
+    return {"card_id": card_ids.card_id(card_ids.PARTNER_HUNT, viewer_id, other), **card}
+
+
+def board(user_id: str, gate: XPGate, *, today: date | None = None) -> list:
+    """Everyone `user_id` may see, as Match objects (with account ids: internal only)."""
     viewer = _require_person(user_id, today)
     if not is_age_eligible(viewer):
         raise _age_error()
@@ -132,15 +146,15 @@ def find_matches(user_id: str, gate: XPGate, *, today: date | None = None) -> li
         if candidate is not None:
             people.append(candidate)
 
-    return [match.to_dict() for match in rank(viewer, people, _cached_gate(gate))]
+    return rank(viewer, people, _cached_gate(gate))
 
 
-def block_user(user_id: str, blocked_user_id: str) -> None:
-    if blocked_user_id == user_id:
-        raise PartnerHuntError(400, "invalid_block", "You cannot block yourself.")
+def block_user(user_id: str, card_id: str) -> None:
+    """Block the member on a card (the board, a request or a connection) by its card_id."""
     _require_person(user_id, None)
-    if read_profile(blocked_user_id) is None:
-        raise PartnerHuntError(404, "user_not_found", "That user does not exist.")
+    blocked_user_id = card_ids.resolve(card_ids.PARTNER_HUNT, user_id, card_id, store.list_user_ids())
+    if blocked_user_id is None or read_profile(blocked_user_id) is None:
+        raise PartnerHuntError(404, "user_not_found", "That member doesn't exist.")
     try:
         # A real Social block, the same as the app's Block button: it hides the two people from each
         # other everywhere, not only in Partner Hunt.

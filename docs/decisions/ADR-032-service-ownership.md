@@ -156,15 +156,23 @@ For each, the owner's side ships first; the consumer's side follows.
 
 The app (mobile-4) switches off each capability it believes has no backend
 (`src/api/availability.ts`) and shows "not live yet" instead. Several turned out to be served
-already, by the owner this ADR names. State as of 2026-10-05:
+already, by the owner this ADR names. State as of 2026-10-05 (meetup rows updated after the app's
+`88eae74` and a check of who creates meetups):
 
 | Feature | Served by | State |
 |---|---|---|
-| Meetup ratings | campus-service: `GET /v1/meetups/{id}/rating`, `POST /v1/meetups/{id}/ratings` | **On.** The app counts it among what campus-service serves (with shared zones and the heatmap), so the rating card works when the map runs on campus-service; on any other source it stays off. |
+| Meetups | campus-service: `POST /v1/meetups`, `GET /v1/meetups[/{id}]`, `POST /v1/meetups/{id}/accept · decline · cancel · leave` | **Unreachable.** Nothing creates a meetup: no screen, and no service (Social, Exercise, the Run Module) calls `POST /v1/meetups`; events always carry `meetup_id: null`. No screen answers an invite either: the app calls none of accept, decline, cancel or leave. So every real user's meetup list is empty. The app owner is building the way in: planning a meetup from a zone screen, and accept, decline, leave and cancel on the meetup screen. |
+| Meetup ratings | campus-service: `GET /v1/meetups/{id}/rating`, `POST /v1/meetups/{id}/ratings` | **On, but unreachable.** The app counts it among what campus-service serves (with shared zones and the heatmap), so the rating card works when the map runs on campus-service; on any other source it stays off. It acts on a meetup, so it can't be reached until meetups can (row above). |
 | Photo uploads | Social: `POST /v1/media/uploads`, `POST /v1/media/{id}/complete` | **On.** Three app-side mismatches kept uploads from ever working (a moderation poll Social has no route for, a `meetup` purpose Social refuses, an unknown `context` field); fixed in the app. Social takes post and avatar photos only. |
 | Ambassador applications | Social: `GET`/`POST /v1/ambassador/application` | **On in the app, closed in Social.** `SOCIAL_AMBASSADOR_OPEN` stays off until a reviewer is named (open item 2), so the form shows as closed and submissions are refused. |
 | "About you" (private details) | Exercise: `GET`/`PUT /api/me/profile-details` | **Off in the app.** The backend is built (open item 1); the app still saves through `PATCH /v1/me` `profile_details` and must be repointed before `profileDetails` is switched on. |
-| Meetup check-in | campus-service: `POST /v1/meetups/{id}/check-in` | **Off in the app.** campus-service started serving it on 2026-10-05; the app still gates `meetupCheckIn` and has not been checked against the route's shape. |
+| Meetup check-in | campus-service: `POST /v1/meetups/{id}/check-in` | **On, but unreachable.** campus-service started serving it on 2026-10-05 and the app switched it on in `88eae74`, on the same terms as ratings (when the map runs on campus-service), after checking the body and result against the route. It acts on a meetup, so it can't be reached until meetups can (row above). |
 
 Lesson: before building a "missing" backend, search every service for the route. Before switching a
 capability on, compare the app's requests and responses with the server's, field by field.
+
+And reachable is not the same as routed. A feature can have a working backend, a route the app calls
+and a capability switched on, and still be unreachable, because nothing creates the thing it acts on
+(meetups above). Checking that the route exists is not checking that a user can arrive at it: follow
+the path from a screen a user can open to the record the feature needs, and confirm something on
+that path creates it.
