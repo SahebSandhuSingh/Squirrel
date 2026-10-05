@@ -5,6 +5,9 @@
  *   node scripts/campus-osm.mjs --fetch            download from the Overpass API (needs internet)
  *   node scripts/campus-osm.mjs --in map.osm       use a file: openstreetmap.org → Export (.osm XML),
  *                                                  or a saved Overpass JSON response
+ *   node scripts/campus-osm.mjs --trace lap.json [--id sports] [--name "Sports Ground Loop"]
+ *                                                  save a loop recorded with the app as a traced route
+ *                                                  (lap.json: GET /v1/activities/:id from campus-service)
  *
  * Writes the same data to two places:
  *   mobile-4/src/api/campus/campusOsm.json          the app's base map (api/campus/campusBaseMap.ts)
@@ -18,6 +21,9 @@
  *   - the sports loop (or any running track) and the lake are ROUTE zones: you qualify by going
  *     round them. The lake's route is the footpath around it when OSM has one, else its shore
  *   - all buildings, roads/paths, green/water/sports areas and named points become the drawn map
+ *   - a running track (leisure=track) becomes the sports loop whether OSM draws it as an area or a
+ *     line, named or not. If OSM has none, a traced route from scripts/campus-routes.json is used
+ *     instead (geometry_source 'traced'); OSM wins whenever it has the zone
  *   - known spelling mistakes in OSM names are corrected (NAME_FIXES)
  * Nothing is invented: a place missing from OpenStreetMap is missing here too.
  */
@@ -90,6 +96,15 @@ function areaM2(ring) {
   }
   return Math.abs(s) / 2;
 }
+
+/** Distance in metres between two [lat, lng] points (equirectangular; fine at campus scale). */
+export function distanceM(a, b) {
+  const toM = metres((a[0] + b[0]) / 2);
+  const [x1, y1] = toM(a);
+  const [x2, y2] = toM(b);
+  return Math.hypot(x2 - x1, y2 - y1);
+}
+const pathLengthM = (pts) => pts.slice(1).reduce((s, p, i) => s + distanceM(pts[i], p), 0);
 
 /** Area-weighted centroid of a ring of [lat, lng] (falls back to the vertex mean for slivers). */
 export function centroid(ring) {
@@ -261,7 +276,7 @@ function poiKind(tags) {
 // --- assembly -------------------------------------------------------------------------------------
 
 /** Everything on campus, in the app's MapFeatures shape plus zones. */
-export function buildCampusGeo(osm, { campusWayId = CAMPUS_WAY_ID } = {}) {
+export function buildCampusGeo(osm, { campusWayId = CAMPUS_WAY_ID, tracedRoutes = [] } = {}) {
   const campusWay = osm.ways.get(campusWayId);
   const campusRing = campusWay ? wayCoords(osm, campusWay) : null;
   if (!campusRing) throw new Error(`The campus outline (OSM way ${campusWayId}) isn't in the data. Export an area that covers the whole campus.`);
@@ -343,6 +358,47 @@ export function buildCampusGeo(osm, { campusWayId = CAMPUS_WAY_ID } = {}) {
     });
   }
 
+  // The running track. OSM draws it either as a closed area or as a line (often unnamed); either
+  // way the longest one on campus becomes the sports loop unless a named area already did.
+  const tracks = [];
+  for (const [wid, way] of osm.ways) {
+    if (way.tags.leisure !== 'track') continue;
+    const pts = wayCoords(osm, way);
+    if (!pts || pts.length < 3 || !onCampus(pts[Math.floor(pts.length / 2)])) continue;
+    const loop = isClosed(way) || distanceM(pts[0], pts[pts.length - 1]) <= 30;
+    tracks.push({ osmId: `w${wid}`, tags: way.tags, pts: isClosed(way) ? open(pts) : pts, loop, length: pathLengthM(pts) });
+  }
+  const bestTrack = tracks.filter((t) => t.loop).sort((a, b) => b.length - a.length)[0];
+  let sportsLoop = zones.find((z) => z.zone_type === 'ROUTE' && z.kind === 'sports');
+  if (!sportsLoop && bestTrack) {
+    const line = simplify(bestTrack.pts, 2);
+    const ring = zoneRing(bestTrack.pts);
+    sportsLoop = {
+      id: uniqueId(used.has('sports') ? 'running-track' : 'sports'),
+      name: bestTrack.tags.name?.trim() || 'Running Track',
+      short_name: null, kind: 'sports', hostel: null, polygon: ring, centroid: centroid(ring).map(round),
+      zone_type: 'ROUTE', route: [...line, line[0]], threshold: 0.8, osm_id: bestTrack.osmId,
+    };
+    zones.push(sportsLoop);
+    if (!isClosed(osm.ways.get(Number(bestTrack.osmId.slice(1))))) terrain.push({ id: `t-${bestTrack.osmId}`, kind: 'track', polygon: bestTrack.pts, label: sportsLoop.name });
+  }
+
+  // Traced routes fill in what OSM lacks (OSM wins whenever it has the zone).
+  const traced = [];
+  for (const r of tracedRoutes) {
+    if (zones.some((z) => z.id === r.id) || (r.id === 'sports' && sportsLoop)) continue;
+    const ring = open(r.route);
+    const zring = zoneRing(ring);
+    used.add(r.id);
+    zones.push({
+      id: r.id, name: r.name, short_name: r.short_name ?? null, kind: r.kind ?? 'sports', hostel: null,
+      polygon: zring, centroid: centroid(zring).map(round), zone_type: 'ROUTE', route: r.route,
+      threshold: r.threshold ?? 0.8, source: 'traced', osm_id: null,
+    });
+    terrain.push({ id: `t-traced-${r.id}`, kind: 'track', polygon: ring, label: r.name });
+    traced.push(r.id);
+  }
+
   for (const a of campusAreas) {
     if (a.tags.building && a.tags.building !== 'no') {
       const levels = Number.parseInt(a.tags['building:levels'] ?? '', 10);
@@ -391,9 +447,47 @@ export function buildCampusGeo(osm, { campusWayId = CAMPUS_WAY_ID } = {}) {
     center: centroid(boundary).map(round),
     boundary,
     zones: sortById(zones),
+    /** What the importer found for the sports loop, for the command's report. */
+    report: {
+      track_in_osm: tracks.map((t) => ({ osm_id: t.osmId, shape: t.loop ? 'loop' : 'open line', length_m: Math.round(t.length) })),
+      sports_loop: sportsLoop ? { id: sportsLoop.id, source: 'osm', osm_id: sportsLoop.osm_id } : traced.includes('sports') ? { id: 'sports', source: 'traced' } : null,
+      traced,
+    },
     features: { terrain: sortById(terrain), roads: sortById(roads), buildings: sortById(buildings), pois: sortById(pois) },
   };
 }
+
+// --- traced routes ----------------------------------------------------------------------------------
+
+/**
+ * A loop recorded with the app → a closed route of [lat, lng]. Takes campus-service's
+ * GET /v1/activities/:id response (its `track`), or any GeoJSON LineString / Feature / FeatureCollection.
+ * The lap has to end near where it started; points are simplified to 2 m.
+ */
+export function routeFromGeoJson(json) {
+  const geom = json?.track ?? json?.geometry ?? json?.features?.find((f) => f?.geometry?.type === 'LineString')?.geometry ?? json;
+  if (geom?.type !== 'LineString' || !Array.isArray(geom.coordinates)) throw new Error('No recorded line found: pass the activity JSON from GET /v1/activities/:id, or a GeoJSON LineString.');
+  const pts = [];
+  for (const [lng, lat] of geom.coordinates) {
+    const p = [round(lat), round(lng)];
+    if (!pts.length || distanceM(pts[pts.length - 1], p) > 0.5) pts.push(p);
+  }
+  if (pts.length < 10) throw new Error('That recording is too short to be a lap.');
+  const gap = distanceM(pts[0], pts[pts.length - 1]);
+  if (gap > 40) throw new Error(`The recording ends ${Math.round(gap)} m from where it started. Record exactly one full lap, finishing where you began.`);
+  const ring = simplify(gap < 0.5 ? pts.slice(0, -1) : pts, 2);
+  return { route: [...ring, ring[0]], length_m: Math.round(pathLengthM([...ring, ring[0]])) };
+}
+
+const here = dirname(fileURLToPath(import.meta.url));
+const ROUTES_FILE = join(here, 'campus-routes.json');
+const readRoutes = () => {
+  try {
+    return JSON.parse(readFileSync(ROUTES_FILE, 'utf8')).routes ?? [];
+  } catch {
+    return [];
+  }
+};
 
 // --- command line ---------------------------------------------------------------------------------
 
@@ -411,6 +505,24 @@ out skel qt;`;
 
 async function main(argv) {
   const at = (flag) => argv[argv.indexOf(flag) + 1];
+  if (argv.includes('--trace')) {
+    const { route, length_m } = routeFromGeoJson(JSON.parse(readFileSync(at('--trace'), 'utf8')));
+    const id = argv.includes('--id') ? at('--id') : 'sports';
+    const entry = {
+      id,
+      name: argv.includes('--name') ? at('--name') : id === 'sports' ? 'Sports Ground Loop' : id,
+      kind: 'sports',
+      threshold: argv.includes('--threshold') ? Number(at('--threshold')) : 0.8,
+      length_m,
+      traced_at: new Date().toISOString(),
+      route,
+    };
+    const routes = [...readRoutes().filter((r) => r.id !== id), entry];
+    writeFileSync(ROUTES_FILE, `${JSON.stringify({ note: 'Loops recorded with the app, used for zones OpenStreetMap lacks. Add with --trace.', routes }, null, 1)}\n`);
+    console.log(`Saved "${entry.name}" (${id}): ${length_m} m, ${route.length - 1} points → ${ROUTES_FILE}`);
+    console.log('Now re-run the import (--fetch or --in) to put it on the map.');
+    return;
+  }
   let osm;
   if (argv.includes('--fetch')) {
     console.log('Downloading the campus from OpenStreetMap (Overpass)…');
@@ -425,13 +537,22 @@ async function main(argv) {
     console.log('Usage: node scripts/campus-osm.mjs --fetch | --in <map.osm | overpass.json>');
     process.exit(2);
   }
-  const geo = { ...buildCampusGeo(osm), fetched_at: new Date().toISOString() };
-  const here = dirname(fileURLToPath(import.meta.url));
+  const { report, ...geo } = { ...buildCampusGeo(osm, { tracedRoutes: readRoutes() }), fetched_at: new Date().toISOString() };
   const targets = [join(here, '..', 'src', 'api', 'campus', 'campusOsm.json'), join(here, '..', '..', 'campus-service', 'src', 'seed', 'zones.osm.json')];
   for (const t of targets) writeFileSync(t, `${JSON.stringify(geo, null, 1)}\n`);
   const f = geo.features;
   console.log(`${geo.zones.length} zones, ${f.buildings.length} buildings, ${f.roads.length} roads/paths, ${f.terrain.length} areas, ${f.pois.length} places.`);
-  for (const z of geo.zones) console.log(`  ${z.kind.padEnd(9)} ${z.id.padEnd(24)} ${z.name}`);
+  for (const z of geo.zones) console.log(`  ${z.kind.padEnd(9)} ${z.zone_type.padEnd(6)} ${z.id.padEnd(28)} ${z.name}${z.source === 'traced' ? '  (traced)' : ''}`);
+  console.log(
+    report.track_in_osm.length
+      ? `Running track in OpenStreetMap: ${report.track_in_osm.map((t) => `${t.osm_id} (${t.shape}, ${t.length_m} m)`).join(', ')}`
+      : 'Running track in OpenStreetMap: none.',
+  );
+  console.log(
+    report.sports_loop
+      ? `Sports loop: ${report.sports_loop.id}, from ${report.sports_loop.source === 'osm' ? `OpenStreetMap (${report.sports_loop.osm_id})` : 'the traced route in scripts/campus-routes.json'}.`
+      : 'Sports loop: none. Add the track on openstreetmap.org (leisure=track), or record one lap with the app and run --trace.',
+  );
   console.log(`Wrote:\n  ${targets.join('\n  ')}`);
 }
 

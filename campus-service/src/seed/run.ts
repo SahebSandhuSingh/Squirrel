@@ -14,7 +14,8 @@ import { HOSTELS, ROUTE_ZONE_PAD_M, ZONES, loadOsmZones, osmLineWkt, osmPolygonW
 
 /**
  * The OpenStreetMap campus (zones.osm.json), when imported: its halls and zones are written with
- * geometry_source 'osm', replacing placeholder or earlier OSM geometry (never surveyed geometry), and
+ * geometry_source 'osm' (or 'traced' for a recorded loop), replacing placeholder, earlier OSM or traced
+ * geometry (never surveyed geometry), and
  * placeholder or earlier-imported zones it doesn't include are switched off. ROUTE zones keep their
  * loop, threshold and type; their outline is the feature plus ROUTE_ZONE_PAD_M around the loop.
  * Returns false when there's nothing imported.
@@ -38,23 +39,23 @@ async function seedOsmZones(): Promise<boolean> {
        ),
        g AS (SELECT d.geom FROM u, ST_Dump(ST_MakeValid(u.geom)) d WHERE GeometryType(d.geom) = 'POLYGON' ORDER BY ST_Area(d.geom) DESC LIMIT 1)
        INSERT INTO zones (id, name, short_name, description, kind, zone_type, geometry, centroid, required_route, qualify_threshold, hostel_id, geometry_source)
-       SELECT $1, $2, $3, $4, $5, $9, g.geom, ST_Centroid(g.geom), CASE WHEN $8::text IS NULL THEN NULL ELSE ST_GeomFromText($8, 4326) END, $11, $7, 'osm' FROM g
+       SELECT $1, $2, $3, $4, $5, $9, g.geom, ST_Centroid(g.geom), CASE WHEN $8::text IS NULL THEN NULL ELSE ST_GeomFromText($8, 4326) END, $11, $7, $12 FROM g
        ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, short_name = EXCLUDED.short_name, kind = EXCLUDED.kind, hostel_id = EXCLUDED.hostel_id, is_active = true,
-         geometry = CASE WHEN zones.geometry_source IN ('dev_placeholder', 'osm') THEN EXCLUDED.geometry ELSE zones.geometry END,
-         centroid = CASE WHEN zones.geometry_source IN ('dev_placeholder', 'osm') THEN EXCLUDED.centroid ELSE zones.centroid END,
-         zone_type = CASE WHEN zones.geometry_source IN ('dev_placeholder', 'osm') THEN EXCLUDED.zone_type ELSE zones.zone_type END,
-         required_route = CASE WHEN zones.geometry_source IN ('dev_placeholder', 'osm') THEN EXCLUDED.required_route ELSE zones.required_route END,
-         qualify_threshold = CASE WHEN zones.geometry_source IN ('dev_placeholder', 'osm') THEN EXCLUDED.qualify_threshold ELSE zones.qualify_threshold END,
-         geometry_source = CASE WHEN zones.geometry_source = 'dev_placeholder' THEN 'osm' ELSE zones.geometry_source END,
+         geometry = CASE WHEN zones.geometry_source IN ('dev_placeholder', 'osm', 'traced') THEN EXCLUDED.geometry ELSE zones.geometry END,
+         centroid = CASE WHEN zones.geometry_source IN ('dev_placeholder', 'osm', 'traced') THEN EXCLUDED.centroid ELSE zones.centroid END,
+         zone_type = CASE WHEN zones.geometry_source IN ('dev_placeholder', 'osm', 'traced') THEN EXCLUDED.zone_type ELSE zones.zone_type END,
+         required_route = CASE WHEN zones.geometry_source IN ('dev_placeholder', 'osm', 'traced') THEN EXCLUDED.required_route ELSE zones.required_route END,
+         qualify_threshold = CASE WHEN zones.geometry_source IN ('dev_placeholder', 'osm', 'traced') THEN EXCLUDED.qualify_threshold ELSE zones.qualify_threshold END,
+         geometry_source = CASE WHEN zones.geometry_source IN ('dev_placeholder', 'osm', 'traced') THEN EXCLUDED.geometry_source ELSE zones.geometry_source END,
          updated_at = now()`,
-      [z.id, z.name, z.short_name, `${z.name} (OpenStreetMap).`, z.kind, osmPolygonWkt(z.polygon), z.kind === 'hostel' ? z.id : null,
-        route, route ? 'ROUTE' : 'AREA', ROUTE_ZONE_PAD_M, route ? z.threshold ?? null : null],
+      [z.id, z.name, z.short_name, z.source === 'traced' ? `${z.name} (traced lap).` : `${z.name} (OpenStreetMap).`, z.kind, osmPolygonWkt(z.polygon), z.kind === 'hostel' ? z.id : null,
+        route, route ? 'ROUTE' : 'AREA', ROUTE_ZONE_PAD_M, route ? z.threshold ?? null : null, z.source === 'traced' ? 'traced' : 'osm'],
     );
     await query(`INSERT INTO territories (zone_id) VALUES ($1) ON CONFLICT DO NOTHING`, [z.id]);
   }
   // Placeholder zones OSM doesn't have, and zones an earlier import had but this one doesn't (a
   // renamed or removed feature), are switched off. Their history stays; surveyed zones are untouched.
-  await query(`UPDATE zones SET is_active = false, updated_at = now() WHERE geometry_source IN ('dev_placeholder', 'osm') AND is_active AND NOT (id = ANY($1::text[]))`, [zones.map((z) => z.id)]);
+  await query(`UPDATE zones SET is_active = false, updated_at = now() WHERE geometry_source IN ('dev_placeholder', 'osm', 'traced') AND is_active AND NOT (id = ANY($1::text[]))`, [zones.map((z) => z.id)]);
   return true;
 }
 

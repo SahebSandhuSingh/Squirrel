@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildCampusGeo, CAMPUS_WAY_ID, insideRing, parseOsmXml, parseOverpassJson } from './campus-osm.mjs';
+import { buildCampusGeo, CAMPUS_WAY_ID, insideRing, parseOsmXml, parseOverpassJson, routeFromGeoJson } from './campus-osm.mjs';
 
 // A small campus in OSM's own formats: the university outline, Nivedita Hall and the library where
 // OpenStreetMap has them, a lake drawn as a multipolygon, a football pitch, a road, a gate and a
@@ -107,4 +107,71 @@ test('the sports loop and the lake are ROUTE zones you complete by going round',
 test('data without the campus outline is refused with a clear message', () => {
   const without = { elements: overpass.elements.filter((e) => e.id !== CAMPUS_WAY_ID) };
   assert.throws(() => buildCampusGeo(parseOverpassJson(without)), /campus outline/);
+});
+
+// A campus with grounds but no track, like IISER Kolkata's OSM data; `withTrack` adds one.
+function campus(withTrack) {
+  let id = 100000;
+  const els = [];
+  const node = (lat, lon) => (els.push({ type: 'node', id: ++id, lat, lon }), id);
+  const ring = (lat, lon, dLat, dLon, n = 24) => {
+    const ids = Array.from({ length: n }, (_, i) => node(lat + dLat * Math.sin((2 * Math.PI * i) / n), lon + dLon * Math.cos((2 * Math.PI * i) / n)));
+    return [...ids, ids[0]];
+  };
+  const square = (lat, lon, d) => { const ids = [node(lat - d, lon - d), node(lat - d, lon + d), node(lat + d, lon + d), node(lat + d, lon - d)]; return [...ids, ids[0]]; };
+  els.push({ type: 'way', id: CAMPUS_WAY_ID, nodes: square(22.9637, 88.5239, 0.006), tags: { amenity: 'university' } });
+  els.push({ type: 'way', id: 1, nodes: square(22.96325, 88.52186, 0.0004), tags: { leisure: 'pitch', sport: 'soccer', name: 'Football Ground' } });
+  if (withTrack === 'line') {
+    // An unnamed track drawn as a line that comes back to its start (not one closed way).
+    const loop = ring(22.96325, 88.52186, 0.00042, 0.00085, 30);
+    els.push({ type: 'way', id: 2, nodes: loop.slice(0, -2), tags: { leisure: 'track', sport: 'running' } });
+  }
+  return parseOverpassJson({ elements: els });
+}
+
+const lapAround = (lat, lon, dLat, dLon, n = 60) => ({
+  type: 'LineString',
+  coordinates: Array.from({ length: n + 1 }, (_, i) => [lon + dLon * Math.cos((2 * Math.PI * i) / n), lat + dLat * Math.sin((2 * Math.PI * i) / n)]),
+});
+
+test('a running track drawn as an unnamed line still becomes the sports loop', () => {
+  const geo = buildCampusGeo(campus('line'));
+  const loop = geo.zones.find((z) => z.id === 'sports');
+  assert.ok(loop, 'sports loop found');
+  assert.equal(loop.name, 'Running Track');
+  assert.equal(loop.zone_type, 'ROUTE');
+  assert.equal(loop.threshold, 0.8);
+  assert.deepEqual(loop.route[0], loop.route.at(-1), 'closed');
+  assert.equal(geo.report.sports_loop.source, 'osm');
+  assert.equal(geo.report.track_in_osm[0].shape, 'loop');
+  assert.ok(geo.features.terrain.some((t) => t.kind === 'track'), 'and it is drawn');
+});
+
+test('with no track in OSM, the report says so and a traced lap fills in', () => {
+  const none = buildCampusGeo(campus(null));
+  assert.equal(none.zones.find((z) => z.zone_type === 'ROUTE'), undefined);
+  assert.deepEqual(none.report.track_in_osm, []);
+  assert.equal(none.report.sports_loop, null);
+
+  const { route, length_m } = routeFromGeoJson({ id: 'act_1', track: lapAround(22.9634, 88.5219, 0.00045, 0.0009) });
+  assert.ok(length_m > 430 && length_m < 480, `lap length ${length_m}`); // a 100 m × 185 m ellipse is ~454 m round
+  const traced = buildCampusGeo(campus(null), { tracedRoutes: [{ id: 'sports', name: 'Sports Ground Loop', threshold: 0.8, route }] });
+  const loop = traced.zones.find((z) => z.id === 'sports');
+  assert.equal(loop.source, 'traced');
+  assert.equal(loop.zone_type, 'ROUTE');
+  assert.equal(loop.name, 'Sports Ground Loop');
+  assert.equal(traced.report.sports_loop.source, 'traced');
+
+  // Once OSM has the track, it wins over the traced lap.
+  const both = buildCampusGeo(campus('line'), { tracedRoutes: [{ id: 'sports', name: 'Sports Ground Loop', route }] });
+  assert.equal(both.zones.filter((z) => z.id === 'sports').length, 1);
+  assert.equal(both.zones.find((z) => z.id === 'sports').source, undefined);
+  assert.deepEqual(both.report.traced, []);
+});
+
+test('a recording that is not one closed lap is refused', () => {
+  const half = lapAround(22.9634, 88.5219, 0.00045, 0.0009);
+  half.coordinates = half.coordinates.slice(0, 31);
+  assert.throws(() => routeFromGeoJson(half), /ends \d+ m from where it started/);
+  assert.throws(() => routeFromGeoJson({ track: null }), /No recorded line/);
 });

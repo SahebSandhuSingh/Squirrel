@@ -165,5 +165,5 @@ const PLACEHOLDER_FEATURES: MapFeatures = {
 };
 
 /** The named zones and the drawn map: OpenStreetMap's once imported, else the placeholder. */
-export const IISER_ZONES: Zone[] = HAS_OSM ? OSM.zones.map((z) => ({ ...z, geometry_source: 'osm' })) : PLACEHOLDER_ZONES;
+export const IISER_ZONES: Zone[] = HAS_OSM ? OSM.zones.map((z) => ({ ...z, geometry_source: (z as { source?: string }).source ?? 'osm' })) : PLACEHOLDER_ZONES;
 export const IISER_FEATURES: MapFeatures = HAS_OSM ? (OSM.features as MapFeatures) : PLACEHOLDER_FEATURES;

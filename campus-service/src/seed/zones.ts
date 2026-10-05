@@ -63,6 +63,8 @@ export type OsmZone = {
   id: string; name: string; short_name: string | null; kind: ZoneSeed['kind']; hostel: string | null; polygon: [number, number][];
   /** ROUTE zones (the sports loop, the lake) carry the closed loop to complete and their threshold. */
   zone_type?: 'AREA' | 'ROUTE'; route?: [number, number][] | null; threshold?: number | null;
+  /** 'traced': a loop recorded with the app, for a zone OpenStreetMap lacks (the sports track). */
+  source?: 'traced';
 };
 export function loadOsmZones(data: unknown = osmFile): OsmZone[] {
   const d = data as { source?: string | null; zones?: OsmZone[] };

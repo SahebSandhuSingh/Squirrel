@@ -48,6 +48,19 @@ zone's outline reaches 25 m beyond its loop so the path is inside it. Spelling m
 are corrected on import (`NAME_FIXES` in the script; fix them on openstreetmap.org too). A zone an
 earlier import had but a new one doesn't (renamed or removed in OSM) is switched off, not deleted.
 
+**The running track.** A `leisure=track` is picked up whether OSM draws it as an area or a line, named
+or not, and the import says whether it found one. IISER Kolkata's OSM data has none yet. Until it
+does, record one lap of the track with the app, fetch it (`GET /v1/activities/:id` from
+campus-service), then:
+
+```bash
+node scripts/campus-osm.mjs --trace lap.json      # writes scripts/campus-routes.json (commit it)
+node scripts/campus-osm.mjs --fetch               # the sports loop is now the traced lap
+```
+
+The traced loop is stored with `geometry_source = 'traced'`. When the track is added to
+OpenStreetMap, the next import uses OSM's instead.
+
 ## How to load real data by hand
 
 ```sql
