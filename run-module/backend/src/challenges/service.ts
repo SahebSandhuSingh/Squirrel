@@ -200,7 +200,7 @@ export async function getChallenge(challengeId: string, userId: string): Promise
   };
 }
 
-export async function listMyChallenges(userId: string): Promise<Challenge[]> {
+export async function listMyChallenges(userId: string): Promise<Array<Challenge & { myProgress: number }>> {
   const res = await pool.query(LIST_MY_CHALLENGES!, [userId]);
   return res.rows;
 }

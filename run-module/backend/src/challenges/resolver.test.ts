@@ -1,13 +1,14 @@
 import { test, expect, beforeAll, afterAll } from 'vitest';
 import crypto from 'node:crypto';
 import { pool } from '../db/pool.js';
-import { createChallenge, getChallenge, inviteUser, acceptInvite, declineInvite } from './service.js';
+import { createChallenge, getChallenge, inviteUser, acceptInvite, declineInvite, listMyChallenges } from './service.js';
 import { resolveChallengesBatch } from './resolver.js';
 import { getUserXp } from '../xp/query.js';
 
 const U1 = crypto.randomUUID();
 const U2 = crypto.randomUUID();
 const U3 = crypto.randomUUID();
+const LIST_USERS = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()] as const;
 
 beforeAll(async () => {
 });
@@ -15,6 +16,50 @@ beforeAll(async () => {
 afterAll(async () => {
   await pool.query('DELETE FROM activity_sessions WHERE user_id IN ($1, $2, $3)', [U1, U2, U3]);
   await pool.query('DELETE FROM challenges WHERE created_by IN ($1, $2, $3)', [U1, U2, U3]);
+  await pool.query('DELETE FROM activity_sessions WHERE user_id = ANY($1::uuid[])', [LIST_USERS]);
+  await pool.query('DELETE FROM challenges WHERE created_by = ANY($1::uuid[])', [LIST_USERS]);
+});
+
+test('GOALS-2: mine list progress matches the challenge detail route', async () => {
+  const userId = LIST_USERS[0];
+  const starts = new Date(Date.now() - 3600000);
+  const ends = new Date(Date.now() + 3600000);
+  const challenge = await createChallenge(userId, 'daily', 'list progress', 'distance_m', 'gte', 5000, starts, ends, 100);
+  const distance = 3210.5;
+
+  await pool.query(
+    'INSERT INTO activity_sessions (id, user_id, type, subtype, started_at, duration_s, metrics) VALUES ($1, $2, $3, $4, $5, 1000, $6)',
+    [crypto.randomUUID(), userId, 'run', 'territory_run', new Date(starts.getTime() + 1000), JSON.stringify({ distance_m: distance })]
+  );
+
+  const listed = (await listMyChallenges(userId)).find((item) => item.id === challenge.id)!;
+  const detail = await getChallenge(challenge.id, userId);
+  expect(listed.myProgress).toBe(detail.myProgress);
+  expect(listed.myProgress).toBe(distance);
+});
+
+test('GOALS-2: mine list reports zero progress when the user has no activity', async () => {
+  const userId = LIST_USERS[1];
+  const starts = new Date(Date.now() - 3600000);
+  const ends = new Date(Date.now() + 3600000);
+  const challenge = await createChallenge(userId, 'daily', 'zero progress', 'runs_completed', 'gte', 1, starts, ends, 100);
+
+  const listed = (await listMyChallenges(userId)).find((item) => item.id === challenge.id);
+  expect(listed?.myProgress).toBe(0);
+  expect(listed?.myProgress).not.toBeNull();
+});
+
+test('GOALS-2: mine list preserves every challenge field and adds only myProgress', async () => {
+  const userId = LIST_USERS[2];
+  const starts = new Date(Date.now() - 3600000);
+  const ends = new Date(Date.now() + 3600000);
+  const challenge = await createChallenge(userId, 'daily', 'shape check', 'runs_completed', 'gte', 1, starts, ends, 100);
+  const raw = await pool.query('SELECT * FROM challenges WHERE id = $1', [challenge.id]);
+  const listed = (await listMyChallenges(userId)).find((item) => item.id === challenge.id)!;
+  const originalKeys = Object.keys(raw.rows[0]).sort();
+
+  expect(Object.keys(listed).sort()).toEqual([...originalKeys, 'myProgress'].sort());
+  for (const key of originalKeys) expect(listed[key as keyof typeof listed]).toEqual(raw.rows[0][key]);
 });
 
 test('H1: Daily challenge target met', async () => {
