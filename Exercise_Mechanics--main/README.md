@@ -394,6 +394,11 @@ Routes, under `/api/users/{id}/partner-hunt/requests`: `GET` (`{ incoming, outgo
 `POST` (`{ to_user_id }`), `POST /{request_id}/accept`, `POST /{request_id}/decline` (204),
 `DELETE /{request_id}` (204, the sender takes it back).
 
+**Not built yet: disconnecting.** Once connected, the only way apart today is a block, which is a
+heavier statement than "not for me after all". Planned: a plain disconnect that either person can
+use, ending the connection for both, silently (no notification, and it reads the same to the other
+side as any connection that has gone).
+
 ## Activity matching
 
 Members who do the same activities are suggested to each other as possible workout partners: two

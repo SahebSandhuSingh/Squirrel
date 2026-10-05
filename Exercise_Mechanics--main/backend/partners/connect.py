@@ -13,6 +13,9 @@ an accept, each side gets the other's Social profile id (people/resolve), and no
     limits   one live request per pair; one request to the same person per REQUEST_COOLDOWN_DAYS,
              however it ended; MAX_NEW_REQUESTS_PER_DAY; MAX_PENDING_OUTGOING
 
+Not built yet: a plain disconnect (mutual and silent) for two people who connected and drifted
+apart; today a block is the only way to end a connection.
+
 Notifications go through Social (partner.request, partner.accepted). The request one names nobody
 to Social: sending the sender as the actor would attach their profile before they are connected.
 """

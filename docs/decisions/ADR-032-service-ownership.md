@@ -151,3 +151,20 @@ For each, the owner's side ships first; the consumer's side follows.
 4. **Push-up demo in the browser coach** predates sign-in: with sign-in required it cannot create an
    account (password, allowed email domain, token on later calls). Needs a decision: sign in first, or
    a guest mode.
+
+## Note: switched-off app features that turned out to have backends
+
+The app (mobile-4) switches off each capability it believes has no backend
+(`src/api/availability.ts`) and shows "not live yet" instead. Several turned out to be served
+already, by the owner this ADR names. State as of 2026-10-05:
+
+| Feature | Served by | State |
+|---|---|---|
+| Meetup ratings | campus-service: `GET /v1/meetups/{id}/rating`, `POST /v1/meetups/{id}/ratings` | **On.** The app counts it among what campus-service serves (with shared zones and the heatmap), so the rating card works when the map runs on campus-service; on any other source it stays off. |
+| Photo uploads | Social: `POST /v1/media/uploads`, `POST /v1/media/{id}/complete` | **On.** Three app-side mismatches kept uploads from ever working (a moderation poll Social has no route for, a `meetup` purpose Social refuses, an unknown `context` field); fixed in the app. Social takes post and avatar photos only. |
+| Ambassador applications | Social: `GET`/`POST /v1/ambassador/application` | **On in the app, closed in Social.** `SOCIAL_AMBASSADOR_OPEN` stays off until a reviewer is named (open item 2), so the form shows as closed and submissions are refused. |
+| "About you" (private details) | Exercise: `GET`/`PUT /api/me/profile-details` | **Off in the app.** The backend is built (open item 1); the app still saves through `PATCH /v1/me` `profile_details` and must be repointed before `profileDetails` is switched on. |
+| Meetup check-in | campus-service: `POST /v1/meetups/{id}/check-in` | **Off in the app.** campus-service started serving it on 2026-10-05; the app still gates `meetupCheckIn` and has not been checked against the route's shape. |
+
+Lesson: before building a "missing" backend, search every service for the route. Before switching a
+capability on, compare the app's requests and responses with the server's, field by field.
