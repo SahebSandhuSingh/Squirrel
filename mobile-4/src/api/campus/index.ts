@@ -57,7 +57,7 @@ const sourceApi: CampusApi =
       : offApi;
 
 /** Capabilities campus-service serves on top of the env opt-ins; undefined (the env default) otherwise. */
-const OPTED: Set<Capability> | undefined = CAMPUS_MAP_ON_SERVICE ? optedInWith(['sharedZones', 'heatmap', 'meetupRating']) : undefined;
+const OPTED: Set<Capability> | undefined = CAMPUS_MAP_ON_SERVICE ? optedInWith(['sharedZones', 'heatmap', 'meetupRating', 'meetupCheckIn']) : undefined;
 
 /** Method → capability for every endpoint that isn't built yet. Everything unlisted passes through. */
 export const campusApi: CampusApi = gateEndpoints(sourceApi, {
@@ -71,7 +71,8 @@ export const campusApi: CampusApi = gateEndpoints(sourceApi, {
   // ADR-032), so it's on there (OPTED above); other sources stay gated until they serve them.
   meetupRating: { capability: 'meetupRating' },
   rateMeetup: { capability: 'meetupRating' },
-  // campus-service serves meetups but no POST /v1/meetups/{id}/check-in yet; other sources' check-in is live.
+  // campus-service serves POST /v1/meetups/{id}/check-in (OPTED above). The gate applies only there;
+  // other sources' check-in was always live.
   checkIn: { capability: 'meetupCheckIn', when: () => CAMPUS_MAP_ON_SERVICE },
   ambassador: { capability: 'ambassador' },
   applyAmbassador: { capability: 'ambassador' },
