@@ -1,29 +1,34 @@
 /**
- * WORKOUT WITH PARTNER — create a shared session for the exercise you picked, then share the
- * invite from the session screen. Rep-based exercises only (it's a rep race).
+ * WORKOUT WITH PARTNER — create a shared session for the exercise you picked, choose how long the
+ * race runs (1, 3 or 5 minutes), then share the invite from the session screen. Rep-based
+ * exercises only: most reps when time runs out wins.
  */
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { featureUnavailable } from '@/api/campus';
-import { sharedWorkoutApi } from '@/api/sharedWorkout';
+import { errorText, featureUnavailable } from '@/api/campus';
+import { existingSessionId, sharedWorkoutApi } from '@/api/sharedWorkout';
 import { ExerciseHeader, SharedEnded, SharedTag } from '@/components/workout/SharedWorkout';
-import { Button, Display, Header, Icon, Screen, tap } from '@/components/ui';
-import { EXERCISE_LIBRARY, PLAN_BOUNDS } from '@/data/exercises';
+import { Button, Display, Header, Icon, Screen, Segmented, tap } from '@/components/ui';
+import { EXERCISE_LIBRARY } from '@/data/exercises';
+import { durationLabel, RACE_DURATIONS_S, type RaceDuration } from '@/logic/sharedWorkout';
+import { useApp } from '@/state/AppState';
 import { colors, fonts } from '@/theme';
 
 const STEPS: [React.ComponentProps<typeof Icon>['name'], string][] = [
   ['share-variant', 'Invite your workout buddy'],
   ['check-circle-outline', 'Both tap “I’m ready”'],
   ['timer-outline', 'A shared countdown starts you together'],
-  ['account-multiple', 'See each other’s reps live'],
+  ['account-multiple', 'Most reps when time runs out wins'],
 ];
 
 export default function NewSharedWorkout() {
   const { exercise } = useLocalSearchParams<{ exercise?: string }>();
   const ex = EXERCISE_LIBRARY.find((e) => e.key === exercise);
+  const { toast } = useApp();
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const [duration, setDuration] = useState<RaceDuration>(180);
   const back = () => (router.canGoBack() ? router.back() : router.replace('/home'));
 
   if (!ex) {
@@ -34,16 +39,22 @@ export default function NewSharedWorkout() {
       </Screen>
     );
   }
-  const target = ex.measure === 'reps' ? PLAN_BOUNDS.reps.value : null;
 
   const create = async () => {
     tap('impact');
     setCreating(true);
     setError(null);
     try {
-      const s = await sharedWorkoutApi.create({ key: ex.key, target, sets: 1 });
+      const s = await sharedWorkoutApi.create(ex.key, duration);
       router.replace({ pathname: '/workout/[id]', params: { id: s.session_id } });
     } catch (e) {
+      // Already in an unfinished session: that's where you belong.
+      const existing = existingSessionId(e);
+      if (existing) {
+        toast('You’re already in a shared workout', 'account-multiple', colors.gold);
+        router.replace({ pathname: '/workout/[id]', params: { id: existing } });
+        return;
+      }
       setError(e);
       setCreating(false);
     }
@@ -61,11 +72,13 @@ export default function NewSharedWorkout() {
             Workout with{'\n'}
             <Text style={{ color: colors.primary }}>a partner</Text>
           </Display>
-          <ExerciseHeader name={ex.name} blurb={ex.blurb} icon={ex.icon} plan={target != null ? `${target} reps · together` : 'Timed · together'} />
+          <ExerciseHeader name={ex.name} blurb={ex.blurb} icon={ex.icon} plan={ex.measure === 'reps' ? `${durationLabel(duration)} race · together` : 'Timed · together'} />
           {ex.measure !== 'reps' ? (
             <Text style={styles.note}>Shared workouts are rep races — pick a rep-based exercise.</Text>
           ) : (
             <View style={{ gap: 10 }}>
+              <Text style={styles.label}>Race length</Text>
+              <Segmented items={RACE_DURATIONS_S.map(durationLabel)} value={durationLabel(duration)} onChange={(v) => setDuration(RACE_DURATIONS_S.find((d) => durationLabel(d) === v) ?? 180)} />
               {STEPS.map(([icon, text], i) => (
                 <View key={text} style={styles.step}>
                   <Text style={styles.stepN}>{i + 1}</Text>
@@ -75,7 +88,7 @@ export default function NewSharedWorkout() {
               ))}
             </View>
           )}
-          {!!error && <Text style={styles.err}>Couldn’t create the session. Try again.</Text>}
+          {!!error && <Text style={styles.err}>{errorText(error)}</Text>}
           <Button label={creating ? 'Creating…' : 'Create shared session'} icon="arrow-right" disabled={creating || ex.measure !== 'reps'} onPress={create} />
           <Button label="Train solo instead" variant="ghost" size="md" onPress={() => router.replace('/exercise/select')} />
         </View>
@@ -89,5 +102,6 @@ const styles = StyleSheet.create({
   stepN: { width: 22, color: colors.mute, fontFamily: fonts.display, fontSize: 20 },
   stepText: { flex: 1, color: colors.sub, fontFamily: fonts.medium, fontSize: 14 },
   note: { color: colors.dim, fontFamily: fonts.regular, fontSize: 13 },
+  label: { color: colors.text, fontFamily: fonts.labelBold, fontSize: 14, letterSpacing: 1, textTransform: 'uppercase' },
   err: { color: colors.coral, fontFamily: fonts.medium, fontSize: 13, textAlign: 'center' },
 });

@@ -22,7 +22,7 @@ export type Capability =
   | 'meetupCheckIn' // POST /v1/meetups/{id}/check-in on campus-service (it serves meetups, not check-in yet)
   | 'ambassador' // GET | POST /v1/ambassador/application (built: Social)
   | 'profileDetails' // PATCH /v1/me with `profile_details`
-  | 'sharedWorkout'; // /v1/workout-sessions/* + workout.* realtime
+  | 'sharedWorkout'; // Exercise: /api/workout-sessions/* + /ws/workout-sessions/{id} (built; on once deployed)
 
 export const CAPABILITY_LABEL: Record<Capability, string> = {
   sharedZones: 'Shared zones',

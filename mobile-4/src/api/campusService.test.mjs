@@ -103,15 +103,15 @@ test('me: Social profile with campus-service’s Open to Meet (Social’s when c
 });
 
 test('sharedZones and heatmap are gated unless campus-service opts them in; the rest stay gated', async () => {
-  const service = { sharedZones: async () => ({ people: [] }), heatmap: async () => ({ cells: [] }), checkIn: async () => ({}) };
-  const rules = { sharedZones: { capability: 'sharedZones' }, heatmap: { capability: 'heatmap' }, checkIn: { capability: 'meetupCheckIn' } };
+  const service = { sharedZones: async () => ({ people: [] }), heatmap: async () => ({ cells: [] }), joinSession: async () => ({}) };
+  const rules = { sharedZones: { capability: 'sharedZones' }, heatmap: { capability: 'heatmap' }, joinSession: { capability: 'sharedWorkout' } };
   const gated = gateEndpoints(service, rules, new Set());
   await assert.rejects(gated.sharedZones(), (e) => isEndpointUnavailable(e));
   await assert.rejects(gated.heatmap('7d'), (e) => isEndpointUnavailable(e));
   const withCampus = gateEndpoints(service, rules, optedInWith(['sharedZones', 'heatmap'], new Set()));
   assert.deepEqual(await withCampus.sharedZones(), { people: [] });
   assert.deepEqual(await withCampus.heatmap('7d'), { cells: [] });
-  await assert.rejects(withCampus.checkIn(), (e) => isEndpointUnavailable(e) && e.capability === 'meetupCheckIn');
+  await assert.rejects(withCampus.joinSession(), (e) => isEndpointUnavailable(e) && e.capability === 'sharedWorkout');
   assert.deepEqual([...optedInWith(['heatmap'], new Set(['media']))].sort(), ['heatmap', 'media']);
 });
 
@@ -315,14 +315,15 @@ test('meetups list hides cancelled meetups and ones you declined', () => {
   assert.deepEqual(meetupsFromCampus(undefined, 'me'), []);
 });
 
-test('on campus-service rating is served and check-in stays gated; other sources: rating gated, check-in passes', async () => {
+test('on campus-service check-in and rating are both served; other sources: rating gated, check-in passes', async () => {
   let called = false;
   let rated = false;
   const svc = { checkIn: async () => { called = true; return {}; }, meetupRating: async () => { rated = true; return {}; } };
   const gates = { checkIn: { capability: 'meetupCheckIn', when: () => true }, meetupRating: { capability: 'meetupRating' } };
-  const onService = gateEndpoints(svc, gates, optedInWith(['sharedZones', 'heatmap', 'meetupRating'], new Set()));
-  await assert.rejects(onService.checkIn('m1', false), (e) => isEndpointUnavailable(e) && e.code === 'meetupCheckIn_unavailable' && /isn’t live yet/.test(e.message));
-  assert.equal(called, false);
+  const onService = gateEndpoints(svc, gates, optedInWith(['sharedZones', 'heatmap', 'meetupRating', 'meetupCheckIn'], new Set()));
+  await onService.checkIn('m1', false);
+  assert.equal(called, true);
+  called = false;
   await onService.meetupRating('m1');
   assert.equal(rated, true);
   const noService = gateEndpoints(svc, gates, new Set());

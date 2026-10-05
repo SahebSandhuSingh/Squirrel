@@ -57,7 +57,7 @@ const sourceApi: CampusApi =
       : offApi;
 
 /** Capabilities campus-service serves on top of the env opt-ins; undefined (the env default) otherwise. */
-const OPTED: Set<Capability> | undefined = CAMPUS_MAP_ON_SERVICE ? optedInWith(['sharedZones', 'heatmap', 'meetupRating']) : undefined;
+const OPTED: Set<Capability> | undefined = CAMPUS_MAP_ON_SERVICE ? optedInWith(['sharedZones', 'heatmap', 'meetupRating', 'meetupCheckIn']) : undefined;
 
 /** Method → capability for every endpoint that isn't built yet. Everything unlisted passes through. */
 export const campusApi: CampusApi = gateEndpoints(sourceApi, {
@@ -71,7 +71,8 @@ export const campusApi: CampusApi = gateEndpoints(sourceApi, {
   // ADR-032), so it's on there (OPTED above); other sources stay gated until they serve them.
   meetupRating: { capability: 'meetupRating' },
   rateMeetup: { capability: 'meetupRating' },
-  // campus-service serves meetups but no POST /v1/meetups/{id}/check-in yet; other sources' check-in is live.
+  // campus-service serves POST /v1/meetups/{id}/check-in (OPTED above). The gate applies only there;
+  // other sources' check-in was always live.
   checkIn: { capability: 'meetupCheckIn', when: () => CAMPUS_MAP_ON_SERVICE },
   ambassador: { capability: 'ambassador' },
   applyAmbassador: { capability: 'ambassador' },
@@ -106,8 +107,12 @@ export function errorKind(e: unknown): ErrorKind {
 }
 
 export function errorCode(e: unknown): string | null {
-  const b = e instanceof ApiError ? (e.body as { code?: unknown } | undefined) : undefined;
-  return typeof b?.code === 'string' ? b.code : null;
+  const b = e instanceof ApiError ? (e.body as { code?: unknown; detail?: { code?: unknown } | unknown } | undefined) : undefined;
+  if (typeof b?.code === 'string') return b.code;
+  // Exercise puts it in detail: { detail: { code, message } }. Without this, its 404 not_found reads
+  // as "route not deployed" (featureUnavailable) instead of "not found".
+  const d = b?.detail as { code?: unknown } | null | undefined;
+  return d && typeof d === 'object' && typeof d.code === 'string' ? d.code : null;
 }
 
 /**

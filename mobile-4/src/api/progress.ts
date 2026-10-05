@@ -1,18 +1,19 @@
 /**
- * Progress, XP, leaderboards and activity intake — the app's contract (routes under /v1).
+ * Progress, XP and leaderboards — the app's contract (routes under /v1).
  *
  * ADR-032 cancelled the separate progress-service. Its endpoints are moving to their owners one by
  * one; each call goes to the service that serves it now:
  *   Run Module (EXPO_PUBLIC_API_URL):  GET /v1/progress, /daily, /weekly, /history, GET /v1/xp
  *   not served yet (EXPO_PUBLIC_PROGRESS_API_URL, never set, so these stay "not connected"):
- *     leaderboards, POST /v1/activities
+ *     leaderboards
  * Challenges left this contract: Goals call the Run Module (api/runChallenges.ts).
  * Move a method to `runBase` (and its screen to `progressReadsLive`) as its endpoint goes live.
  *
  *
- * The server owns XP, levels, streaks, challenge progress/completion and leaderboards. The app
- * only *reports* activity (bounded STEP_COUNT / WORKOUT_COMPLETED events with an idempotency
- * key) and reads the results. Runs reach the service from the Run Module, never from the app.
+ * The server owns XP, levels, streaks, challenge progress/completion and leaderboards; the app only
+ * reads them. There is no activity intake from the app: a camera workout reaches the server through
+ * Exercise's own session row, runs through the Run Module, and hand-tapped reps (the partner race)
+ * earn nothing, so reporting workouts from the phone would double-count one and let tapping earn XP.
  *
  *   GET  /v1/me                              PATCH /v1/me { displayName, avatarUrl, campus, timezone }
  *   GET  /v1/progress                         lifetime + today
@@ -20,14 +21,11 @@
  *   GET  /v1/progress/weekly?weekStart=YYYY-MM-DD   + previous week and change ratios
  *   GET  /v1/progress/history?days=N | from&to
  *   GET  /v1/xp                               GET /v1/xp/history
- *   POST /v1/activities { events: [...] }    GET /v1/activities
  *   GET  /v1/leaderboards/{global|friends|campus}?period=daily|weekly|alltime
  * Errors are `{ code, detail }` (the shared client surfaces `detail`; `code` is on ApiError.body).
  */
-import { Platform } from 'react-native';
-import * as SecureStore from 'expo-secure-store';
-import { api, ApiError, hasApiToken } from '@/api/client';
-import { API_CONFIGURED, API_URL, PROGRESS_API_CONFIGURED, PROGRESS_API_URL } from '@/api/config';
+import { api, ApiError } from '@/api/client';
+import { API_CONFIGURED, API_URL, PROGRESS_API_URL } from '@/api/config';
 
 // ---------------------------------------------------------------------------
 // Types (exact response shapes)
@@ -93,20 +91,6 @@ export type XpBoard = {
   nextCursor: number | null;
 };
 
-export type ClientActivityType = 'STEP_COUNT' | 'WORKOUT_COMPLETED';
-export type ActivityEventInput = {
-  idempotencyKey: string;
-  type: ClientActivityType;
-  /** STEP_COUNT: today's cumulative total. WORKOUT_COMPLETED: minutes. */
-  value: number;
-  /** ISO-8601 with offset. */
-  occurredAt: string;
-  metadata?: { exercise?: string; reps?: number; calories?: number; sessionId?: string };
-};
-export type ActivityResult =
-  | { idempotencyKey: string; status: 'accepted' | 'duplicate'; eventId?: string; xpAwarded?: number; goalsCompleted?: string[]; challengesCompleted?: string[] }
-  | { idempotencyKey: string; status: 'rejected'; code: string; detail: string };
-export type ActivitiesResponse = { results: ActivityResult[]; progress: DailyProgress; xp: XpSummary };
 
 // ---------------------------------------------------------------------------
 // Endpoints
@@ -114,7 +98,7 @@ export type ActivitiesResponse = { results: ActivityResult[]; progress: DailyPro
 
 /** The Run Module, which serves the progress reads and the XP summary. */
 const runBase = API_URL;
-/** Not served by anyone yet: leaderboards, activity intake. */
+/** Not served by anyone yet: leaderboards. */
 const base = PROGRESS_API_URL;
 const q = (params: Record<string, string | number | undefined>) => {
   const s = Object.entries(params)
@@ -132,15 +116,12 @@ export const progressApi = {
   xp: () => api<XpSummary>('/v1/xp', { base: runBase }),
   leaderboard: (kind: 'global' | 'friends' | 'campus', period: XpBoard['period'] = 'weekly', limit = 50) =>
     api<XpBoard>(`/v1/leaderboards/${kind}${q({ period, limit })}`, { base }),
-  postActivities: (events: ActivityEventInput[]) => api<ActivitiesResponse>('/v1/activities', { base, body: { events } }),
 };
 
 /** The progress reads and XP (Run Module) are reachable in this build. */
 export const PROGRESS_READS_CONFIGURED = API_CONFIGURED;
 /** Progress reads and XP can be fetched: the Run Module is configured and we're signed in. */
 export const progressReadsLive = (mode: string) => PROGRESS_READS_CONFIGURED && mode === 'live';
-/** Leaderboards and activity intake can be used: not served yet, so false in every real build. */
-export const progressLive = (mode: string) => PROGRESS_API_CONFIGURED && mode === 'live';
 
 /** The `code` from a progress-service error body (`{ code, detail }`). */
 export const errorCode = (e: unknown): string | null => {
@@ -148,96 +129,3 @@ export const errorCode = (e: unknown): string | null => {
   return typeof b?.code === 'string' ? b.code : null;
 };
 
-// ---------------------------------------------------------------------------
-// Offline activity queue
-//
-// Activity is queued first and then flushed, so a workout finished offline (or while the
-// service is down) is delivered later. Every event carries its idempotency key, so a flush
-// that is retried after a lost response can't double-count: the server answers "duplicate".
-// Accepted, duplicate and rejected events leave the queue (a rejection is final); network
-// errors, 5xx and 401 keep it for the next flush. Items are stored one per key so no single
-// secure-store value grows past the platform's size guidance.
-// ---------------------------------------------------------------------------
-
-const INDEX_KEY = 'squirrel.pq.index';
-const ITEM_KEY = (id: string) => `squirrel.pq.${id}`;
-const MAX_QUEUE = 100;
-/** The server refuses events older than its offline-sync window (7 days by default). */
-const MAX_AGE_MS = 7 * 24 * 3600 * 1000;
-
-const store = {
-  get: async (k: string) => (Platform.OS === 'web' ? globalThis.localStorage?.getItem(k) ?? null : SecureStore.getItemAsync(k)),
-  set: async (k: string, v: string) => (Platform.OS === 'web' ? globalThis.localStorage?.setItem(k, v) : SecureStore.setItemAsync(k, v)),
-  del: async (k: string) => (Platform.OS === 'web' ? globalThis.localStorage?.removeItem(k) : SecureStore.deleteItemAsync(k)),
-};
-
-async function readIndex(): Promise<string[]> {
-  try {
-    const raw = await store.get(INDEX_KEY);
-    const v = raw ? JSON.parse(raw) : [];
-    return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
-  } catch {
-    return [];
-  }
-}
-
-/** Serialise queue mutations (enqueue during a flush must not lose writes). */
-let chain: Promise<unknown> = Promise.resolve();
-const locked = <T,>(fn: () => Promise<T>): Promise<T> => {
-  const run = chain.then(fn, fn);
-  chain = run.catch(() => undefined);
-  return run;
-};
-
-const shortId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-
-export const newIdempotencyKey = (prefix: string) => `${prefix}:${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-
-export function enqueueActivity(ev: ActivityEventInput): Promise<void> {
-  return locked(async () => {
-    const index = await readIndex();
-    const id = shortId();
-    await store.set(ITEM_KEY(id), JSON.stringify(ev));
-    const next = [...index, id];
-    for (const drop of next.slice(0, Math.max(0, next.length - MAX_QUEUE))) await store.del(ITEM_KEY(drop));
-    await store.set(INDEX_KEY, JSON.stringify(next.slice(-MAX_QUEUE)));
-  });
-}
-
-export type FlushResult = { sent: number; pending: number; response?: ActivitiesResponse };
-
-/** Send everything queued. Safe to call often and concurrently (calls are serialised). */
-export function flushActivities(): Promise<FlushResult> {
-  return locked(async () => {
-    const index = await readIndex();
-    if (!index.length || !PROGRESS_API_CONFIGURED || !hasApiToken()) return { sent: 0, pending: index.length };
-    const items: { id: string; ev: ActivityEventInput }[] = [];
-    const stale: string[] = [];
-    for (const id of index) {
-      try {
-        const raw = await store.get(ITEM_KEY(id));
-        const ev = raw ? (JSON.parse(raw) as ActivityEventInput) : null;
-        if (!ev || Date.now() - Date.parse(ev.occurredAt) > MAX_AGE_MS) stale.push(id);
-        else items.push({ id, ev });
-      } catch {
-        stale.push(id);
-      }
-    }
-    let response: ActivitiesResponse | undefined;
-    const done = new Set(stale);
-    for (let i = 0; i < items.length; i += 50) {
-      const batch = items.slice(i, i + 50);
-      try {
-        response = await progressApi.postActivities(batch.map((b) => b.ev));
-        batch.forEach((b) => done.add(b.id)); // accepted, duplicate or (finally) rejected
-      } catch (e) {
-        if (e instanceof ApiError && e.status === 422) batch.forEach((b) => done.add(b.id)); // malformed: never going to succeed
-        break; // offline / 5xx / 401: keep the rest for next time
-      }
-    }
-    for (const id of done) await store.del(ITEM_KEY(id));
-    const remaining = index.filter((id) => !done.has(id));
-    await store.set(INDEX_KEY, JSON.stringify(remaining));
-    return { sent: items.filter((b) => done.has(b.id)).length, pending: remaining.length, response };
-  });
-}

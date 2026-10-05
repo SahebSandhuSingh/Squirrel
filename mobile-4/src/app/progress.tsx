@@ -30,12 +30,14 @@ const loadLive = async (): Promise<LiveData> => {
 };
 
 const PERIODS: Period[] = ['Day', 'Week', 'Month', 'Year'];
-const METRICS = ['steps', 'active', 'kcal', 'workouts'] as const;
+// No steps: nothing counts them (no pedometer or Health Connect, and nothing writes steps server-side),
+// so a Steps tab would read 0 forever.
+const METRICS = ['active', 'kcal', 'workouts'] as const;
 type Metric = (typeof METRICS)[number];
-const METRIC_LABEL: Record<Metric, string> = { steps: 'Steps', active: 'Active', kcal: 'Calories', workouts: 'Workouts' };
+const METRIC_LABEL: Record<Metric, string> = { active: 'Active', kcal: 'Calories', workouts: 'Workouts' };
 /** Units of each series bucket (the Year series is stored in thousands / hours). */
 const unit = (m: Metric, p: Period) =>
-  m === 'steps' ? (p === 'Year' ? 'k steps' : 'steps') : m === 'kcal' ? (p === 'Year' ? 'k kcal' : 'kcal') : m === 'active' ? (p === 'Year' ? 'h' : 'min') : 'workouts';
+  m === 'kcal' ? (p === 'Year' ? 'k kcal' : 'kcal') : m === 'active' ? (p === 'Year' ? 'h' : 'min') : 'workouts';
 const PREV: Record<Period, string> = { Day: 'yesterday', Week: 'last week', Month: 'last month', Year: 'last year' };
 const HEAT = [alpha(colors.text, 0.06), alpha(colors.primary, 0.25), alpha(colors.primary, 0.45), alpha(colors.primary, 0.7), colors.primary];
 
@@ -45,7 +47,7 @@ export default function Progress() {
   const remote = useRemote(live ? 'progress:screen' : null, loadLive);
   const L = live ? remote.data : undefined;
   const [period, setPeriod] = useState<Period>('Week');
-  const [metric, setMetric] = useState<Metric>('steps');
+  const [metric, setMetric] = useState<Metric>('active');
 
   // ---- TODAY: the server's daily goals
   const daily = L

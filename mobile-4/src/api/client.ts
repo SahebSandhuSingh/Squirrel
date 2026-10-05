@@ -60,6 +60,9 @@ function errorMessage(json: unknown, fallback: string): string {
   if (typeof b?.message === 'string') return b.message;
   if (typeof b?.error === 'string') return b.error;
   if (typeof b?.detail === 'string') return b.detail;
+  // Exercise's coded errors: detail = { code, message } (the message is written for people).
+  const d = b?.detail as { message?: unknown } | null | undefined;
+  if (d && typeof d === 'object' && !Array.isArray(d) && typeof d.message === 'string') return d.message;
   // FastAPI validation errors: detail = [{ loc, msg }, …]
   if (Array.isArray(b?.detail)) {
     const msgs = b.detail.map((d: { msg?: unknown; loc?: unknown[] }) => (typeof d?.msg === 'string' ? `${d.loc?.slice(-1)[0] ?? 'field'}: ${d.msg}` : null)).filter(Boolean);

@@ -1,50 +1,49 @@
 /**
- * SHARED WORKOUT SESSION — waiting room → ready → shared countdown → rep race → done.
- * The phase comes from the server's session (derivePhase); the countdown is aligned to the
- * server clock so both phones start together. Your reps are yours (you tap them) and are
- * reported up; your partner's only ever come from the backend.
+ * SHARED WORKOUT SESSION — invite → ready → shared countdown → timed rep race → result.
+ * The phase is the server's (Exercise), ticked over locally at its own timestamps; the clock is the
+ * server's. Your reps are yours (you tap them) and are reported up; your partner's only ever come
+ * from the server. Hand-tapped races earn no XP: nothing here calls the solo workout's XP path.
  */
 import { useEffect, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
-import { errorText } from '@/api/campus';
-import { ActiveShared, Countdown, InvitePanel, Participants, ReadyButton, seatOf, SharedComplete, SharedEnded, SharedTag, WaitingForPartner, ExerciseHeader } from '@/components/workout/SharedWorkout';
+import { errorKind, errorText, featureUnavailable } from '@/api/campus';
+import { useAuth } from '@/auth/AuthProvider';
+import { ActiveShared, Countdown, ExerciseHeader, InvitePanel, Participants, ReadyButton, seatOf, SharedEnded, SharedResult, SharedTag, WaitingForPartner } from '@/components/workout/SharedWorkout';
 import { Header, Screen, tap } from '@/components/ui';
 import { LoadingRows } from '@/components/campus/States';
-import { EXERCISE_LIBRARY, estimateKcal } from '@/data/exercises';
-import { useMe } from '@/hooks/useCampus';
-import { derivePhase, useSharedWorkout } from '@/hooks/useSharedWorkout';
+import { EXERCISE_LIBRARY } from '@/data/exercises';
+import { useSharedWorkout } from '@/hooks/useSharedWorkout';
+import { durationLabel, partnerLeftMidRace, raceResult, screenPhase, type ScreenPhase } from '@/logic/sharedWorkout';
 import { useApp } from '@/state/AppState';
 import { colors, fonts } from '@/theme';
 
+const IN_SESSION = new Set<ScreenPhase>(['waiting', 'lobby', 'countdown', 'racing']);
+
 export default function SharedWorkoutScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const me = useMe();
-  const meId = me.data?.user_id ?? null;
-  const w = useSharedWorkout(id, meId);
-  const { toast, completeExercise } = useApp();
-  const [myReps, setMyReps] = useState(0);
-  const [paused, setPaused] = useState(false);
-  const [finished, setFinished] = useState(false);
-  const [xp, setXp] = useState<number | null>(null);
+  const { mode } = useAuth();
+  const w = useSharedWorkout(id, mode === 'live');
+  const { toast } = useApp();
   const [busy, setBusy] = useState(false);
   const [confirmExit, setConfirmExit] = useState(false);
-  const startedAt = useRef<number | null>(null);
 
   const s = w.session;
-  const phase = derivePhase(s, meId, w.serverNow, finished, w.loadError);
-  const lost = w.conn === 'lost' && (phase === 'waiting' || phase === 'lobby' || phase === 'countdown' || phase === 'active');
+  const phase = s ? screenPhase(s, w.serverNow) : null;
+  const inSession = !!phase && IN_SESSION.has(phase);
+  const lost = w.conn === 'lost' && inSession;
   const ex = s ? EXERCISE_LIBRARY.find((e) => e.key === s.exercise.key) : undefined;
   const partnerName = w.partner?.user.display_name.split(' ')[0] ?? 'Partner';
   const home = () => router.replace('/home');
+  const again = () => router.replace({ pathname: '/workout/new', params: { exercise: s?.exercise.key ?? '' } });
 
+  // You left the lobby and someone else is still in it: it's theirs now.
   useEffect(() => {
-    if (phase === 'active' && startedAt.current == null) startedAt.current = Date.now();
+    if (phase === 'removed') router.replace('/home');
   }, [phase]);
 
   // Leaving mid-session (back gesture / hardware back) asks first, then tells the server.
   const navigation = useNavigation();
-  const inSession = phase === 'waiting' || phase === 'lobby' || phase === 'countdown' || phase === 'active';
   const inSessionRef = useRef(inSession);
   useEffect(() => {
     inSessionRef.current = inSession;
@@ -79,64 +78,69 @@ export default function SharedWorkoutScreen() {
       return;
     }
     void run(async () => {
-      await w.leave();
       inSessionRef.current = false;
+      await w.leave();
     });
   };
-  const addRep = (d: number) => {
-    const next = Math.max(0, myReps + d);
-    if (next === myReps) return;
-    tap(d > 0 ? 'impact' : 'select');
-    setMyReps(next);
-    w.reportReps(next);
+  const addRep = (d: 1 | -1) => {
+    if (w.tapRep(d)) tap(d > 0 ? 'impact' : 'select');
   };
   const finish = () =>
     run(async () => {
-      await w.complete(myReps);
-      setFinished(true);
+      await w.finish();
       tap('success');
-      // Your reps feed XP and missions exactly like a solo workout (same app rules, no new maths).
-      if (ex && myReps > 0) {
-        const secs = startedAt.current ? Math.round((Date.now() - startedAt.current) / 1000) : myReps * 3;
-        setXp(completeExercise({ key: ex.key, slug: ex.slug, reps: myReps, timedSeconds: 0, activeSeconds: secs, kcal: estimateKcal(ex, secs) }).xp);
-      }
     });
 
   const you = seatOf(w.me, 'You');
   const partner = seatOf(w.partner, 'Partner');
+  const loadError = w.loadError;
 
   return (
     <Screen tabBar={false}>
       <Header back title="" />
-      {lost ? (
+      {mode === 'signed-out' || mode === 'demo' ? (
+        <SharedEnded kind="signed_out" primary="Sign in" onPrimary={() => router.push('/sign-in')} secondary="Back to Home" onSecondary={home} />
+      ) : lost ? (
         <SharedEnded kind="connection_lost" primary="Try to reconnect" onPrimary={w.reload} secondary="Leave" onSecondary={home} />
-      ) : phase === 'loading' ? (
-        <View style={{ gap: 12 }}>
-          <SharedTag status="connecting" />
-          <LoadingRows rows={3} height={84} />
-        </View>
-      ) : phase === 'unavailable' || phase === 'not_found' || phase === 'error' ? (
-        <SharedEnded kind={phase} detail={phase === 'error' ? errorText(w.loadError) : undefined} primary={phase === 'error' ? 'Try again' : 'Back to Home'} onPrimary={phase === 'error' ? w.reload : home} secondary={phase === 'unavailable' ? 'Train solo' : undefined} onSecondary={() => router.replace('/exercise/select')} />
-      ) : phase === 'expired' || phase === 'you_left' || phase === 'already_completed' || phase === 'partner_left_before_start' ? (
-        <SharedEnded kind={phase} primary="New shared session" onPrimary={() => router.replace({ pathname: '/workout/new', params: { exercise: s?.exercise.key ?? '' } })} secondary="Back to Home" onSecondary={home} />
-      ) : phase === 'partner_left_during' ? (
-        <SharedEnded kind="partner_left_during" detail={`${partnerName} left. You did ${myReps} reps — finish them solo or wrap up.`} primary={myReps > 0 ? 'Save my reps' : 'Back to Home'} onPrimary={myReps > 0 ? finish : home} secondary="Back to Home" onSecondary={home} />
-      ) : phase === 'complete' ? (
-        <SharedComplete myReps={myReps || (w.me?.reps ?? 0)} partnerReps={w.partner?.reps ?? null} partnerName={partnerName} partnerStillGoing={!!w.partner && !w.partner.finished_at && s?.status !== 'completed'} xp={xp} onHome={home} onProgress={() => router.replace('/progress')} />
+      ) : !s ? (
+        loadError ? (
+          featureUnavailable(loadError) ? (
+            <SharedEnded kind="unavailable" primary="Back to Home" onPrimary={home} secondary="Train solo" onSecondary={() => router.replace('/exercise/select')} />
+          ) : errorKind(loadError) === 'not_found' ? (
+            <SharedEnded kind="not_found" primary="Back to Home" onPrimary={home} />
+          ) : (
+            <SharedEnded kind="error" detail={errorText(loadError)} primary="Try again" onPrimary={w.reload} secondary="Back to Home" onSecondary={home} />
+          )
+        ) : (
+          <View style={{ gap: 12 }}>
+            <SharedTag status="connecting" />
+            <LoadingRows rows={3} height={84} />
+          </View>
+        )
+      ) : phase === 'removed' ? (
+        <LoadingRows rows={2} height={84} />
+      ) : phase === 'expired' ? (
+        <SharedEnded kind="expired" primary="New shared session" onPrimary={again} secondary="Back to Home" onSecondary={home} />
+      ) : phase === 'closed' ? (
+        <SharedEnded kind="closed" primary="New shared session" onPrimary={again} secondary="Back to Home" onSecondary={home} />
+      ) : phase === 'you_left' ? (
+        <SharedEnded kind="you_left" primary="Back to Home" onPrimary={home} secondary="New shared session" onSecondary={again} />
+      ) : phase === 'result' || phase === 'you_finished' ? (
+        <SharedResult result={raceResult(s, w.myReps)} partnerName={partnerName} partnerStillGoing={phase === 'you_finished'} handTapped={s.rep_source === 'hand_tapped'} onHome={home} onAgain={again} />
       ) : phase === 'countdown' ? (
         <View style={{ gap: 14 }}>
           <SharedTag status="starting" />
           <Participants you={you} partner={partner} />
           <Countdown seconds={w.secondsToStart ?? 0} />
         </View>
-      ) : phase === 'active' && s ? (
-        <ActiveShared exercise={s.exercise.name} target={s.exercise.target} myReps={myReps} partnerReps={w.partner?.reps ?? null} partnerName={partnerName} conn={w.conn} paused={paused} onRep={() => addRep(1)} onUndo={() => addRep(-1)} onPause={() => setPaused((p) => !p)} onFinish={finish} onExit={exit} />
-      ) : s ? (
+      ) : phase === 'racing' ? (
+        <ActiveShared exercise={s.exercise.name} secondsLeft={w.secondsLeft ?? 0} myReps={w.myReps} partnerReps={w.partner?.reps ?? null} partnerName={partnerName} partnerLeft={partnerLeftMidRace(s)} conn={w.conn} onRep={() => addRep(1)} onUndo={() => addRep(-1)} onFinish={finish} onExit={exit} />
+      ) : (
         <View style={{ gap: 16 }}>
           <SharedTag status={phase === 'waiting' ? 'waiting' : 'lobby'} />
-          <ExerciseHeader name={s.exercise.name} icon={ex?.icon} blurb={ex?.blurb} plan={s.exercise.target != null ? `${s.exercise.target} reps · together` : undefined} />
+          <ExerciseHeader name={s.exercise.name} icon={ex?.icon} blurb={ex?.blurb} plan={`${durationLabel(s.duration_s)} race · most reps wins`} />
           <Participants you={you} partner={partner} />
-          {phase === 'waiting' && w.me?.role === 'host' && (
+          {phase === 'waiting' && (
             <>
               <WaitingForPartner />
               <InvitePanel url={s.invite_url} code={s.invite_code} exerciseName={s.exercise.name} />
@@ -145,7 +149,7 @@ export default function SharedWorkoutScreen() {
           {phase === 'lobby' && <ReadyButton ready={!!w.me?.ready} busy={busy} onToggle={() => run(() => w.setReady(!w.me?.ready))} />}
           <ExitLink onExit={exit} confirm={confirmExit} />
         </View>
-      ) : null}
+      )}
     </Screen>
   );
 }
