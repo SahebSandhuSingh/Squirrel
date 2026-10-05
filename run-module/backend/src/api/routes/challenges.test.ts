@@ -71,3 +71,78 @@ test('H10: Isolation - cannot GET challenge not part of, nor accept/join', async
   });
   expect(joinRes.statusCode).toBe(403);
 });
+
+test('POST /v1/challenges validation - rejects unknown metric', async () => {
+  const payload = {
+    type: 'daily',
+    title: 'Test',
+    metric: 'steps', // invalid
+    comparator: 'gte',
+    threshold: 1000,
+    starts_at: '2025-01-01T00:00:00Z',
+    ends_at: '2025-01-02T00:00:00Z',
+    xp_reward: 100
+  };
+
+  const res = await fastify.inject({
+    method: 'POST',
+    url: '/v1/challenges',
+    headers: { Authorization: "Bearer " + validToken },
+    payload
+  });
+  
+  expect(res.statusCode).toBe(400);
+  expect(res.json().error).toContain('Invalid metric');
+  expect(res.json().error).toContain('distance_m');
+});
+
+test('POST /v1/challenges validation - accepts allowed metrics', async () => {
+  const metrics = ['distance_m', 'duration_s', 'runs_completed', 'territory_area_m2', 'territories_captured'];
+  
+  for (const metric of metrics) {
+    const res = await fastify.inject({
+      method: 'POST',
+      url: '/v1/challenges',
+      headers: { Authorization: "Bearer " + validToken },
+      payload: {
+        type: 'daily',
+        title: `Test ${metric}`,
+        metric,
+        comparator: 'gte',
+        threshold: 10,
+        starts_at: '2025-01-01T00:00:00Z',
+        ends_at: '2025-01-02T00:00:00Z',
+        xp_reward: 50
+      }
+    });
+    expect(res.statusCode).toBe(201);
+  }
+});
+
+test('POST /v1/challenges validation - rejects unvalidated fields', async () => {
+  const base = {
+    type: 'daily', title: 'Test', metric: 'distance_m', comparator: 'gte', threshold: 10,
+    starts_at: '2025-01-01T00:00:00Z', ends_at: '2025-01-02T00:00:00Z', xp_reward: 50
+  };
+
+  const cases = [
+    { mod: { type: 'weekly' }, err: 'Invalid type' },
+    { mod: { comparator: 'eq' }, err: 'Invalid comparator' },
+    { mod: { threshold: '10' }, err: 'valid number' },
+    { mod: { xp_reward: -5 }, err: 'positive integer' },
+    { mod: { title: '   ' }, err: 'non-empty string' },
+    { mod: { starts_at: 'not-a-date' }, err: 'valid date string' },
+    { mod: { ends_at: '2024-01-01T00:00:00Z' }, err: 'ends_at must be after starts_at' },
+  ];
+
+  for (const { mod, err } of cases) {
+    const res = await fastify.inject({
+      method: 'POST',
+      url: '/v1/challenges',
+      headers: { Authorization: "Bearer " + validToken },
+      payload: { ...base, ...mod }
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain(err);
+  }
+});

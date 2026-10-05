@@ -409,6 +409,8 @@ export const socialCampusApi: T.CampusApi = {
   applyAmbassador: (answers, key) => communityApi.applyAmbassador(answers, key),
 
   meetups: notLive('Meetups'),
+  createMeetup: notLive('Meetups'),
+  respondMeetup: notLive('Meetups'),
   meetup: notLive('Meetups'),
   checkIn: notLive('Meetups'),
 };

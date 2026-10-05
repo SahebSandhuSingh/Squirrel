@@ -1,18 +1,20 @@
 import { StyleSheet, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
+import { CAMPUS_MAP_ON_SERVICE } from '@/api/campus';
 import { BattleList } from '@/components/campus/BattleList';
 import { CampusMap } from '@/components/campus/CampusMap';
 import { SourceBadge } from '@/components/campus/States';
 import { ZonePanel } from '@/components/campus/ZonePanel';
-import { Header, Screen } from '@/components/ui';
-import { useMe, useTerritorySync, useZones } from '@/hooks/useCampus';
+import { Button, Header, Screen, tap } from '@/components/ui';
+import { useCampusSession, useMe, useTerritorySync, useZones } from '@/hooks/useCampus';
 
-/** One zone: its place on the map, owner, status, history, the allowed action and its battles. */
+/** One zone: its place on the map, owner, status, history, the allowed action, planning a meetup here, and its battles. */
 export default function ZoneScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const zones = useZones();
   const me = useMe();
   useTerritorySync();
+  const { signedIn } = useCampusSession();
   return (
     <Screen tabBar={false}>
       <Header back title="Zone" right={<SourceBadge />} />
@@ -20,6 +22,10 @@ export default function ZoneScreen() {
       <View style={{ marginTop: 14 }}>
         <ZonePanel zoneId={id} meId={me.data?.user_id ?? null} />
       </View>
+      {/* Meetups are campus-service's (ADR-032): planned from a zone, with people you've crossed paths with. */}
+      {CAMPUS_MAP_ON_SERVICE && signedIn && (
+        <Button label="Plan a meetup here" variant="secondary" iconLeft="calendar-plus" onPress={() => { tap(); router.push({ pathname: '/meetup/new', params: { zoneId: id } }); }} style={{ marginTop: 14 }} />
+      )}
       <BattleList zoneId={id} newBattle={{ label: 'New battle', params: { zoneId: id } }} />
     </Screen>
   );

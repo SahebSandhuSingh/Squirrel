@@ -32,7 +32,9 @@ export const DEFAULT_LOOK: AvatarLook = {
   accessory: 'none',
 };
 
-export type ToastMsg = { id: number; text: string; icon?: string; color?: string };
+/** `action`: one button (e.g. Undo); such a toast stays `ms` long (default 2.6 s). */
+export type ToastOpts = { action?: { label: string; onPress: () => void }; ms?: number };
+export type ToastMsg = { id: number; text: string; icon?: string; color?: string } & ToastOpts;
 
 /** You, as far as this phone knows. The name/id are the signed-in account's, never invented. */
 export type Me = { id: string; name: string | null; look: AvatarLook };
@@ -62,7 +64,8 @@ type AppState = {
   exerciseToday: { sessions: number; minutes: number; kcal: number };
   // feedback
   toasts: ToastMsg[];
-  toast: (text: string, icon?: string, color?: string) => void;
+  toast: (text: string, icon?: string, color?: string, opts?: ToastOpts) => void;
+  dismissToast: (id: number) => void;
 };
 
 export type ActiveExercise = { key: string; sessionId?: string; startedAt: number };
@@ -94,11 +97,13 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setXp(total);
   }, []);
 
-  const toast = useCallback((text: string, icon?: string, color?: string) => {
+  const toast = useCallback((text: string, icon?: string, color?: string, opts?: ToastOpts) => {
     const id = ++toastId.current;
-    setToasts((t) => [...t.slice(-2), { id, text, icon, color }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2600);
+    const ms = opts?.ms ?? 2600;
+    setToasts((t) => [...t.slice(-2), { id, text, icon, color, ...opts, ms }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), ms);
   }, []);
+  const dismissToast = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
 
   // ---- XP from the Run Module (GET /v1/xp), the XP authority, whenever it's configured and we're signed in:
   // read on sign-in, on foreground and after each workout, so nothing here is client-decided.
@@ -194,6 +199,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     exerciseToday,
     toasts,
     toast,
+    dismissToast,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

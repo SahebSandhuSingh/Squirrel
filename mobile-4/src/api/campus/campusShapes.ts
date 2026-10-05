@@ -31,6 +31,8 @@ export const CAMPUS_SERVICE_METHODS = [
   // meetups, check-in and post-meetup rating (ADR-032): campus-service serves all of them.
   'meetups',
   'meetup',
+  'createMeetup',
+  'respondMeetup',
   'checkIn',
   'meetupRating',
   'rateMeetup',
@@ -90,7 +92,9 @@ export type CampusMeetup = {
   place_text: string | null;
   starts_at: string;
   status: 'proposed' | 'confirmed' | 'cancelled' | 'completed';
-  participants: { user_id: string; role: 'host' | 'guest'; status: 'invited' | 'accepted' | 'declined'; responded_at: string | null; person: (T.PersonLite & { open_to_meet?: boolean }) | null }[];
+  participants: { user_id: string; role: 'host' | 'guest'; status: 'invited' | 'accepted' | 'declined'; responded_at: string | null; checked_in?: boolean; person: (T.PersonLite & { open_to_meet?: boolean }) | null }[];
+  /** Read back once campus-service sends them (check-in is otherwise only known from its response). */
+  my_check_in_at?: string | null;
 };
 
 /** Fields campus-service adds to a list it hid or emptied (Active now, shared zones, a person's context). */
@@ -267,8 +271,9 @@ const CHECK_IN_CLOSES_AFTER_MS = 6 * 3600_000;
 
 /**
  * A campus-service meetup → the app's Meetup. Title: who you're meeting ("Meetup with Aanya & Ravi").
- * Attendees: host + invitees who haven't declined. campus-service records no check-ins, so nobody
- * shows as checked in (and `my_check_in_at` is null).
+ * Attendees: host + invitees who haven't declined, each marked confirmed or only invited. Your role
+ * and RSVP decide what you can do. Check-ins are read when campus-service sends them (`checked_in`,
+ * `my_check_in_at`); until then nobody shows as checked in.
  */
 export function meetupFromCampus(m: CampusMeetup, meId: string | null): T.Meetup {
   const going = (m.participants ?? []).filter((p) => p.status !== 'declined');
@@ -276,14 +281,18 @@ export function meetupFromCampus(m: CampusMeetup, meId: string | null): T.Meetup
   const where = m.zone?.name ?? m.place_text ?? null;
   const title = others.length ? `Meetup with ${others.length > 2 ? `${others.slice(0, 2).join(', ')} +${others.length - 2}` : others.join(' & ')}` : where ? `Meetup at ${where}` : 'Meetup';
   const start = Date.parse(m.starts_at);
+  const mine = meId ? (m.participants ?? []).find((p) => p.user_id === meId) : undefined;
   return {
     id: m.id,
     title,
     starts_at: m.starts_at,
     location: { name: where ?? 'On campus', zone_id: m.zone_id ?? m.zone?.id ?? null },
     event_id: null,
-    attendees: going.map((p) => ({ user_id: p.user_id, display_name: p.person?.display_name ?? 'Squirrel', avatar_url: p.person?.avatar_url ?? null, hostel: p.person?.hostel ?? null, checked_in: false })),
-    my_check_in_at: null,
+    attendees: going.map((p) => ({ user_id: p.user_id, display_name: p.person?.display_name ?? 'Squirrel', avatar_url: p.person?.avatar_url ?? null, hostel: p.person?.hostel ?? null, checked_in: p.checked_in === true, rsvp: p.status === 'accepted' ? 'accepted' : 'invited', host: p.role === 'host' })),
+    my_check_in_at: m.my_check_in_at ?? null,
+    status: m.status,
+    my_role: mine?.role ?? null,
+    my_rsvp: mine?.status ?? null,
     check_in_opens_at: new Date(start - CHECK_IN_OPENS_BEFORE_MS).toISOString(),
     check_in_closes_at: new Date(start + CHECK_IN_CLOSES_AFTER_MS).toISOString(),
   };

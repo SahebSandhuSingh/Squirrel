@@ -1,6 +1,7 @@
 /**
  * MEETUPS — your upcoming meetups, each with a check-in. With campus-service configured these are its
- * meetups (host + invitees; cancelled and declined ones hidden) and check-in isn't live there yet.
+ * meetups (host + invitees; cancelled and declined ones hidden): an invite you haven't answered says
+ * so, and new ones are planned from a zone.
  */
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
@@ -33,7 +34,9 @@ export default function Meetups() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.title}>{m.title}</Text>
                 <Text style={styles.meta}>{formatEventDate(m.starts_at)} · {m.location.name}</Text>
-                {checkInLive && (
+                {m.my_rsvp === 'invited' ? (
+                  <Text style={[styles.meta, { color: colors.secondary }]}>You’re invited · tap to answer</Text>
+                ) : checkInLive && (
                   <Text style={[styles.meta, { color: m.my_check_in_at ? colors.green : open ? colors.primary : colors.dim }]}>
                     {m.my_check_in_at ? 'Checked in' : open ? 'Check-in open' : `Check-in opens ${formatEventDate(m.check_in_opens_at)}`}
                   </Text>
@@ -51,7 +54,7 @@ export default function Meetups() {
           ) : list.loading ? (
             <LoadingRows rows={3} height={80} />
           ) : (
-            <EmptyNote icon="calendar-blank-outline" title="No meetups coming up" body={CAMPUS_MAP_ON_SERVICE ? 'When you’re invited to a meetup, it appears here.' : 'RSVP to an event and your meetup appears here.'} action={isLocked('events') ? undefined : 'Browse events'} onAction={() => router.push('/events')} />
+            <EmptyNote icon="calendar-blank-outline" title="No meetups coming up" body={CAMPUS_MAP_ON_SERVICE ? 'Plan one from any zone on the map, or wait for an invite: it appears here.' : 'RSVP to an event and your meetup appears here.'} action={isLocked('events') ? undefined : 'Browse events'} onAction={() => router.push('/events')} />
           )
         }
       />

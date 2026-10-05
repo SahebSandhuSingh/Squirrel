@@ -112,6 +112,8 @@ export function makeHttpCampusApi(base: string): T.CampusApi {
 
     meetups: async () => (await get<{ meetups: T.Meetup[] }>('/v1/meetups')).meetups,
     meetup: (meetupId) => get<T.Meetup>(`/v1/meetups/${id(meetupId)}`),
+    createMeetup: (input) => send<T.Meetup>('/v1/meetups', 'POST', input),
+    respondMeetup: (meetupId, action) => send<T.Meetup>(`/v1/meetups/${id(meetupId)}/${action}`, 'POST', {}),
     checkIn: (meetupId, notify) => send<T.CheckInResult>(`/v1/meetups/${id(meetupId)}/check-in`, 'POST', { notify_safety_contact: notify }),
   };
 }
