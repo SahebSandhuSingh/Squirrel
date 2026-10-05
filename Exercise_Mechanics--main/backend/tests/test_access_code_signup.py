@@ -136,7 +136,7 @@ def test_access_code_signup_global_limit_caps_failures_across_ips(app):
     assert _count_accounts() == 0
 
 
-def test_email_verification_revokes_the_access_and_refresh_sessions_from_signup(app, monkeypatch):
+def test_email_verification_revokes_refresh_but_access_token_lives_until_expiry(app, monkeypatch):
     sent = []
     monkeypatch.setattr(mailer, "send_email", lambda to, subject, text: sent.append(text))
     created = call(app, "POST", "/api/auth/signup/access-code", json=_payload())
@@ -152,9 +152,11 @@ def test_email_verification_revokes_the_access_and_refresh_sessions_from_signup(
     verified = call(app, "POST", "/api/auth/email/verify", json={"email": "john.doe@gmail.com", "code": code})
     assert verified.status == 200
     assert verified.json()["new_account"] is False
+    assert read_profile(created.json()["user_id"])["session_version"] == 1
 
-    stale = call(app, "GET", "/api/me/profile-details", headers={"authorization": f"Bearer {first_token}"})
-    assert stale.status == 401
+    # Access tokens are stateless and intentionally remain valid until their 15-minute expiry.
+    still_valid = call(app, "GET", "/api/me/profile-details", headers={"authorization": f"Bearer {first_token}"})
+    assert still_valid.status == 200
     assert call(app, "POST", "/api/auth/refresh", json={"refresh_token": first_refresh}).status == 401
     fresh = call(app, "GET", "/api/me/profile-details",
                  headers={"authorization": f"Bearer {verified.json()['access_token']}"})

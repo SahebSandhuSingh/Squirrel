@@ -229,15 +229,6 @@ def verify_access_token(token: str, now: float | None = None) -> str | None:
         return None
     if int(claims.get("exp", 0)) <= (now if now is not None else time.time()):
         return None
-    try:
-        token_version = int(claims.get("sv", 0))
-        # Lazy import avoids a module cycle: auth.store uses the password/token primitives above.
-        from backend.auth.store import session_version
-        if token_version != session_version(claims["sub"]):
-            return None
-    except Exception:
-        # If account state cannot be read, fail closed rather than accepting a possibly revoked token.
-        return None
     return claims["sub"]
 
 
