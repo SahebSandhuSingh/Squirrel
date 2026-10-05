@@ -195,7 +195,9 @@ export async function meetupRoutes(app: FastifyInstance) {
         let cancelledByResponses = false;
 
         if (action === 'accept' || action === 'decline') {
-          if (actor.role !== 'guest' || actor.status !== 'invited') throw errors.notFound('Meetup');
+          if (actor.role !== 'guest') throw errors.notFound('Meetup');
+          if (action === 'accept' && actor.status !== 'invited' && actor.status !== 'declined') throw errors.notFound('Meetup');
+          if (action === 'decline' && actor.status !== 'invited') throw errors.notFound('Meetup');
           if (row.status === 'cancelled' || status === 'completed') throw errors.conflict('meetup_closed', 'This meetup is no longer open for responses.');
           if (action === 'accept') {
             await query(`UPDATE meetup_participants SET status = 'accepted', responded_at = now() WHERE meetup_id = $1 AND user_id = $2`, [id, user.id], tx);
@@ -246,6 +248,62 @@ export async function meetupRoutes(app: FastifyInstance) {
       return serialize(result.row, result.parts);
     });
   }
+
+
+  app.post('/v1/meetups/:id/check-in', { preHandler: requireAuth }, async (req) => {
+    const viewer = currentUser(req);
+    const { id } = IdParams.parse(req.params);
+    const body = z.object({ notify_safety_contact: z.boolean().default(false) }).parse(req.body ?? {});
+  
+    const scope = `meetup-checkin:${id}`;
+    const replay = await one<{ response: any; scope: string }>(
+      `SELECT response, scope FROM idempotency_keys WHERE user_id = $1 AND key = $2`, [viewer.id, id]
+    );
+    if (replay) {
+      if (replay.scope !== scope) throw errors.conflict('idempotency_key_reused', 'Idempotency key reused for a different request.');
+      return replay.response;
+    }
+  
+    return await withTransaction(async (tx) => {
+      const row = await loadMeetup(id, tx, true);
+      if (!row) throw errors.notFound('Meetup');
+      
+      const parts = await participants(id, tx);
+      if (await blockedFromViewer(viewer.id, parts, tx)) throw errors.notFound('Meetup');
+  
+      const me = parts.find((p) => p.user_id === viewer.id);
+      if (!me) throw errors.notFound('Meetup');
+      if (me.status === 'declined') throw errors.conflict('meetup_not_participant', 'Only attendees can check in.');
+  
+      const startMs = Date.parse(row.starts_at);
+      if (Date.now() < startMs - 3600_000 || Date.now() > startMs + 6 * 3600_000) {
+        throw errors.conflict('meetup_checkin_closed', 'Check-in is only available between 1 hour before and 6 hours after the meetup.');
+      }
+      
+      if (me.status === 'invited') {
+        await query(`UPDATE meetup_participants SET status = 'accepted', responded_at = now() WHERE meetup_id = $1 AND user_id = $2`, [id, viewer.id], tx);
+      }
+      
+      const res = { 
+        meetup_id: id, 
+        checked_in_at: new Date().toISOString(), 
+        safety_notification: { requested: body.notify_safety_contact, status: body.notify_safety_contact ? 'not_configured' : 'skipped', contact_label: null } 
+      };
+  
+      await query(`INSERT INTO idempotency_keys (user_id, key, scope, status_code, response) VALUES ($1, $2, $3, 200, $4) ON CONFLICT DO NOTHING`, [viewer.id, id, scope, res], tx);
+      
+      for (const p of parts) {
+        if (p.user_id !== viewer.id && (p.status === 'accepted' || (me.status === 'invited' && p.user_id === viewer.id /* self updated */))) {
+          // If a user just accepted via check-in, they aren't in 'parts' as accepted yet, but we only notify *other* attendees anyway.
+          await notify(p.user_id, 'meetup.check_in', 'Meetup check-in', '{actor} checked in for the meetup.',
+            { meetup_id: id, route: `/meetup/${id}` }, viewer.id,
+            campusNotificationDedupeKey('meetup.check_in', id, p.user_id));
+        }
+      }
+      
+      return res;
+    });
+  });
 
   app.get('/v1/meetups/:id/rating', { preHandler: requireAuth }, async (req) => {
     const viewer = currentUser(req);
