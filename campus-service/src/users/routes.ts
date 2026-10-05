@@ -113,6 +113,15 @@ export async function userRoutes(app: FastifyInstance) {
   const openToMeetHandler = async (req: FastifyRequest) => {
     const user = currentUser(req);
     const b = OpenToMeet.parse(req.body ?? {});
+    if (b.enabled) {
+      const activity = await one<{ exists: boolean }>(
+        `SELECT EXISTS (SELECT 1 FROM activities WHERE user_id = $1 AND verification_status = 'VERIFIED') AS exists`,
+        [user.id],
+      );
+      if (!activity?.exists) {
+        throw errors.conflict('verified_activity_required', 'Record and verify a run or walk first to turn on Open to Meet.');
+      }
+    }
     const until = b.enabled ? new Date(Date.now() + (b.hours ?? 12) * 3_600_000).toISOString() : null;
     const u = (await updateUser(user.id, { open_to_meet: b.enabled, open_to_meet_updated_at: new Date().toISOString(), open_to_meet_until: until }))!;
     return { enabled: u.open_to_meet, updated_at: u.open_to_meet_updated_at, visible_until: u.open_to_meet_until };

@@ -20,6 +20,8 @@ describe('XP cache to Run Module (integration)', () => {
   });
 
   async function makeActive(userId: string) {
+    await api('GET', '/v1/me', userId);
+    await sql(`INSERT INTO activities (user_id, activity_type, verification_status, started_at) VALUES ($1, 'walk', 'VERIFIED', now())`, [userId]);
     await api('PUT', '/v1/me/open-to-meet', userId, { enabled: true });
     await sql(`INSERT INTO presence (user_id, geom, accuracy_m, updated_at, expires_at) VALUES ('${userId}', ST_SetSRID(ST_MakePoint(0, 0), 4326), 10, now(), now() + interval '1 hour') ON CONFLICT (user_id) DO UPDATE SET updated_at = EXCLUDED.updated_at, expires_at = EXCLUDED.expires_at`);
   }

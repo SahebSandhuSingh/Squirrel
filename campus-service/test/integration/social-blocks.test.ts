@@ -6,6 +6,7 @@ import { api, app, HAS_DB, sql, useTestApp } from './setup.js';
 
 async function active(userId: string) {
   await api('GET', '/v1/me', userId);
+  await sql(`INSERT INTO activities (user_id, activity_type, verification_status, started_at) VALUES ($1, 'walk', 'VERIFIED', now())`, [userId]);
   await api('PUT', '/v1/me/open-to-meet', userId, { enabled: true });
   await api('PUT', '/v1/map/presence', userId, { lat: 22.9637, lng: 88.5284 });
 }

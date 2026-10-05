@@ -4,6 +4,11 @@ import { trackAlong, xyToLatLng, sweepRect } from '../helpers.js';
 
 const key = () => `k-${Math.random().toString(36).slice(2)}`;
 
+async function giveVerifiedActivity(userId: string) {
+  await api('GET', '/v1/me', userId);
+  await sql(`INSERT INTO activities (user_id, activity_type, verification_status, started_at) VALUES ($1, 'walk', 'VERIFIED', now())`, [userId]);
+}
+
 describe.skipIf(!HAS_DB)('GPS ingest, privacy, challenges (integration)', () => {
   useTestApp();
 
@@ -74,6 +79,8 @@ describe.skipIf(!HAS_DB)('GPS ingest, privacy, challenges (integration)', () => 
     expect((await api('PUT', '/v1/map/presence', 'u_rhea', { lat: b.lat, lng: b.lng, accuracy_m: 8 })).body.accepted).toBe(true);
     expect((await api('PUT', '/v1/map/presence', 'u_kabir', { lat: far.lat, lng: far.lng, accuracy_m: 8 })).body.accepted).toBe(true);
     await api('POST', '/v1/activities', 'u_rhea', { type: 'run', started_at: new Date().toISOString() }); // rhea is active now
+
+    await Promise.all(['u_aanya', 'u_rhea', 'u_kabir'].map(giveVerifiedActivity));
 
     const closed = await api('GET', '/v1/people/active', 'u_aanya');
     expect(closed.body.visible).toBe(false);
