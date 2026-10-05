@@ -9,6 +9,7 @@ import { shortTime } from '@/components/campus/territoryUi';
 import { useLocks } from '@/components/Locked';
 import { PokeButton } from '@/components/social/PokeButton';
 import { useCampus, useRealtime, useRefreshOnFocus } from '@/hooks/useCampus';
+import { earlierRows, keepOlder } from '@/logic/notificationPages';
 import { useApp } from '@/state/AppState';
 import { setUnread } from '@/state/socialStore';
 import { Button, Header, Icon, Screen } from '@/components/ui';
@@ -51,6 +52,8 @@ const kindOf = (n: AppNotification): Kind => (n.type === 'territory' ? territory
 /**
  * Notifications: pokes (with POKE BACK), friendships, territory alerts and campus activity from the
  * backend. Without a backend the list says "Not live yet" — there are no sample notifications.
+ * The newest page is grouped (people first); "Show older" pages back through the rest with the
+ * server's cursor, in time order under "Earlier".
  */
 export default function Notifications() {
   return <CampusNotifications />;
@@ -58,14 +61,31 @@ export default function Notifications() {
 
 function CampusNotifications() {
   const { toast } = useApp();
-  const r = useCampus<{ items: AppNotification[]; unread: number }>('notifications', () => getNotifications());
+  const r = useCampus<{ items: AppNotification[]; unread: number; next_cursor: string | null }>('notifications', () => getNotifications());
   const [markingAll, setMarkingAll] = useState(false);
+  // Past the first page: every row loaded so far, and where the next page starts (null: no more).
+  const [older, setOlder] = useState<{ kept: AppNotification[]; cursor: string | null } | null>(null);
+  const [more, setMore] = useState<'idle' | 'loading' | 'error'>('idle');
+  const cursor = older ? older.cursor : r.data?.next_cursor ?? null;
+  const loadOlder = async () => {
+    if (!cursor || more === 'loading' || !r.data) return;
+    const first = r.data.items;
+    setMore('loading');
+    try {
+      const page = await getNotifications(cursor);
+      setOlder((o) => ({ kept: keepOlder(o?.kept ?? [], first, page.items), cursor: page.next_cursor }));
+      setMore('idle');
+    } catch {
+      setMore('error');
+    }
+  };
   useRefreshOnFocus(r.reload, 20_000);
   useRealtime((m) => {
-    if (m.type === 'notification.created' && r.data) r.mutate({ items: [m.data, ...r.data.items.filter((n) => n.id !== m.data.id)], unread: r.data.unread + 1 });
+    if (m.type === 'notification.created' && r.data) r.mutate({ ...r.data, items: [m.data, ...r.data.items.filter((n) => n.id !== m.data.id)], unread: r.data.unread + 1 });
   });
   // Opening the list marks what you've seen as read (the backend keeps the truth).
-  const unreadIds = (r.data?.items ?? []).filter((n) => !n.read).map((n) => n.id).join(',');
+  const earlier = older && r.data ? earlierRows(older.kept, r.data.items) : [];
+  const unreadIds = [...(r.data?.items ?? []), ...earlier].filter((n) => !n.read).map((n) => n.id).join(',');
   useEffect(() => {
     if (!unreadIds) {
       if (r.data) setUnread(0);
@@ -85,7 +105,8 @@ function CampusNotifications() {
     try {
       const x = await campusApi.markNotificationsRead([]); // empty = all
       setUnread(x.unread);
-      if (r.data) r.mutate({ items: r.data.items.map((n) => ({ ...n, read: true })), unread: x.unread });
+      if (r.data) r.mutate({ ...r.data, items: r.data.items.map((n) => ({ ...n, read: true })), unread: x.unread });
+      setOlder((o) => o && { ...o, kept: o.kept.map((n) => ({ ...n, read: true })) });
     } catch {
       toast('Couldn’t mark as read — try again', 'alert-circle-outline', colors.coral);
     } finally {
@@ -94,7 +115,7 @@ function CampusNotifications() {
   };
 
   const items = r.data?.items ?? [];
-  const hasUnread = items.some((n) => !n.read) || (r.data?.unread ?? 0) > 0;
+  const hasUnread = items.some((n) => !n.read) || earlier.some((n) => !n.read) || (r.data?.unread ?? 0) > 0;
   // People first (pokes, friendships, shared ground, Squirrel Dates); everything campus after.
   const PEOPLE = new Set(['poke', 'friendship', 'shared_zone', 'date_suggestion']);
   const pokes = items.filter((n) => PEOPLE.has(n.type));
@@ -107,16 +128,30 @@ function CampusNotifications() {
         right={hasUnread ? <Button label="Mark all read" size="sm" variant="ghost" iconLeft="check-all" onPress={markAll} disabled={markingAll} /> : undefined}
       />
       <FlatList
-        data={[...pokes, ...rest]}
+        data={[...pokes, ...rest, ...earlier]}
         keyExtractor={(n) => n.id}
         contentContainerStyle={{ gap: 10, paddingTop: 10, paddingBottom: 40 }}
         ListHeaderComponent={pokes.length ? <Text style={styles.section}>People</Text> : null}
         renderItem={({ item, index }) => (
           <View>
             {index === pokes.length && rest.length > 0 && <Text style={[styles.section, { marginTop: 8, marginBottom: 10 }]}>Campus</Text>}
+            {index === items.length && <Text style={[styles.section, { marginTop: 8, marginBottom: 10 }]}>Earlier</Text>}
             <NotificationCard n={item} />
           </View>
         )}
+        ListFooterComponent={
+          items.length && cursor ? (
+            <Button
+              label={more === 'loading' ? 'Loading…' : more === 'error' ? 'Couldn’t load — try again' : 'Show older'}
+              variant="secondary"
+              size="sm"
+              iconLeft={more === 'error' ? 'refresh' : 'chevron-down'}
+              disabled={more === 'loading'}
+              onPress={loadOlder}
+              style={{ marginTop: 6, alignSelf: 'center' }}
+            />
+          ) : null
+        }
         ListEmptyComponent={
           r.signedOut ? (
             <EmptyNote icon="account-lock-outline" title="Sign in to see notifications" action="Sign in" onAction={() => router.push('/sign-in')} />

@@ -11,5 +11,5 @@ export const sendPoke = (userId: string) => campusApi.sendPoke(userId, key('poke
 export const pokeBack = (userId: string) => campusApi.pokeBack(userId, key('poke-back', userId));
 export const getIncomingPokes = () => campusApi.incomingPokes();
 export const getFriendshipStatus = (userId: string) => campusApi.friendshipStatus(userId);
-export const getNotifications = () => campusApi.notifications();
+export const getNotifications = (cursor?: string | null) => campusApi.notifications(cursor);
 export const markNotificationsRead = (ids: string[]) => campusApi.markNotificationsRead(ids);
