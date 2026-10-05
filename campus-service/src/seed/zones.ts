@@ -12,8 +12,9 @@
  * The hostels below are the institute's three real halls; Nivedita and NSCB are placed from
  * OpenStreetMap, the rest is a stand-in.
  */
-import { readFileSync } from 'node:fs';
 import { config } from '../config.js';
+// A static import, so the build copies the file into dist/ with the code that reads it.
+import osmFile from './zones.osm.json' with { type: 'json' };
 
 type XY = [number, number];
 export type ZoneSeed = {
@@ -59,13 +60,9 @@ export const lineWkt = (xy: XY[]) => `LINESTRING(${xy.map(toLngLat).map(([lng, l
 
 /** zones.osm.json as written by mobile-4/scripts/campus-osm.mjs; empty until the campus is imported. */
 export type OsmZone = { id: string; name: string; short_name: string | null; kind: ZoneSeed['kind']; hostel: string | null; polygon: [number, number][] };
-export function loadOsmZones(file = new URL('./zones.osm.json', import.meta.url)): OsmZone[] {
-  try {
-    const data = JSON.parse(readFileSync(file, 'utf8')) as { source?: string | null; zones?: OsmZone[] };
-    return data.source === 'osm' && Array.isArray(data.zones) ? data.zones : [];
-  } catch {
-    return [];
-  }
+export function loadOsmZones(data: unknown = osmFile): OsmZone[] {
+  const d = data as { source?: string | null; zones?: OsmZone[] };
+  return d.source === 'osm' && Array.isArray(d.zones) ? d.zones : [];
 }
 /** An OSM ring of [lat, lng] as WKT (closed, lng first). */
 export const osmPolygonWkt = (ring: [number, number][]) => `POLYGON((${[...ring, ring[0]!].map(([lat, lng]) => `${lng} ${lat}`).join(',')}))`;
