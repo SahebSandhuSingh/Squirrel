@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { PROGRESS_READS_CONFIGURED, progressApi, progressReadsLive, type LifetimeProgress, type ProgressHistory, type WeeklyProgress, type XpBoard } from '@/api/progress';
+import { PROGRESS_READS_CONFIGURED, progressApi, progressReadsLive, type LifetimeProgress, type ProgressHistory, type WeeklyProgress, } from '@/api/progress';
+import { campusApi } from '@/api/campus';
 import { useRemote } from '@/api/useRemote';
 import { useAuth } from '@/auth/AuthProvider';
 import { AnimatedNumber, Button, Card, Display, EmptyState, FadeIn, Header, Icon, Kicker, PressScale, ProgressBar, Ring, Screen, Segmented, tap } from '@/components/ui';
@@ -11,17 +12,19 @@ import { alpha, colors, fonts, radius } from '@/theme';
 /**
  * YOUR PROGRESS: today → progress over time → performance → what to do next.
  * Every figure comes from the progress-service (daily goals, streak, XP, level, week-over-week,
- * history, campus rank). Not configured or signed out → a "not connected" / sign-in state.
+ * history). The campus rank is the Squirrels board's own `me` row (the board this row opens), so
+ * the two never disagree. Not configured or signed out → a "not connected" / sign-in state.
  * There is no sample data: nothing here is invented.
  */
 
-type LiveData = { lifetime: LifetimeProgress; weekly: WeeklyProgress; history: ProgressHistory; campus: XpBoard | null };
+/** `campus`: your weekly rank (null = not on the board yet), or undefined when the board couldn't load. */
+type LiveData = { lifetime: LifetimeProgress; weekly: WeeklyProgress; history: ProgressHistory; campus?: { rank: number | null } };
 const loadLive = async (): Promise<LiveData> => {
   const [lifetime, weekly, history, campus] = await Promise.all([
     progressApi.lifetime(),
     progressApi.weekly(),
     progressApi.history(366),
-    progressApi.leaderboard('campus', 'weekly', 1).catch(() => null), // not served yet; 409 until a campus is set
+    campusApi.squirrelBoard('weekly', 1).then((b) => ({ rank: b.me?.rank ?? null }), () => undefined),
   ]);
   return { lifetime, weekly, history, campus };
 };
@@ -107,6 +110,7 @@ export default function Progress() {
   const streak = periodStats.find((s) => s.id === 'streak')!;
   const activeDays = L.weekly.activeDays;
   const campusRank = L.campus?.rank ?? null;
+  const rankText = campusRank ? `#${campusRank} this week` : L.campus ? 'Unranked' : '–';
 
   return (
     <Screen tabBar={false}>
@@ -225,7 +229,7 @@ export default function Progress() {
         <PressScale onPress={() => router.push('/leaderboard')} style={[styles.perfRow, styles.divider]} scaleTo={0.99} accessibilityLabel="Campus leaderboard">
           <Icon name="trophy-outline" size={18} color={colors.gold} />
           <Text style={styles.perfLabel}>Campus XP rank</Text>
-          <Text style={styles.perfValue}>{campusRank ? `#${campusRank} this week` : L.campus === null ? 'Set campus' : 'Unranked'}</Text>
+          <Text style={styles.perfValue}>{rankText}</Text>
           <Icon name="chevron-right" size={18} color={colors.dim} style={{ width: 86, textAlign: 'right' }} />
         </PressScale>
       </Card>
