@@ -45,7 +45,7 @@ export const goalArt = (id: string) => GOAL_ART[id] ?? { icon: 'flag-checkered' 
 
 /**
  * One of today's goals, exactly as the server reports it. Progress is counted by the server
- * from your runs, workouts and steps — there's nothing to tap here to "log" it.
+ * from your runs and workouts — there's nothing to tap here to "log" it.
  */
 export function GoalCard({ goal: g, compact }: { goal: DailyGoal; compact?: boolean }) {
   const art = goalArt(g.id);

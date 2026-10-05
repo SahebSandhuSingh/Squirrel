@@ -20,7 +20,7 @@ import { useApp } from '@/state/AppState';
 import { alpha, colors, fonts, radius } from '@/theme';
 
 /**
- * HOME. Every number here comes from a backend: today's steps / active minutes / calories /
+ * HOME. Every number here comes from a backend: today's active minutes / calories /
  * streak and goals from the progress-service, territory / people / leaderboard from the campus
  * API, XP from the progress-service or the Run Module. Without a backend a section says so
  * ("Not connected" / "Not live yet"); there is no sample content.
@@ -67,14 +67,13 @@ export default function Home() {
             </Pressable>
           </View>
           {daily.state !== 'ready' ? (
-            <Text style={styles.note}>{daily.state === 'signed_out' ? 'Sign in to see your steps, active minutes, calories and streak.' : 'Steps, active minutes, calories and streak come from the progress service, which isn’t connected to this build yet.'}</Text>
+            <Text style={styles.note}>{daily.state === 'signed_out' ? 'Sign in to see your active minutes, calories and streak.' : 'Active minutes, calories and streak come from the Run Module, which isn’t connected to this build yet.'}</Text>
           ) : daily.error && !d ? (
             <ErrorState cause={daily.cause} onRetry={daily.reload} compact title="Couldn’t load today" />
           ) : !d ? (
             <LoadingRows rows={1} height={92} />
           ) : (
             <View style={styles.rings}>
-              <RingStat progress={targets.steps ? d.steps / targets.steps : 0} color={colors.green} color2={colors.secondary} icon="shoe-print" value={d.steps.toLocaleString('en-IN')} label="Steps" />
               <RingStat progress={targets.active ? d.activeMinutes / targets.active : 0} color={colors.secondary} color2={colors.blue} icon="timer-outline" value={`${Math.round(d.activeMinutes)}m`} label="Active" />
               <RingStat progress={0} color={colors.orange} color2={colors.gold} icon="fire" value={String(Math.round(d.calories))} label="kcal" />
               <RingStat progress={Math.min(1, d.streak.current / 14)} color={colors.violet} color2={colors.primary} icon="lightning-bolt" value={`${d.streak.current}d`} label="Streak" />

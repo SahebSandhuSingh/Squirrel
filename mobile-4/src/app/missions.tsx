@@ -1,6 +1,6 @@
 /**
  * TODAY'S GOALS — the progress-service's daily goals (GET /v1/progress/daily), counted by the
- * server from your runs, workouts and steps. Nothing to tap to "log": the server is the record.
+ * server from your runs and workouts. Nothing to tap to "log": the server is the record.
  * Meal & water goals belong to a feature that isn't launched, so they show as Coming soon.
  */
 import { StyleSheet, Text, View } from 'react-native';
@@ -56,7 +56,7 @@ export default function Missions() {
               </FadeIn>
             ))}
           </View>
-          <Text style={styles.hint}>Counted by the server from your runs, workouts and steps.</Text>
+          <Text style={styles.hint}>Counted by the server from your runs and workouts.</Text>
         </>
       )}
 
