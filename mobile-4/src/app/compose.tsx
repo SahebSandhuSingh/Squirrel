@@ -21,7 +21,7 @@ type RunActivity = { km: number; minutes: number; pace: string };
 /**
  * Post composer (also reached after finishing a run, with that run's real numbers prefilled).
  * With the Social service configured, Post publishes via POST /v1/posts (caption, backdrop,
- * sticker, approved photo's media_id) — the backend links activities itself. Without it, posting
+ * sticker, uploaded photo's media_id) — the backend links activities itself. Without it, posting
  * says "Posts · Not live yet" and Post is disabled: nothing is saved locally or faked in a feed.
  */
 export default function Compose() {
@@ -68,7 +68,7 @@ export default function Compose() {
       </View>
 
       <SceneImage kind={scene} seed={SOCIAL_API_CONFIGURED ? seed : 7} aspect={1.2} style={{ marginTop: 14 }} scrim={false}>
-        {photo && <Image source={{ uri: photo.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" accessibilityLabel="Your approved photo" />}
+        {photo && <Image source={{ uri: photo.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" accessibilityLabel="Your photo" />}
         {activity && (
           <View style={styles.actChip}>
             <Text style={styles.actText}>🏃 {activity.km} km · {activity.minutes} min · {activity.pace}/km</Text>

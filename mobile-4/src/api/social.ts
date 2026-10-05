@@ -204,7 +204,10 @@ export type Comment = { id: string; post_id: string; author: PostAuthor; body: s
 export type CommentPage = Page<Comment> & { total: number };
 
 export type UploadTicket = { media_id: string; upload_url: string; method: 'PUT'; headers: Record<string, string>; expires_at: string };
-export type MediaStatus = { media_id: string; status: 'pending' | 'ready'; url: string | null };
+/** What Social stores photos for (it refuses anything else with a 422). */
+export type UploadPurpose = 'post' | 'avatar';
+/** Social sends no `moderation` today; a missing verdict means nothing to wait for. */
+export type MediaStatus = { media_id: string; status: 'pending' | 'ready'; url: string | null; moderation?: 'pending' | 'approved' | 'rejected' | null; rejection_reason?: string | null };
 
 // ---------------------------------------------------------------------------
 // Endpoints
@@ -270,10 +273,10 @@ export const commentsApi = {
  * No image bytes ever go through the JSON API.
  */
 export const mediaApi = {
-  createUpload: (purpose: 'post' | 'avatar', contentType: string, byteSize: number) =>
+  createUpload: (purpose: UploadPurpose, contentType: string, byteSize: number) =>
     s<UploadTicket>('/v1/media/uploads', { body: { purpose, content_type: contentType, byte_size: byteSize } }),
   complete: (mediaId: string) => s<MediaStatus>(`/v1/media/${id(mediaId)}/complete`, { method: 'POST' }),
-  async upload(purpose: 'post' | 'avatar', file: Blob, contentType: string): Promise<MediaStatus> {
+  async upload(purpose: UploadPurpose, file: Blob, contentType: string): Promise<MediaStatus> {
     const ticket = await mediaApi.createUpload(purpose, contentType, file.size);
     const res = await fetch(ticket.upload_url, { method: ticket.method, headers: ticket.headers, body: file });
     if (!res.ok) throw new ApiError(res.status, 'Upload failed. Try again.');

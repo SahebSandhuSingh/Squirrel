@@ -1,16 +1,14 @@
 /**
- * Photo upload service (Dev A). The same presigned flow as the Social service:
- *   POST /v1/media/uploads → PUT the bytes to upload_url → POST /v1/media/{id}/complete
- *   → the backend's moderation decides; GET /v1/media/{id} until it does.
- * Photos are resized on the device first (≤ 1600 px, JPEG) — never uploaded at full resolution —
- * and nothing is treated as visible until the backend reports it approved.
+ * Photo upload: resize on the device, then Social's presigned flow (api/social.ts mediaApi):
+ *   POST /v1/media/uploads → PUT the bytes to upload_url (with progress) → POST /v1/media/{id}/complete.
+ * Photos are resized first (≤ 1600 px, JPEG), never uploaded at full resolution.
  *
- * Not live yet: every call rejects with EndpointUnavailableError('media') until the backend ships
- * (api/availability.ts). There is no simulated upload in any mode.
+ * Social stores photos for posts and avatars only, and has no moderation step: a completed upload
+ * is usable at once. If a `moderation` verdict ever comes back, it's respected (see photoOutcome);
+ * a missing one means there's nothing to wait for.
  */
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
-import { campusApi } from '@/api/campus';
-import type { MediaItem, MediaPurpose, UploadRequest } from '@/api/campus/types';
+import { mediaApi, type MediaStatus, type UploadPurpose } from '@/api/social';
 
 export const MAX_EDGE_PX = 1600;
 export const THUMB_EDGE_PX = 480;
@@ -49,25 +47,10 @@ function put(url: string, headers: Record<string, string>, body: Blob, onProgres
   });
 }
 
-export async function uploadPhoto(photo: PreparedPhoto, purpose: MediaPurpose, context: UploadRequest['context'], onProgress: (f: number) => void, signal?: AbortSignal): Promise<MediaItem> {
-  const ticket = await campusApi.createUpload({ purpose, content_type: photo.mime, byte_size: photo.bytes, context });
+export async function uploadPhoto(photo: PreparedPhoto, purpose: UploadPurpose, onProgress: (f: number) => void, signal?: AbortSignal): Promise<MediaStatus> {
+  const ticket = await mediaApi.createUpload(purpose, photo.mime, photo.bytes);
   await put(ticket.upload_url, ticket.headers, photo.blob, onProgress, signal);
-  return campusApi.completeUpload(ticket.media_id);
+  return mediaApi.complete(ticket.media_id);
 }
 
-export const getMedia = (mediaId: string) => campusApi.media(mediaId);
-
-/** Poll moderation with backoff until approved/rejected or the budget runs out (then: still processing). */
-export async function waitForModeration(mediaId: string, signal?: AbortSignal, budgetMs = 60_000): Promise<MediaItem> {
-  const t0 = Date.now();
-  let wait = 1000;
-  let last = await getMedia(mediaId);
-  while (!signal?.aborted && last.moderation !== 'approved' && last.moderation !== 'rejected' && Date.now() - t0 < budgetMs) {
-    await new Promise((r) => setTimeout(r, wait));
-    wait = Math.min(5000, wait * 1.6);
-    last = await getMedia(mediaId);
-  }
-  return last;
-}
-
-export const isVisible = (m: MediaItem | null | undefined) => !!m && m.status === 'ready' && m.moderation === 'approved';
+export { photoOutcome } from '@/logic/photo';

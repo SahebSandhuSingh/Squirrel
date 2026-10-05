@@ -13,7 +13,6 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Mascot } from '@/art/Mascot';
 import { campusApi, CAMPUS_MAP_ON_SERVICE, errorText, isEndpointAvailable, type CheckInResult, type Meetup } from '@/api/campus';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
-import { PhotoUpload } from '@/components/media/PhotoUpload';
 import { MeetupRating } from '@/components/meetup/MeetupRating';
 import { ErrorState, LoadingRows, SourceBadge } from '@/components/campus/States';
 import { Button, Card, Display, Header, Icon, Kicker, Screen, SectionHeader, tap } from '@/components/ui';
@@ -121,12 +120,7 @@ export default function MeetupScreen() {
       {/* After it's over: rate the people you met (the backend decides when that's possible) */}
       <MeetupRating meetupId={m.id} meId={me.data?.user_id ?? null} />
 
-      {checkedIn && (
-        <>
-          <SectionHeader title="Meetup photo" />
-          <PhotoUpload purpose="meetup" context={{ meetup_id: m.id }} label="Share a photo" />
-        </>
-      )}
+      {/* No meetup photo: Social stores photos for posts and avatars only. */}
 
       <SectionHeader title={`Who’s coming · ${m.attendees.length}`} />
       <View style={{ gap: 8 }}>

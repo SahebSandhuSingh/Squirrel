@@ -609,16 +609,6 @@ export type DateSettings = { enabled: boolean; zones_ready: boolean };
 /** Whether *I* blocked this person. A block works both ways for suggestions, follows and challenges. */
 export type BlockState = { user_id: string; blocked: boolean };
 
-// ---------------------------------------------------------------------------
-// Photo upload (Dev A) — presigned PUT, then complete; moderation decides visibility
-// ---------------------------------------------------------------------------
-
-export type MediaPurpose = 'post' | 'avatar' | 'meetup' | 'event';
-export type UploadRequest = { purpose: MediaPurpose; content_type: string; byte_size: number; context?: { meetup_id?: string; event_id?: string } };
-export type UploadTicket = { media_id: string; upload_url: string; method: 'PUT'; headers: Record<string, string>; expires_at: string };
-export type Moderation = 'pending' | 'approved' | 'rejected';
-/** Nothing is public until `status` is 'ready' AND `moderation` is 'approved'. */
-export type MediaItem = { media_id: string; status: 'pending' | 'ready'; url: string | null; moderation?: Moderation | null; rejection_reason?: string | null };
 
 // ---------------------------------------------------------------------------
 // Post-meetup rating (Dev A)
@@ -787,9 +777,6 @@ export interface CampusApi {
   blockStatus(userId: string): Promise<BlockState>;
   setBlocked(userId: string, blocked: boolean): Promise<BlockState>;
   // Dev A
-  createUpload(input: UploadRequest): Promise<UploadTicket>;
-  completeUpload(mediaId: string): Promise<MediaItem>;
-  media(mediaId: string): Promise<MediaItem>;
   meetupRating(meetupId: string): Promise<MeetupRatingState>;
   rateMeetup(meetupId: string, input: MeetupRatingInput, idempotencyKey: string): Promise<MeetupRatingResult>;
   ambassador(): Promise<AmbassadorState>;

@@ -104,10 +104,7 @@ export function makeHttpCampusApi(base: string): T.CampusApi {
     blockStatus: (userId) => get<T.BlockState>(`/v1/users/${id(userId)}/block`),
     setBlocked: (userId, blocked) => send<T.BlockState>(`/v1/users/${id(userId)}/block`, blocked ? 'POST' : 'DELETE'),
 
-    // Dev A — media (same presigned flow as the Social service), meetup ratings, ambassadors
-    createUpload: (input) => send<T.UploadTicket>('/v1/media/uploads', 'POST', input),
-    completeUpload: (mediaId) => send<T.MediaItem>(`/v1/media/${id(mediaId)}/complete`, 'POST'),
-    media: (mediaId) => get<T.MediaItem>(`/v1/media/${id(mediaId)}`),
+    // Dev A — meetup ratings, ambassadors (photo uploads go to Social: api/campus/media.ts)
     meetupRating: (meetupId) => get<T.MeetupRatingState>(`/v1/meetups/${id(meetupId)}/rating`),
     rateMeetup: (meetupId, input, key) => send<T.MeetupRatingResult>(`/v1/meetups/${id(meetupId)}/ratings`, 'POST', { ...input, idempotency_key: key }),
     ambassador: () => get<T.AmbassadorState>('/v1/ambassador/application'),
@@ -153,8 +150,7 @@ export const CAMPUS_ROUTES = [
   'GET /v1/map/heatmap?window=1h|24h|7d',
   'GET /v1/dates/suggestions?user_id=, POST /v1/dates/suggestions/{id}/dismiss, GET|PUT /v1/dates/settings',
   'GET|POST|DELETE /v1/users/{id}/block',
-  // Expected from Dev A (media mirrors the Social service's presigned flow; the rest are new)
-  'POST /v1/media/uploads, PUT {upload_url}, POST /v1/media/{id}/complete, GET /v1/media/{id}',
+  // Expected from Dev A
   'GET /v1/meetups/{id}/rating, POST /v1/meetups/{id}/ratings',
   'GET|POST /v1/ambassador/application',
   'WS realtime_url (territory.updated, stats.updated, invite.updated, event.updated, active.updated, poke.received, relationship.updated, friendship.created, notification.created, players.updated)',

@@ -61,7 +61,7 @@ function fakeCampus(overrides = {}) {
 test('hybrid: map-world methods go to campus-service, everything else stays on Social', async () => {
   const api = makeHybridCampusApi(fakeSocial(), fakeCampus());
   for (const m of CAMPUS_SERVICE_METHODS) assert.equal(await api[m](), `campus:${m}`, m);
-  for (const m of ['crews', 'events', 'profile', 'invites', 'notifications', 'squirrelBoard', 'searchPeople', 'sendPoke', 'dateSuggestions', 'setBlocked', 'createUpload', 'zonePlayers', 'ambassador']) {
+  for (const m of ['crews', 'events', 'profile', 'invites', 'notifications', 'squirrelBoard', 'searchPeople', 'sendPoke', 'dateSuggestions', 'setBlocked', 'zonePlayers', 'ambassador']) {
     assert.equal(await api[m](), `social:${m}`, m);
   }
 });

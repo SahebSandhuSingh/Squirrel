@@ -67,9 +67,6 @@ export const campusApi: CampusApi = gateEndpoints(sourceApi, {
   dismissDateSuggestion: { capability: 'dateSuggestions' },
   dateSettings: { capability: 'dateSuggestions' },
   setDateSettings: { capability: 'dateSuggestions' },
-  createUpload: { capability: 'media' },
-  completeUpload: { capability: 'media' },
-  media: { capability: 'media' },
   // Routed to campus-service when it's configured (it owns meetups + rating, ADR-032), but it doesn't
   // serve GET /v1/meetups/{id}/rating or POST /v1/meetups/{id}/ratings yet: opt in once it does.
   meetupRating: { capability: 'meetupRating' },

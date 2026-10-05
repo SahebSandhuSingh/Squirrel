@@ -1,15 +1,15 @@
 /**
- * Reusable photo upload: ADD PHOTO → preview → UPLOAD (progress) → processing / moderation →
- * approved | rejected | failed (retry). The parent only gets a photo it may show once the
- * backend reports it stored AND approved — nothing is implied public before that.
+ * Reusable photo upload: ADD PHOTO → preview → UPLOAD (progress) → ready | failed (retry).
+ * The parent only gets a photo once Social reports it stored. Social has no moderation step, so a
+ * stored photo is ready at once; a verdict, if one is ever sent, is respected (rejected / checking).
  * Images are resized on the device (≤ 1600 px) and previewed from a small thumbnail.
  */
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { errorText, featureUnavailable, isEndpointAvailable } from '@/api/campus';
-import { isVisible, preparePhoto, uploadPhoto, waitForModeration, type PreparedPhoto } from '@/api/campus/media';
-import type { MediaItem, MediaPurpose, UploadRequest } from '@/api/campus/types';
+import { photoOutcome, preparePhoto, uploadPhoto, type PreparedPhoto } from '@/api/campus/media';
+import type { MediaStatus, UploadPurpose } from '@/api/social';
 import { Button, Icon, tap } from '@/components/ui';
 import { alpha, colors, fonts, radius } from '@/theme';
 
@@ -20,13 +20,12 @@ type Phase =
   | { k: 'selecting' }
   | { k: 'preview'; photo: PreparedPhoto }
   | { k: 'uploading'; photo: PreparedPhoto }
-  | { k: 'processing'; photo: PreparedPhoto; media: MediaItem }
-  | { k: 'approved'; photo: PreparedPhoto; media: MediaItem }
+  | { k: 'approved'; photo: PreparedPhoto; media: MediaStatus }
   | { k: 'rejected'; photo: PreparedPhoto; reason: string | null }
-  | { k: 'pending_long'; photo: PreparedPhoto; media: MediaItem }
+  | { k: 'checking'; photo: PreparedPhoto; media: MediaStatus }
   | { k: 'failed'; photo: PreparedPhoto | null; error: unknown };
 
-export function PhotoUpload({ purpose, context, onChange, label = 'Add photo', autoUpload = false }: { purpose: MediaPurpose; context?: UploadRequest['context']; onChange?: (p: ApprovedPhoto | null, busy: boolean) => void; label?: string; autoUpload?: boolean }) {
+export function PhotoUpload({ purpose, onChange, label = 'Add photo', autoUpload = false }: { purpose: UploadPurpose; onChange?: (p: ApprovedPhoto | null, busy: boolean) => void; label?: string; autoUpload?: boolean }) {
   const [phase, setPhase] = useState<Phase>({ k: 'idle' });
   const [progress] = useState(() => new Animated.Value(0));
   const abort = useRef<AbortController | null>(null);
@@ -36,11 +35,11 @@ export function PhotoUpload({ purpose, context, onChange, label = 'Add photo', a
   });
   useEffect(() => () => abort.current?.abort(), []);
 
-  // Tell the parent what it may use: only an approved photo; "busy" while anything is in flight.
+  // Tell the parent what it may use: only a stored photo; "busy" while anything is in flight.
   useEffect(() => {
     // A failed or rejected photo also blocks posting until it's retried or removed — never silently dropped.
     const busy = phase.k !== 'idle' && phase.k !== 'approved';
-    const ok = phase.k === 'approved' && isVisible(phase.media) ? { mediaId: phase.media.media_id, uri: phase.media.url?.startsWith('http') ? phase.media.url : phase.photo.uri, width: phase.photo.width, height: phase.photo.height } : null;
+    const ok = phase.k === 'approved' ? { mediaId: phase.media.media_id, uri: phase.media.url?.startsWith('http') ? phase.media.url : phase.photo.uri, width: phase.photo.width, height: phase.photo.height } : null;
     cb.current?.(ok, busy);
   }, [phase]);
 
@@ -66,16 +65,15 @@ export function PhotoUpload({ purpose, context, onChange, label = 'Add photo', a
     progress.setValue(0);
     setPhase({ k: 'uploading', photo });
     try {
-      const media = await uploadPhoto(photo, purpose, context, (f) => Animated.timing(progress, { toValue: f, duration: 150, useNativeDriver: false }).start(), ctrl.signal);
-      setPhase({ k: 'processing', photo, media });
-      const final = await waitForModeration(media.media_id, ctrl.signal);
+      const media = await uploadPhoto(photo, purpose, (f) => Animated.timing(progress, { toValue: f, duration: 150, useNativeDriver: false }).start(), ctrl.signal);
       if (ctrl.signal.aborted) return;
-      if (final.moderation === 'approved' && final.status === 'ready') {
+      const outcome = photoOutcome(media);
+      if (outcome === 'usable') {
         tap('success');
-        setPhase({ k: 'approved', photo, media: final });
-      } else if (final.moderation === 'rejected') {
-        setPhase({ k: 'rejected', photo, reason: final.rejection_reason ?? null });
-      } else setPhase({ k: 'pending_long', photo, media: final });
+        setPhase({ k: 'approved', photo, media });
+      } else if (outcome === 'rejected') {
+        setPhase({ k: 'rejected', photo, reason: media.rejection_reason ?? null });
+      } else setPhase({ k: 'checking', photo, media });
     } catch (e) {
       if (!ctrl.signal.aborted) setPhase({ k: 'failed', photo, error: e });
     }
@@ -102,7 +100,7 @@ export function PhotoUpload({ purpose, context, onChange, label = 'Add photo', a
       <Pressable onPress={pick} disabled={phase.k === 'selecting'} style={styles.add} accessibilityRole="button" accessibilityLabel={label}>
         {phase.k === 'selecting' ? <ActivityIndicator color={colors.primary} /> : <Icon name="camera-plus-outline" size={26} color={colors.primary} />}
         <Text style={styles.addText}>{phase.k === 'selecting' ? 'Preparing…' : label}</Text>
-        <Text style={styles.addSub}>Photos are checked before anyone sees them.</Text>
+        <Text style={styles.addSub}>Resized on your phone before it uploads.</Text>
       </Pressable>
     );
   }
@@ -132,16 +130,17 @@ export function PhotoUpload({ purpose, context, onChange, label = 'Add photo', a
             <Text style={styles.cancel} onPress={reset} accessibilityRole="button">Cancel</Text>
           </>
         )}
-        {(phase.k === 'processing' || phase.k === 'pending_long') && (
+        {phase.k === 'checking' && (
           <View style={styles.row}>
             <ActivityIndicator size="small" color={colors.violet} />
-            <Text style={[styles.state, { flex: 1 }]}>{phase.k === 'processing' ? 'Checking your photo…' : 'Still being checked — we’ll notify you when it’s done.'}</Text>
+            <Text style={[styles.state, { flex: 1 }]}>Still being checked. Post without it, or try again later.</Text>
+            <Text style={styles.cancel} onPress={reset} accessibilityRole="button">Remove</Text>
           </View>
         )}
         {phase.k === 'approved' && (
           <View style={styles.row}>
             <Icon name="check-decagram" size={18} color={colors.primary} />
-            <Text style={[styles.state, { flex: 1, color: colors.primary }]}>Approved · ready to share</Text>
+            <Text style={[styles.state, { flex: 1, color: colors.primary }]}>Uploaded · ready to share</Text>
             <Text style={styles.cancel} onPress={reset} accessibilityRole="button">Remove</Text>
           </View>
         )}

@@ -17,7 +17,7 @@ export type Capability =
   | 'sharedZones' // GET /v1/me/shared-zones
   | 'heatmap' // GET /v1/map/heatmap
   | 'dateSuggestions' // GET /v1/dates/suggestions, POST …/{id}/dismiss, GET|PUT /v1/dates/settings (built: Social)
-  | 'media' // POST /v1/media/uploads, PUT {upload_url}, POST /v1/media/{id}/complete, GET /v1/media/{id}
+  | 'media' // Social: POST /v1/media/uploads, PUT {upload_url}, POST /v1/media/{id}/complete (posts, avatars)
   | 'meetupRating' // GET /v1/meetups/{id}/rating, POST /v1/meetups/{id}/ratings
   | 'meetupCheckIn' // POST /v1/meetups/{id}/check-in on campus-service (it serves meetups, not check-in yet)
   | 'ambassador' // GET | POST /v1/ambassador/application
@@ -36,12 +36,12 @@ export const CAPABILITY_LABEL: Record<Capability, string> = {
   sharedWorkout: 'Shared workouts',
 };
 
-/** Backend status in code. Squirrel Dates is built (Social service); the rest don't exist yet. */
+/** Backend status in code. Squirrel Dates and photo uploads are built (Social service). */
 const BUILT: Record<Capability, boolean> = {
   sharedZones: false,
   heatmap: false,
   dateSuggestions: true,
-  media: false,
+  media: true,
   meetupRating: false,
   meetupCheckIn: false,
   ambassador: false,
