@@ -6,7 +6,7 @@ import { endpointAvailability, EndpointUnavailableError, gateEndpoints, isEndpoi
 // and one that fails for real — the same shape as the campus service.
 const service = {
   heatmap: async () => ({ cells: [{ id: 'c1' }] }),
-  ambassador: async () => ({ open: true }),
+  joinSession: async () => ({ id: 's1' }),
   zones: async () => [{ id: 'lhc' }],
   crews: async () => [],
   me: async () => {
@@ -16,7 +16,7 @@ const service = {
 };
 const rules = {
   heatmap: { capability: 'heatmap' },
-  ambassador: { capability: 'ambassador' },
+  joinSession: { capability: 'sharedWorkout' },
   updateMe: { capability: 'profileDetails', when: (p) => p.profile_details !== undefined },
 };
 const none = new Set();
@@ -24,7 +24,7 @@ const none = new Set();
 test('an unbuilt endpoint rejects as unavailable — never fake data', async () => {
   const api = gateEndpoints(service, rules, none);
   await assert.rejects(api.heatmap(), (e) => e instanceof EndpointUnavailableError && e.capability === 'heatmap' && isEndpointUnavailable(e));
-  await assert.rejects(api.ambassador(), (e) => isEndpointUnavailable(e) && e.code === 'ambassador_unavailable');
+  await assert.rejects(api.joinSession(), (e) => isEndpointUnavailable(e) && e.code === 'sharedWorkout_unavailable');
 });
 
 test('one unavailable endpoint does not take down the rest of the service', async () => {
@@ -53,7 +53,7 @@ test('field-level gate: PATCH /v1/me works, only profile_details is unavailable'
 test('opting an endpoint in (backend shipped) passes calls through, per endpoint', async () => {
   const api = gateEndpoints(service, rules, parseLiveEndpoints('heatmap, nonsense'));
   assert.deepEqual(await api.heatmap(), { cells: [{ id: 'c1' }] });
-  await assert.rejects(api.ambassador(), (e) => isEndpointUnavailable(e));
+  await assert.rejects(api.joinSession(), (e) => isEndpointUnavailable(e));
   assert.equal(endpointAvailability('heatmap', parseLiveEndpoints('heatmap')).status, 'available');
   assert.equal(endpointAvailability('sharedWorkout', none).status, 'unavailable');
 });

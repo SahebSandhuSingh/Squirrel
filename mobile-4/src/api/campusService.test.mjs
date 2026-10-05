@@ -103,15 +103,15 @@ test('me: Social profile with campus-service’s Open to Meet (Social’s when c
 });
 
 test('sharedZones and heatmap are gated unless campus-service opts them in; the rest stay gated', async () => {
-  const service = { sharedZones: async () => ({ people: [] }), heatmap: async () => ({ cells: [] }), ambassador: async () => ({}) };
-  const rules = { sharedZones: { capability: 'sharedZones' }, heatmap: { capability: 'heatmap' }, ambassador: { capability: 'ambassador' } };
+  const service = { sharedZones: async () => ({ people: [] }), heatmap: async () => ({ cells: [] }), checkIn: async () => ({}) };
+  const rules = { sharedZones: { capability: 'sharedZones' }, heatmap: { capability: 'heatmap' }, checkIn: { capability: 'meetupCheckIn' } };
   const gated = gateEndpoints(service, rules, new Set());
   await assert.rejects(gated.sharedZones(), (e) => isEndpointUnavailable(e));
   await assert.rejects(gated.heatmap('7d'), (e) => isEndpointUnavailable(e));
   const withCampus = gateEndpoints(service, rules, optedInWith(['sharedZones', 'heatmap'], new Set()));
   assert.deepEqual(await withCampus.sharedZones(), { people: [] });
   assert.deepEqual(await withCampus.heatmap('7d'), { cells: [] });
-  await assert.rejects(withCampus.ambassador(), (e) => isEndpointUnavailable(e) && e.capability === 'ambassador');
+  await assert.rejects(withCampus.checkIn(), (e) => isEndpointUnavailable(e) && e.capability === 'meetupCheckIn');
   assert.deepEqual([...optedInWith(['heatmap'], new Set(['media']))].sort(), ['heatmap', 'media']);
 });
 
@@ -258,13 +258,13 @@ test('EXPO_PUBLIC_CAMPUS_SERVICE_URL is never ignored silently', () => {
   assert.match(campusServiceIgnoredReason({ ...base, source: 'mock' }), /dev mock/);
 });
 
-test('ambassador applications have no backend: never routed to campus-service, gated as not live', async () => {
+test('ambassador applications are Social’s: never routed to campus-service, and not gated', async () => {
   assert.ok(!CAMPUS_SERVICE_METHODS.includes('ambassador') && !CAMPUS_SERVICE_METHODS.includes('applyAmbassador'));
   let called = false;
   const svc = { ambassador: async () => { called = true; return {}; } };
-  const api = gateEndpoints(svc, { ambassador: { capability: 'ambassador' } }, optedInWith(['sharedZones', 'heatmap']));
-  await assert.rejects(api.ambassador(), (e) => isEndpointUnavailable(e) && e.code === 'ambassador_unavailable');
-  assert.equal(called, false);
+  const api = gateEndpoints(svc, { ambassador: { capability: 'ambassador' } }, new Set());
+  await api.ambassador();
+  assert.equal(called, true);
 });
 
 // ---- meetups + post-meetup rating (ADR-032: campus-service owns them)

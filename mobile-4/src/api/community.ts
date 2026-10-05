@@ -20,6 +20,7 @@
 import { api } from '@/api/client';
 import { API_CONFIGURED, EXERCISE_API_CONFIGURED, EXERCISE_API_URL, SOCIAL_API_URL } from '@/api/config';
 import { withRetry } from '@/api/endpoints';
+import type { AmbassadorApplication, AmbassadorState } from '@/api/campus/types';
 import type { Page, PostAuthor } from '@/api/social';
 
 export type UserSummary = PostAuthor;
@@ -151,6 +152,11 @@ export const communityApi = {
   dailyStats: (days = 7) => safe<DailyStats>(`/v1/stats/daily${qs({ days })}`),
   xpBoard: (window: BoardWindow = 'daily') => safe<XpBoard>(`/v1/leaderboards/xp${qs({ window })}`),
   hostelBoard: (window: BoardWindow = 'daily') => safe<HostelBoard>(`/v1/leaderboards/hostels${qs({ window })}`),
+  /** Your latest application and whether you may apply now (Social sends the form's fields). */
+  ambassador: () => safe<AmbassadorState>('/v1/ambassador/application'),
+  /** Not retried: one key per form, and Social returns the existing application for a repeated key. */
+  applyAmbassador: (answers: Record<string, string>, idempotencyKey: string) =>
+    s<AmbassadorApplication>('/v1/ambassador/application', { body: { answers, idempotency_key: idempotencyKey } }),
 };
 
 export const crewsApi = {

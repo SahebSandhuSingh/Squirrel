@@ -405,8 +405,8 @@ export const socialCampusApi: T.CampusApi = {
   setBlocked: (userId, blocked) => (blocked ? blocksApi.block(userId) : blocksApi.unblock(userId)),
   meetupRating: notLive('Meetup ratings'),
   rateMeetup: notLive('Meetup ratings'),
-  ambassador: notLive('Ambassador applications'),
-  applyAmbassador: notLive('Ambassador applications'),
+  ambassador: () => communityApi.ambassador(),
+  applyAmbassador: (answers, key) => communityApi.applyAmbassador(answers, key),
 
   meetups: notLive('Meetups'),
   meetup: notLive('Meetups'),

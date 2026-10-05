@@ -20,7 +20,7 @@ export type Capability =
   | 'media' // Social: POST /v1/media/uploads, PUT {upload_url}, POST /v1/media/{id}/complete (posts, avatars)
   | 'meetupRating' // GET /v1/meetups/{id}/rating, POST /v1/meetups/{id}/ratings
   | 'meetupCheckIn' // POST /v1/meetups/{id}/check-in on campus-service (it serves meetups, not check-in yet)
-  | 'ambassador' // GET | POST /v1/ambassador/application
+  | 'ambassador' // GET | POST /v1/ambassador/application (built: Social)
   | 'profileDetails' // PATCH /v1/me with `profile_details`
   | 'sharedWorkout'; // /v1/workout-sessions/* + workout.* realtime
 
@@ -36,7 +36,7 @@ export const CAPABILITY_LABEL: Record<Capability, string> = {
   sharedWorkout: 'Shared workouts',
 };
 
-/** Backend status in code. Squirrel Dates and photo uploads are built (Social service). */
+/** Backend status in code. Squirrel Dates, photo uploads and ambassador applications are built (Social service). */
 const BUILT: Record<Capability, boolean> = {
   sharedZones: false,
   heatmap: false,
@@ -44,7 +44,7 @@ const BUILT: Record<Capability, boolean> = {
   media: true,
   meetupRating: false,
   meetupCheckIn: false,
-  ambassador: false,
+  ambassador: true,
   profileDetails: false,
   sharedWorkout: false,
 };
