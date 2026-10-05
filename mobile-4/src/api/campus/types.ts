@@ -129,6 +129,11 @@ export type Profile = PersonLite & {
   recent_activities: ActivityHistoryItem[];
   joined_at: string;
   founding_member: boolean;
+  /**
+   * A private account you don't follow: only the name and avatar are real. Everything else is
+   * withheld by the server (blank or zero), so screens show "private", never those values.
+   */
+  restricted?: boolean;
 };
 
 /** The signed-in user: the public profile plus private settings. */
@@ -186,6 +191,12 @@ export type SharedContext = {
   shared_crews: CrewLite[];
   shared_events: { event_id: string; title: string }[];
   icebreakers: Icebreaker[];
+  /**
+   * Set when the backend left the context empty on purpose and the screen should say so (e.g.
+   * `blocks_unreachable`: it couldn't check blocks). Never set for a block itself: that reads as nothing shared.
+   */
+  hidden_reason?: string | null;
+  hidden_code?: HiddenCode | null;
 };
 
 /** A discovery card (Friend Mode, Date Mode, Active Now). Activity-first — never photo-first. */
@@ -762,7 +773,8 @@ export interface CampusApi {
   friendshipStatus(userId: string): Promise<{ user_id: string; friends: boolean; since: string | null }>;
 
   // Notifications
-  notifications(): Promise<{ items: AppNotification[]; unread: number }>;
+  /** Newest first, a page at a time: pass `next_cursor` back for the next page (null on the last). */
+  notifications(cursor?: string | null): Promise<{ items: AppNotification[]; unread: number; next_cursor: string | null }>;
   markNotificationsRead(ids: string[]): Promise<{ unread: number }>;
 
   // Dev B

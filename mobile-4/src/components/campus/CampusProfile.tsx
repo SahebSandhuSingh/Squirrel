@@ -8,6 +8,7 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Scene } from '@/art/Scene';
 import { campusApi, errorText, featureUnavailable, type BlockState, type Me, type Profile, type SharedContext } from '@/api/campus';
+import { hiddenActionFor } from '@/api/campus/campusShapes';
 import { useAuth } from '@/auth/AuthProvider';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
 import { PokeButton } from '@/components/social/PokeButton';
@@ -54,6 +55,8 @@ export function CampusProfileView({ userId, isMe }: { userId?: string; isMe: boo
   const s = p.stats;
   const v = p.verification;
   const shared = ctx.data;
+  // A private account you don't follow: the server withheld everything but the name and avatar.
+  const priv = !isMe && p.restricted === true;
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ paddingBottom: (isMe ? TAB_BAR_SPACE : 30) + insets.bottom }} showsVerticalScrollIndicator={false}>
@@ -73,19 +76,21 @@ export function CampusProfileView({ userId, isMe }: { userId?: string; isMe: boo
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginTop: -52, gap: 12 }}>
           <PersonAvatar person={p} size={104} ring={colors.primary} link={false} />
           <View style={{ flex: 1, paddingBottom: 6, gap: 6 }}>
-            <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
-              <ModeChip mode={p.connection_mode} />
-              {p.founding_member && (
-                <View style={[styles.pill, { borderColor: colors.primary }]}>
-                  <Icon name="star-four-points" size={11} color={colors.primary} />
-                  <Text style={[styles.pillText, { color: colors.primary }]}>Founding Squirrel</Text>
+            {!priv && (
+              <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+                <ModeChip mode={p.connection_mode} />
+                {p.founding_member && (
+                  <View style={[styles.pill, { borderColor: colors.primary }]}>
+                    <Icon name="star-four-points" size={11} color={colors.primary} />
+                    <Text style={[styles.pillText, { color: colors.primary }]}>Founding Squirrel</Text>
+                  </View>
+                )}
+                <View style={[styles.pill, { borderColor: p.open_to_meet ? colors.green : colors.lineHi }]}>
+                  <Icon name={p.open_to_meet ? 'hand-wave' : 'hand-back-left-off-outline'} size={11} color={p.open_to_meet ? colors.green : colors.dim} />
+                  <Text style={[styles.pillText, { color: p.open_to_meet ? colors.green : colors.dim }]}>{p.open_to_meet ? 'Open to meet' : 'Not meeting now'}</Text>
                 </View>
-              )}
-              <View style={[styles.pill, { borderColor: p.open_to_meet ? colors.green : colors.lineHi }]}>
-                <Icon name={p.open_to_meet ? 'hand-wave' : 'hand-back-left-off-outline'} size={11} color={p.open_to_meet ? colors.green : colors.dim} />
-                <Text style={[styles.pillText, { color: p.open_to_meet ? colors.green : colors.dim }]}>{p.open_to_meet ? 'Open to meet' : 'Not meeting now'}</Text>
               </View>
-            </View>
+            )}
           </View>
         </View>
 
@@ -93,8 +98,8 @@ export function CampusProfileView({ userId, isMe }: { userId?: string; isMe: boo
           <Display size={30} numberOfLines={1} style={{ flexShrink: 1 }}>{p.display_name}</Display>
           {v.student_verified && <Icon name="check-decagram" size={20} color={colors.secondary} accessibilityLabel="Verified student" />}
         </View>
-        <Text style={styles.meta}>{[p.hostel && `${p.hostel} Hostel`, `joined ${shortTime(p.joined_at)}`].filter(Boolean).join(' · ')}</Text>
-        {!!p.bio && <Text style={styles.bio}>{p.bio}</Text>}
+        {!priv && <Text style={styles.meta}>{[p.hostel && `${p.hostel} Hostel`, `joined ${shortTime(p.joined_at)}`].filter(Boolean).join(' · ')}</Text>}
+        {!priv && !!p.bio && <Text style={styles.bio}>{p.bio}</Text>}
 
         {!isMe && (
           <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
@@ -109,122 +114,132 @@ export function CampusProfileView({ userId, isMe }: { userId?: string; isMe: boo
           </View>
         )}
 
-        {/* Shared context + icebreakers (others only; hidden when the backend has none) */}
-        {!isMe && shared && (shared.shared_zones.length > 0 || shared.shared_crews.length > 0 || shared.icebreakers.length > 0) && (
-          <Card style={{ marginTop: 14, gap: 10 }}>
-            {shared.shared_zones.length > 0 && (
-              <Text style={styles.sharedLine}>
-                <Icon name="map-marker-radius" size={13} color={colors.primary} /> Shared ground: {shared.shared_zones.map((z) => z.zone_name).join(', ')}
-              </Text>
-            )}
-            {shared.shared_crews.length > 0 && (
-              <Text style={styles.sharedLine}>
-                <Icon name="account-group" size={13} color={colors.blue} /> Both in {shared.shared_crews.map((c) => c.name).join(', ')}
-              </Text>
-            )}
-            <Icebreakers items={shared.icebreakers} targetUserId={p.user_id} max={4} />
+        {priv ? (
+          <Card style={styles.private}>
+            <Icon name="lock-outline" size={26} color={colors.dim} />
+            <Text style={styles.rowTitle}>Private account</Text>
+            <Text style={styles.privateText}>{p.display_name.split(' ')[0]}’s activity, crews and badges are only visible to people they’ve accepted.</Text>
           </Card>
-        )}
-
-        {!isMe && userId && ctx.data && (
-          <View style={{ marginTop: 10 }}>
-            <SharedZonesEntry userId={userId} zones={ctx.data.shared_zones} />
-          </View>
-        )}
-        {!isMe && userId && <ProfileDateSuggestion userId={userId} />}
-
-        {/* Stats */}
-        <SectionHeader title="Activity stats" />
-        <View style={styles.grid}>
-          {s.total_distance_m != null && <StatTile icon="map-marker-distance" v={km(s.total_distance_m)} l="Total distance" />}
-          <StatTile icon="calendar-month" v={km(s.month_distance_m)} l="This month" />
-          {s.zones_claimed != null && <StatTile icon="flag-variant" v={String(s.zones_claimed)} l="Zones held" c={colors.primary} />}
-          {s.territories_defended != null && <StatTile icon="shield-check" v={String(s.territories_defended)} l="Defended" c={colors.gold} />}
-          {s.territories_stolen != null && <StatTile icon="sword-cross" v={String(s.territories_stolen)} l="Stolen" c={colors.secondary} />}
-          <StatTile icon="account-group" v={String(s.crew_memberships)} l="Crews" c={colors.blue} />
-          {s.events_attended != null && <StatTile icon="calendar-check" v={String(s.events_attended)} l="Events" c={colors.violet} />}
-          {s.streak_days != null && <StatTile icon="fire" v={`${s.streak_days}d`} l="Streak" c={colors.orange} />}
-        </View>
-
-        {/* Territory */}
-        <SectionHeader title="Territory" action={isMe ? 'Map' : undefined} onAction={isMe ? () => router.push('/explore') : undefined} />
-        {p.territories.length ? (
-          <View style={{ gap: 8 }}>
-            {p.territories.map((t) => (
-              <PressScale key={t.zone_id} onPress={() => router.push({ pathname: '/zone/[id]', params: { id: t.zone_id } })} style={styles.row} scaleTo={0.98} accessibilityLabel={`${t.zone_name}, held`}>
-                <View style={[styles.dot, { backgroundColor: isMe ? colors.primary : colors.secondary }]} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.rowTitle}>{t.zone_name}</Text>
-                  <Text style={styles.meta}>held since {shortTime(t.claimed_at)} · defended {t.defended_count}×</Text>
-                </View>
-                <Icon name="chevron-right" size={18} color={colors.dim} />
-              </PressScale>
-            ))}
-          </View>
         ) : (
-          <Text style={styles.empty}>{isMe ? 'No zones yet. Run through one, then claim it.' : 'Holds no zones right now.'}</Text>
-        )}
-
-        {/* Crews */}
-        <SectionHeader title="Crews" action={isMe ? 'Find crews' : undefined} onAction={isMe ? () => router.push('/crews') : undefined} />
-        {p.crews.length ? (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {p.crews.map((c) => (
-              <PressScale key={c.id} onPress={() => router.push({ pathname: '/crew/[id]', params: { id: c.id } })} style={[styles.crew, { borderColor: c.color ?? colors.line }]} scaleTo={0.97}>
-                <Icon name={(c.icon as React.ComponentProps<typeof Icon>['name']) ?? 'account-group'} size={14} color={c.color ?? colors.text} />
-                <Text style={styles.crewText}>{c.name}</Text>
-                {c.role && c.role !== 'member' && <Text style={styles.role}>{c.role}</Text>}
-              </PressScale>
-            ))}
-          </View>
-        ) : (
-          <Text style={styles.empty}>{isMe ? 'Not in a crew yet.' : 'No crews yet.'}</Text>
-        )}
-
-        {isMe && (
           <>
-            <SectionHeader title="People & places" />
-            <View style={{ gap: 8 }}>
-              <LinkRow icon="account-heart-outline" label="Friends" onPress={() => router.push('/friends')} />
-              <LinkRow icon="map-marker-radius" label="Shared zones" detail="Who’s been where you have" onPress={() => router.push('/shared')} />
-              <LinkRow icon="shield-account-outline" label="Safety & visibility" detail={p.open_to_meet ? 'Open to Meet is on' : 'Open to Meet is off'} onPress={() => router.push('/active')} />
+          {/* Shared context + icebreakers (others only; hidden when the backend has none) */}
+          {!isMe && shared && (shared.shared_zones.length > 0 || shared.shared_crews.length > 0 || shared.icebreakers.length > 0) && (
+            <Card style={{ marginTop: 14, gap: 10 }}>
+              {shared.shared_zones.length > 0 && (
+                <Text style={styles.sharedLine}>
+                  <Icon name="map-marker-radius" size={13} color={colors.primary} /> Shared ground: {shared.shared_zones.map((z) => z.zone_name).join(', ')}
+                </Text>
+              )}
+              {shared.shared_crews.length > 0 && (
+                <Text style={styles.sharedLine}>
+                  <Icon name="account-group" size={13} color={colors.blue} /> Both in {shared.shared_crews.map((c) => c.name).join(', ')}
+                </Text>
+              )}
+              <Icebreakers items={shared.icebreakers} targetUserId={p.user_id} max={4} />
+            </Card>
+          )}
+
+          {!isMe && userId && ctx.data && (
+            <View style={{ marginTop: 10 }}>
+              <SharedZonesEntry userId={userId} zones={ctx.data.shared_zones} unchecked={hiddenActionFor(ctx.data.hidden_code) === 'retry'} />
             </View>
-          </>
-        )}
+          )}
+          {!isMe && userId && <ProfileDateSuggestion userId={userId} />}
 
-        {/* Badges */}
-        <SectionHeader title="Badges" action={isMe ? 'All badges' : undefined} onAction={isMe ? () => router.push('/badges') : undefined} />
-        {p.badges.length ? <BadgeRow badges={p.badges} /> : <Text style={styles.empty}>No badges yet.</Text>}
+          {/* Stats */}
+          <SectionHeader title="Activity stats" />
+          <View style={styles.grid}>
+            {s.total_distance_m != null && <StatTile icon="map-marker-distance" v={km(s.total_distance_m)} l="Total distance" />}
+            <StatTile icon="calendar-month" v={km(s.month_distance_m)} l="This month" />
+            {s.zones_claimed != null && <StatTile icon="flag-variant" v={String(s.zones_claimed)} l="Zones held" c={colors.primary} />}
+            {s.territories_defended != null && <StatTile icon="shield-check" v={String(s.territories_defended)} l="Defended" c={colors.gold} />}
+            {s.territories_stolen != null && <StatTile icon="sword-cross" v={String(s.territories_stolen)} l="Stolen" c={colors.secondary} />}
+            <StatTile icon="account-group" v={String(s.crew_memberships)} l="Crews" c={colors.blue} />
+            {s.events_attended != null && <StatTile icon="calendar-check" v={String(s.events_attended)} l="Events" c={colors.violet} />}
+            {s.streak_days != null && <StatTile icon="fire" v={`${s.streak_days}d`} l="Streak" c={colors.orange} />}
+          </View>
 
-        {/* Activity history */}
-        {p.recent_activities.length > 0 && (
-          <>
-            <SectionHeader title="Recent activity" />
+          {/* Territory */}
+          <SectionHeader title="Territory" action={isMe ? 'Map' : undefined} onAction={isMe ? () => router.push('/explore') : undefined} />
+          {p.territories.length ? (
             <View style={{ gap: 8 }}>
-              {p.recent_activities.map((a) => (
-                <View key={a.id} style={styles.row}>
-                  <Icon name={a.type === 'walk' ? 'walk' : 'run-fast'} size={18} color={colors.primary} />
+              {p.territories.map((t) => (
+                <PressScale key={t.zone_id} onPress={() => router.push({ pathname: '/zone/[id]', params: { id: t.zone_id } })} style={styles.row} scaleTo={0.98} accessibilityLabel={`${t.zone_name}, held`}>
+                  <View style={[styles.dot, { backgroundColor: isMe ? colors.primary : colors.secondary }]} />
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.rowTitle}>{km(a.distance_m, 2)} {a.type}</Text>
-                    <Text style={styles.meta}>
-                      {shortTime(a.started_at)} · {Math.round(a.duration_s / 60)} min · {a.zones_count} zone{a.zones_count === 1 ? '' : 's'}
-                    </Text>
+                    <Text style={styles.rowTitle}>{t.zone_name}</Text>
+                    <Text style={styles.meta}>held since {shortTime(t.claimed_at)} · defended {t.defended_count}×</Text>
                   </View>
-                  <Text style={[styles.status, { color: a.status === 'verified' ? colors.green : a.status === 'rejected' ? colors.coral : colors.gold }]}>{a.status}</Text>
-                </View>
+                  <Icon name="chevron-right" size={18} color={colors.dim} />
+                </PressScale>
               ))}
             </View>
+          ) : (
+            <Text style={styles.empty}>{isMe ? 'No zones yet. Run through one, then claim it.' : 'Holds no zones right now.'}</Text>
+          )}
+
+          {/* Crews */}
+          <SectionHeader title="Crews" action={isMe ? 'Find crews' : undefined} onAction={isMe ? () => router.push('/crews') : undefined} />
+          {p.crews.length ? (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {p.crews.map((c) => (
+                <PressScale key={c.id} onPress={() => router.push({ pathname: '/crew/[id]', params: { id: c.id } })} style={[styles.crew, { borderColor: c.color ?? colors.line }]} scaleTo={0.97}>
+                  <Icon name={(c.icon as React.ComponentProps<typeof Icon>['name']) ?? 'account-group'} size={14} color={c.color ?? colors.text} />
+                  <Text style={styles.crewText}>{c.name}</Text>
+                  {c.role && c.role !== 'member' && <Text style={styles.role}>{c.role}</Text>}
+                </PressScale>
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.empty}>{isMe ? 'Not in a crew yet.' : 'No crews yet.'}</Text>
+          )}
+
+          {isMe && (
+            <>
+              <SectionHeader title="People & places" />
+              <View style={{ gap: 8 }}>
+                <LinkRow icon="account-heart-outline" label="Friends" onPress={() => router.push('/friends')} />
+                <LinkRow icon="map-marker-radius" label="Shared zones" detail="Who’s been where you have" onPress={() => router.push('/shared')} />
+                <LinkRow icon="shield-account-outline" label="Safety & visibility" detail={p.open_to_meet ? 'Open to Meet is on' : 'Open to Meet is off'} onPress={() => router.push('/active')} />
+              </View>
+            </>
+          )}
+
+          {/* Badges */}
+          <SectionHeader title="Badges" action={isMe ? 'All badges' : undefined} onAction={isMe ? () => router.push('/badges') : undefined} />
+          {p.badges.length ? <BadgeRow badges={p.badges} /> : <Text style={styles.empty}>No badges yet.</Text>}
+
+          {/* Activity history */}
+          {p.recent_activities.length > 0 && (
+            <>
+              <SectionHeader title="Recent activity" />
+              <View style={{ gap: 8 }}>
+                {p.recent_activities.map((a) => (
+                  <View key={a.id} style={styles.row}>
+                    <Icon name={a.type === 'walk' ? 'walk' : 'run-fast'} size={18} color={colors.primary} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.rowTitle}>{km(a.distance_m, 2)} {a.type}</Text>
+                      <Text style={styles.meta}>
+                        {shortTime(a.started_at)} · {Math.round(a.duration_s / 60)} min · {a.zones_count} zone{a.zones_count === 1 ? '' : 's'}
+                      </Text>
+                    </View>
+                    <Text style={[styles.status, { color: a.status === 'verified' ? colors.green : a.status === 'rejected' ? colors.coral : colors.gold }]}>{a.status}</Text>
+                  </View>
+                ))}
+              </View>
+            </>
+          )}
+
+          {/* Verification */}
+          <SectionHeader title="Verification" />
+          <Card style={{ gap: 8 }}>
+            <Check ok={v.email_verified} label={v.email_domain ? `Institute email · @${v.email_domain}` : 'Institute email'} />
+            <Check ok={v.student_verified} label="Student status" />
+            <Check ok={v.phone_verified} label="Phone" />
+            <Check ok={v.selfie_verified} label="Selfie check" />
+          </Card>
           </>
         )}
-
-        {/* Verification */}
-        <SectionHeader title="Verification" />
-        <Card style={{ gap: 8 }}>
-          <Check ok={v.email_verified} label={v.email_domain ? `Institute email · @${v.email_domain}` : 'Institute email'} />
-          <Check ok={v.student_verified} label="Student status" />
-          <Check ok={v.phone_verified} label="Phone" />
-          <Check ok={v.selfie_verified} label="Selfie check" />
-        </Card>
 
         {isMe && (
           <>
@@ -331,6 +346,8 @@ function LinkRow({ icon, label, detail, detailColor = colors.dim, onPress }: { i
 }
 
 const styles = StyleSheet.create({
+  private: { marginTop: 18, alignItems: 'center', gap: 8, paddingVertical: 22 },
+  privateText: { color: colors.dim, fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, textAlign: 'center' },
   topBar: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', maxWidth: MAX_WIDTH, alignSelf: 'center' },
   col: { paddingHorizontal: 16, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: colors.imageChip },

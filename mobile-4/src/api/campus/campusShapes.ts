@@ -149,10 +149,11 @@ export const NOTHING_SHARED = (): T.SharedContext => ({ shared_zones: [], shared
 
 /**
  * A person's context. `blocked` (either direction) → just an empty context: nothing reveals the block.
- * `blocks_unreachable` → empty too (fail-closed); the code isn't part of SharedContext.
+ * `blocks_unreachable` → empty too (fail-closed), but with the reason, so the screen says it couldn't
+ * check rather than "no common ground".
  */
 export function sharedContextFromCampus(raw: T.SharedContext & CampusHidden): T.SharedContext {
-  if (raw.hidden_reason) return NOTHING_SHARED();
+  if (raw.hidden_reason) return hiddenCodeOf(raw.hidden_reason) === 'blocked' ? NOTHING_SHARED() : { ...NOTHING_SHARED(), ...hidden(raw.hidden_reason) };
   return { shared_zones: raw.shared_zones ?? [], shared_crews: raw.shared_crews ?? [], shared_events: raw.shared_events ?? [], icebreakers: raw.icebreakers ?? [] };
 }
 

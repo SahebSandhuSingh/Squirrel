@@ -156,6 +156,7 @@ function profile(p: PublicProfile, membership: Membership | null, email: string 
       .map((a) => ({ id: a.id, type: 'run' as const, started_at: a.started_at, distance_m: km(a.distance_km) ?? 0, duration_s: Math.round((a.duration_minutes ?? 0) * 60), zones_count: 0, status: a.verified ? ('verified' as const) : ('processing' as const) })),
     joined_at: u.created_at,
     founding_member: !!membership?.founding || p.badges.some((b) => b.kind === 'founding'),
+    restricted: p.restricted === true,
   };
 }
 
@@ -345,13 +346,17 @@ export const socialCampusApi: T.CampusApi = {
 
   squirrelBoard: async (period, limit = 10) => {
     const b = await communityApi.xpBoard(boardWindow(period));
-    if (!b.available) throw new ApiError(503, 'The XP board is unavailable right now', { code: 'leaderboard_unavailable' });
+    // The Run Module is down, not missing: an outage code, so screens say "couldn't load · try again",
+    // never "not live yet" (a 503 code ending in `unavailable` means not deployed; featureUnavailable).
+    if (!b.available) throw new ApiError(503, 'The XP board couldn’t load right now', { code: 'leaderboard_unreachable' });
     const row = (e: (typeof b.entries)[number]): T.SquirrelRow => ({ ...person({ ...e.user, hostel: e.hostel }), rank: e.rank, xp: e.xp, zones_claimed: 0, distance_m: null });
     return { period, entries: b.entries.slice(0, limit).map(row), me: b.me ? row(b.me) : null, updated_at: new Date().toISOString() };
   },
   hostelBoard: async (period) => {
     const b = await communityApi.hostelBoard(boardWindow(period));
     if (!b.enabled) return notLive('Hostel vs Hostel')();
+    // Run Module unreachable: Social still lists every hostel, at 0 XP. Never show that as standings.
+    if (!b.available) throw new ApiError(503, 'Hostel standings couldn’t load right now', { code: 'leaderboard_unreachable' });
     return {
       period,
       entries: b.entries.map((e) => ({ rank: e.rank, hostel_id: e.hostel, name: e.hostel, score: e.xp, territories: 0, active_members: e.active, distance_m: null })),
@@ -372,9 +377,9 @@ export const socialCampusApi: T.CampusApi = {
   incomingPokes: notLive('Pokes'),
   friendshipStatus: notLive('Friends'),
 
-  notifications: async () => {
-    const page = await notificationsApi.list();
-    return { items: page.items.map(notification), unread: page.unread };
+  notifications: async (cursor) => {
+    const page = await notificationsApi.list(cursor);
+    return { items: page.items.map(notification), unread: page.unread, next_cursor: page.next_cursor ?? null };
   },
   markNotificationsRead: (ids) => notificationsApi.markRead(ids),
 

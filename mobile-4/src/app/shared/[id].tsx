@@ -5,8 +5,9 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { campusApi, type Profile, type SharedContext } from '@/api/campus';
+import { hiddenActionFor } from '@/api/campus/campusShapes';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
-import { ErrorState, LoadingRows, SourceBadge } from '@/components/campus/States';
+import { EmptyNote, ErrorState, LoadingRows, SourceBadge } from '@/components/campus/States';
 import { PRIVACY_LINE, SharedZoneRow } from '@/components/discovery/SharedZones';
 import { PokeButton } from '@/components/social/PokeButton';
 import { Button, Card, Display, Header, Icon, Kicker, Screen } from '@/components/ui';
@@ -20,6 +21,8 @@ export default function SharedWith() {
   const other = useCampus<Profile>(`profile:${id}`, () => campusApi.profile(id));
   const ctx = useCampus<SharedContext>(`context:${id}`, () => campusApi.sharedContext(id));
   const zones = ctx.data?.shared_zones ?? [];
+  // Emptied because the server couldn't check (not "nothing shared"): say so and offer a retry.
+  const unchecked = hiddenActionFor(ctx.data?.hidden_code) === 'retry';
   const p = other.data;
   const first = p?.display_name.split(' ')[0] ?? 'them';
 
@@ -39,7 +42,7 @@ export default function SharedWith() {
           <Text style={styles.who}>You</Text>
         </View>
         <View style={styles.link}>
-          <Text style={styles.count} accessibilityLabel={`${zones.length} shared zones`}>{ctx.data ? zones.length : '–'}</Text>
+          <Text style={styles.count} accessibilityLabel={`${zones.length} shared zones`}>{ctx.data && !unchecked ? zones.length : '–'}</Text>
           <Text style={styles.countL}>{zones.length === 1 ? 'zone' : 'zones'}</Text>
         </View>
         <View style={styles.side}>
@@ -52,6 +55,8 @@ export default function SharedWith() {
         <ErrorState cause={ctx.cause} onRetry={ctx.reload} feature="Shared zones" />
       ) : !ctx.data ? (
         <LoadingRows rows={3} height={72} style={{ marginTop: 16 }} />
+      ) : unchecked ? (
+        <EmptyNote icon="shield-alert-outline" title="Can’t check shared zones right now" body={ctx.data.hidden_reason ?? undefined} action="Retry" onAction={ctx.reload} />
       ) : zones.length === 0 ? (
         <Card style={styles.empty}>
           <Icon name="map-marker-question-outline" size={30} color={colors.dim} />

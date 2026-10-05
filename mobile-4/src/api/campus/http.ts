@@ -85,7 +85,10 @@ export function makeHttpCampusApi(base: string): T.CampusApi {
     incomingPokes: async () => (await get<{ pokes: T.IncomingPoke[] }>('/v1/pokes/incoming')).pokes,
     friendshipStatus: (userId) => get<{ user_id: string; friends: boolean; since: string | null }>(`/v1/friends/status/${id(userId)}`),
 
-    notifications: () => get<{ items: T.AppNotification[]; unread: number }>('/v1/notifications'),
+    notifications: async (cursor) => {
+      const page = await get<{ items: T.AppNotification[]; unread: number; next_cursor?: string | null }>(`/v1/notifications${cursor ? `?cursor=${id(cursor)}` : ''}`);
+      return { ...page, next_cursor: page.next_cursor ?? null };
+    },
     markNotificationsRead: (ids) => send<{ unread: number }>('/v1/notifications/read', 'POST', { ids }),
 
     // Dev B — shared zones (the per-person overlap is sharedContext above), heatmap, Squirrel Dates

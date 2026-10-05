@@ -377,7 +377,17 @@ test('active now and shared zones pass the reason through (an empty list says wh
 test('a person’s context: blocked → just an empty context (nothing reveals the block)', () => {
   const empty = { shared_zones: [], shared_crews: [], shared_events: [], icebreakers: [] };
   assert.deepEqual(sharedContextFromCampus({ ...empty, hidden_reason: 'blocked' }), empty);
-  assert.deepEqual(sharedContextFromCampus({ ...empty, hidden_reason: 'blocks_unreachable' }), empty);
   const ctx = { ...empty, shared_zones: [{ zone_id: 'lib', zone_name: 'Library', relation: 'both_ran' }] };
   assert.deepEqual(sharedContextFromCampus({ ...ctx, hidden_reason: null }), ctx);
+});
+
+test('a person’s context: blocks couldn’t be checked → empty, but says so (never "no common ground")', () => {
+  const empty = { shared_zones: [], shared_crews: [], shared_events: [], icebreakers: [] };
+  const c = sharedContextFromCampus({ ...empty, hidden_reason: 'blocks_unreachable' });
+  assert.deepEqual([c.shared_zones, c.icebreakers, c.hidden_code], [[], [], 'blocks_unreachable']);
+  assert.match(c.hidden_reason, /block list/);
+  assert.equal(hiddenActionFor(c.hidden_code), 'retry');
+  // Even if a server leaked data alongside the code, none of it is shown.
+  const leaky = sharedContextFromCampus({ ...empty, shared_zones: [{ zone_id: 'lib', zone_name: 'Library', relation: 'both_ran' }], hidden_reason: 'blocks_unreachable' });
+  assert.deepEqual(leaky.shared_zones, []);
 });

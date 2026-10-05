@@ -44,21 +44,22 @@ export function SharedZoneRow({ zone, index }: { zone: SharedZone; index: number
 }
 
 /** Compact entry point on someone's profile: "3 shared zones →". */
-export function SharedZonesEntry({ userId, zones }: { userId: string; zones: SharedZone[] }) {
-  const n = zones.length;
+/** `unchecked`: the server couldn't check this time, so there's no count to show (never "none yet"). */
+export function SharedZonesEntry({ userId, zones, unchecked = false }: { userId: string; zones: SharedZone[]; unchecked?: boolean }) {
+  const n = unchecked ? 0 : zones.length;
   return (
     <PressScale
       onPress={() => router.push({ pathname: '/shared/[id]', params: { id: userId } })}
       style={styles.entry}
       scaleTo={0.985}
       accessibilityRole="button"
-      accessibilityLabel={n ? `${n} shared zones. Open` : 'Shared zones. None yet. Open'}>
+      accessibilityLabel={unchecked ? 'Shared zones. Couldn’t check right now. Open' : n ? `${n} shared zones. Open` : 'Shared zones. None yet. Open'}>
       <View style={styles.entryIcon}>
         <Icon name="map-marker-radius" size={18} color={colors.primary} />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={styles.entryTitle}>{n ? `${n} shared zone${n === 1 ? '' : 's'}` : 'Shared zones'}</Text>
-        <Text style={styles.entrySub} numberOfLines={1}>{n ? zones.map((z) => z.zone_name).join(' · ') : 'No common ground yet'}</Text>
+        <Text style={styles.entrySub} numberOfLines={1}>{unchecked ? 'Couldn’t check right now' : n ? zones.map((z) => z.zone_name).join(' · ') : 'No common ground yet'}</Text>
       </View>
       <Icon name="chevron-right" size={20} color={colors.dim} />
     </PressScale>
