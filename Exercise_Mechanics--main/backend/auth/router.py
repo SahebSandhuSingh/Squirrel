@@ -36,7 +36,6 @@ from backend.auth.store import (
     normalize_email,
     signup_email_taken,
     read_credential_for_email_code,
-    session_version,
 )
 from backend.auth import email_codes, throttle
 from backend.auth.tokens import burn_password_check, issue_access_token, public_jwks, verify_password
@@ -101,8 +100,7 @@ def token_pair(user_id: str, *, verified: bool | None = None) -> dict:
     not given."""
     if verified is None:
         verified = email_verified(user_id)
-    access, access_exp = issue_access_token(user_id, email_verified=verified,
-                                            session_version=session_version(user_id))
+    access, access_exp = issue_access_token(user_id, email_verified=verified)
     refresh, refresh_exp = issue_refresh_token(user_id)
     return {
         "user_id": user_id,

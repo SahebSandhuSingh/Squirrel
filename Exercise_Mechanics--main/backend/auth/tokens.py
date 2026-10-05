@@ -202,13 +202,12 @@ def _signature_ok(signing_input: str, sig: str) -> bool:
     return True
 
 
-def issue_access_token(user_id: str, now: float | None = None, *, email_verified: bool = False,
-                       session_version: int = 0) -> tuple[str, int]:
+def issue_access_token(user_id: str, now: float | None = None, *, email_verified: bool = False) -> tuple[str, int]:
     """Return (token, expires_at_epoch_seconds). An account that proved its email address at sign-up
     (auth/email_codes.py) carries `"ev": true`, for the Social service's founding-member badges."""
     iat = int(now if now is not None else time.time())
     exp = iat + config.ACCESS_TOKEN_TTL_SECONDS
-    claims = {"sub": user_id, "iat": iat, "exp": exp, "typ": "access", "sv": session_version}
+    claims = {"sub": user_id, "iat": iat, "exp": exp, "typ": "access"}
     if email_verified:
         claims["ev"] = True
     payload = _b64e(json.dumps(claims, separators=(",", ":")).encode())

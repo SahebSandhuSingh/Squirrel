@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import base64
+import json
 import re
 
 import psycopg
@@ -41,6 +43,11 @@ def _count_accounts() -> int:
         with psycopg.connect(connection.database_url()) as conn:
             return conn.execute("SELECT count(*) FROM user_accounts").fetchone()[0]
     return len(list((config.AUTH_DIR / "credentials").glob("*.json")))
+
+
+def _claims(token: str) -> dict:
+    payload = token.split(".")[1]
+    return json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
 
 
 def test_all_four_fields_create_account_with_original_email_lookup_and_normalized_phone(app):
@@ -211,7 +218,8 @@ def test_email_verification_revokes_refresh_but_access_token_lives_until_expiry(
     verified = call(app, "POST", "/api/auth/email/verify", json={"email": "john.doe@gmail.com", "code": code})
     assert verified.status == 200
     assert verified.json()["new_account"] is False
-    assert read_profile(created.json()["user_id"])["session_version"] == 1
+    assert "session_version" not in read_profile(created.json()["user_id"])
+    assert "sv" not in _claims(verified.json()["access_token"])
 
     # Access tokens are stateless and intentionally remain valid until their 15-minute expiry.
     still_valid = call(app, "GET", "/api/me/profile-details", headers={"authorization": f"Bearer {first_token}"})

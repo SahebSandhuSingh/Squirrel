@@ -215,24 +215,6 @@ def consume_refresh_token(token: str, now: float | None = None) -> str | None:
     return record.get("user_id")
 
 
-def session_version(user_id: str) -> int:
-    profile = _read_profile_for_auth(user_id)
-    try:
-        return max(0, int(profile.get("session_version", 0))) if profile else 0
-    except (TypeError, ValueError):
-        return 0
-
-
-def _read_profile_for_auth(user_id: str) -> dict | None:
-    if connection.enabled():
-        return db_accounts.read_profile(user_id)
-    try:
-        with open(user_dir(user_id) / PROFILE_FILENAME, encoding="utf-8") as profile_file:
-            return json.load(profile_file)
-    except (FileNotFoundError, ValueError):
-        return None
-
-
 def email_verified(user_id: str) -> bool:
     """Whether the account proved its email address at sign-up (auth/email_codes.py)."""
     if connection.enabled():
@@ -247,7 +229,7 @@ def email_verified(user_id: str) -> bool:
 
 
 def mark_email_verified(user_id: str, now: datetime | None = None) -> None:
-    """First verification revokes all existing access and refresh sessions for this account."""
+    """Mark the email verified and delete existing refresh tokens for this account."""
     from backend.users.store import read_profile, write_profile
 
     profile = read_profile(user_id)
@@ -258,7 +240,6 @@ def mark_email_verified(user_id: str, now: datetime | None = None) -> None:
         db_accounts.verify_email_and_revoke_sessions(user_id, verified_at)
         return
     profile["email_verified_at"] = verified_at
-    profile["session_version"] = max(0, int(profile.get("session_version", 0))) + 1
     write_profile(user_id, profile)
     for token_path in (config.AUTH_DIR / "refresh").glob("*.json"):
         try:

@@ -30,7 +30,7 @@ from pathlib import Path
 
 from backend import config, mailer
 from backend.auth import throttle
-from backend.auth.store import normalize_email
+from backend.auth.store import normalize_email, normalize_signup_email
 from backend.auth.tokens import signing_secret
 from backend.db import connection
 
@@ -83,11 +83,11 @@ def allowed_domains_text() -> str:
 
 
 def _email_sha(email: str) -> str:
-    return hashlib.sha256(normalize_email(email).encode()).hexdigest()
+    return hashlib.sha256(normalize_signup_email(email).encode()).hexdigest()
 
 
 def _code_hmac(email: str, code: str) -> str:
-    return hmac.new(signing_secret(), f"{normalize_email(email)}:{code}".encode(), hashlib.sha256).hexdigest()
+    return hmac.new(signing_secret(), f"{normalize_signup_email(email)}:{code}".encode(), hashlib.sha256).hexdigest()
 
 
 def _path(email: str) -> Path:
@@ -165,7 +165,7 @@ def send_code(email: str, caller: str, *, now: float | None = None, any_domain: 
     previous = _read(email)
     if previous is not None and now - previous.sent_at < RESEND_AFTER_S:
         raise ResendTooSoon(int(RESEND_AFTER_S - (now - previous.sent_at)) + 1)
-    email_key = throttle.email_key(email)
+    email_key = throttle.email_key(normalize_signup_email(email))
     throttle.check(throttle.EMAIL_CODE_EMAIL, email_key, now=now)
     throttle.check(throttle.EMAIL_CODE_IP, caller, now=now)
     throttle.hit(throttle.EMAIL_CODE_EMAIL, email_key, now=now)

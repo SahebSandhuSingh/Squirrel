@@ -77,14 +77,13 @@ def gmail_alias_credentials(canonical_email: str) -> list[dict]:
 
 
 def verify_email_and_revoke_sessions(user_id: str, verified_at: str) -> bool:
-    """Atomically mark first verification, bump access-token version, and delete refresh tokens."""
+    """Atomically mark first verification and delete refresh tokens."""
     with pooled() as conn, conn.transaction():
         row = conn.execute(
             "UPDATE user_profiles SET profile = "
-            "jsonb_set(jsonb_set(profile, '{email_verified_at}', to_jsonb(%s::text), true), "
-            "'{session_version}', to_jsonb(COALESCE((profile->>'session_version')::integer, 0) + 1), true), "
+            "jsonb_set(profile, '{email_verified_at}', to_jsonb(%s::text), true), "
             "updated_at = now() WHERE user_id = %s AND profile->>'email_verified_at' IS NULL "
-            "RETURNING (profile->>'session_version')::integer",
+            "RETURNING user_id",
             (verified_at, user_id),
         ).fetchone()
         if row is None:

@@ -10,7 +10,7 @@ import pytest
 from fastapi import FastAPI
 
 from backend import config, mailer
-from backend.auth import email_codes
+from backend.auth import email_codes, throttle
 from backend.auth.router import router as auth_router
 from backend.tests.asgi_client import call
 from backend.users.router import router as users_router
@@ -119,6 +119,32 @@ def test_codes_cannot_be_requested_back_to_back(app, outbox):
     assert call(app, "POST", "/api/auth/email-code", json={"email": _EMAIL}).status == 202
     again = call(app, "POST", "/api/auth/email-code", json={"email": _EMAIL})
     assert again.status == 429 and "retry-after" in {k.lower() for k in again.headers}
+
+
+def test_gmail_alias_spellings_share_the_five_codes_per_hour_limit(app, outbox):
+    spellings = [
+        "j.ohndoe@gmail.com",
+        "johndoe+1@gmail.com",
+        "johndoe+2@gmail.com",
+        "johndoe+3@gmail.com",
+        "johndoe+4@gmail.com",
+        "johndoe@googlemail.com",
+    ]
+    for i, email in enumerate(spellings[:5]):
+        email_codes.send_code(email, "1.2.3.4", now=i * (email_codes.RESEND_AFTER_S + 1), any_domain=True)
+    with pytest.raises(throttle.Throttled):
+        email_codes.send_code(spellings[5], "1.2.3.4", now=5 * (email_codes.RESEND_AFTER_S + 1), any_domain=True)
+    assert len(outbox) == 5
+
+
+def test_non_gmail_code_limits_remain_per_exact_address(app, outbox):
+    for i in range(5):
+        email_codes.send_code("j.ohndoe@company.example", "1.2.3.4",
+                              now=i * (email_codes.RESEND_AFTER_S + 1), any_domain=True)
+    # Dots and plus tags are not aliases at non-Gmail domains.
+    email_codes.send_code("johndoe+1@company.example", "1.2.3.4",
+                          now=5 * (email_codes.RESEND_AFTER_S + 1), any_domain=True)
+    assert len(outbox) == 6
 
 
 def test_a_new_code_replaces_the_old_one(app, outbox):
