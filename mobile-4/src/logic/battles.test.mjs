@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { battleHeadline, battlesAtZone, battlesForCrew, orderedActions, startSlots } from './battles.ts';
+import { battleHeadline, battleListFrom, battlesAtZone, battlesForCrew, orderedActions, startSlots } from './battles.ts';
 
 const asha = { user_id: 'u1', display_name: 'Asha Rao', avatar_url: null };
 const kabir = { user_id: 'u2', display_name: 'Kabir', avatar_url: null };
@@ -51,4 +51,11 @@ test('start slots are at least 30 minutes ahead', () => {
   assert.equal(slots[0].label, 'Tomorrow · 6:30 AM', '6 PM today is too close');
   assert.ok(slots.every((s) => s.at.getTime() > now.getTime() + 30 * 60_000));
   assert.equal(slots.at(-1).label, 'Sat · 7 AM');
+});
+
+test('battle list: crew battles missing only when the server says so', () => {
+  const b = battle();
+  assert.deepEqual(battleListFrom({ invites: [b] }), { invites: [b], crewBattlesUnavailable: false });
+  assert.deepEqual(battleListFrom({ invites: [], crew_battles_unavailable: true }), { invites: [], crewBattlesUnavailable: true });
+  assert.deepEqual(battleListFrom({ invites: [b], crew_battles_unavailable: false }).crewBattlesUnavailable, false);
 });

@@ -3,7 +3,7 @@
  * worded, and the start times offered. What a person may do is the server's `actions` list, never
  * decided here. Pure, so it's unit-tested without the app.
  */
-import type { ChallengeAction, ChallengeInvite } from '@/api/campus/types';
+import type { BattleListResponse, ChallengeAction, ChallengeInvite } from '@/api/campus/types';
 
 /** Group activities aren't placed yet (closer to an event than a battle), so they're not offered. */
 export const BATTLE_TYPES = new Set(['territory', 'zone_race', 'weekend_war']);
@@ -16,6 +16,13 @@ const sortBattles = (list: ChallengeInvite[]) => {
   const done = list.filter((b) => !LIVE.has(b.status)).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
   return [...live, ...done.slice(0, RECENT_FINISHED)];
 };
+
+/** The battle list, and whether crew battles are missing from it (absent flag: nothing missing). */
+export type BattleList = { invites: ChallengeInvite[]; crewBattlesUnavailable: boolean };
+export const battleListFrom = (body: BattleListResponse): BattleList => ({
+  invites: body.invites ?? [],
+  crewBattlesUnavailable: body.crew_battles_unavailable === true,
+});
 
 /** Territory duels and zone races at this zone. */
 export const battlesAtZone = (list: ChallengeInvite[], zoneId: string) =>

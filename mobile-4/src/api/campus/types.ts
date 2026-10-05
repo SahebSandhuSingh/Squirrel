@@ -406,6 +406,11 @@ export type ChallengeInvite = {
 };
 
 export type ChallengeAction = 'accept' | 'decline' | 'cancel' | 'schedule' | 'start' | 'complete';
+/**
+ * GET /v1/challenge-invites. `crew_battles_unavailable`: your crews couldn't be checked and nothing
+ * was cached, so crew battles were left out rather than shown to everyone.
+ */
+export type BattleListResponse = { invites: ChallengeInvite[]; crew_battles_unavailable?: boolean };
 
 export type ChallengeInviteCreate = {
   type: ChallengeTypeInfo['id'];

@@ -1,7 +1,9 @@
 /**
  * Territory battles for one zone or one crew (campus-service). Every button is one of the battle's
  * `actions` as the server sent them for you; when your crew role couldn't be checked
- * (`actions_status: crew_role_unavailable`) the card says so and offers a retry instead.
+ * (`actions_status: crew_role_unavailable`) the card says so and offers a retry instead. When crew
+ * battles couldn't be loaded at all (`crew_battles_unavailable`), the section says that rather than
+ * "no battles".
  */
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -12,7 +14,7 @@ import type { ChallengeAction, ChallengeInvite } from '@/api/campus/types';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
 import { Button, Card, Icon, PressScale, SectionHeader, tap } from '@/components/ui';
 import { invalidateCampus, useAction, useCampus } from '@/hooks/useCampus';
-import { ACTION_LABEL, battleHeadline, battlesAtZone, battlesForCrew, orderedActions, startSlots } from '@/logic/battles';
+import { ACTION_LABEL, battleHeadline, battlesAtZone, battlesForCrew, orderedActions, startSlots, type BattleList as Battles } from '@/logic/battles';
 import { formatEventDate } from '@/logic/format';
 import { useApp } from '@/state/AppState';
 import { alpha, colors, fonts, radius } from '@/theme';
@@ -24,9 +26,13 @@ const DONE_TOAST: Record<Exclude<ChallengeAction, 'schedule'>, string> = {
 
 /** Battles at a zone (`zoneId`) or against a crew (`crewId`). Renders nothing when campus-service isn't configured. */
 export function BattleList({ zoneId, crewId, newBattle }: { zoneId?: string; crewId?: string; newBattle?: { label: string; params: Record<string, string> } }) {
-  const r = useCampus<ChallengeInvite[]>('battles', () => battlesApi.list(), { enabled: BATTLES_CONFIGURED });
+  const r = useCampus<Battles>('battles', () => battlesApi.list(), { enabled: BATTLES_CONFIGURED });
   if (!BATTLES_CONFIGURED || r.signedOut) return null;
-  const list = r.data ? (zoneId ? battlesAtZone(r.data, zoneId) : crewId ? battlesForCrew(r.data, crewId) : []) : [];
+  const rows = r.data?.invites ?? [];
+  const list = zoneId ? battlesAtZone(rows, zoneId) : crewId ? battlesForCrew(rows, crewId) : [];
+  // Crew battles were left out (the server couldn't check your crews): say so, never "no battles".
+  const crewMissing = r.data?.crewBattlesUnavailable === true;
+  const crewNote = <Text style={styles.meta}>Crew battles couldn’t load. <Text style={styles.link} onPress={r.reload}>Try again</Text></Text>;
   const start = newBattle ? () => router.push({ pathname: '/invite/new', params: newBattle.params }) : undefined;
   return (
     <View>
@@ -38,10 +44,11 @@ export function BattleList({ zoneId, crewId, newBattle }: { zoneId?: string; cre
           <Text style={styles.meta}>Loading battles…</Text>
         )
       ) : list.length === 0 ? (
-        <Text style={styles.meta}>{zoneId ? 'No battles for this zone yet.' : 'No battles against this crew yet.'}</Text>
+        crewMissing ? crewNote : <Text style={styles.meta}>{zoneId ? 'No battles for this zone yet.' : 'No battles against this crew yet.'}</Text>
       ) : (
         <View style={{ gap: 10 }}>
           {list.map((b) => <BattleCard key={b.id} b={b} onRetry={r.reload} />)}
+          {crewMissing && crewNote}
         </View>
       )}
     </View>
