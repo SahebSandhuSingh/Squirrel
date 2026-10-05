@@ -202,12 +202,13 @@ def _signature_ok(signing_input: str, sig: str) -> bool:
     return True
 
 
-def issue_access_token(user_id: str, now: float | None = None, *, email_verified: bool = False) -> tuple[str, int]:
+def issue_access_token(user_id: str, now: float | None = None, *, email_verified: bool = False,
+                       session_version: int = 0) -> tuple[str, int]:
     """Return (token, expires_at_epoch_seconds). An account that proved its email address at sign-up
     (auth/email_codes.py) carries `"ev": true`, for the Social service's founding-member badges."""
     iat = int(now if now is not None else time.time())
     exp = iat + config.ACCESS_TOKEN_TTL_SECONDS
-    claims = {"sub": user_id, "iat": iat, "exp": exp, "typ": "access"}
+    claims = {"sub": user_id, "iat": iat, "exp": exp, "typ": "access", "sv": session_version}
     if email_verified:
         claims["ev"] = True
     payload = _b64e(json.dumps(claims, separators=(",", ":")).encode())
@@ -227,6 +228,15 @@ def verify_access_token(token: str, now: float | None = None) -> str | None:
     if not isinstance(claims, dict) or claims.get("typ") != "access" or not isinstance(claims.get("sub"), str):
         return None
     if int(claims.get("exp", 0)) <= (now if now is not None else time.time()):
+        return None
+    try:
+        token_version = int(claims.get("sv", 0))
+        # Lazy import avoids a module cycle: auth.store uses the password/token primitives above.
+        from backend.auth.store import session_version
+        if token_version != session_version(claims["sub"]):
+            return None
+    except Exception:
+        # If account state cannot be read, fail closed rather than accepting a possibly revoked token.
         return None
     return claims["sub"]
 

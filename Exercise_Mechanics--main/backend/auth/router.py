@@ -34,6 +34,8 @@ from backend.auth.store import (
     read_credential,
     register_account,
     normalize_email,
+    signup_email_taken,
+    session_version,
 )
 from backend.auth import email_codes, throttle
 from backend.auth.tokens import burn_password_check, issue_access_token, public_jwks, verify_password
@@ -98,7 +100,8 @@ def token_pair(user_id: str, *, verified: bool | None = None) -> dict:
     not given."""
     if verified is None:
         verified = email_verified(user_id)
-    access, access_exp = issue_access_token(user_id, email_verified=verified)
+    access, access_exp = issue_access_token(user_id, email_verified=verified,
+                                            session_version=session_version(user_id))
     refresh, refresh_exp = issue_refresh_token(user_id)
     return {
         "user_id": user_id,
@@ -124,9 +127,15 @@ def count_access_code_signup(request: Request) -> None:
     address = throttle.client_address(request)
     try:
         throttle.check(throttle.ACCESS_CODE_SIGNUP_IP, address)
+        throttle.check(throttle.ACCESS_CODE_SIGNUP_GLOBAL, "all-addresses")
     except throttle.Throttled as exc:
         raise throttle.too_many(exc) from None
+
+
+def record_access_code_signup_failure(request: Request) -> None:
+    address = throttle.client_address(request)
     throttle.hit(throttle.ACCESS_CODE_SIGNUP_IP, address)
+    throttle.hit(throttle.ACCESS_CODE_SIGNUP_GLOBAL, "all-addresses")
 
 
 def domain_error() -> HTTPException:
@@ -188,23 +197,32 @@ def access_code_signup(body: AccessCodeSignupBody, request: Request) -> dict:
     expected_bytes = expected.encode("ascii") if configured_ok else b"000000"
     matches = secrets.compare_digest(expected_bytes, supplied)
     if not configured_ok or not matches:
+        record_access_code_signup_failure(request)
         raise HTTPException(status_code=403, detail="Sign-up failed. Check your details and try again.")
+
+    # Only signup's uniqueness comparison folds Gmail/Googlemail aliases. The stored email and all
+    # existing sign-in lookups retain the exact normalization rules they already had.
+    if signup_email_taken(email):
+        record_access_code_signup_failure(request)
+        raise HTTPException(status_code=409, detail="An account with this email already exists. Sign in instead.")
+    signup_key = normalize_email(email)
 
     try:
         user_id = register_account(
-            email,
+            signup_key,
             secrets.token_urlsafe(32),
             body.full_name,
             "",
             profile={
                 "full_name": body.full_name,
                 "email_as_entered": email,
-                "phone_number_unverified": body.phone,
+                "mobile": "+91" + body.phone.removeprefix("+91"),
                 "signup_method": "access_code",
             },
             email_verified=False,
         )
     except EmailTaken:
+        record_access_code_signup_failure(request)
         raise HTTPException(status_code=409, detail="An account with this email already exists. Sign in instead.") from None
     return token_pair(user_id, verified=False)
 

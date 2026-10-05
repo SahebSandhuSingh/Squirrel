@@ -10,10 +10,12 @@ import pytest
 from fastapi import FastAPI
 
 from backend import config, mailer
+from backend.auth.store import register_account
 from backend.auth.router import router as auth_router
 from backend.auth.store import read_credential
 from backend.db import connection
 from backend.tests.asgi_client import call
+from backend.profiles.router import router as profiles_router
 from backend.users.router import router as users_router
 from backend.users.store import read_profile
 
@@ -25,6 +27,7 @@ def app(tmp_path, monkeypatch):
     app = FastAPI()
     app.include_router(auth_router)
     app.include_router(users_router)
+    app.include_router(profiles_router)
     return app
 
 
@@ -40,16 +43,18 @@ def _count_accounts() -> int:
     return len(list((config.AUTH_DIR / "credentials").glob("*.json")))
 
 
-def test_all_four_fields_create_account_with_normalized_key_and_unverified_phone(app):
+def test_all_four_fields_create_account_with_original_email_lookup_and_normalized_phone(app):
     response = call(app, "POST", "/api/auth/signup/access-code", json=_payload())
     assert response.status == 201
     assert _count_accounts() == 1
-    assert read_credential("john.doe@gmail.com") == read_credential("johndoe@gmail.com")
+    assert read_credential("john.doe@gmail.com") is not None
+    assert read_credential("johndoe@gmail.com") is None
     profile = read_profile(response.json()["user_id"])
-    assert profile["email"] == "johndoe@gmail.com"
+    assert profile["email"] == "john.doe@gmail.com"
     assert profile["email_as_entered"] == "john.doe@gmail.com"
     assert profile["full_name"] == "John Doe"
-    assert profile["phone_number_unverified"] == "+919876543210"
+    assert profile["mobile"] == "+919876543210"
+    assert "phone_number_unverified" not in profile
     assert profile["created_at"]
 
 
@@ -77,13 +82,20 @@ def test_unset_access_code_fails_closed(app, monkeypatch):
     assert _count_accounts() == 0
 
 
-def test_gmail_dot_alias_is_one_account_and_duplicate_is_refused(app):
-    first = call(app, "POST", "/api/auth/signup/access-code", json=_payload())
-    second = call(app, "POST", "/api/auth/signup/access-code", json=_payload(email="johndoe@gmail.com"))
-    assert first.status == 201
-    assert second.status == 409
-    assert read_credential("john.doe@gmail.com")["user_id"] == first.json()["user_id"]
-    assert read_credential("johndoe@gmail.com")["user_id"] == first.json()["user_id"]
+def test_gmail_alias_is_checked_against_both_sides_without_changing_existing_lookup(app):
+    existing = register_account("john.doe@gmail.com", "not-a-login-password", "John", "Doe")
+    response = call(app, "POST", "/api/auth/signup/access-code", json=_payload(email="johndoe@gmail.com"))
+    assert response.status == 409
+    assert read_credential("john.doe@gmail.com")["user_id"] == existing
+    assert read_credential("johndoe@gmail.com") is None
+    assert _count_accounts() == 1
+
+
+def test_googlemail_alias_is_treated_as_the_same_gmail_mailbox(app):
+    existing = register_account("john.doe+legacy@googlemail.com", "not-a-login-password", "John", "Doe")
+    response = call(app, "POST", "/api/auth/signup/access-code", json=_payload(email="johndoe@gmail.com"))
+    assert response.status == 409
+    assert read_credential("john.doe+legacy@googlemail.com")["user_id"] == existing
     assert _count_accounts() == 1
 
 
@@ -104,11 +116,49 @@ def test_existing_ac_in_email_code_signup_route_still_works(app, monkeypatch):
     assert _count_accounts() == 1
 
 
-def test_access_code_signup_rate_limit_is_five_attempts_per_ip(app):
+def test_access_code_signup_per_ip_limit_counts_only_failed_attempts(app):
+    successful = [call(app, "POST", "/api/auth/signup/access-code",
+                       json=_payload(email=f"eventuser{i}@gmail.com")) for i in range(6)]
+    assert [r.status for r in successful] == [201] * 6
     responses = [call(app, "POST", "/api/auth/signup/access-code", json=_payload(access_code="000000"))
                  for _ in range(6)]
     assert [r.status for r in responses] == [403, 403, 403, 403, 403, 429]
+    assert _count_accounts() == 6
+
+
+def test_access_code_signup_global_limit_caps_failures_across_ips(app):
+    failures = [call(app, "POST", "/api/auth/signup/access-code", json=_payload(access_code="000000"),
+                     client=f"198.51.100.{i}") for i in range(1, 101)]
+    assert all(response.status == 403 for response in failures)
+    capped = call(app, "POST", "/api/auth/signup/access-code", json=_payload(access_code="000000"),
+                  client="203.0.113.200")
+    assert capped.status == 429
     assert _count_accounts() == 0
+
+
+def test_email_verification_revokes_the_access_and_refresh_sessions_from_signup(app, monkeypatch):
+    sent = []
+    monkeypatch.setattr(mailer, "send_email", lambda to, subject, text: sent.append(text))
+    created = call(app, "POST", "/api/auth/signup/access-code", json=_payload())
+    assert created.status == 201
+    first_token = created.json()["access_token"]
+    first_refresh = created.json()["refresh_token"]
+    before = call(app, "GET", "/api/me/profile-details", headers={"authorization": f"Bearer {first_token}"})
+    assert before.status == 200
+
+    started = call(app, "POST", "/api/auth/email/start", json={"email": "john.doe@gmail.com"})
+    assert started.status == 202
+    code = re.search(r"\b(\d{6})\b", sent[-1]).group(1)
+    verified = call(app, "POST", "/api/auth/email/verify", json={"email": "john.doe@gmail.com", "code": code})
+    assert verified.status == 200
+    assert verified.json()["new_account"] is False
+
+    stale = call(app, "GET", "/api/me/profile-details", headers={"authorization": f"Bearer {first_token}"})
+    assert stale.status == 401
+    assert call(app, "POST", "/api/auth/refresh", json={"refresh_token": first_refresh}).status == 401
+    fresh = call(app, "GET", "/api/me/profile-details",
+                 headers={"authorization": f"Bearer {verified.json()['access_token']}"})
+    assert fresh.status == 200
 
 
 def test_access_code_is_absent_from_response_and_logs(app, caplog):

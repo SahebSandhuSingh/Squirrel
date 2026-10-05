@@ -34,12 +34,39 @@ class EmailTaken(Exception):
 
 
 def normalize_email(email: str) -> str:
-    value = email.strip().lower()
+    return email.strip().lower()
+
+
+def normalize_signup_email(email: str) -> str:
+    """Canonical Gmail mailbox key for signup collision checks only."""
+    value = normalize_email(email)
     local, separator, domain = value.rpartition("@")
-    if separator and domain == "gmail.com":
+    if separator and domain in {"gmail.com", "googlemail.com"}:
         local = local.split("+", 1)[0].replace(".", "")
-        return f"{local}@{domain}"
+        return f"{local}@gmail.com"
     return value
+
+
+def signup_email_taken(email: str) -> bool:
+    """Compare a signup address against existing addresses using Gmail alias rules on both sides.
+
+    This intentionally does not change normalize_email or existing account lookups.
+    """
+    canonical = normalize_signup_email(email)
+    if not canonical.endswith("@gmail.com"):
+        return read_credential(canonical) is not None
+    if connection.enabled():
+        return db_accounts.gmail_alias_exists(canonical)
+    profiles = config.USERS_DIR.glob(f"*/{PROFILE_FILENAME}")
+    for path in profiles:
+        try:
+            with open(path, encoding="utf-8") as profile_file:
+                stored_email = json.load(profile_file).get("email")
+        except (OSError, ValueError, AttributeError):
+            continue
+        if isinstance(stored_email, str) and normalize_signup_email(stored_email) == canonical:
+            return True
+    return False
 
 
 def _credential_path(email: str) -> Path:
@@ -159,6 +186,24 @@ def consume_refresh_token(token: str, now: float | None = None) -> str | None:
     return record.get("user_id")
 
 
+def session_version(user_id: str) -> int:
+    profile = _read_profile_for_auth(user_id)
+    try:
+        return max(0, int(profile.get("session_version", 0))) if profile else 0
+    except (TypeError, ValueError):
+        return 0
+
+
+def _read_profile_for_auth(user_id: str) -> dict | None:
+    if connection.enabled():
+        return db_accounts.read_profile(user_id)
+    try:
+        with open(user_dir(user_id) / PROFILE_FILENAME, encoding="utf-8") as profile_file:
+            return json.load(profile_file)
+    except (FileNotFoundError, ValueError):
+        return None
+
+
 def email_verified(user_id: str) -> bool:
     """Whether the account proved its email address at sign-up (auth/email_codes.py)."""
     if connection.enabled():
@@ -173,12 +218,24 @@ def email_verified(user_id: str) -> bool:
 
 
 def mark_email_verified(user_id: str, now: datetime | None = None) -> None:
-    """Record that the account proved its email (a code sign-in on an account made before
-    verification was on). No-op when already recorded or the profile is missing."""
+    """First verification revokes all existing access and refresh sessions for this account."""
     from backend.users.store import read_profile, write_profile
 
     profile = read_profile(user_id)
     if not profile or profile.get("email_verified_at"):
         return
-    profile["email_verified_at"] = (now or datetime.now(timezone.utc)).isoformat()
+    verified_at = (now or datetime.now(timezone.utc)).isoformat()
+    if connection.enabled():
+        db_accounts.verify_email_and_revoke_sessions(user_id, verified_at)
+        return
+    profile["email_verified_at"] = verified_at
+    profile["session_version"] = max(0, int(profile.get("session_version", 0))) + 1
     write_profile(user_id, profile)
+    for token_path in (config.AUTH_DIR / "refresh").glob("*.json"):
+        try:
+            with open(token_path, encoding="utf-8") as token_file:
+                refresh = json.load(token_file)
+        except (OSError, ValueError):
+            continue
+        if refresh.get("user_id") == user_id:
+            token_path.unlink(missing_ok=True)
