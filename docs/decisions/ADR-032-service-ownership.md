@@ -37,7 +37,7 @@ Social profile ids; services translate through Social (`POST /internal/v1/people
 | Runs, GPS route points, run territory polygons | **Run Module** | campus-service receives a one-shot copy of a run's points for zone eligibility only. |
 | Workouts, rep counting, coaching, Partner Hunt | **Exercise** | — |
 | Feed, posts, follows, notifications, events, waitlist/referrals, Squirrel Dates, badges (incl. rules: Early Bird, Night Owl, Park Regular), ambassador applications | **Social** | — |
-| Shared workouts ("workout with a partner") | **Exercise** (proposed — see open item 3) | — |
+| Shared workouts ("workout with a partner") | **Exercise** (decided — see open item 3) | Blocks from Social; names and profile ids through Social's `people/resolve`. |
 
 ### "Challenges" is three features
 
@@ -125,10 +125,27 @@ For each, the owner's side ships first; the consumer's side follows.
    closed and refuses submissions. Don't switch it on until a person is named, given the admin role,
    and has agreed how quickly applicants hear back; otherwise applications sit unanswered. That is a
    company decision.
-3. **Shared workouts.** No backend in this repository implements either `/v1/workout-sessions` (what the
-   app calls) or `/v1/shared-workouts`. Exercise is proposed: it already runs live coaching sockets and
-   counts reps. If a deployed service serves `/v1/shared-workouts`, its source must be brought into
-   this repository first.
+3. **Shared workouts — decided: Exercise.** Exercise serves them under `/api/workout-sessions`
+   (create, get, invite preview, join, ready, reps, complete, leave) with a per-session socket,
+   `WS /ws/workout-sessions/{id}`; the app's 2-second polling stays as the fallback. The app's
+   `/v1/workout-sessions` routes were written before any backend existed and are replaced; the app
+   moves from `CAMPUS_API_URL` to `EXPO_PUBLIC_EXERCISE_API_URL`. The contract:
+   - A race lasts a fixed 1, 3 or 5 minutes, chosen at creation. When both players are ready the
+     server sets `starts_at = now + 3 s` and `ends_at = starts_at + duration`; there is no client
+     "start" call. The phase (`lobby`, `expired`, `countdown`, `racing`, `finished`) is never stored:
+     it is worked out from timestamps on every read. Each player has their own `finished_at` and
+     `left_at`.
+   - Reps are hand-tapped in this version, sent as `{ reps, seq }`; the highest `seq` wins (retries
+     and undo). Reports count until 5 seconds after `ends_at`.
+   - **No XP for hand-tapped reps:** nothing is written to the XP ledger or `activity_sessions`. The
+     result is shown, and the app says XP arrives once reps are camera-counted.
+   - Joining (and previewing an invite) is refused if either player has blocked the other, by
+     Social's block list, and refused when Social can't be checked (as Partner Hunt does).
+   - An unstarted lobby expires after 10 minutes. Leaving before the start frees the leaver's seat
+     (the lobby closes only when everyone has left); from the countdown on, leaving or about 30
+     seconds disconnected ends that player's race only.
+   Details: the Exercise README, "Workout with Partner". No service in this repository serves
+   `/v1/shared-workouts`, so nothing else is retired.
 4. **Push-up demo in the browser coach** predates sign-in: with sign-in required it cannot create an
    account (password, allowed email domain, token on later calls). Needs a decision: sign in first, or
    a guest mode.

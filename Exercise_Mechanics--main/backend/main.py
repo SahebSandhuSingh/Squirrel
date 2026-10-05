@@ -15,6 +15,7 @@ Layout:
     users/       user REST (create · profile · skill)
     profiles/    sign-up details: age, gender, activities, measurements/BMI, physique, habits, consent
     partners/    Partner Hunt: preferences, matching, blocks, behind the Run Module's XP gate
+    shared_workouts/  Workout with Partner: invite, ready, shared countdown, a timed rep race (+ its socket)
     activity_matching/  workout partners suggested by shared activities (opt-in, no XP gate)
     activity_rating/    the member's own rating of a session (user-generated; never feeds the Workout Score)
     moderation/         reports on members or sessions, and the moderators' review queue
@@ -53,6 +54,7 @@ from backend.partners.router import router as partners_router
 from backend.profiles.router import router as profiles_router
 from backend.reports.router import router as reports_router
 from backend.sessions.router import router as sessions_router
+from backend.shared_workouts.router import router as shared_workouts_router
 from backend.training.builders import validate_training_builders
 from backend.training.router import router as setup_ws_router
 from backend.users.router import router as users_router
@@ -122,6 +124,7 @@ app.include_router(activity_matching_router)
 app.include_router(moderation_router)
 app.include_router(auth_router)
 app.include_router(nearby_router)
+app.include_router(shared_workouts_router)  # /api/workout-sessions/*, /ws/workout-sessions/{id}
 app.include_router(deeplinks_router)   # /join, /invite/*, /.well-known/* — must precede the SPA mount
 app.include_router(setup_ws_router)
 

@@ -2,6 +2,8 @@
 
   • GET /join                  — Android → Play Store, iOS → App Store, anything else → landing page.
   • GET /invite/{token}        — same routing; Play gets an install referrer carrying the invite.
+  • GET /w/{code}              — a shared-workout invite (Workout with Partner): an installed app opens
+                                 it at /workout/join/{code}; otherwise the same store routing as /join.
   • GET /join/qr.svg           — the download QR code (optionally for an invite: ?invite=<token>).
   • GET /join/poster           — printable "Scan to join us" poster.
   • POST /api/invites          — (auth) mint a personal invite link.
@@ -32,7 +34,7 @@ router = APIRouter()
 _IOS_UA = re.compile(r"iphone|ipad|ipod", re.I)
 _ANDROID_UA = re.compile(r"android", re.I)
 # Paths an installed app should claim via Universal Links / App Links.
-APP_LINK_PATHS = ["/join", "/join/*", "/invite/*", "/nearby", "/nearby/*"]
+APP_LINK_PATHS = ["/join", "/join/*", "/invite/*", "/nearby", "/nearby/*", "/w/*"]
 
 
 def join_url(invite: str | None = None) -> str:
@@ -47,14 +49,14 @@ def play_store_url(invite: str | None) -> str:
     return f"{config.PLAY_STORE_URL}{sep}referrer={referrer}"
 
 
-def _route(request: Request, invite: str | None, inviter_name: str | None) -> Response:
+def _route(request: Request, invite: str | None, inviter_name: str | None, *, open_app: str | None = None) -> Response:
     ua = request.headers.get("user-agent", "")
     headers = {"Cache-Control": "no-store", "Vary": "User-Agent"}
     if _ANDROID_UA.search(ua):
         return RedirectResponse(play_store_url(invite), status_code=302, headers=headers)
     if _IOS_UA.search(ua):
         return RedirectResponse(config.APP_STORE_URL, status_code=302, headers=headers)
-    return HTMLResponse(_landing_html(invite, inviter_name), headers=headers)
+    return HTMLResponse(_landing_html(invite, inviter_name, open_app=open_app), headers=headers)
 
 
 @router.get("/join", include_in_schema=False)
@@ -68,6 +70,15 @@ def invite(token: str, request: Request) -> Response:
     if record is None:   # unknown / expired invites still get people to the app
         return _route(request, None, None)
     return _route(request, token, display_name(record["inviter"]))
+
+
+@router.get("/w/{code}", include_in_schema=False)
+def shared_workout_invite(code: str, request: Request) -> Response:
+    """Only reached when the app isn't installed (an installed app claims /w/* as a Universal/App
+    Link). Nothing about the session is looked up or shown here: the code is checked by the app."""
+    clean = code.strip().upper()
+    target = f"{config.APP_SCHEME}://workout/join/{clean}" if re.fullmatch(r"[A-Z0-9]{4,16}", clean) else None
+    return _route(request, None, None, open_app=target)
 
 
 @router.get("/join/qr.svg", include_in_schema=False)
@@ -138,11 +149,11 @@ p { color:var(--muted); margin:0 0 24px; }
 """
 
 
-def _landing_html(invite: str | None, inviter_name: str | None) -> str:
+def _landing_html(invite: str | None, inviter_name: str | None, *, open_app: str | None = None) -> str:
     esc = html.escape
     target = join_url(invite)
     app_store_js = json.dumps(config.APP_STORE_URL).replace("</", "<\\/")
-    open_app = f"{config.APP_SCHEME}://invite/{invite}" if invite else f"{config.APP_SCHEME}://nearby"
+    open_app = open_app or (f"{config.APP_SCHEME}://invite/{invite}" if invite else f"{config.APP_SCHEME}://nearby")
     heading = f"{esc(inviter_name)} invited you to Squirrel Social 🐿️" if inviter_name else esc(copy.ACQUISITION_TITLE)
     # iPadOS Safari reports a desktop UA, so a touch-capable "Mac" is sent to the App Store client-side.
     return f"""<!doctype html>

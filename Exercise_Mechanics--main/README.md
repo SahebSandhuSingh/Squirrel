@@ -386,6 +386,39 @@ city and no meeting preferences. The frontend doesn't show it yet.
 Routes: `GET /api/users/{id}/activity-matching` (status, and exactly what matches see),
 `GET /api/users/{id}/activity-matches`, `POST /api/users/{id}/activity-matches/blocks`.
 
+## Workout with Partner (shared workouts)
+
+Two people race the same rep exercise for a fixed 1, 3 or 5 minutes (`backend/shared_workouts/`).
+One creates a session and shares its invite link (`{SQUIRREL_PUBLIC_BASE_URL}/w/{code}`, which
+opens the app at `/workout/join/{code}`), the other joins, both tap ready, and a shared 3-second
+countdown starts them together. Exercise owns this feature ([ADR-032](../docs/decisions/ADR-032-service-ownership.md)).
+
+- **The phase is never stored.** It's worked out from timestamps on every read: `lobby` (not
+  started, under 10 minutes old), `expired`, `countdown` (before `starts_at`), `racing`, and
+  `finished` (after `ends_at = starts_at + duration`, or once every player has finished or left).
+- **Leaving.** Before the start, leaving frees your seat: if the host leaves, the partner becomes
+  the host and can invite someone else; the lobby closes only when everyone has left. From the
+  countdown on, leaving (or 30 seconds with no socket and no request) ends only your own race.
+- **Reps** are hand-tapped: `{ reps, seq }`, a running total and a counter, and the highest `seq`
+  wins, so retries and undo are safe. Reports count until 5 seconds after `ends_at`.
+- **No XP.** Nothing is written to `activity_sessions` or Social for a shared race; the result is
+  shown and that is all, until reps are camera-counted.
+- **Who sees what.** A session is visible only to the two people in it (404 for anyone else). An
+  invite is visible to anyone signed in with the code unless either has blocked the other: the same
+  404 as an unknown code, and `503 blocks_unreachable` when Social's blocks can't be checked. People
+  are shown by their Social profile (`POST /internal/v1/people/resolve`, looked up on create and
+  join and kept with the session); login ids never leave Exercise.
+- **Live updates:** `WS /ws/workout-sessions/{id}?token=<access token>` sends
+  `workout.session.updated` and `workout.reps.updated`, and answers `{"type":"ping"}` with `pong`.
+  The app polls `GET` every 2 seconds when there's no socket. Sockets and presence are in-process
+  (one worker, as for `/ws/train`).
+- **Storage:** `shared_workout_sessions` (migration 007) with `DATABASE_URL`, otherwise
+  `data/shared_workouts/<id>.json`. Sessions are deleted a week after they close.
+
+Routes, under `/api/workout-sessions`: `POST` (create `{ exercise_key, duration_s }`), `GET /{id}`,
+`GET /invites/{code}` (preview), `POST /invites/{code}/join`, `PUT /{id}/ready` (`{ ready }`),
+`POST /{id}/reps` and `POST /{id}/complete` (`{ reps, seq }`), `POST /{id}/leave`.
+
 ## Squirrel Social: accounts, Nearby Discovery, invite links
 
 Phones find each other over Bluetooth and the backend decides when two people are really near each
