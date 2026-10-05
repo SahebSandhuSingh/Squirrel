@@ -59,9 +59,14 @@ async function seedOsmZones(): Promise<boolean> {
   return true;
 }
 
-/** Returns where the zones came from, for the log line. */
-export async function seedZones(): Promise<'osm' | 'dev_placeholder'> {
-  if (await seedOsmZones()) return 'osm';
+/**
+ * Hostels and zones. By default the imported campus (zones.osm.json) when there is one, else the
+ * placeholder layout. `source: 'placeholder'` always seeds the placeholder: the integration tests
+ * use it so they run against a fixed, known map, not whatever the last OpenStreetMap import held.
+ * Returns where the zones came from, for the log line.
+ */
+export async function seedZones(opts: { source?: 'auto' | 'placeholder' } = {}): Promise<'osm' | 'dev_placeholder'> {
+  if (opts.source !== 'placeholder' && (await seedOsmZones())) return 'osm';
   for (const h of HOSTELS) await query(`INSERT INTO hostels (id, name, short_name) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, short_name = EXCLUDED.short_name`, [h.id, h.name, h.short]);
   for (const z of ZONES) {
     await query(

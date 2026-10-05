@@ -17,7 +17,9 @@ export async function resetDb() {
   const pool = getPool();
   await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
   await migrate();
-  await seedZones();
+  // The fixed placeholder map the tests are written against, never the committed OSM import
+  // (which changes whenever someone re-imports). test/integration/seed-osm.test.ts covers that path.
+  await seedZones({ source: 'placeholder' });
 }
 
 export let runFakeStats = { awards: 0, totals: 0, lastTotalSubjects: 0 };
