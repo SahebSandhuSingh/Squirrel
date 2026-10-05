@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 
-from app.models import User
+from app.models import CrewMember, User
 from tests.conftest import auth, new_sub
 from tests.test_crews_events import crew
 
@@ -73,3 +73,38 @@ def test_service_token_and_limits(client):
     assert client.post("/internal/v1/crews/lookup", json={"crew_ids": [str(uuid.uuid4())]}).status_code == 401
     assert client.post("/internal/v1/crews/memberships", json={"subjects": []}, headers=SVC).status_code == 422
     assert client.post("/internal/v1/crews/memberships", json={"subjects": [new_sub() for _ in range(201)]}, headers=SVC).status_code == 422
+
+
+def crews_total(client) -> int:
+    r = client.get("/internal/v1/crews/count", headers=SVC)
+    assert r.status_code == 200, r.text
+    assert r.json()["as_of"]
+    return r.json()["crews_total"]
+
+
+def test_count_is_crews_with_at_least_one_member(client, api, database):
+    before = crews_total(client)
+    owner, member, other = new_sub(), new_sub(), new_sub()
+    for s in (owner, member, other):
+        api.user(s)
+    first = crew(client, owner, "Count Early")
+    crew(client, other, "Count Late")
+    client.post(f"/v1/crews/{first['id']}/join", headers=auth(member))
+    assert crews_total(client) == before + 2  # a crew counts once, however many members
+
+    client.delete(f"/v1/crews/{first['id']}/membership", headers=auth(member))
+    assert crews_total(client) == before + 2  # still has its owner
+
+    # A crew whose last member is gone (e.g. their account was deleted) no longer counts,
+    # even though its stored members_count wasn't brought down.
+    with database.SessionLocal() as db:
+        db.execute(delete(CrewMember).where(CrewMember.crew_id == uuid.UUID(first["id"])))
+        db.commit()
+    assert crews_total(client) == before + 1
+
+
+def test_count_needs_the_service_token(client):
+    sub = new_sub()
+    assert client.get("/internal/v1/crews/count").status_code == 401
+    assert client.get("/internal/v1/crews/count", headers=auth(sub)).status_code == 401
+

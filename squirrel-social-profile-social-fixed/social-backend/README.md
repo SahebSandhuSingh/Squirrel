@@ -197,6 +197,7 @@ saves 120/min, follows 60/min, profile updates 20/min, username checks 60/min, u
 | `POST /internal/v1/blocks/import` | Service token: `{ blocks: [{ blocker, blocked }]≤1000 }` (subjects) → `{ imported, already, skipped }`. One-time copy of another service's own block table; safe to re-run; provisions unseen subjects; removes follows between the two, like an app block |
 | `POST /internal/v1/crews/memberships` | Service token (campus-service): `{ subjects[]≤200 }` → `{ people: [{ subject, crews: [{ id, name, role, joined_at }] }] }`, oldest membership first (the first is the main crew); request order, each subject once. Never writes; an unseen subject has no crews |
 | `POST /internal/v1/crews/lookup` | Service token: `{ crew_ids[]≤200 }` → `{ crews: [{ id, name, interest, scope, hostel, members_count, members: [{ subject, role, joined_at }] }] }`; unknown ids are left out (never a 404) |
+| `GET /internal/v1/crews/count` | Service token → `{ crews_total, as_of }`: crews with at least one member, counted from the membership rows (campus-service's stats) |
 
 | GET / POST /v1/ambassador/application | Ambassador applications, settings, and rate-limited form submission. |
 | GET /v1/admin/ambassador/applications / POST ./decision | Requires `admin` role: list pending/reviewed applications and approve/reject with notifications. |

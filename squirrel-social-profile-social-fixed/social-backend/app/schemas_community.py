@@ -449,6 +449,11 @@ class InternalCrewsLookupOut(BaseModel):
     crews: list[InternalCrew]  # in request order; unknown ids left out
 
 
+class InternalCrewsCountOut(BaseModel):
+    crews_total: int  # crews with at least one member
+    as_of: datetime
+
+
 class InternalBlocksOut(BaseModel):
     """Everyone `subject` must not be shown to or paired with: blocked by them or blocking them.
     Callers cache it for at most 30 seconds and fail closed when they can't get a fresh one."""

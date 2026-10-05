@@ -13,6 +13,7 @@
   POST /internal/v1/blocks/import           one-time copy of another service's own blocks into Social
   POST /internal/v1/crews/memberships       subjects → their crews (campus-service: crew territory)
   POST /internal/v1/crews/lookup            crew ids → crew + members by subject
+  GET  /internal/v1/crews/count             how many crews have at least one member (campus stats)
 
 The Run Module's finish worker (or the Exercise backend) calls this once an activity is final.
 It is idempotent on (source, source_ref): re-sending the same run returns the same activity, with
@@ -49,6 +50,7 @@ from app.schemas_community import (
     InternalCrewMembershipsIn,
     InternalCrewMembershipsOut,
     InternalCrewRef,
+    InternalCrewsCountOut,
     InternalCrewsLookupIn,
     InternalCrewsLookupOut,
     InternalNotificationIn,
@@ -396,3 +398,12 @@ def crews_lookup(
                      members_count=c.members_count, members=members[c.id])
         for i in ids if (c := found.get(i))
     ])
+
+
+@router.get("/crews/count", response_model=InternalCrewsCountOut)
+def crews_count(db: DB, settings: AppSettings, authorization: Annotated[str | None, Header()] = None):
+    """Crews with at least one member, counted from the membership rows: a crew left empty (its
+    last member's account deleted) doesn't count, whatever its stored members_count says."""
+    _check_service_token(settings, authorization)
+    total = db.scalar(select(func.count(func.distinct(CrewMember.crew_id)))) or 0
+    return InternalCrewsCountOut(crews_total=total, as_of=utcnow())
