@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { battleHeadline, battleListFrom, battlesAtZone, battlesForCrew, orderedActions, startSlots } from './battles.ts';
+import { applyBattleUpdate, battleHeadline, battleListFrom, battlesAtZone, battlesForCrew, orderedActions, startSlots } from './battles.ts';
 
 const asha = { user_id: 'u1', display_name: 'Asha Rao', avatar_url: null };
 const kabir = { user_id: 'u2', display_name: 'Kabir', avatar_url: null };
@@ -58,4 +58,17 @@ test('battle list: crew battles missing only when the server says so', () => {
   assert.deepEqual(battleListFrom({ invites: [b] }), { invites: [b], crewBattlesUnavailable: false });
   assert.deepEqual(battleListFrom({ invites: [], crew_battles_unavailable: true }), { invites: [], crewBattlesUnavailable: true });
   assert.deepEqual(battleListFrom({ invites: [b], crew_battles_unavailable: false }).crewBattlesUnavailable, false);
+});
+
+test('a pushed battle replaces its old copy (with the actions it carries) or joins the list', () => {
+  const a = battle({ id: 'a' });
+  const b = battle({ id: 'b' });
+  const list = { invites: [a, b], crewBattlesUnavailable: true };
+  const accepted = { ...a, status: 'accepted', actions: ['start', 'cancel'] };
+  const next = applyBattleUpdate(list, accepted);
+  assert.deepEqual(next.invites.map((x) => [x.id, x.status, x.actions.join()]), [['a', 'accepted', 'start,cancel'], ['b', 'pending', 'accept,decline']]);
+  assert.equal(next.crewBattlesUnavailable, true);
+  assert.equal(list.invites[0], a); // the cached list isn't changed in place
+  const fresh = battle({ id: 'c', direction: 'outgoing' });
+  assert.deepEqual(applyBattleUpdate(next, fresh).invites.map((x) => x.id), ['c', 'a', 'b']);
 });

@@ -4,6 +4,10 @@
  * (`actions_status: crew_role_unavailable`) the card says so and offers a retry instead. When crew
  * battles couldn't be loaded at all (`crew_battles_unavailable`), the section says that rather than
  * "no battles".
+ *
+ * Live while you watch: campus-service pushes `invite.updated` to every participant when a battle is
+ * created or changes (each copy carries that person's own `actions`), and the card updates in place.
+ * Without a socket, coming back to the screen refreshes it.
  */
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -13,8 +17,8 @@ import { battlesApi, BATTLES_CONFIGURED } from '@/api/campus/battles';
 import type { ChallengeAction, ChallengeInvite } from '@/api/campus/types';
 import { PersonAvatar } from '@/components/campus/PersonAvatar';
 import { Button, Card, Icon, PressScale, SectionHeader, tap } from '@/components/ui';
-import { invalidateCampus, useAction, useCampus } from '@/hooks/useCampus';
-import { ACTION_LABEL, battleHeadline, battlesAtZone, battlesForCrew, orderedActions, startSlots, type BattleList as Battles } from '@/logic/battles';
+import { invalidateCampus, useAction, useCampus, useRealtime, useRefreshOnFocus } from '@/hooks/useCampus';
+import { ACTION_LABEL, applyBattleUpdate, battleHeadline, battlesAtZone, battlesForCrew, orderedActions, startSlots, type BattleList as Battles } from '@/logic/battles';
 import { formatEventDate } from '@/logic/format';
 import { useApp } from '@/state/AppState';
 import { alpha, colors, fonts, radius } from '@/theme';
@@ -27,6 +31,10 @@ const DONE_TOAST: Record<Exclude<ChallengeAction, 'schedule'>, string> = {
 /** Battles at a zone (`zoneId`) or against a crew (`crewId`). Renders nothing when campus-service isn't configured. */
 export function BattleList({ zoneId, crewId, newBattle }: { zoneId?: string; crewId?: string; newBattle?: { label: string; params: Record<string, string> } }) {
   const r = useCampus<Battles>('battles', () => battlesApi.list(), { enabled: BATTLES_CONFIGURED });
+  useRefreshOnFocus(r.reload, 30_000);
+  useRealtime((m) => {
+    if (m.type === 'invite.updated' && m.data?.id && r.data) r.mutate(applyBattleUpdate(r.data, m.data));
+  });
   if (!BATTLES_CONFIGURED || r.signedOut) return null;
   const rows = r.data?.invites ?? [];
   const list = zoneId ? battlesAtZone(rows, zoneId) : crewId ? battlesForCrew(rows, crewId) : [];

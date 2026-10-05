@@ -59,8 +59,13 @@ export function useHostelOptions() {
 /** Stylised base map (roads, buildings, terrain, POIs). Public and static — cached for the session. */
 export const useMapFeatures = () => useCampus('map:features', () => campusApi.mapFeatures(), { needsAuth: false });
 
-/** Run `fn` for every realtime message while the component is mounted. */
+/**
+ * Run `fn` for every realtime message while the component is mounted. The socket's address comes
+ * from /v1/config, so it's loaded here too (cached): a screen opened straight from a link or a
+ * notification is live without passing through Home first.
+ */
 export function useRealtime(fn: (m: RealtimeMessage) => void) {
+  useConfig();
   const ref = useRef(fn);
   useEffect(() => {
     ref.current = fn;

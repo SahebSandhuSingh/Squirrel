@@ -24,6 +24,16 @@ export const battleListFrom = (body: BattleListResponse): BattleList => ({
   crewBattlesUnavailable: body.crew_battles_unavailable === true,
 });
 
+/**
+ * A battle as campus-service pushed it (`invite.updated`, sent to each participant with their own
+ * `actions`): replaces the one with its id, or joins the list if it's new. Where it shows is still
+ * battlesAtZone / battlesForCrew's call.
+ */
+export const applyBattleUpdate = (list: BattleList, b: ChallengeInvite): BattleList => ({
+  ...list,
+  invites: list.invites.some((x) => x.id === b.id) ? list.invites.map((x) => (x.id === b.id ? b : x)) : [b, ...list.invites],
+});
+
 /** Territory duels and zone races at this zone. */
 export const battlesAtZone = (list: ChallengeInvite[], zoneId: string) =>
   sortBattles(list.filter((b) => BATTLE_TYPES.has(b.type) && b.zone?.id === zoneId));
