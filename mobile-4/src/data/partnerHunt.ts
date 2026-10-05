@@ -1,14 +1,8 @@
-import type { LibraryExercise } from '@/data/exercises';
 import type { IconName } from '@/data/icons';
-import type { AvatarLook } from '@/types';
 
 /**
- * PARTNER HUNT: find a workout buddy. Locked (see LOCKED.partnerHunt); this file holds
- * only the shape of the future feature. There is no matching logic and no buddy data.
- *
- * Future flow: Partner Hunt → Find your buddy → Preferences → Matching → Buddy profiles → Connect.
- * Matching reuses what the app already knows: the user's campus (City.campus), interests
- * (the crew interest types), activities (runs + the exercise library), availability and goals.
+ * PARTNER HUNT copy for the locked screen (LOCKED.partnerHunt). The feature itself runs on Exercise:
+ * api/partnerHunt.ts (contract), logic/partnerHunt.ts (rules), app/partner-hunt/* (screens).
  */
 
 export type PartnerHuntStep = { id: 'find' | 'preferences' | 'matching' | 'profiles' | 'connect'; title: string; body: string; icon: IconName };
@@ -30,24 +24,3 @@ export const MATCH_FACTORS: MatchFactor[] = [
   { id: 'availability', label: 'Availability', icon: 'calendar-clock' },
   { id: 'goals', label: 'Goals', icon: 'flag-checkered' },
 ];
-
-export type Availability = 'early-morning' | 'morning' | 'afternoon' | 'evening' | 'weekend';
-export type FitnessGoal = 'consistency' | 'strength' | 'endurance' | 'weight' | 'fun';
-
-/** The user's Partner Hunt preferences (future: stored on the user profile). */
-export type PartnerPreferences = {
-  campus: string; // City.campus
-  interests: ('running' | 'yoga' | 'nutrition' | 'cycling' | 'hiit' | 'walking' | 'climbing')[];
-  activities: ('run' | LibraryExercise['slug'])[];
-  availability: Availability[];
-  goals?: FitnessGoal[];
-};
-
-/** A buddy card, built from an existing user profile plus their preferences. */
-export type BuddyProfile = { id: string; name: string; look: AvatarLook | null; level: number | null; tags: string[] } & {
-  preferences: PartnerPreferences;
-  /** 0..1, from the future matching service. */
-  match?: number;
-};
-
-export type ConnectionStatus = 'none' | 'requested' | 'connected';
