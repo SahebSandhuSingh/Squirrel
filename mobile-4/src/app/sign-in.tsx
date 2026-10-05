@@ -1,8 +1,10 @@
 /**
- * SIGN IN / JOIN. Campus-only: a .ac.in email gets a one-time code (Exercise backend
- * /api/auth/email/start → /email/verify). A new address also gives a name, and optionally a
- * friend's invite code (`?invite=<code>` pre-fills it). Password sign-in (older accounts) and the
- * developer token stay available underneath. New accounts go to onboarding first.
+ * SIGN IN / JOIN. An emailed one-time code (Exercise backend /api/auth/email/start → /email/verify).
+ * Any existing account can sign in this way, whatever its domain; a new address must be on the
+ * campus allow-list (the server says so if not), gives a name, and optionally a friend's invite
+ * code (`?invite=<code>` pre-fills it). Joining without a campus email: the four-step access-code
+ * form (email, full name, phone, the six-digit code read out in person). Password sign-in (older
+ * accounts) and the developer token stay available underneath. New accounts go to onboarding first.
  */
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -10,6 +12,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { campusApi, CAMPUS_SOURCE } from '@/api/campus';
 import { isAcademicEmail, useAuth } from '@/auth/AuthProvider';
+import { looksLikeEmail, NoAccountError, normalizeIndianMobile, SignupError, STEP_OF, type SignupStep } from '@/logic/accessSignup';
 import { Wordmark } from '@/components/Brand';
 import { Button, Display, IconButton, Kicker, Tagline, tap } from '@/components/ui';
 import { colors, fonts, MAX_WIDTH, radius } from '@/theme';
@@ -42,9 +45,88 @@ export default function SignIn() {
   const [password, setPassword] = useState('');
   const [token, setToken] = useState('');
   const [showMore, setShowMore] = useState(false);
+  const [accessSignup, setAccessSignup] = useState(false);
+  const [signupEmail, setSignupEmail] = useState('');
+  const [signupName, setSignupName] = useState('');
+  const [signupPhone, setSignupPhone] = useState('');
+  const [signupCode, setSignupCode] = useState('');
+  const [signupStep, setSignupStep] = useState<SignupStep>(1);
+  /** The current step's field has been left once: show its error line from then on. */
+  const [signupTouched, setSignupTouched] = useState(false);
+  /** The last sign-up failed because the email already has an account. */
+  const [signupExisting, setSignupExisting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const emailOk = isAcademicEmail(email);
+  /** The last code request found no account for a non-campus address: offer the access-code sign-up. */
+  const [noAccount, setNoAccount] = useState(false);
+  // Any address may ask for a code: existing accounts (access-code ones included) sign in whatever
+  // their domain, and the server refuses new non-campus addresses with its own message.
+  const emailOk = looksLikeEmail(email);
+
+  // Access-code sign-up: each step's check, and the phone as the server will get it.
+  const signupEmailOk = looksLikeEmail(signupEmail);
+  const signupEmailCampus = signupEmailOk && isAcademicEmail(signupEmail);
+  const signupNameOk = signupName.trim().length > 0 && signupName.trim().length <= 120;
+  const signupPhone91 = normalizeIndianMobile(signupPhone);
+  const signupStepOk =
+    signupStep === 1 ? signupEmailOk && !signupEmailCampus : signupStep === 2 ? signupNameOk : signupStep === 3 ? !!signupPhone91 : signupCode.length === 6;
+  const goToStep = (n: SignupStep) => {
+    setSignupStep(n);
+    setSignupTouched(false);
+  };
+  const openAccessSignup = () => {
+    setAccessSignup(true);
+    goToStep(1);
+    setSignupExisting(false);
+    setError(null);
+  };
+  /** Back to the emailed-code form, optionally with this address filled in. */
+  const closeAccessSignup = (withEmail?: string) => {
+    setAccessSignup(false);
+    setSignupExisting(false);
+    setError(null);
+    if (withEmail) {
+      setEmail(withEmail.trim());
+      setCodeSent(false);
+    }
+  };
+  const nextStep = () => {
+    if (!signupStepOk || busy) return setSignupTouched(true);
+    setError(null);
+    setSignupExisting(false);
+    if (signupStep < 4) return goToStep((signupStep + 1) as SignupStep);
+    void createAccount();
+  };
+  /** Step 4: create the account; a failure returns to the step whose field needs fixing. */
+  const createAccount = async () => {
+    setBusy(true);
+    setError(null);
+    auth.clearNotice();
+    try {
+      await auth.signUpWithAccessCode({ email: signupEmail.trim(), full_name: signupName.trim(), phone: signupPhone91 ?? signupPhone.trim(), access_code: signupCode });
+      await routeAfterSignIn(true);
+    } catch (e) {
+      if (e instanceof SignupError) {
+        if (e.field) goToStep(STEP_OF[e.field]);
+        setSignupExisting(e.existingAccount);
+      }
+      setError(e instanceof Error ? e.message : 'Something went wrong.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const signupFieldError =
+    signupStep === 1
+      ? signupEmailCampus
+        ? 'That’s a campus address. Use the institute email sign-in instead.'
+        : signupTouched && !signupEmailOk
+          ? 'Enter a valid email address.'
+          : null
+      : signupStep === 2
+        ? signupTouched && !signupNameOk ? 'Enter your full name.' : null
+        : signupStep === 3
+          ? !signupPhone91 && (signupTouched || signupPhone.replace(/\D/g, '').length >= 10) ? 'Enter a 10-digit Indian mobile number, like 98300 41275.' : null
+          : null;
 
   const run = async (fn: () => Promise<void | { newAccount: boolean }>, after = true) => {
     setBusy(true);
@@ -70,28 +152,36 @@ export default function SignIn() {
 
         <Kicker style={{ marginTop: 28 }}>{joining ? 'Join your campus' : 'Welcome back'}</Kicker>
         <Display size={44} style={{ marginTop: 6, lineHeight: 46 }}>
-          {joining ? 'Get in with your' : 'Back in'}
+          {joining ? (accessSignup ? 'Create your' : 'Get in with your') : 'Back in'}
           {'\n'}
-          <Text style={{ color: colors.primary }}>{joining ? '.ac.in email' : 'the game.'}</Text>
+          <Text style={{ color: colors.primary }}>{joining ? (accessSignup ? 'account.' : '.ac.in email') : 'the game.'}</Text>
         </Display>
-        <Text style={styles.lead}>Squirrel Social is campus-only. We’ll send a one-time code to your institute inbox — no password needed.</Text>
+        <Text style={styles.lead}>
+          {accessSignup
+            ? 'Create an account with your email, full name, phone number and the access code you were given.'
+            : joining
+              ? 'Squirrel Social is campus-only. We’ll send a one-time code to your institute inbox — no password needed.'
+              : 'We’ll email you a one-time code — no password needed.'}
+        </Text>
 
         <View style={{ gap: 10, marginTop: 18 }}>
+          {!accessSignup ? <>
           <TextInput
             style={[styles.input, email.length > 4 && !emailOk && { borderColor: colors.coral }]}
             value={email}
             onChangeText={(v) => {
               setEmail(v);
               setCodeSent(false);
+              setNoAccount(false);
             }}
             placeholder="you@iiserkol.ac.in"
             placeholderTextColor={colors.mute}
             autoCapitalize="none"
             keyboardType="email-address"
             autoComplete="email"
-            accessibilityLabel="Institute email"
+            accessibilityLabel={joining ? 'Institute email' : 'Email'}
           />
-          {email.length > 4 && !emailOk && <Text style={styles.error}>Use your institute email — it ends in .ac.in.</Text>}
+          {email.length > 4 && !emailOk && <Text style={styles.error}>Enter a valid email address.</Text>}
           {!codeSent ? (
             <Button
               label={busy ? 'Sending…' : 'Send my code'}
@@ -99,7 +189,11 @@ export default function SignIn() {
               disabled={busy || !emailOk}
               onPress={() =>
                 run(async () => {
-                  const r = await auth.requestEmailCode(email);
+                  setNoAccount(false);
+                  const r = await auth.requestEmailCode(email).catch((e: unknown) => {
+                    if (e instanceof NoAccountError) setNoAccount(true);
+                    throw e;
+                  });
                   setNewAccount(!!r.newAccount);
                   setCodeSent(true);
                 }, false)
@@ -130,6 +224,62 @@ export default function SignIn() {
           )}
           {error && <Text style={styles.error} accessibilityRole="alert">{error}</Text>}
           {auth.notice && !error && <Text style={styles.sent}>{auth.notice}</Text>}
+          {(joining || noAccount) && (
+            <Text style={styles.link} onPress={openAccessSignup} accessibilityRole="button">
+              No campus email? Sign up with an access code
+            </Text>
+          )}
+          </> : <>
+            <Text style={styles.lead}>Create an account · Step {signupStep} of 4</Text>
+            {!auth.authConfigured && <Text style={styles.warn}>No account server is configured (EXPO_PUBLIC_EXERCISE_API_URL), so accounts can’t be created yet.</Text>}
+            {signupStep === 1 && (
+              <TextInput style={[styles.input, !!signupFieldError && { borderColor: colors.coral }]} value={signupEmail} onChangeText={setSignupEmail} onBlur={() => setSignupTouched(true)} onSubmitEditing={nextStep} returnKeyType="next" placeholder="Email address" placeholderTextColor={colors.mute} autoCapitalize="none" keyboardType="email-address" autoComplete="email" accessibilityLabel="Email address" />
+            )}
+            {signupStep === 2 && (
+              <TextInput style={[styles.input, !!signupFieldError && { borderColor: colors.coral }]} value={signupName} onChangeText={setSignupName} onBlur={() => setSignupTouched(true)} onSubmitEditing={nextStep} returnKeyType="next" placeholder="Full name" placeholderTextColor={colors.mute} autoComplete="name" maxLength={120} accessibilityLabel="Full name" />
+            )}
+            {signupStep === 3 && (
+              <TextInput style={[styles.input, !!signupFieldError && { borderColor: colors.coral }]} value={signupPhone} onChangeText={setSignupPhone} onBlur={() => setSignupTouched(true)} onSubmitEditing={nextStep} returnKeyType="next" placeholder="Indian mobile number" placeholderTextColor={colors.mute} keyboardType="phone-pad" autoComplete="tel" maxLength={20} accessibilityLabel="Phone number" />
+            )}
+            {signupStep === 4 && (
+              <>
+                <Text style={styles.lead}>Enter your six-digit access code.</Text>
+                <TextInput style={[styles.input, styles.code]} value={signupCode} onChangeText={(v) => setSignupCode(v.replace(/[^0-9]/g, '').slice(0, 6))} onSubmitEditing={nextStep} placeholder="6-digit code" placeholderTextColor={colors.mute} keyboardType="number-pad" maxLength={6} accessibilityLabel="Six-digit access code" />
+              </>
+            )}
+            {signupFieldError && <Text style={styles.error}>{signupFieldError}</Text>}
+            {signupStep === 1 && signupEmailCampus && (
+              <Text style={styles.link} onPress={() => closeAccessSignup(signupEmail)} accessibilityRole="button">Use institute email sign-in</Text>
+            )}
+            {error && <Text style={styles.error} accessibilityRole="alert">{error}</Text>}
+            {signupExisting && (
+              <Text style={styles.link} onPress={() => closeAccessSignup(signupEmail)} accessibilityRole="button">Sign in with an emailed code</Text>
+            )}
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              {signupStep > 1 && (
+                <Button
+                  label="Back"
+                  iconLeft="chevron-left"
+                  variant="secondary"
+                  style={{ flex: 1 }}
+                  disabled={busy}
+                  onPress={() => {
+                    setError(null);
+                    setSignupExisting(false);
+                    goToStep((signupStep - 1) as SignupStep);
+                  }}
+                />
+              )}
+              <Button
+                label={busy ? 'Creating…' : signupStep === 4 ? 'Create account' : 'Continue'}
+                icon="arrow-right"
+                style={{ flex: 2 }}
+                disabled={busy || !signupStepOk || (signupStep === 4 && !auth.authConfigured)}
+                onPress={nextStep}
+              />
+            </View>
+            <Text style={styles.link} onPress={() => closeAccessSignup()} accessibilityRole="button">Back to institute email sign-in</Text>
+          </>}
         </View>
 
         <View style={styles.or}>

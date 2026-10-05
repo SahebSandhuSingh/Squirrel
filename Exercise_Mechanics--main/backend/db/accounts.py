@@ -50,6 +50,48 @@ def read_credential(email: str) -> dict | None:
     return {"user_id": row[0], "password_hash": row[1], "created_at": row[2].isoformat()}
 
 
+def gmail_alias_exists(canonical_email: str) -> bool:
+    """Find legacy and current Gmail/Googlemail spellings matching a signup canonical key."""
+    with pooled() as conn:
+        row = conn.execute(
+            "SELECT EXISTS (SELECT 1 FROM user_accounts WHERE "
+            "CASE WHEN lower(split_part(email, '@', 2)) IN ('gmail.com', 'googlemail.com') "
+            "THEN replace(split_part(lower(split_part(email, '@', 1)), '+', 1), '.', '') || '@gmail.com' "
+            "ELSE lower(email) END = %s)",
+            (canonical_email,),
+        ).fetchone()
+    return bool(row[0])
+
+
+def gmail_alias_credentials(canonical_email: str) -> list[dict]:
+    """Return every account matching a Gmail alias key, so callers can reject ambiguity."""
+    with pooled() as conn:
+        rows = conn.execute(
+            "SELECT user_id, password_hash, created_at FROM user_accounts WHERE "
+            "CASE WHEN lower(split_part(email, '@', 2)) IN ('gmail.com', 'googlemail.com') "
+            "THEN replace(split_part(lower(split_part(email, '@', 1)), '+', 1), '.', '') || '@gmail.com' "
+            "ELSE lower(email) END = %s ORDER BY user_id",
+            (canonical_email,),
+        ).fetchall()
+    return [{"user_id": row[0], "password_hash": row[1], "created_at": row[2].isoformat()} for row in rows]
+
+
+def verify_email_and_revoke_sessions(user_id: str, verified_at: str) -> bool:
+    """Atomically mark first verification and delete refresh tokens."""
+    with pooled() as conn, conn.transaction():
+        row = conn.execute(
+            "UPDATE user_profiles SET profile = "
+            "jsonb_set(profile, '{email_verified_at}', to_jsonb(%s::text), true), "
+            "updated_at = now() WHERE user_id = %s AND profile->>'email_verified_at' IS NULL "
+            "RETURNING user_id",
+            (verified_at, user_id),
+        ).fetchone()
+        if row is None:
+            return False
+        conn.execute("DELETE FROM user_refresh_tokens WHERE user_id = %s", (user_id,))
+        return True
+
+
 def store_refresh_token(digest: str, user_id: str, expires_at: int) -> None:
     with pooled() as conn:
         conn.execute("INSERT INTO user_refresh_tokens (token_sha256, user_id, expires_at) VALUES (%s, %s, %s)",

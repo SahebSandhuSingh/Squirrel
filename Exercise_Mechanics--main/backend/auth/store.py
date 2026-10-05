@@ -37,6 +37,67 @@ def normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
+def normalize_signup_email(email: str) -> str:
+    """Canonical Gmail mailbox key for signup collision checks only."""
+    value = normalize_email(email)
+    local, separator, domain = value.rpartition("@")
+    if separator and domain in {"gmail.com", "googlemail.com"}:
+        local = local.split("+", 1)[0].replace(".", "")
+        return f"{local}@gmail.com"
+    return value
+
+
+def signup_email_taken(email: str) -> bool:
+    """Compare a signup address against existing addresses using Gmail alias rules on both sides.
+
+    This intentionally does not change normalize_email or existing account lookups.
+    """
+    canonical = normalize_signup_email(email)
+    if not canonical.endswith("@gmail.com"):
+        return read_credential(canonical) is not None
+    if connection.enabled():
+        return db_accounts.gmail_alias_exists(canonical)
+    profiles = config.USERS_DIR.glob(f"*/{PROFILE_FILENAME}")
+    for path in profiles:
+        try:
+            with open(path, encoding="utf-8") as profile_file:
+                stored_email = json.load(profile_file).get("email")
+        except (OSError, ValueError, AttributeError):
+            continue
+        if isinstance(stored_email, str) and normalize_signup_email(stored_email) == canonical:
+            return True
+    return False
+
+
+def read_credential_for_email_code(email: str) -> dict | None:
+    """Resolve email-code sign-in exactly first, then a unique Gmail mailbox alias."""
+    exact = read_credential(email)
+    if exact is not None:
+        return exact
+    normalized = normalize_email(email)
+    _, separator, domain = normalized.rpartition("@")
+    if not separator or domain not in {"gmail.com", "googlemail.com"}:
+        return None
+    canonical = normalize_signup_email(normalized)
+    if connection.enabled():
+        matches = db_accounts.gmail_alias_credentials(canonical)
+    else:
+        matches_by_id: dict[str, dict] = {}
+        for path in config.USERS_DIR.glob(f"*/{PROFILE_FILENAME}"):
+            try:
+                with open(path, encoding="utf-8") as profile_file:
+                    stored_email = json.load(profile_file).get("email")
+            except (OSError, ValueError, AttributeError):
+                continue
+            if not isinstance(stored_email, str) or normalize_signup_email(stored_email) != canonical:
+                continue
+            credential = read_credential(stored_email)
+            if credential is not None:
+                matches_by_id[credential["user_id"]] = credential
+        matches = list(matches_by_id.values())
+    return matches[0] if len(matches) == 1 else None
+
+
 def _credential_path(email: str) -> Path:
     return config.AUTH_DIR / "credentials" / f"{hashlib.sha256(normalize_email(email).encode()).hexdigest()}.json"
 
@@ -168,12 +229,23 @@ def email_verified(user_id: str) -> bool:
 
 
 def mark_email_verified(user_id: str, now: datetime | None = None) -> None:
-    """Record that the account proved its email (a code sign-in on an account made before
-    verification was on). No-op when already recorded or the profile is missing."""
+    """Mark the email verified and delete existing refresh tokens for this account."""
     from backend.users.store import read_profile, write_profile
 
     profile = read_profile(user_id)
     if not profile or profile.get("email_verified_at"):
         return
-    profile["email_verified_at"] = (now or datetime.now(timezone.utc)).isoformat()
+    verified_at = (now or datetime.now(timezone.utc)).isoformat()
+    if connection.enabled():
+        db_accounts.verify_email_and_revoke_sessions(user_id, verified_at)
+        return
+    profile["email_verified_at"] = verified_at
     write_profile(user_id, profile)
+    for token_path in (config.AUTH_DIR / "refresh").glob("*.json"):
+        try:
+            with open(token_path, encoding="utf-8") as token_file:
+                refresh = json.load(token_file)
+        except (OSError, ValueError):
+            continue
+        if refresh.get("user_id") == user_id:
+            token_path.unlink(missing_ok=True)

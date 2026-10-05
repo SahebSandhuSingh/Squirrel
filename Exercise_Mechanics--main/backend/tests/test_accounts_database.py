@@ -91,6 +91,31 @@ def test_two_sign_ups_with_one_email_at_the_same_moment_make_one_account(db):
     assert db.execute("SELECT count(*) FROM user_profiles").fetchone() == (1,)  # no orphan profiles
 
 
+def test_gmail_alias_credentials_returns_a_stored_alias_match(db):
+    uid = auth_store.register_account("John.Doe@gmail.com", "correct horse", "John", "Doe")
+
+    matches = auth_store.db_accounts.gmail_alias_credentials("johndoe@gmail.com")
+
+    assert [match["user_id"] for match in matches] == [uid]
+
+
+def test_gmail_alias_credentials_returns_all_ambiguous_matches(db):
+    first = auth_store.register_account("a.b@gmail.com", "correct horse", "A", "One")
+    second = auth_store.register_account("ab+two@googlemail.com", "correct horse", "A", "Two")
+
+    matches = auth_store.db_accounts.gmail_alias_credentials("ab@gmail.com")
+
+    assert {match["user_id"] for match in matches} == {first, second}
+
+
+def test_gmail_alias_credentials_matches_stored_googlemail_plus_tag(db):
+    uid = auth_store.register_account("John.Doe+run@googlemail.com", "correct horse", "John", "Doe")
+
+    matches = auth_store.db_accounts.gmail_alias_credentials("johndoe@gmail.com")
+
+    assert [match["user_id"] for match in matches] == [uid]
+
+
 def test_a_refresh_token_works_once_even_when_two_refreshes_race(db):
     uid = auth_store.register_account("ana@example.test", "correct horse", "Ana", "Tester")
     token, _ = auth_store.issue_refresh_token(uid)

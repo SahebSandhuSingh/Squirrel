@@ -17,6 +17,8 @@ the emailed code while config.email_verification_required() is on.
 
 from __future__ import annotations
 
+import os
+
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -31,6 +33,9 @@ from backend.auth.store import (
     issue_refresh_token,
     read_credential,
     register_account,
+    normalize_email,
+    signup_email_taken,
+    read_credential_for_email_code,
 )
 from backend.auth import email_codes, throttle
 from backend.auth.tokens import burn_password_check, issue_access_token, public_jwks, verify_password
@@ -38,6 +43,7 @@ from backend.auth.tokens import burn_password_check, issue_access_token, public_
 router = APIRouter(prefix="/api/auth")
 
 _EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+_ACCESS_EMAIL_PATTERN = r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$"
 
 
 class RegisterBody(BaseModel):
@@ -65,6 +71,15 @@ class EmailVerifyBody(BaseModel):
     # Needed only when the address has no account yet (the reply to /email/start says which).
     first_name: str | None = Field(default=None, min_length=1, max_length=80)
     last_name:  str | None = Field(default=None, max_length=80)
+
+
+class AccessCodeSignupBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=3, max_length=200, pattern=_ACCESS_EMAIL_PATTERN)
+    full_name: str = Field(min_length=1, max_length=120)
+    phone: str = Field(min_length=10, max_length=13, pattern=r"^(?:\+91)?[6-9][0-9]{9}$")
+    access_code: str = Field(min_length=6, max_length=6, pattern=r"^[0-9]{6}$")
 
 
 class LoginBody(BaseModel):
@@ -107,6 +122,21 @@ def count_sign_up(request: Request) -> None:
     throttle.hit(throttle.SIGNUP_IP, address)
 
 
+def count_access_code_signup(request: Request) -> None:
+    address = throttle.client_address(request)
+    try:
+        throttle.check(throttle.ACCESS_CODE_SIGNUP_IP, address)
+        throttle.check(throttle.ACCESS_CODE_SIGNUP_GLOBAL, "all-addresses")
+    except throttle.Throttled as exc:
+        raise throttle.too_many(exc) from None
+
+
+def record_access_code_signup_failure(request: Request) -> None:
+    address = throttle.client_address(request)
+    throttle.hit(throttle.ACCESS_CODE_SIGNUP_IP, address)
+    throttle.hit(throttle.ACCESS_CODE_SIGNUP_GLOBAL, "all-addresses")
+
+
 def domain_error() -> HTTPException:
     return HTTPException(status_code=403, detail=f"Sign-up is open to {email_codes.allowed_domains_text()} "
                                                  "email addresses only.")
@@ -145,6 +175,55 @@ def register(body: RegisterBody, request: Request) -> dict:
     except EmailTaken:
         raise HTTPException(status_code=409, detail="an account with this email already exists") from None
     return token_pair(user_id, verified=verified)
+
+
+@router.post("/signup/access-code", status_code=status.HTTP_201_CREATED)
+def access_code_signup(body: AccessCodeSignupBody, request: Request) -> dict:
+    """Create a complete non-campus account using the operator-provided access code."""
+    count_access_code_signup(request)
+    email = body.email.strip()
+    normalized = normalize_email(email)
+    domain = normalized.rsplit("@", 1)[-1]
+    if domain == "ac.in" or domain.endswith(".ac.in"):
+        raise HTTPException(status_code=403, detail="Use the institute email sign-in option.")
+    if not body.full_name.strip():
+        raise HTTPException(status_code=422, detail="Enter your full name.")
+
+    # Fail closed unless a six-digit secret is configured. Compare fixed-width bytes in constant time.
+    expected = os.environ.get("SIGNUP_ACCESS_CODE", "")
+    configured_ok = len(expected) == 6 and expected.isascii() and expected.isdigit()
+    supplied = body.access_code.encode("ascii")
+    expected_bytes = expected.encode("ascii") if configured_ok else b"000000"
+    matches = secrets.compare_digest(expected_bytes, supplied)
+    if not configured_ok or not matches:
+        record_access_code_signup_failure(request)
+        raise HTTPException(status_code=403, detail="Sign-up failed. Check your details and try again.")
+
+    # Only signup's uniqueness comparison folds Gmail/Googlemail aliases. The stored email and all
+    # existing sign-in lookups retain the exact normalization rules they already had.
+    if signup_email_taken(email):
+        record_access_code_signup_failure(request)
+        raise HTTPException(status_code=409, detail="An account with this email already exists. Sign in instead.")
+    signup_key = normalize_email(email)
+
+    try:
+        user_id = register_account(
+            signup_key,
+            secrets.token_urlsafe(32),
+            body.full_name,
+            "",
+            profile={
+                "full_name": body.full_name,
+                "email_as_entered": email,
+                "mobile": "+91" + body.phone.removeprefix("+91"),
+                "signup_method": "access_code",
+            },
+            email_verified=False,
+        )
+    except EmailTaken:
+        record_access_code_signup_failure(request)
+        raise HTTPException(status_code=409, detail="An account with this email already exists. Sign in instead.") from None
+    return token_pair(user_id, verified=False)
 
 
 @router.post("/login")
@@ -198,7 +277,7 @@ def _send(email: str, request: Request, *, any_domain: bool = False) -> int:
 def email_start(body: EmailCodeBody, request: Request) -> dict:
     """A code to sign in with. An existing account gets one whatever its domain (it may predate the
     allow-list); a new address must be an allowed one. `new_account` tells the app to ask for a name."""
-    exists = read_credential(body.email) is not None
+    exists = read_credential_for_email_code(body.email) is not None
     if not exists and not email_codes.domain_allowed(body.email):
         raise domain_error()
     ttl = _send(body.email, request, any_domain=exists)
@@ -207,7 +286,7 @@ def email_start(body: EmailCodeBody, request: Request) -> dict:
 
 @router.post("/email/verify")
 def email_verify(body: EmailVerifyBody, request: Request) -> dict:
-    credential = read_credential(body.email)
+    credential = read_credential_for_email_code(body.email)
     if credential is None:
         # Check everything that doesn't spend the code first, so a missing name costs no attempt.
         if not body.first_name or not body.first_name.strip():

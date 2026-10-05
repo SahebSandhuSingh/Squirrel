@@ -10,17 +10,17 @@ import { exerciseApi, type ExerciseUser } from '@/api/exercise';
 import { invalidateRemote } from '@/api/useRemote';
 import { profileApi } from '@/api/social';
 import { accountApi, type TokenPair } from '@/auth/account';
-import { jwtSubject } from '@/auth/jwt';
+import { jwtEmailVerified, jwtSubject } from '@/auth/jwt';
 import { unregisterPush, usePushNotifications } from '@/notifications/push';
 import { resetTerritories } from '@/state/territoryStore';
+import { looksLikeEmail, normalizeIndianMobile, splitFullName } from '@/logic/accessSignup';
 
 /** Some backend that authenticates the bearer token is configured. */
 const BEARER_BACKEND = API_CONFIGURED || CAMPUS_API_CONFIGURED || PROGRESS_API_CONFIGURED || EXERCISE_API_CONFIGURED || SOCIAL_API_CONFIGURED;
 
-/** Campus sign-up is limited to institutional emails. The backend enforces the exact domains. */
-export const isAcademicEmail = (e: string) =>
-  /^[^\s@]+@([a-z0-9-]+\.)*[a-z0-9-]+\.ac\.in$/i.test(e.trim()) ||
-  /^[^\s@]+@squirrelsocial\.in$/i.test(e.trim());
+const NO_ACCOUNT_SERVER = 'No account server is configured. Set EXPO_PUBLIC_EXERCISE_API_URL, or explore the demo.';
+
+export { isAcademicEmail } from '@/logic/accessSignup';
 /**
  * Authentication. One Squirrel Social account (Exercise backend, /api/auth) signs in to every
  * backend: the Run Module and the Social service accept the same bearer token, and the Exercise
@@ -42,16 +42,23 @@ type AuthState = {
   email: string | null;
   /** Signed-in user's id (JWT `sub`, a UUID), when live. */
   userId: string | null;
+  /**
+   * The account has proved its email (the token's `ev` claim). Access-code accounts start without
+   * it and get it the first time they sign in with an emailed code. False when signed out.
+   */
+  emailVerified: boolean;
   apiConfigured: boolean;
   authConfigured: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   /**
-   * Email-code sign-in for .ac.in addresses: request sends a code, verify exchanges it for tokens.
+   * Email-code sign-in: request sends a code, verify exchanges it for tokens (and marks the email
+   * verified, so a signed-in access-code account can verify in place).
    * `newAccount`: the address has no account yet, so verify needs a name. There is no simulated code.
    */
   requestEmailCode: (email: string) => Promise<{ newAccount?: boolean }>;
   /** `invite`: a friend's invite code, claimed on a new account (best effort). */
   verifyEmailCode: (email: string, code: string, name?: Name, invite?: string) => Promise<{ newAccount: boolean }>;
+  signUpWithAccessCode: (details: { email: string; full_name: string; phone: string; access_code: string }) => Promise<void>;
   signInWithToken: (token: string) => Promise<void>;
   continueDemo: () => void;
   signOut: () => Promise<void>;
@@ -94,6 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [mode, setMode] = useState<Mode>('loading');
   const [email, setEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [emailVerified, setEmailVerified] = useState(false);
   const [name, setName] = useState<Name | null>(null);
   const [lastEmail, setLastEmail] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -114,6 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     forgetCachedData(null);
     setApiToken(null);
     setUserId(null);
+    setEmailVerified(false);
     setEmail(null);
     setName(null);
   }, [forgetCachedData]);
@@ -124,6 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       forgetCachedData(sub);
       setApiToken(access);
       setUserId(sub);
+      setEmailVerified(jwtEmailVerified(access));
     },
     [forgetCachedData],
   );
@@ -205,7 +215,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = useCallback(
     async (em: string, password: string) => {
-      if (!AUTH_CONFIGURED) throw new Error('No account server is configured. Set EXPO_PUBLIC_EXERCISE_API_URL, or explore the demo.');
+      if (!AUTH_CONFIGURED) throw new Error(NO_ACCOUNT_SERVER);
       const pair = await accountApi.login(em.trim(), password);
       await savePair(pair);
       await rememberEmail(em.trim());
@@ -215,8 +225,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [savePair, rememberEmail, loadName],
   );
 
+  // Any address: an existing account (an access-code one too) gets a code whatever its domain, and
+  // the server refuses new addresses outside the campus allow-list with its own message.
   const requestEmailCode = useCallback(async (em: string) => {
-    if (!isAcademicEmail(em)) throw new Error('Use your institute email (it ends in .ac.in).');
+    if (!looksLikeEmail(em)) throw new Error('Enter your email address.');
     if (AUTH_CONFIGURED) {
       const r = await accountApi.emailStart(em.trim());
       return { newAccount: r.newAccount };
@@ -251,6 +263,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [savePair, rememberEmail, rememberName, loadName],
   );
 
+  const signUpWithAccessCode = useCallback(async (details: { email: string; full_name: string; phone: string; access_code: string }) => {
+    if (!AUTH_CONFIGURED) throw new Error(NO_ACCOUNT_SERVER);
+    const email = details.email.trim();
+    const full_name = details.full_name.trim().replace(/\s+/g, ' ');
+    const pair = await accountApi.accessCodeSignup({ email, full_name, phone: normalizeIndianMobile(details.phone) ?? details.phone.trim(), access_code: details.access_code });
+    await savePair(pair);
+    await rememberEmail(email);
+    await rememberName(splitFullName(full_name));
+    setMode('live');
+  }, [savePair, rememberEmail, rememberName]);
+
   const signInWithToken = useCallback(
     async (t: string) => {
       await store.set(KEY, t);
@@ -282,11 +305,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         mode,
         email,
         userId,
+        emailVerified,
         apiConfigured: BEARER_BACKEND,
         authConfigured: AUTH_CONFIGURED,
         signIn,
         requestEmailCode,
         verifyEmailCode,
+        signUpWithAccessCode,
         signInWithToken,
         continueDemo: () => setMode('demo'),
         signOut,

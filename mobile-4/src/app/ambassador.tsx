@@ -1,12 +1,15 @@
 /**
  * BECOME A SQUIRREL AMBASSADOR (Dev A). The form's fields come from the backend — the app never
- * invents one — and once you've applied, you see your status instead of the form.
+ * invents one — and once you've applied, you see your status instead of the form. Only accounts
+ * with a verified email may apply; an access-code account verifies here by signing in with an
+ * emailed code, which gives it a token with `ev: true` (Social then lets it apply).
  */
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { Mascot } from '@/art/Mascot';
 import { errorText } from '@/api/campus';
+import { useAuth } from '@/auth/AuthProvider';
 import { applyAmbassador, getAmbassador } from '@/api/campus/community';
 import type { AmbassadorApplication, AmbassadorField, AmbassadorState, AmbassadorStatus } from '@/api/campus/types';
 import { ErrorState, LoadingRows, SourceBadge } from '@/components/campus/States';
@@ -23,11 +26,15 @@ const STATUS: Record<AmbassadorStatus, { label: string; line: string; color: str
 };
 
 export default function Ambassador() {
+  const auth = useAuth();
   const config = useConfig();
   const r = useCampus<AmbassadorState>('ambassador', () => getAmbassador());
   const [justApplied, setJustApplied] = useState<AmbassadorApplication | null>(null);
   const campus = config.data?.campus.name ?? 'your campus';
   const app = justApplied ?? r.data?.application ?? null;
+  // An application already made keeps showing its status; otherwise an unverified account is asked
+  // to verify before it sees the form (the server refuses it anyway).
+  const needsVerify = auth.mode === 'live' && !auth.emailVerified && !app;
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -40,7 +47,9 @@ export default function Ambassador() {
         </Display>
         <Text style={styles.lead}>Help grow the Squirrel Social campus at {campus}.</Text>
 
-        {r.error && !r.data ? (
+        {needsVerify && (r.data || r.error) ? (
+          <VerifyEmail email={auth.email} onVerified={() => invalidateCampus('ambassador')} />
+        ) : r.error && !r.data ? (
           <ErrorState cause={r.cause} onRetry={r.reload} feature="Ambassador applications" />
         ) : !r.data ? (
           <LoadingRows rows={4} height={64} style={{ marginTop: 18 }} />
@@ -63,6 +72,71 @@ export default function Ambassador() {
         )}
       </Screen>
     </KeyboardAvoidingView>
+  );
+}
+
+/** Verify in place: an emailed code to the account's own address, exchanged for a verified token. */
+function VerifyEmail({ email, onVerified }: { email: string | null; onVerified: () => void }) {
+  const auth = useAuth();
+  const [sent, setSent] = useState(false);
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const attempt = async (fn: () => Promise<unknown>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong. Try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const send = () =>
+    attempt(async () => {
+      await auth.requestEmailCode(email ?? '');
+      setSent(true);
+      setCode('');
+    });
+  const verify = () =>
+    attempt(async () => {
+      await auth.verifyEmailCode(email ?? '', code);
+      tap('success');
+      onVerified();
+    });
+  return (
+    <Card style={[styles.center, { alignItems: 'stretch' }]}>
+      <View style={{ alignItems: 'center', gap: 8 }}>
+        <Icon name="email-check-outline" size={28} color={colors.violet} />
+        <Text style={styles.cardTitle}>Verify your email to apply</Text>
+        <Text style={styles.body}>
+          {email
+            ? `Ambassadors need a verified email. Sign in with an emailed code to verify — we’ll send a one-time code to ${email}.`
+            : 'Ambassadors need a verified email. Sign out, then sign in with an emailed code to verify.'}
+        </Text>
+      </View>
+      {email && !sent && <Button label={busy ? 'Sending…' : 'Email me a code'} icon="arrow-right" disabled={busy || !auth.authConfigured} onPress={send} style={{ marginTop: 6 }} />}
+      {email && sent && (
+        <View style={{ gap: 10, marginTop: 6 }}>
+          <TextInput
+            value={code}
+            onChangeText={(t) => setCode(t.replace(/[^0-9]/g, ''))}
+            onSubmitEditing={() => code.length >= 4 && !busy && verify()}
+            placeholder="6-digit code"
+            placeholderTextColor={colors.mute}
+            keyboardType="number-pad"
+            autoComplete="one-time-code"
+            maxLength={8}
+            style={[styles.input, styles.code]}
+            accessibilityLabel="Verification code"
+          />
+          <Button label={busy ? 'Checking…' : 'Verify'} icon="check" disabled={busy || code.length < 4} onPress={verify} />
+          <Text style={styles.link} onPress={busy ? undefined : send} accessibilityRole="button">Send a new code</Text>
+        </View>
+      )}
+      {!!error && <Text style={styles.err} accessibilityLiveRegion="polite">{error}</Text>}
+    </Card>
   );
 }
 
@@ -179,6 +253,8 @@ const styles = StyleSheet.create({
   count: { color: colors.mute, fontFamily: fonts.mono, fontSize: 11 },
   input: { color: colors.text, fontFamily: fonts.regular, fontSize: 15, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 11 },
   multi: { minHeight: 96, textAlignVertical: 'top' },
+  code: { fontFamily: fonts.labelBold, fontSize: 22, letterSpacing: 6, textAlign: 'center' },
+  link: { color: colors.primary, fontFamily: fonts.label, fontSize: 14, textAlign: 'center', paddingVertical: 4 },
   options: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   option: { borderWidth: 1, borderColor: colors.line, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: colors.card },
   optionOn: { borderColor: colors.primary, backgroundColor: alpha(colors.primary, 0.08) },
