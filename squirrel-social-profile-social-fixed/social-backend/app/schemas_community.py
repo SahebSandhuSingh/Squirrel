@@ -342,14 +342,17 @@ CAMPUS_KINDS = (
     "event.reminder", "meetup.check_in", "meetup.invited", "meetup.accepted", "meetup.declined", "meetup.cancelled",
     "activity.verification_complete",
 )
-NotificationKind = Literal[RUN_MODULE_KINDS + CAMPUS_KINDS]  # type: ignore[valid-type]
+# Exercise (Partner Hunt Connect). Written by the caller like campus kinds. partner.request names no
+# actor: the two aren't connected yet, so Exercise sends the anonymous card name in the title instead.
+EXERCISE_KINDS = ("partner.request", "partner.accepted")
+NotificationKind = Literal[RUN_MODULE_KINDS + CAMPUS_KINDS + EXERCISE_KINDS]  # type: ignore[valid-type]
 
 
 class InternalNotificationIn(_In):
-    """From the Run Module (territory steals) or campus-service.
+    """From the Run Module (territory steals), campus-service, or Exercise (Partner Hunt Connect).
 
     Run Module kinds: the text is written here, from `kind` and the names Social knows; `title` and
-    `body` must be left out. Campus kinds: the caller writes `title` (and optionally `body`) and may
+    `body` must be left out. Campus and Exercise kinds: the caller writes `title` (and optionally `body`) and may
     put `{actor}` where the actor's name goes. Social fills it with the actor's display name, or with
     `actor_fallback` when there is no actor, Social doesn't know them, or the two are blocked either
     way."""

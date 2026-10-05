@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from fastapi import WebSocketDisconnect
 
-from backend import social_publish
+from backend import social_blocks, social_publish
 from backend.auth.tokens import issue_access_token
 from backend.main import app
 from backend.shared_workouts import hub, model, presence, router as sw_router, service, store
@@ -193,12 +193,18 @@ def test_a_session_is_readable_only_by_the_two_people_in_it(clock, social):
 def test_participants_keep_working_while_social_is_down(clock, social):
     s = create()
     assert join(s).status == 200
+    assert ready(s, HOST).status == 200
     social.failure = "down"
+    social_blocks.clear_cache()
     for user in (HOST, JOINER):
         r = get(s, user)
         assert r.status == 200 and r.json()["partner"]["user"]["display_name"] == "Vik Mehta"
-    assert ready(s, HOST).status == 200
+    r = ready(s, JOINER)                    # the last step before a race: blocks must be checked
+    assert r.status == 503 and code_of(r) == "blocks_unreachable"
+    assert get(s, HOST).json()["partner"]["ready"] is False
+    social.failure = None
     assert ready(s, JOINER).json()["phase"] == "countdown"
+    social.failure = "down"
     clock.advance(3)
     assert reps(s, HOST, 1, 1).json()["accepted"] is True
     assert leave(s, JOINER).status == 200
@@ -385,6 +391,51 @@ def test_phases_lobby_then_expired_exactly_at_ten_minutes(clock, social):
     assert get(s, HOST).json()["phase"] == "lobby"
     clock.advance(0.001)
     assert get(s, HOST).json()["phase"] == get(s, JOINER).json()["phase"] == "expired"
+
+
+# --- blocks made after joining ---------------------------------------------------------------------
+
+@pytest.mark.parametrize("blocker, blocked", [(HOST, JOINER), (JOINER, HOST)])
+@pytest.mark.parametrize("readier", [HOST, JOINER])
+def test_a_block_found_at_ready_quietly_closes_the_lobby_for_both(clock, social, blocker, blocked, readier):
+    s = create()
+    join(s)
+    social.block(blocker, blocked)
+    social_blocks.clear_cache()             # as after Exercise's 30-second cache
+    r = ready(s, readier)
+    assert r.status == 200
+    for user in (HOST, JOINER):
+        v = get(s, user).json()
+        assert v["phase"] == "finished" and v["starts_at"] is None
+        seats = [v["host"], v["partner"]]
+        assert [p["left_reason"] for p in seats] == ["closed", "closed"]
+        assert all(not p["ready"] for p in seats)
+        assert "block" not in json.dumps(v).lower()
+    assert create(HOST)["phase"] == create(JOINER)["phase"] == "lobby"   # both are free again
+
+
+def test_ready_needs_no_block_check_alone_or_to_unready(clock, social):
+    s = create()
+    social.failure = "down"
+    assert ready(s, HOST).status == 200      # alone: nobody to check against
+    social.failure = None
+    join(s)
+    ready(s, JOINER)
+    social.failure = "down"
+    assert ready(s, JOINER, False).status == 200
+
+
+def test_a_block_during_the_race_lets_the_race_finish(clock, social):
+    s = racing(clock, duration=60)
+    social.block(HOST, JOINER)
+    social_blocks.clear_cache()
+    wait(clock, s, 30)
+    assert reps(s, JOINER, 10, 10).json()["accepted"] is True
+    v = get(s, HOST).json()
+    assert v["phase"] == "racing" and v["partner"]["left_at"] is None
+    wait(clock, s, 30)
+    done = get(s, JOINER).json()
+    assert done["phase"] == "finished" and done["host"]["left_reason"] is None
 
 
 # --- reps ------------------------------------------------------------------------------------------

@@ -1,9 +1,17 @@
 """Partner Hunt REST routes.
 
-    GET  /api/users/{id}/partner-hunt              status: XP, gate, age, saved preferences
+    GET  /api/users/{id}/partner-hunt              status: XP, gate, age, saved preferences, and `options`
+                                                   (the form's vocabularies with labels, age range, min XP)
     PUT  /api/users/{id}/partner-hunt/preferences  save preferences (allowed while still locked)
     GET  /api/users/{id}/partner-hunt/matches      the board — only once every access check passes
     POST /api/users/{id}/partner-hunt/blocks       block someone, both directions, immediately (in Social)
+
+    Connect (connect.py): anonymous until both say yes, then each gets the other's Social profile id
+    GET    /api/users/{id}/partner-hunt/requests                       { incoming, outgoing, connections }
+    POST   /api/users/{id}/partner-hunt/requests                       { to_user_id } → request (201)
+    POST   /api/users/{id}/partner-hunt/requests/{request_id}/accept   → connection
+    POST   /api/users/{id}/partner-hunt/requests/{request_id}/decline  → 204, silent
+    DELETE /api/users/{id}/partner-hunt/requests/{request_id}          → 204, the sender takes it back
 
 Errors carry a machine-readable `code` in `detail` (see service.py) so the client can say exactly
 what stands between the user and the board.
@@ -13,12 +21,12 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from typing import Literal
 
 from backend.core.ids import is_valid_user_id
-from backend.partners import service
+from backend.partners import connect, service
 from backend.partners.policy import (
     ACTIVITIES,
     MAX_PARTNER_AGE,
@@ -79,6 +87,11 @@ class BlockRequest(BaseModel):
     user_id: str
 
 
+class ConnectRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    to_user_id: str
+
+
 @lru_cache(maxsize=1)
 def get_xp_gate() -> XPGate:
     """Built once per process from the environment (see xp_gate.xp_gate_from_env). Tests override
@@ -109,6 +122,35 @@ def post_partner_block(user_id: str, body: BlockRequest) -> dict:
         raise HTTPException(status_code=400, detail={"code": "invalid_user_id", "message": "Invalid user id."})
     _call(service.block_user, _checked(user_id), target)
     return {"blocked_user_id": target}
+
+
+@router.get("/users/{user_id}/partner-hunt/requests")
+def get_partner_requests(user_id: str) -> dict:
+    return _call(connect.list_requests, _checked(user_id))
+
+
+@router.post("/users/{user_id}/partner-hunt/requests", status_code=201)
+def post_partner_request(user_id: str, body: ConnectRequest, gate: XPGate = Depends(get_xp_gate)) -> dict:
+    if not is_valid_user_id(body.to_user_id):
+        raise HTTPException(status_code=400, detail={"code": "invalid_user_id", "message": "Invalid user id."})
+    return _call(connect.send_request, _checked(user_id), body.to_user_id, gate)
+
+
+@router.post("/users/{user_id}/partner-hunt/requests/{request_id}/accept")
+def post_accept_partner_request(user_id: str, request_id: str) -> dict:
+    return _call(connect.accept, _checked(user_id), request_id)
+
+
+@router.post("/users/{user_id}/partner-hunt/requests/{request_id}/decline", status_code=204)
+def post_decline_partner_request(user_id: str, request_id: str) -> Response:
+    _call(connect.decline, _checked(user_id), request_id)
+    return Response(status_code=204)
+
+
+@router.delete("/users/{user_id}/partner-hunt/requests/{request_id}", status_code=204)
+def delete_partner_request(user_id: str, request_id: str) -> Response:
+    _call(connect.withdraw, _checked(user_id), request_id)
+    return Response(status_code=204)
 
 
 def _checked(user_id: str) -> str:

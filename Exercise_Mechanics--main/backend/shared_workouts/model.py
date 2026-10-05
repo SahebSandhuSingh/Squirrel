@@ -20,6 +20,10 @@ The phase is never stored. It is worked out from the timestamps on every read, i
         before starts_at                    → countdown
         otherwise                           → racing
 
+Blocks are checked again when someone readies up with a partner seated: a blocked pair's lobby is
+closed for both (left_reason "closed"), quietly. A race that has started is never cut short by a
+block; it ends on its own within five minutes.
+
 Before the start, leaving frees the leaver's seat (they are removed; if the host leaves, the
 partner becomes the host and can invite someone else). The last player to leave keeps their seat
 with left_at set, which is what closes the lobby. From the countdown on, each player's race ends
@@ -157,6 +161,13 @@ def leave(session: dict, me: dict, now: datetime, reason: str = "left") -> None:
                 p["role"], p["ready"] = "host", False
             return
     me["left_at"], me["left_reason"] = iso(now), reason
+
+
+def close_lobby(session: dict, now: datetime) -> None:
+    """End an unstarted lobby for everyone in it at once (a block found when someone readies up).
+    Every player gets the same left_reason, so neither learns who blocked whom."""
+    for p in seated(session):
+        p["left_at"], p["left_reason"], p["ready"] = iso(now), "closed", False
 
 
 def join(session: dict, user_id: str, person: dict, now: datetime) -> None:

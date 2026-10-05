@@ -140,7 +140,9 @@ For each, the owner's side ships first; the consumer's side follows.
    - **No XP for hand-tapped reps:** nothing is written to the XP ledger or `activity_sessions`. The
      result is shown, and the app says XP arrives once reps are camera-counted.
    - Joining (and previewing an invite) is refused if either player has blocked the other, by
-     Social's block list, and refused when Social can't be checked (as Partner Hunt does).
+     Social's block list, and refused when Social can't be checked (as Partner Hunt does). Blocks
+     are checked again when a player readies up: a blocked pair's lobby closes quietly for both. A
+     race in progress is not cut short; it is bounded at five minutes.
    - An unstarted lobby expires after 10 minutes. Leaving before the start frees the leaver's seat
      (the lobby closes only when everyone has left); from the countdown on, leaving or about 30
      seconds disconnected ends that player's race only.

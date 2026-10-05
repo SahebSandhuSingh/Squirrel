@@ -207,7 +207,7 @@ optional and switch features on:
 |---|---|---|
 | `RUN_MODULE_URL` | Partner Hunt's XP gate: the Run Module's `/v1/users/{id}/xp-gate`, called with a short-lived service token signed with `JWT_SECRET` (`RUN_MODULE_TOKEN` overrides it with a fixed token) | Partner Hunt reports the XP service as unavailable |
 | `PARTNER_HUNT_DEV_XP` | Local testing only, when `RUN_MODULE_URL` is unset: a fixed XP for every user | — |
-| `SOCIAL_API_URL`, `SOCIAL_INTERNAL_TOKEN` | The Social service and its service token. Finished workouts are published to it (`backend/social_publish.py`). **Blocks are Social's** ([ADR-032](../docs/decisions/ADR-032-service-ownership.md)): Partner Hunt and activity matching read each viewer's either-way block set from `GET /internal/v1/blocks/{id}` (cached at most 30 s), and their Block buttons create a Social block through `POST /internal/v1/blocks/import` (`backend/social_blocks.py`). Checks fail closed: with Social unreachable (a 404 included), the board is withheld and a block refused, `503 blocks_unreachable` | Workouts are not published; Partner Hunt and activity-matching boards and blocks answer `503 blocks_unreachable` (logged) |
+| `SOCIAL_API_URL`, `SOCIAL_INTERNAL_TOKEN` | The Social service and its service token. Finished workouts are published to it (`backend/social_publish.py`). **Blocks are Social's** ([ADR-032](../docs/decisions/ADR-032-service-ownership.md)): Partner Hunt and activity matching read each viewer's either-way block set from `GET /internal/v1/blocks/{id}` (cached at most 30 s), and their Block buttons create a Social block through `POST /internal/v1/blocks/import` (`backend/social_blocks.py`). Shared workouts and Partner Hunt Connect show people by their Social profile (`POST /internal/v1/people/resolve`, `backend/social_people.py`), and Connect sends `partner.request` / `partner.accepted` through `POST /internal/v1/notifications` (`backend/social_notify.py`, in the background). Checks fail closed: with Social unreachable (a 404 included), the board is withheld and a block refused, `503 blocks_unreachable` | Workouts are not published; Partner Hunt and activity-matching boards and blocks answer `503 blocks_unreachable` (logged) |
 | `MODERATION_TOKEN` | Moderator routes for reports | Moderator routes refuse every request (503) |
 | `DATABASE_URL` | **Accounts and profiles are stored here** (sign-in, refresh tokens, profile, skill, profile details, measurements, consents, Partner Hunt preferences). Exercise sessions are also copied into `exercise_sessions`, and into the shared `activity_sessions` that XP is derived from (see below) | Accounts and profiles are files under `data/`, lost on a redeploy without a volume |
 | `JWT_SECRET` | Signs Squirrel Social login tokens (HS256 JWTs). The **same value as the Run Module's**, so one sign-in works on both. **Required in production** (`SQUIRREL_AUTH_SECRET`, if set, takes precedence) | A development key is generated once in `data/auth/secret.key` |
@@ -365,6 +365,35 @@ Each report records who reported, whom or what, the category, a description, whe
   `unreadable`, never dropped.
 - Reports are stored in `data/moderation/reports/`, which is git-ignored.
 
+## Partner Hunt: options and Connect
+
+`GET /api/users/{id}/partner-hunt` carries `options`: every vocabulary the preferences form needs
+(activities, times, modes, genders, each `{ key, label }`), the partner age range and the minimum
+XP, all from `backend/partners/policy.py`, so the app keeps no copy of them.
+
+**Connect** (`backend/partners/connect.py`) lets you ask someone on your board to train together.
+
+- **Anonymous until both say yes.** A request shows the board's card: first name and last initial,
+  age band, level, and what you share. No photo, no full name, no profile link. Once it's
+  accepted, each side gets the other's Social profile id (`social_profile_id`), and nothing more.
+- **Sending** needs every board check, and the person must be on your board right now; otherwise
+  `404 not_on_board`, which is also what a block gives.
+- **Declines are silent.** The sender sees the request as pending until it expires (14 days), then
+  as expired, exactly as if it had gone unanswered. Withdrawing a declined request looks the same
+  as withdrawing any other.
+- **Blocks** (Social's, either direction) refuse sending and accepting, and drop the pair from every
+  list, connections included. When Social can't be asked: `503 blocks_unreachable`.
+- **Limits:** one live request per pair (`409 already_requested`, `they_asked_you`,
+  `already_connected`); one request to the same person per 30 days however it ended (`429
+  too_soon` with `retry_after`); 10 new requests a day (`429 daily_limit`); 20 waiting
+  (`429 too_many_pending`).
+- **Notifications** through Social: `partner.request` to the recipient, naming nobody to Social
+  (the card name is in the title), and `partner.accepted` to the sender, naming the accepter.
+
+Routes, under `/api/users/{id}/partner-hunt/requests`: `GET` (`{ incoming, outgoing, connections }`),
+`POST` (`{ to_user_id }`), `POST /{request_id}/accept`, `POST /{request_id}/decline` (204),
+`DELETE /{request_id}` (204, the sender takes it back).
+
 ## Activity matching
 
 Members who do the same activities are suggested to each other as possible workout partners: two
@@ -405,7 +434,9 @@ countdown starts them together. Exercise owns this feature ([ADR-032](../docs/de
   shown and that is all, until reps are camera-counted.
 - **Who sees what.** A session is visible only to the two people in it (404 for anyone else). An
   invite is visible to anyone signed in with the code unless either has blocked the other: the same
-  404 as an unknown code, and `503 blocks_unreachable` when Social's blocks can't be checked. People
+  404 as an unknown code, and `503 blocks_unreachable` when Social's blocks can't be checked. Blocks
+  are checked again when someone readies up with a partner seated: a blocked pair's lobby closes for
+  both, quietly (`left_reason: "closed"`); a race that has started is never cut short. People
   are shown by their Social profile (`POST /internal/v1/people/resolve`, looked up on create and
   join and kept with the session); login ids never leave Exercise.
 - **Live updates:** `WS /ws/workout-sessions/{id}?token=<access token>` sends
@@ -454,6 +485,8 @@ With `DATABASE_URL` set (`backend/db/`):
   validated preferences as JSON), and the "About you" form's personal email, course and CGPA are in
   `user_personal_details` (migration 006). Both survive a redeploy. A database that is down means
   sign-in and profiles fail until it is back. Blocks are not stored here: Social owns them (ADR-032).
+  Shared workout sessions are in `shared_workout_sessions` (migration 007) and Partner Hunt Connect
+  requests in `partner_requests` (migration 008).
 - **Every exercise session is copied** into `exercise_sessions`, and, for accounts, into the shared
   `activity_sessions` table, which is what earns the session XP (below). Session files stay the
   source of truth.

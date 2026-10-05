@@ -6,6 +6,8 @@ Who may see what:
     an invite (preview, join) anyone signed in with the code, unless either of you has blocked the
                               other (404, the same as an unknown code); blocks are Social's and the
                               check fails closed (503 blocks_unreachable)
+    ready (with a partner)    blocks checked again: a blocked pair's lobby closes for both, quietly;
+                              503 blocks_unreachable when Social can't be asked. Never during a race.
 
 People are shown by their Social PersonLite, looked up when they create or join (503
 social_unreachable when Social can't answer), and stored with the session, so an outage during a
@@ -118,7 +120,12 @@ def join(code: str, user_id: str) -> dict:
 
 def set_ready(session_id: str, user_id: str, ready: bool) -> dict:
     now = utcnow()
-    _participant_session(session_id, user_id, now)
+    doc = _participant_session(session_id, user_id, now)
+    # Readying up with a partner seated is the last step before the race, so blocks are checked
+    # again here (either may have blocked the other since joining). Fails closed: no race starts
+    # while Social can't be asked.
+    others = [p for p in model.seated(doc) if p["user_id"] != user_id]
+    blocked = _blocked(user_id) if ready and others and model.phase(doc, now) == model.LOBBY else None
 
     def change(d: dict) -> None:
         me = _me(d, user_id)
@@ -127,6 +134,9 @@ def set_ready(session_id: str, user_id: str, ready: bool) -> dict:
             raise SharedWorkoutError(409, "already_started", "The countdown has started; ready can't change now.")
         if current != model.LOBBY:
             raise SharedWorkoutError(409, "not_in_lobby", "This session has ended.", phase=current)
+        if blocked and any(p["user_id"] in blocked for p in model.seated(d) if p is not me):
+            model.close_lobby(d, now)          # quietly: the same for both, no error, no reason given
+            return
         model.set_ready(d, me, ready, now)
 
     doc = _update(session_id, change, now)

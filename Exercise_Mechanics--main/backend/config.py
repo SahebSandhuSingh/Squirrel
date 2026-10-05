@@ -25,6 +25,8 @@ REPORTS_DIR      = _REPO_ROOT / "data" / "moderation" / "reports"
 
 # Shared workout sessions (Workout with Partner) without DATABASE_URL: one JSON file per session.
 SHARED_WORKOUTS_DIR = _REPO_ROOT / "data" / "shared_workouts"
+# Partner Hunt Connect requests without DATABASE_URL: one file for everyone's requests.
+PARTNER_REQUESTS_FILE = _REPO_ROOT / "data" / "partner_hunt" / "requests.json"
 
 
 def user_dir(user_id: str) -> Path:

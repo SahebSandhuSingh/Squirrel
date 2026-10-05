@@ -435,6 +435,42 @@ def test_status_tells_unavailable_apart_from_locked():
     assert body["unlocked"] is False
 
 
+@pytest.mark.parametrize("gate", [RecordingGate({}), UnconfiguredXPGate()])
+def test_status_carries_the_forms_options_whatever_the_gate_says(gate):
+    ana = _user("ana", dob="2010-01-01")      # under 18 and locked: the options are still there
+    status, body = _request(_app(gate), "GET", f"/api/users/{ana}/partner-hunt")
+    assert status == 200
+    options = body["options"]
+    assert options["activities"][0] == {"key": "running", "label": "Running"}
+    assert {"key": "hiit", "label": "HIIT"} in options["activities"]
+    assert options["times"][0] == {"key": "early_morning", "label": "Early morning"}
+    assert options["modes"] == [{"key": "in_person", "label": "In person"}, {"key": "remote", "label": "Remote"},
+                                {"key": "either", "label": "Either"}]
+    assert options["genders"] == [{"key": "female", "label": "Female"}, {"key": "male", "label": "Male"},
+                                  {"key": "non_binary", "label": "Non-binary"}]
+    assert options["partner_age"] == {"min": 18, "max": 99} and options["min_xp"] == 100
+
+
+def test_options_are_exactly_what_preferences_accept():
+    """The app builds its form from `options`; every choice must save, and nothing else may."""
+    from backend.partners import policy
+
+    options = _request(_app(RecordingGate({})), "GET", f"/api/users/{_user('ana')}/partner-hunt")[1]["options"]
+    keys = {name: [o["key"] for o in options[name]] for name in ("activities", "times", "modes", "genders")}
+    assert keys == {"activities": list(policy.ACTIVITIES), "times": list(policy.WORKOUT_TIMES),
+                    "modes": list(policy.MODES), "genders": list(policy.PARTNER_GENDERS)}
+    for vocab, labels in ((policy.ACTIVITIES, policy.ACTIVITY_LABELS), (policy.WORKOUT_TIMES, policy.WORKOUT_TIME_LABELS),
+                          (policy.MODES, policy.MODE_LABELS), (policy.PARTNER_GENDERS, policy.PARTNER_GENDER_LABELS)):
+        assert set(labels) == set(vocab) and all(label.strip() for label in labels.values())
+    ana = _user("bea")
+    everything = prefs(activities=keys["activities"], preferred_times=keys["times"], partner_genders=keys["genders"],
+                       partner_age_min=options["partner_age"]["min"], partner_age_max=options["partner_age"]["max"])
+    for mode in keys["modes"]:
+        status, _ = _request(_app(RecordingGate({})), "PUT", f"/api/users/{ana}/partner-hunt/preferences",
+                             {**everything, "mode": mode})
+        assert status == 200, mode
+
+
 def test_the_gate_is_always_asked_for_exactly_100_xp():
     ana, ben = _user("ana"), _user("ben", gender="male")
     gate = RecordingGate(default_xp=500)

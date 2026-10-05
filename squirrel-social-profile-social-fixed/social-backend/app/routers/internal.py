@@ -1,7 +1,8 @@
 """Service-to-service routes — how the other modules publish into Social.
 
   POST /internal/v1/activities              Authorization: Bearer $SOCIAL_INTERNAL_TOKEN
-  POST /internal/v1/notifications           a territory event (Run Module) or a campus event (campus-service)
+  POST /internal/v1/notifications           a territory event (Run Module), a campus event (campus-service)
+                                            or a Partner Hunt request/accept (Exercise)
                                             → the in-app list + push; returns Social's notification id
   POST /internal/v1/tasks/push-receipts     check Expo push receipts now (for an external cron)
   POST /internal/v1/tasks/event-reminders   send due event reminders now (for an external cron)
@@ -164,7 +165,7 @@ _ACTOR_DATA = {"run_id", "capture_event_id", "user_id", "actor_id", "actor_subje
 
 # Where a tap opens when the caller sends no `data.route` (app screens, see mobile src/app/).
 _ROUTES = {"territory": "/territory", "zone": "/territory", "challenge": "/invites", "event": "/events",
-           "meetup": "/meetups", "activity": "/notifications"}
+           "meetup": "/meetups", "activity": "/notifications", "partner": "/partner-hunt"}
 
 
 def _route(kind: str, data: dict) -> str:

@@ -20,7 +20,19 @@ from datetime import date, datetime, timezone
 from backend import social_blocks
 from backend.partners import store
 from backend.partners.matching import Person, Preferences, age_on, is_age_eligible, normalise_gender, rank
-from backend.partners.policy import PARTNER_HUNT_MIN_XP
+from backend.partners.policy import (
+    ACTIVITIES,
+    ACTIVITY_LABELS,
+    MAX_PARTNER_AGE,
+    MIN_AGE,
+    MODE_LABELS,
+    MODES,
+    PARTNER_GENDER_LABELS,
+    PARTNER_GENDERS,
+    PARTNER_HUNT_MIN_XP,
+    WORKOUT_TIME_LABELS,
+    WORKOUT_TIMES,
+)
 from backend.partners.xp_gate import XPGate, XPServiceUnavailable
 from backend.users.store import read_profile, read_skill
 
@@ -54,6 +66,22 @@ def partner_status(user_id: str, gate: XPGate, *, today: date | None = None) -> 
         "fitness_level": person.fitness_level,
         "preferences": preferences,
         "ready": bool(unlocked and age_ok and preferences and preferences.get("visible")),
+        "options": options(),
+    }
+
+
+def options() -> dict:
+    """Every vocabulary and limit the preferences form needs, in policy order, with English labels."""
+    def labelled(keys: tuple[str, ...], labels: dict[str, str]) -> list[dict]:
+        return [{"key": key, "label": labels[key]} for key in keys]
+
+    return {
+        "activities": labelled(ACTIVITIES, ACTIVITY_LABELS),
+        "times": labelled(WORKOUT_TIMES, WORKOUT_TIME_LABELS),
+        "modes": labelled(MODES, MODE_LABELS),
+        "genders": labelled(PARTNER_GENDERS, PARTNER_GENDER_LABELS),
+        "partner_age": {"min": MIN_AGE, "max": MAX_PARTNER_AGE},
+        "min_xp": PARTNER_HUNT_MIN_XP,
     }
 
 

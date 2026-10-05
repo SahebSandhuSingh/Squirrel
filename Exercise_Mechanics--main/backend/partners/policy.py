@@ -42,6 +42,28 @@ MODES = ("in_person", "remote", "either")
 # genders, because the preference cannot be confirmed — it only matches users who set no preference.
 PARTNER_GENDERS = ("female", "male", "non_binary")
 
+# What the app shows for each key (GET /api/users/{id}/partner-hunt → options), so the app never keeps
+# its own copy of these vocabularies. Every key above has exactly one label (tests check it).
+ACTIVITY_LABELS = {
+    "running": "Running",
+    "walking": "Walking",
+    "cycling": "Cycling",
+    "strength_training": "Strength training",
+    "home_workout": "Home workout",
+    "yoga": "Yoga",
+    "hiit": "HIIT",
+    "sports": "Sports",
+}
+WORKOUT_TIME_LABELS = {
+    "early_morning": "Early morning",
+    "morning": "Morning",
+    "afternoon": "Afternoon",
+    "evening": "Evening",
+    "night": "Night",
+}
+MODE_LABELS = {"in_person": "In person", "remote": "Remote", "either": "Either"}
+PARTNER_GENDER_LABELS = {"female": "Female", "male": "Male", "non_binary": "Non-binary"}
+
 # The existing skill levels (users/skill.json), in order, so "one level apart" is computable.
 FITNESS_LEVELS = ("beginner", "intermediate", "advanced")
 
@@ -58,3 +80,13 @@ MAX_MATCHES = 50
 
 # Age bands shown on a card. A match sees a band, never a birth date or an exact age.
 AGE_BANDS = ((18, 24), (25, 34), (35, 44), (45, 54), (55, MAX_PARTNER_AGE))
+
+# --- connecting ----------------------------------------------------------------------------------
+# A request (Connect) lasts this long unanswered. A decline is silent: the sender sees the request
+# as pending until it expires, exactly as if it had gone unanswered.
+REQUEST_TTL_DAYS = 14
+# One request per person per this long, however the last one ended (unanswered, declined, withdrawn),
+# so a silent decline can't be worked around by asking again.
+REQUEST_COOLDOWN_DAYS = 30
+MAX_NEW_REQUESTS_PER_DAY = 10
+MAX_PENDING_OUTGOING = 20

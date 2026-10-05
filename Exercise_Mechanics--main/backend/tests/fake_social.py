@@ -5,7 +5,7 @@ backend/social_blocks.py and backend/social_people.py open their HTTP requests (
 It answers like social-backend/app/routers/internal.py: GET /internal/v1/blocks/{sub} returns
 everyone blocked either way, POST /internal/v1/blocks/import adds pairs idempotently, and
 POST /internal/v1/people/resolve turns subjects into people (provisioning unseen ones, as Social
-does). Set `failure` to make every call fail the way a real outage would.
+does), and POST /internal/v1/notifications is recorded in `notifications`. Set `failure` to make every call fail the way a real outage would.
 """
 
 from __future__ import annotations
@@ -28,6 +28,8 @@ class FakeSocial:
         # "timeout": no answer in time. "garbage": 200 with a body that is not the contract's shape.
         self.failure: int | str | None = None
         self.names: dict[str, str] = {}             # display names by subject; a default otherwise
+        self.notifications: list[dict] = []
+        self.notifications_fail = False             # only the notification route fails
 
     def block(self, blocker: str, blocked: str) -> None:
         """A block made elsewhere, e.g. with the app's Block button."""
@@ -45,8 +47,10 @@ class FakeSocial:
 
     def __call__(self, request, timeout):
         method, url = request.get_method(), request.full_url
-        assert url.startswith(URL + "/internal/v1/") and 0 < timeout <= 10
+        assert url.startswith(URL + "/internal/v1/")
         path = url[len(URL):]
+        # Anything a request waits on must time out quickly; notifications are sent in the background.
+        assert 0 < timeout <= (90 if path == "/internal/v1/notifications" else 10)
         body = json.loads(request.data) if request.data else None
         self.requests.append((method, path, body))
         if self.failure == "down":
@@ -59,6 +63,11 @@ class FakeSocial:
             raise urllib.error.HTTPError(url, 401, "Unauthorized", {}, io.BytesIO(b"{}"))
         if self.failure == "garbage":
             return io.BytesIO(b'{"blocked": "everyone"}')
+        if method == "POST" and path == "/internal/v1/notifications":
+            if self.notifications_fail:
+                raise urllib.error.HTTPError(url, 502, "Bad Gateway", {}, io.BytesIO(b"{}"))
+            self.notifications.append(body)
+            return io.BytesIO(json.dumps({"created": True, "notification_id": str(uuid.uuid4())}).encode())
         if method == "POST" and path == "/internal/v1/people/resolve":
             people = [{"subject": sub, "profile_id": self.profile_id(sub), "username": f"user{i}",
                        "display_name": self.name(sub), "avatar_url": None, "hostel": None, "level": 1}

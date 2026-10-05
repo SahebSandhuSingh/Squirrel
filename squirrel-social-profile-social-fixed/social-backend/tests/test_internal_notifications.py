@@ -1,4 +1,4 @@
-"""POST /internal/v1/notifications from campus-service: campus kinds, the caller's text with an
+"""POST /internal/v1/notifications from campus-service and Exercise: their kinds, the caller's text with an
 `{actor}` placeholder Social fills (or hides on a block), and Social's notification id back."""
 
 from __future__ import annotations
@@ -102,3 +102,52 @@ def test_text_rules_by_kind(client, api):
     assert client.post(URL, json=run_module, headers=SVC).status_code == 422  # Run Module text is Social's
     assert client.post(URL, json=campus(me, kind="meetup.exploded"), headers=SVC).status_code == 422
     assert client.post(URL, json=campus(me), headers={"Authorization": "Bearer nope"}).status_code == 401
+
+
+# --- Exercise: Partner Hunt Connect ----------------------------------------------------------------
+
+def test_a_partner_request_arrives_naming_nobody(client, api, pushes):
+    """Exercise sends no actor for partner.request: the two aren't connected, so nothing in the
+    notification may lead to the sender's profile. The anonymous card name is in the title."""
+    me = new_sub()
+    api.user(me)
+    client.post("/v1/me/push-tokens", json={"token": "ExponentPushToken[me]", "platform": "ios"}, headers=auth(me))
+    body = {"user_subject": me, "kind": "partner.request", "title": "Ana T. wants to work out with you",
+            "body": "Open Partner Hunt to accept or decline.", "data": {"route": "/partner-hunt", "request_id": "r1"},
+            "dedupe_key": "partner.request:r1"}
+    r = client.post(URL, json=body, headers=SVC)
+    assert r.status_code == 200, r.text
+    [n] = notes(client, me)
+    assert n["kind"] == "partner.request" and n["actor"] is None
+    assert n["title"] == "Ana T. wants to work out with you"
+    assert n["data"] == {"route": "/partner-hunt", "request_id": "r1"}
+    assert pushes.sent[-1]["data"]["kind"] == "partner.request"
+    assert client.post(URL, json=body, headers=SVC).json()["created"] is False
+
+
+def test_a_partner_accept_names_the_accepter_unless_blocked(client, api):
+    me, them = new_sub(), new_sub()
+    api.user(me)
+    them_id = api.user(them, display_name="Ben Kumar")["id"]
+    body = {"user_subject": me, "kind": "partner.accepted", "actor_subject": them,
+            "title": "{actor} accepted your Partner Hunt request", "body": "You can see each other's profiles now.",
+            "data": {"route": "/partner-hunt/buddy/r1", "request_id": "r1"}, "dedupe_key": "partner.accepted:r1"}
+    assert client.post(URL, json=body, headers=SVC).json()["created"] is True
+    [n] = notes(client, me)
+    assert n["title"] == "Ben Kumar accepted your Partner Hunt request" and n["actor"]["display_name"] == "Ben Kumar"
+    assert n["data"]["route"] == "/partner-hunt/buddy/r1"
+    client.post(f"/v1/users/{them_id}/block", headers=auth(me))
+    assert client.post(URL, json={**body, "dedupe_key": "partner.accepted:r2"}, headers=SVC).json()["created"] is True
+    blocked = notes(client, me)[0]
+    assert blocked["title"] == "Someone accepted your Partner Hunt request" and blocked["actor"] is None
+
+
+def test_partner_kinds_route_to_partner_hunt_by_default_and_need_a_title(client, api):
+    me = new_sub()
+    api.user(me)
+    body = {"user_subject": me, "kind": "partner.request", "title": "Someone wants to work out with you",
+            "data": {}, "dedupe_key": "pr-default"}
+    assert client.post(URL, json=body, headers=SVC).json()["created"] is True
+    assert notes(client, me)[0]["data"]["route"] == "/partner-hunt"
+    assert client.post(URL, json={**body, "title": None, "dedupe_key": "pr-2"}, headers=SVC).status_code == 422
+    assert client.post(URL, json={**body, "kind": "partner.poked", "dedupe_key": "pr-3"}, headers=SVC).status_code == 422

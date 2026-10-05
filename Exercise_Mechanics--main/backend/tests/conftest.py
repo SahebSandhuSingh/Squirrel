@@ -19,13 +19,13 @@ import os
 import psycopg
 import pytest
 
-from backend import config, social_blocks, social_people
+from backend import config, social_blocks, social_notify, social_people
 from backend.auth import throttle
 from backend.tests.fake_social import TOKEN as SOCIAL_TOKEN, URL as SOCIAL_URL, FakeSocial
 
 ACCOUNTS_DB_URL = os.environ.get("TEST_ACCOUNTS_DATABASE_URL", "")
 _ACCOUNT_TABLES = ("user_refresh_tokens, user_accounts, user_profile_data, user_personal_details, user_profiles, "
-                   "auth_throttle, email_verification_codes, partner_hunt_preferences, shared_workout_sessions")
+                   "auth_throttle, email_verification_codes, partner_hunt_preferences, shared_workout_sessions, partner_requests")
 
 
 @pytest.fixture(scope="session")
@@ -47,6 +47,7 @@ def _isolated_auth_storage(tmp_path_factory, monkeypatch, _accounts_database):
     monkeypatch.setattr(config, "AUTH_DIR", root / "auth")
     monkeypatch.setattr(config, "INVITES_DIR", root / "invites")
     monkeypatch.setattr(config, "SHARED_WORKOUTS_DIR", root / "shared_workouts")
+    monkeypatch.setattr(config, "PARTNER_REQUESTS_FILE", root / "partner_hunt" / "requests.json")
     monkeypatch.setenv(config.AUTH_SECRET_ENV, "test-signing-secret")
     monkeypatch.delenv(config.REQUIRE_AUTH_ENV, raising=False)
     # Sign-up's email gate is tested in test_email_verification.py; elsewhere any address signs up
@@ -72,13 +73,15 @@ def _isolated_auth_storage(tmp_path_factory, monkeypatch, _accounts_database):
 
 @pytest.fixture
 def fake_social(monkeypatch) -> FakeSocial:
-    """Social's internal routes (blocks, people/resolve), in memory: configured as Social would be,
+    """Social's internal routes (blocks, people/resolve, notifications), in memory: configured as Social would be,
     and answering normally until a test sets `failure`."""
     social = FakeSocial()
     monkeypatch.setenv("SOCIAL_API_URL", SOCIAL_URL)
     monkeypatch.setenv("SOCIAL_INTERNAL_TOKEN", SOCIAL_TOKEN)
     monkeypatch.setattr(social_blocks, "_urlopen", social)
     monkeypatch.setattr(social_people, "_urlopen", social)
+    monkeypatch.setattr(social_notify, "_urlopen", social)
+    monkeypatch.setattr(social_notify, "_in_background", lambda send: send())   # inline, so tests see it
     return social
 
 
