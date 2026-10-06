@@ -38,7 +38,7 @@ With no backend URLs (`.env.example`) every screen shows an honest *Not connecte
 | `/welcome` | **Live at IISER Kolkata**: IISER-only messaging, `.ac.in` CTA, live user / zone / crew counters (from the backend), campus map visual, Founding Squirrel |
 | `/avatar` | **Make It You**: body, hair, outfit, shoes, accessories, gear, emotes and pet mascot |
 | `/home` *(tab)* | Top bar, greeting, activity rings, Start Exercise, Start Run, missions, **your territory** (under-attack alerts), **Active now**, Friend Mode / Challenges shortcuts, today's top squirrels, campus events, crew activity |
-| `/explore` *(Map tab)* | **Squirrel Social Map**: full-screen game world (terrain, roads, buildings, POIs), territories by status (neutral / controlled / contested / under attack), your avatar marker, nearby Squirrels with clustering, player / territory / POI sheets, nearby list with search, Poke from any card |
+| `/explore` *(Map tab)* | Opens on the **Territory Network** (below); the school button switches to the campus map. **Campus map**: full-screen game world (terrain, roads, buildings, POIs), territories by status (neutral / controlled / contested / under attack), your avatar marker, nearby Squirrels with clustering, player / territory / POI sheets, nearby list with search, Poke from any card |
 | **＋** *(tab)* | Create menu: start run, post, log workout; log water, log a meal and find an event are locked (coming soon) |
 | `/social` *(tab)* | Stories, For You / Following / Nearby feed, **Squirrels near you** (with Poke), suggested people, crews teaser |
 | `/profile` *(tab)* | **Campus profile**: photo, name, bio, connection mode, Founding Squirrel, Open to Meet toggle, activity stats (distance, month, zones, defended, stolen, crews, events, streak), territory, crews, badges, activity history, verification. (The offline demo profile when the campus backend is off.) |
@@ -65,6 +65,44 @@ With no backend URLs (`.env.example`) every screen shows an honest *Not connecte
 | `/shared`, `/shared/[id]` | **Shared zones**: everyone you share ground with; “You’ve both been here” with one person (zone-level only) |
 | `/ambassador` | **Become a Squirrel ambassador**: backend-defined form, then application status |
 | `/notifications` | **Pokes & friends** (Poke Back inline) and campus notifications from the backend; demo list when the campus backend is off |
+
+## Territory Network (Map tab)
+
+`src/features/world/` turns Bengal into a game world: **West Bengal → Kolkata Metro → Kolkata → zones → territories**, revealed as you zoom. The whole city is covered. These areas get special treatment:
+- **College Street:** 8 micro territories.
+- **Salt Lake:** Sectors I, II, III and V, each split into territories.
+- **New Town:** Action Areas I–III.
+- **Dhakuria and Jadavpur.**
+- **The Kalyani–Mohanpur campus belt:** University of Kalyani, AIIMS, BCKV and IISER Kolkata.
+- **Howrah.**
+- **Outposts:** IIT Kharagpur, Visva-Bharati, NIT Durgapur, Burdwan and North Bengal.
+
+**Preview Season (labelled in the UI).** There is no territory backend yet, so crews, owners, XP and live activity come from `source/preview.ts`. It is deterministic (seeded from territory ids), runs only on the device, and is the only place that invents state. The HUD always says **PREVIEW SEASON**, and the note behind it explains what that means. Your discoveries, claims and season XP are kept on the device. A backend implements `WorldSource` (`source/types.ts`, suggested routes in its header) and replaces it without screen changes.
+
+**What it does:**
+- **Navigation:** pan, pinch, wheel and double-click zoom; tap a territory, long-press for a peek card, hover on desktop.
+- **Search:** territories, zones, colleges and universities (with aliases such as JU, CU, IIT KGP), landmarks, hotspots, crews and areas. It flies the camera to the result.
+- **Controls:** Locate me, Return to my territory, Kolkata, West Bengal, activity heat, campus map.
+- **Territory panel:** a bottom sheet on phones and a side panel at 900 px and wider. It shows level, control, defence, crew, the battle bar, active squirrels, recent activity and micro territories.
+- **Moves:** hold-to-confirm claim, defend, challenge, push and capture, plus scouting of fogged ground.
+- **Game moments:** claim and capture (the boundary expands, the crew colour floods in, XP counts up), discovery (the fog burns off), under-attack alerts and live ripples.
+- **States:** unclaimed, owned, contested (animated two-crew border), under attack (pulsing), locked (gold double border), and uncharted (hatched fog).
+
+**How it's built:**
+- **One map page for every platform.** The map is MapLibre GL running inside a WebView on phones and an iframe on the web. This is the same split as the pose tracker, so there is no native map module and no new development build. The page is `engine/engine.js` plus `engine/engine.css`, inlined by `node scripts/world-engine.mjs`. Run that after editing either file; `npm test` checks the generated file is up to date.
+- **App ↔ map messages** are typed in `engine/protocol.ts`.
+- **Base map.** Street detail is a custom dark style on OpenFreeMap vector tiles (no key). If tiles can't load, the network draws on its own geography: the Natural Earth West Bengal outline (`data/geo/bengal.json`, built by `scripts/world-geo.mjs`) and a hand-traced Hooghly. The `EXPO_PUBLIC_MAP*` variables in `.env.example` let you self-host any of this.
+- **How territories are drawn.** Each territory is a Voronoi cell around a real place, clipped to its region's outline. Salt Lake's sectors and New Town's Action Areas use hand-drawn outlines instead.
+
+**Geography is approximate and correctable.** Each region lives in its own file under `data/regions/`. Move a seed or a corner there and the territories regrow. Places are in `data/places.ts`, each tagged with an accuracy. Anything not surveyed is labelled **≈ approx.** Ambiguous names (Shokpur, Khorda, "Muslim University", MAKAUT) are in `data/context.ts → UNRESOLVED`. Search lists them with their candidates and never flies to a guess.
+
+**Performance:**
+- The screen doesn't subscribe to the whole world. The map only gets new GeoJSON when something it draws changes (owner, status, level, discovery).
+- L5 territories and particles load the first time you zoom past the city view.
+- All motion comes from one animation loop capped at ~30 fps. It only touches layers visible at the current zoom, and pauses when the map is off screen.
+- There is a single DOM marker (you). Everything else is GPU-drawn.
+
+**Privacy.** Activity is only ever aggregated per territory ("12 squirrels ran through…"). Your position comes from your own device and is never sent anywhere by this screen. With no GPS fix inside Bengal, you appear at a labelled preview position at College Street.
 
 ## Not launched yet (locked)
 

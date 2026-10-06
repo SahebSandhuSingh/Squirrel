@@ -49,6 +49,15 @@ export const REALTIME_URL = trim(process.env.EXPO_PUBLIC_REALTIME_URL);
  *  Unset: jsDelivr and Google's model storage, as the browser coach uses. */
 export const POSE_ASSETS_URL = trim(process.env.EXPO_PUBLIC_POSE_ASSETS_URL);
 
+/** Territory Network map (src/features/world). All optional:
+ *  MAPLIBRE_URL  a folder serving maplibre-gl.js + maplibre-gl.css (unset: unpkg)
+ *  MAP_TILES_URL a TileJSON for OpenMapTiles-schema vector tiles (unset: OpenFreeMap, no key);
+ *                "off" draws the network on its own geography only
+ *  MAP_GLYPHS_URL a glyph template with {fontstack}/{range} (unset: OpenFreeMap's Noto Sans) */
+export const MAPLIBRE_URL = trim(process.env.EXPO_PUBLIC_MAPLIBRE_URL);
+export const MAP_TILES_URL = trim(process.env.EXPO_PUBLIC_MAP_TILES_URL);
+export const MAP_GLYPHS_URL = trim(process.env.EXPO_PUBLIC_MAP_GLYPHS_URL);
+
 /** Development only: the live-workout debug overlay and [FRAME]/[POSE]/[EXERCISE] logs
  *  (EXPO_PUBLIC_POSE_DEBUG=1 at build time). Never set it for a production build. */
 export const POSE_DEBUG = process.env.EXPO_PUBLIC_POSE_DEBUG === '1';

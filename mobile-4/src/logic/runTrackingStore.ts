@@ -1,4 +1,4 @@
-// @ts-expect-error Node's built-in strip-types test runner needs the explicit .ts extension.
+// The explicit .ts extension is for Node's built-in strip-types test runner (tsconfig allows it).
 import { addFix, addFixBatch, emptyTrack, type Fix, type TrackState } from './track.ts';
 
 export type RunSource = 'gps' | 'demo';

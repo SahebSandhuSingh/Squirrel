@@ -43,7 +43,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test src/logic/*.test.mjs src/api/*.test.mjs scripts/*.test.mjs",
+    "test": "node scripts/world-engine.mjs --check && node --experimental-strip-types --test src/logic/*.test.mjs src/api/*.test.mjs src/features/world/logic/*.test.mjs scripts/*.test.mjs",
     "lint": "expo lint"
   },
   "private": true,

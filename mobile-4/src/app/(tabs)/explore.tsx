@@ -1,7 +1,10 @@
 /**
- * MAP — Squirrel Social's persistent social world. See the campus, its territories, points of
- * interest and the Squirrels around you; tap someone → card → POKE 👋. Everything shown (who
- * appears, where roughly, who holds what, relationship state) comes from the backend.
+ * MAP — two views of Squirrel Social's world:
+ *   CITY    the Territory Network (features/world): Bengal → Kolkata → zones → territories, crews,
+ *           claims and battles. The default.
+ *   CAMPUS  the campus map below: its territories, points of interest and the Squirrels around
+ *           you; tap someone → card → POKE 👋. Everything shown (who appears, where roughly, who
+ *           holds what, relationship state) comes from the backend.
  */
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -25,10 +28,16 @@ import { hiddenActionFor } from '@/api/campus/campusShapes';
 import { useAllTerritories } from '@/state/territoryStore';
 import { useApp } from '@/state/AppState';
 import { alpha, colors, fonts, mapColors, radius } from '@/theme';
+import { WorldScreen } from '@/features/world/WorldScreen';
 
 type Sheet = { kind: 'player'; player: MapPlayer } | { kind: 'zone'; zone: Zone } | { kind: 'poi'; id: string } | { kind: 'list'; players: MapPlayer[]; title: string } | null;
 
-export default function MapScreen() {
+export default function MapTab() {
+  const [view, setView] = useState<'city' | 'campus'>('city');
+  return view === 'city' ? <WorldScreen onOpenCampus={() => setView('campus')} /> : <CampusMapScreen onBack={() => setView('city')} />;
+}
+
+function CampusMapScreen({ onBack }: { onBack: () => void }) {
   const insets = useSafeAreaInsets();
   const { toast } = useApp();
   const me = useMe();
@@ -121,6 +130,10 @@ export default function MapScreen() {
 
       {/* Status banners: they never block or wipe the map */}
       <View style={[styles.banners, { top: headerTop + 64 }]} pointerEvents="box-none">
+        <Pressable onPress={() => { tap(); onBack(); }} style={styles.back} accessibilityRole="button" accessibilityLabel="Back to the Kolkata territory network">
+          <Icon name="chevron-left" size={16} color={colors.primary} />
+          <Text style={styles.backText}>Territory network</Text>
+        </Pressable>
         <SourceBadge style={{ alignSelf: 'center' }} />
         {/* One banner at a time, most important first, so the map stays visible. */}
         {/* A feature with no backend yet is not an error: the map's own Not-live state covers it. */}
@@ -263,6 +276,8 @@ const styles = StyleSheet.create({
   map: { ...StyleSheet.absoluteFill, borderRadius: 0, borderWidth: 0 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
   banners: { position: 'absolute', left: 12, right: 12, gap: 6 },
+  back: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: alpha(colors.panel, 0.93), borderRadius: radius.pill, borderWidth: 1, borderColor: alpha(colors.primary, 0.4), paddingLeft: 8, paddingRight: 12, paddingVertical: 6 },
+  backText: { color: colors.text, fontFamily: fonts.labelBold, fontSize: 13, letterSpacing: 0.8, textTransform: 'uppercase' },
   controls: { position: 'absolute', left: 12, right: 12, flexDirection: 'row', alignItems: 'center' },
   nearby: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: alpha(colors.panel, 0.93), borderRadius: radius.pill, borderWidth: 1, borderColor: alpha(colors.primary, 0.4), paddingHorizontal: 14, paddingVertical: 9 },
   nearbyEmoji: { fontSize: 15 },

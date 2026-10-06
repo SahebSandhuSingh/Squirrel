@@ -1,0 +1,50 @@
+/* Squirrel Social — map page. Inlined by scripts/world-engine.mjs. Animations are transform /
+   opacity only (GPU), and the whole page sits on the same near-black as the map. */
+html, body { margin: 0; height: 100%; background: #06070A; overflow: hidden; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
+#map { position: absolute; inset: 0; }
+.maplibregl-canvas { outline: none; }
+
+/* Cinematic finish: a soft vignette and a whisper of grain over the map (never over the HUD). */
+#vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(120% 90% at 50% 45%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.55) 100%); }
+#grain { position: absolute; inset: -50%; pointer-events: none; opacity: 0.05; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.9'/></svg>"); }
+
+/* Attribution: compact, out of the HUD's way (the app tells us how much space it needs). */
+.maplibregl-ctrl-top-right { top: var(--inset-top, 0px); right: var(--inset-right, 0px); }
+.maplibregl-ctrl-attrib { background: rgba(6,7,10,0.6) !important; color: #6E7280; font: 10px/1.4 -apple-system, system-ui, sans-serif; }
+.maplibregl-ctrl-attrib a { color: #8A8F9C; }
+.maplibregl-ctrl-attrib-button { filter: invert(1) opacity(0.5); background-color: transparent !important; }
+
+/* Desktop hover card */
+#tip { position: absolute; left: 0; top: 0; pointer-events: none; opacity: 0; transition: opacity 120ms ease; z-index: 3;
+  background: rgba(8,9,12,0.92); border: 1px solid rgba(237,230,214,0.14); border-left: 2px solid #D7FF1F; padding: 7px 10px 7px 9px;
+  font: 600 11px/1.35 -apple-system, system-ui, sans-serif; letter-spacing: 0.08em; color: #EDE6D6; display: flex; flex-direction: column; gap: 2px; white-space: nowrap; }
+#tip b { font-weight: 800; letter-spacing: 0.14em; }
+#tip span { font-size: 10px; }
+
+/* YOU: a radar puck with the Squirrel mark */
+.me { position: relative; width: 64px; height: 64px; pointer-events: none; }
+.me > * { position: absolute; left: 50%; top: 50%; }
+.me-ring { width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%; border: 1.5px solid rgba(215,255,31,0.55); animation: me-pulse 2.4s cubic-bezier(.2,.6,.3,1) infinite; }
+.me-sweep { width: 76px; height: 76px; margin: -38px 0 0 -38px; border-radius: 50%; background: conic-gradient(from 0deg, rgba(215,255,31,0) 0deg, rgba(215,255,31,0) 290deg, rgba(215,255,31,0.28) 360deg); animation: me-spin 3.2s linear infinite; }
+.me-core { width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%; overflow: hidden; background: #0B0C10; border: 2px solid #D7FF1F; box-shadow: 0 0 0 3px rgba(6,7,10,0.85), 0 0 18px rgba(215,255,31,0.45); }
+.me-core img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.me-dir { width: 0; height: 0; margin: -31px 0 0 -7px; border-left: 7px solid transparent; border-right: 7px solid transparent; border-bottom: 11px solid #D7FF1F; transform-origin: 7px 31px; opacity: 0; transition: transform 300ms ease, opacity 200ms; }
+.me-label { margin: 24px 0 0 0; transform: translateX(-50%); white-space: nowrap; font: 800 10px/1 -apple-system, system-ui, sans-serif; letter-spacing: 0.22em; color: #06070A; background: #D7FF1F; padding: 4px 7px 3px; opacity: 0; transition: opacity 260ms ease; }
+.me-announce .me-label { opacity: 1; }
+.me-active .me-ring { animation-duration: 1.2s; }
+.me-battle .me-core { border-color: #FF5A36; box-shadow: 0 0 0 3px rgba(6,7,10,0.85), 0 0 18px rgba(255,90,54,0.55); }
+.me-battle .me-ring { border-color: rgba(255,90,54,0.6); animation-duration: 1s; }
+.me-battle .me-sweep { background: conic-gradient(from 0deg, rgba(255,90,54,0) 0deg, rgba(255,90,54,0) 290deg, rgba(255,90,54,0.3) 360deg); }
+.me-preview .me-core { border-style: dashed; }
+/* State / metro zoom: a small, quiet puck that doesn't sit on the city's name. */
+.me-far > * { scale: 0.5; }
+.me-far .me-sweep, .me-far .me-label { display: none; }
+@keyframes me-pulse { 0% { transform: scale(0.45); opacity: 0.9; } 100% { transform: scale(1.5); opacity: 0; } }
+@keyframes me-spin { to { transform: rotate(360deg); } }
+
+/* No MapLibre (offline before first load): the app shows its own message over this. */
+#fallback { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; color: #6E7280; font: 600 12px -apple-system, system-ui, sans-serif; letter-spacing: 0.2em; }
+
+@media (prefers-reduced-motion: reduce) {
+  .me-ring, .me-sweep { animation: none; }
+}
