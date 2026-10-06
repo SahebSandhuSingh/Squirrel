@@ -76,8 +76,10 @@ export function MapBanner({ icon, tone = 'info', text, action, onAction }: { ico
 // Bottom sheet (in-screen; gestures here never reach the map beneath)
 // ---------------------------------------------------------------------------
 
+/** On a phone: a draggable bottom sheet. On a wide screen: a compact card floating at the left, so the map stays in view. */
 export function MapSheet({ bottom, onClose, children, label }: { bottom: number; onClose: () => void; children: React.ReactNode; label: string }) {
-  const { height } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
+  const wide = width >= 900;
   const [y] = useState(() => new Animated.Value(1));
   const [drag] = useState(() => new Animated.Value(0));
   useEffect(() => {
@@ -96,7 +98,7 @@ export function MapSheet({ bottom, onClose, children, label }: { bottom: number;
   );
   return (
     <Animated.View
-      style={[styles.sheet, { bottom, maxHeight: Math.max(260, height * 0.6), transform: [{ translateY: Animated.add(y.interpolate({ inputRange: [0, 1], outputRange: [0, 520] }), drag) }] }]}
+      style={[styles.sheet, wide && styles.sheetWide, { bottom, maxHeight: Math.max(260, height * (wide ? 0.7 : 0.55)), transform: [{ translateY: Animated.add(y.interpolate({ inputRange: [0, 1], outputRange: [0, 520] }), drag) }] }]}
       accessibilityViewIsModal={false}
       accessibilityLabel={label}>
       <View {...responder.panHandlers} style={styles.grabArea}>
@@ -140,7 +142,7 @@ export function TerritorySheet({ zone, meId, baseMap }: { zone: Zone; meId: stri
       <View style={{ gap: 12 }}>
         <View>
           <Kicker>Zone · IISER Kolkata</Kicker>
-          <Display size={30} style={{ marginTop: 2 }}>{zone.name}</Display>
+          <Display size={26} style={{ marginTop: 2 }}>{zone.name}</Display>
         </View>
         <NotLiveYet name="Territory" compact body="Who controls this zone, claims, steals and defends switch on with the campus backend. This map is approximate." />
       </View>
@@ -150,7 +152,7 @@ export function TerritorySheet({ zone, meId, baseMap }: { zone: Zone; meId: stri
     <View style={{ gap: 12 }}>
       <View>
         <Kicker>Territory</Kicker>
-        <Display size={30} style={{ marginTop: 2 }}>{zone.name}</Display>
+        <Display size={26} style={{ marginTop: 2 }}>{zone.name}</Display>
         <View style={[styles.status, { borderColor: ui.color }]}>
           <Icon name={ui.icon} size={13} color={ui.color} />
           <Text style={[styles.statusText, { color: ui.color }]}>{ui.label}</Text>
@@ -206,7 +208,7 @@ export function PoiSheet({ poi, zones }: { poi: Poi; zones: Zone[] }) {
   return (
     <View style={{ gap: 10 }}>
       <Kicker color={colors.gold}>Point of interest</Kicker>
-      <Display size={28}>{poi.name}</Display>
+      <Display size={26}>{poi.name}</Display>
       {!!poi.description && <Text style={styles.body}>{poi.description}</Text>}
       {zone && <Button label={`In ${zone.name}`} variant="secondary" size="sm" iconLeft="flag-variant" onPress={() => router.push({ pathname: '/zone/[id]', params: { id: zone.id } })} />}
       <Button label="Walk here" size="sm" iconLeft="walk" onPress={() => router.push({ pathname: '/run', params: { type: 'walk' } })} />
@@ -272,7 +274,8 @@ const styles = StyleSheet.create({
   banner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: alpha(colors.panel, 0.93), borderRadius: radius.md, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 9 },
   bannerText: { flex: 1, color: colors.sub, fontFamily: fonts.regular, fontSize: 12, lineHeight: 16 },
   bannerAction: { fontFamily: fonts.labelBold, fontSize: 13, letterSpacing: 0.8, textTransform: 'uppercase' },
-  sheet: { position: 'absolute', left: 8, right: 8, alignSelf: 'center', maxWidth: MAX_WIDTH, backgroundColor: colors.bg2, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 16, paddingBottom: 16 },
+  sheet: { position: 'absolute', left: 8, right: 8, alignSelf: 'center', maxWidth: MAX_WIDTH, backgroundColor: colors.bg2, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 16, paddingBottom: 16, shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 18, shadowOffset: { width: 0, height: 6 }, elevation: 8 },
+  sheetWide: { left: 16, right: undefined, width: 380, alignSelf: 'flex-start' },
   grabArea: { alignItems: 'center', paddingVertical: 10 },
   grip: { width: 44, height: 5, borderRadius: 3, backgroundColor: colors.lineHi },
   close: { position: 'absolute', right: 10, top: 10, zIndex: 3, width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card },

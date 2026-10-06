@@ -167,3 +167,20 @@ const PLACEHOLDER_FEATURES: MapFeatures = {
 /** The named zones and the drawn map: OpenStreetMap's once imported, else the placeholder. */
 export const IISER_ZONES: Zone[] = HAS_OSM ? OSM.zones.map((z) => ({ ...z, geometry_source: (z as { source?: string }).source ?? 'osm' })) : PLACEHOLDER_ZONES;
 export const IISER_FEATURES: MapFeatures = HAS_OSM ? (OSM.features as MapFeatures) : PLACEHOLDER_FEATURES;
+
+/**
+ * The drawn campus under a backend's zones. campus-service serves zone outlines only (no roads,
+ * buildings or terrain), which left its map as outlines on bare ground; when the zones are this
+ * campus, the OpenStreetMap base drawn here goes underneath — the same real campus, map data
+ * only (no people, owners or activity). A backend that draws its own base, another campus, or the
+ * hand-placed placeholder (not real geometry) never gets it.
+ */
+export function withCampusBase(features: MapFeatures | null | undefined, zones: Zone[]): MapFeatures | null {
+  const hasBase = !!features && (features.roads.length > 0 || features.buildings.length > 0 || features.terrain.length > 0);
+  if (hasBase || !HAS_OSM || !zones.length) return features ?? null;
+  const lat = zones.reduce((s, z) => s + z.centroid[0], 0) / zones.length;
+  const lng = zones.reduce((s, z) => s + z.centroid[1], 0) / zones.length;
+  const far = Math.hypot((lat - CAMPUS_CENTER[0]) * M_PER_DEG_LAT, (lng - CAMPUS_CENTER[1]) * M_PER_DEG_LNG) > 3000;
+  if (far) return features ?? null;
+  return { ...IISER_FEATURES, pois: features?.pois.length ? features.pois : IISER_FEATURES.pois, zones: features?.zones };
+}
