@@ -1,13 +1,14 @@
 /**
  * "About you" — the profile-building fields in onboarding. Compulsory fields carry a pink
  * REQUIRED tag and block Continue; CGPA is marked OPTIONAL and never blocks. Errors show once a
- * field has been left (or Continue was tried), with the right keyboard for every input.
+ * field has been left (or Continue was tried), with the right keyboard for every input. The college
+ * email is the sign-in address, shown rather than typed (Exercise accepts no other).
  */
 import { forwardRef, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
 import type { Gender } from '@/api/campus/types';
 import { Icon, tap } from '@/components/ui';
-import type { DetailsErrors, DetailsField, DetailsForm } from '@/logic/profileValidation';
+import { ageOn, dobToIso, formatDobInput, type DetailsErrors, type DetailsField, type DetailsForm } from '@/logic/profileValidation';
 import { alpha, colors, fonts, radius } from '@/theme';
 
 export const GENDERS: { id: Gender; label: string }[] = [
@@ -26,6 +27,7 @@ export function ProfileDetailsForm({ value, onChange, errors, showAll, courses }
   const set = (k: DetailsField) => (t: string) => onChange({ ...value, [k]: t });
   const blur = (k: DetailsField) => () => setTouched((x) => ({ ...x, [k]: true }));
   const err = (k: DetailsField) => (showAll || touched[k] ? errors[k] : undefined);
+  const dob = dobToIso(value.date_of_birth);
 
   return (
     <View style={{ gap: 16 }}>
@@ -41,11 +43,14 @@ export function ProfileDetailsForm({ value, onChange, errors, showAll, courses }
       </Field>
 
       <Field label="Personal email" required error={err('personal_email')} help="We’ll use this if you ever lose access to your college email.">
-        <Input ref={(r) => { refs.current.personal_email = r; }} value={value.personal_email} onChangeText={set('personal_email')} onBlur={blur('personal_email')} placeholder="you@gmail.com" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} autoComplete="email" textContentType="emailAddress" returnKeyType="next" onSubmitEditing={() => refs.current.college_email?.focus()} invalid={!!err('personal_email')} />
+        <Input ref={(r) => { refs.current.personal_email = r; }} value={value.personal_email} onChangeText={set('personal_email')} onBlur={blur('personal_email')} placeholder="you@gmail.com" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} autoComplete="email" textContentType="emailAddress" returnKeyType="next" onSubmitEditing={() => refs.current.phone?.focus()} invalid={!!err('personal_email')} />
       </Field>
 
-      <Field label="College email" required error={err('college_email')} help="Your official institute address.">
-        <Input ref={(r) => { refs.current.college_email = r; }} value={value.college_email} onChangeText={set('college_email')} onBlur={blur('college_email')} placeholder="you@iiserkol.ac.in" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} autoComplete="off" returnKeyType="next" onSubmitEditing={() => refs.current.phone?.focus()} invalid={!!err('college_email')} />
+      <Field label="College email" required error={showAll ? errors.college_email : undefined} help="The address you signed in with.">
+        <View style={[styles.input, styles.readOnly]} accessibilityLabel={`College email, ${value.college_email || 'not loaded'}`}>
+          <Icon name="lock-outline" size={14} color={colors.dim} />
+          <Text style={styles.readOnlyText} numberOfLines={1}>{value.college_email || '—'}</Text>
+        </View>
       </Field>
 
       <Field label="Phone number" required error={err('phone')}>
@@ -53,7 +58,7 @@ export function ProfileDetailsForm({ value, onChange, errors, showAll, courses }
           <View style={styles.prefix} accessibilityLabel="Country code plus 91">
             <Text style={styles.prefixText}>🇮🇳 +91</Text>
           </View>
-          <Input ref={(r) => { refs.current.phone = r; }} value={value.phone} onChangeText={set('phone')} onBlur={blur('phone')} placeholder="98765 43210" keyboardType="phone-pad" autoComplete="tel" textContentType="telephoneNumber" maxLength={16} returnKeyType="next" onSubmitEditing={() => refs.current.age?.focus()} invalid={!!err('phone')} style={{ flex: 1 }} accessibilityLabel="Phone number" />
+          <Input ref={(r) => { refs.current.phone = r; }} value={value.phone} onChangeText={set('phone')} onBlur={blur('phone')} placeholder="98765 43210" keyboardType="phone-pad" autoComplete="tel" textContentType="telephoneNumber" maxLength={16} returnKeyType="next" onSubmitEditing={() => refs.current.date_of_birth?.focus()} invalid={!!err('phone')} style={{ flex: 1 }} accessibilityLabel="Phone number" />
         </View>
       </Field>
 
@@ -65,8 +70,8 @@ export function ProfileDetailsForm({ value, onChange, errors, showAll, courses }
         </View>
       </Field>
 
-      <Field label="Age" required error={err('age')}>
-        <Input ref={(r) => { refs.current.age = r; }} value={value.age} onChangeText={(t) => set('age')(t.replace(/[^\d]/g, ''))} onBlur={blur('age')} placeholder="20" keyboardType="number-pad" maxLength={2} returnKeyType="done" invalid={!!err('age')} style={{ width: 110 }} />
+      <Field label="Date of birth" required error={err('date_of_birth')} help={dob ? `You’re ${ageOn(dob, new Date())}.` : 'Never shown on your profile.'}>
+        <Input ref={(r) => { refs.current.date_of_birth = r; }} value={value.date_of_birth} onChangeText={(t) => set('date_of_birth')(formatDobInput(t))} onBlur={blur('date_of_birth')} placeholder="DD/MM/YYYY" keyboardType="number-pad" maxLength={10} returnKeyType="done" invalid={!!err('date_of_birth')} style={{ width: 160 }} accessibilityLabel="Date of birth, day month year" />
       </Field>
 
       <Field label="Course" required error={err('course')}>
@@ -160,4 +165,6 @@ const styles = StyleSheet.create({
   errRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   err: { flex: 1, color: colors.coral, fontFamily: fonts.medium, fontSize: 12 },
   help: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12 },
+  readOnly: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.cardHi },
+  readOnlyText: { flex: 1, color: colors.sub, fontFamily: fonts.regular, fontSize: 16 },
 });

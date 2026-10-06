@@ -1,23 +1,28 @@
 /**
- * ONBOARDING: wingman intro → About you (profile details: 7 compulsory fields, CGPA optional) →
- * "What are you looking for?" (Date / Friends / Crew) → hostel → Open to Meet → saved to the
- * profile (PATCH /v1/me, with `profile_details`). Date can be picked as a preference even
- * while Date Mode is locked; the Date Mode screens stay behind the backend's safety gate.
+ * ONBOARDING: wingman intro → About you (7 compulsory fields, CGPA optional) → "What are you
+ * looking for?" (Date / Friends / Crew) → hostel → Finish. About you is Exercise's
+ * (GET/PUT /api/me/profile-details, api/profileDetails.ts), saved first; its field errors send you
+ * back to the form with each one on its field. The rest is the profile (PATCH /v1/me). Date can be
+ * picked as a preference even while Date Mode is locked; its screens stay behind the safety gate.
  *
- * Saving `profile_details` has no backend yet (capability 'profileDetails'): while it's
- * unavailable, "About you" shows "Not live yet" instead of collecting details it can't store,
- * and Finish saves everything else (mode, hostel, onboarding done) — PATCH /v1/me itself is live.
+ * No Open to Meet step: campus-service turns it on only after a verified run or walk, which a new
+ * account never has. It's on the profile and Active Now once it can be used.
+ *
+ * Without Exercise configured (or its route not deployed), "About you" shows "Not live yet" instead
+ * of collecting details it can't store, and Finish saves everything else.
  */
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Mascot } from '@/art/Mascot';
-import { campusApi, errorKind, errorText, featureUnavailable, isEndpointAvailable, type ConnectionMode, type Me } from '@/api/campus';
-import { OpenToMeetToggle } from '@/components/campus/Social';
+import { campusApi, errorKind, errorText, featureUnavailable, type ConnectionMode, type Me } from '@/api/campus';
+import { ApiError } from '@/api/client';
+import { PROFILE_DETAILS_CONFIGURED, profileDetailsApi } from '@/api/profileDetails';
+import { useRemote } from '@/api/useRemote';
 import { DEFAULT_COURSES, GENDERS, ProfileDetailsForm } from '@/components/profile/ProfileDetailsForm';
 import { useAuth } from '@/auth/AuthProvider';
-import { isComplete, normalizePhone, validateDetails, type DetailsForm } from '@/logic/profileValidation';
-import { ErrorState, NotLiveYet, SourceBadge } from '@/components/campus/States';
+import { detailsBody, dobFromIso, isComplete, serverFieldErrors, validateDetails, type DetailsErrors, type DetailsForm } from '@/logic/profileValidation';
+import { ErrorState, LoadingRows, NotLiveYet, SourceBadge } from '@/components/campus/States';
 import { Button, Display, FadeIn, Header, Icon, Kicker, PressScale, ProgressBar, Screen, Tagline, tap } from '@/components/ui';
 import { invalidateCampus, useAction, useConfig, useHostelOptions, useMe } from '@/hooks/useCampus';
 import { alpha, colors, fonts, radius } from '@/theme';
@@ -28,7 +33,7 @@ const MODES: { id: ConnectionMode; title: string; line: string; body: string; ic
   { id: 'date', title: 'Date', line: 'Move first, then meet', body: 'Activity-first dating — never photo-first. Opens behind a safety gate.', icon: 'heart-multiple', color: colors.secondary },
 ];
 
-const STEPS = 5;
+const STEPS = 4;
 
 export default function Onboarding() {
   const config = useConfig();
@@ -38,35 +43,52 @@ export default function Onboarding() {
   const [mode, setMode] = useState<ConnectionMode | null>(null);
   const [hostel, setHostel] = useState<string | null>(null);
   const auth = useAuth();
-  const domains = config.data?.campus.email_domains ?? [];
   const courses = config.data?.campus.courses?.length ? config.data.campus.courses : DEFAULT_COURSES;
-  const [details, setDetails] = useState<DetailsForm | null>(null);
-  const saved = me.data?.profile_details;
-  // Prefill from anything already known (a saved profile, or the college email you signed in with).
-  const form: DetailsForm = details ?? {
-    full_name: saved?.full_name ?? '',
-    personal_email: saved?.personal_email ?? '',
-    college_email: saved?.college_email ?? auth.email ?? me.data?.email ?? '',
-    phone: saved?.phone?.replace(/^\+91/, '') ?? '',
-    gender: GENDERS.some((g) => g.id === saved?.gender) ? saved!.gender : '',
-    age: saved?.age != null ? String(saved.age) : '',
-    course: saved?.course ?? '',
-    cgpa: saved?.cgpa != null ? String(saved.cgpa) : '',
+  const saved = useRemote(PROFILE_DETAILS_CONFIGURED && auth.mode === 'live' ? 'ex:profile-details' : null, profileDetailsApi.get);
+  const [details, setDetailsState] = useState<DetailsForm | null>(null);
+  // Exercise's own field errors from the last save; cleared as soon as you edit the form.
+  const [serverErrors, setServerErrors] = useState<DetailsErrors>({});
+  const setDetails = (next: DetailsForm) => {
+    setServerErrors({});
+    setDetailsState(next);
   };
-  const detailErrors = validateDetails(form, domains); // cheap; recomputed each render
+  const s = saved.data;
+  // Prefill from what Exercise already knows (a saved form, or the account: name, sign-in email, …).
+  const form: DetailsForm = details ?? {
+    full_name: s?.full_name ?? '',
+    personal_email: s?.personal_email ?? '',
+    college_email: s?.college_email ?? auth.email ?? me.data?.email ?? '',
+    phone: s?.phone?.replace(/^\+91/, '') ?? '',
+    gender: GENDERS.some((g) => g.id === s?.gender) ? s!.gender! : '',
+    date_of_birth: dobFromIso(s?.date_of_birth),
+    course: s?.course ?? '',
+    cgpa: s?.cgpa != null ? String(s.cgpa) : '',
+  };
+  const detailErrors = { ...validateDetails(form), ...serverErrors }; // cheap; recomputed each render
   const [showAllErrors, setShowAllErrors] = useState(false);
   const missing = Object.keys(detailErrors).length;
-  // Built but not deployed (404 no_route / 501) is found out at save time: save the rest, say so.
-  const [detailsLive, setDetailsLive] = useState(() => isEndpointAvailable('profileDetails'));
+  // Not configured, or the route not deployed (found on load or at save time): save the rest, say so.
+  const [detailsLive, setDetailsLive] = useState(PROFILE_DETAILS_CONFIGURED);
+  const detailsUsable = detailsLive && !(saved.error && featureUnavailable(saved.error));
+  const detailsLoading = detailsUsable && !saved.data && !saved.error;
   const save = useAction(async (patch: Parameters<typeof campusApi.updateMe>[0]) => {
-    try {
-      return await campusApi.updateMe(patch);
-    } catch (e) {
-      if (patch.profile_details === undefined || !featureUnavailable(e)) throw e; // real errors stay real
-      setDetailsLive(false);
-      const { profile_details: _unsaved, ...rest } = patch;
-      return campusApi.updateMe(rest);
+    if (detailsUsable) {
+      try {
+        await profileDetailsApi.save(detailsBody(form));
+      } catch (e) {
+        const fields = e instanceof ApiError && e.status === 422 ? serverFieldErrors(e.body) : {};
+        if (Object.keys(fields).length) {
+          // Back to the form, each problem on its field. Nothing was saved.
+          setServerErrors(fields);
+          setShowAllErrors(true);
+          setStep(1);
+          return null;
+        }
+        if (!featureUnavailable(e)) throw e; // real errors stay real
+        setDetailsLive(false);
+      }
     }
+    return campusApi.updateMe(patch);
   });
   const dateGate = config.data?.features.date_mode;
   const hostels = hostelOptions.options;
@@ -78,26 +100,17 @@ export default function Onboarding() {
     setStep((s) => Math.min(STEPS - 1, s + 1));
   };
   const detailsNext = () => {
-    if (detailsLive && !isComplete(detailErrors)) {
+    if (detailsUsable && !isComplete(detailErrors)) {
       tap('impact');
       setShowAllErrors(true);
       return;
     }
     next();
   };
-  const finish = async () => {
-    if (detailsLive && !isComplete(detailErrors)) return setStep(1); // never complete with a required field missing
-    const profile_details = {
-      full_name: form.full_name.trim(),
-      personal_email: form.personal_email.trim().toLowerCase(),
-      college_email: form.college_email.trim().toLowerCase(),
-      phone: normalizePhone(form.phone)!,
-      gender: form.gender,
-      age: Number(form.age),
-      course: form.course.trim(),
-      cgpa: form.cgpa.trim() ? Number(form.cgpa) : null,
-    };
-    const r: Me | null = await save.run({ ...(detailsLive ? { profile_details } : {}), ...(chosenMode ? { connection_mode: chosenMode } : {}), ...(chosenHostel ? { hostel_zone_id: chosenHostel } : {}), onboarding_completed: true });
+  const finish = async (withHostel = true) => {
+    if (detailsUsable && !isComplete(detailErrors)) return setStep(1); // never complete with a required field missing
+    const hostelId = withHostel ? chosenHostel : null;
+    const r: Me | null = await save.run({ ...(chosenMode ? { connection_mode: chosenMode } : {}), ...(hostelId ? { hostel_zone_id: hostelId } : {}), onboarding_completed: true });
     if (r) {
       invalidateCampus('me');
       tap('success');
@@ -129,18 +142,20 @@ export default function Onboarding() {
           <Display size={38} style={{ marginTop: 4 }}>Build your{'\n'}<Text style={{ color: colors.primary }}>profile</Text></Display>
           <Text style={styles.lead2}>These stay private to you and the Squirrel team — your public profile shows only your name, hostel and activity.</Text>
           <View style={{ marginTop: 16 }}>
-            {detailsLive ? (
+            {detailsLoading ? (
+              <LoadingRows rows={5} height={58} />
+            ) : detailsUsable ? (
               <ProfileDetailsForm value={form} onChange={setDetails} errors={detailErrors} showAll={showAllErrors} courses={courses} />
             ) : (
               <NotLiveYet name="Profile details" body="Saving your name, contact details, course and CGPA isn’t live yet, so we won’t ask for them now. Everything else in setup still saves." />
             )}
           </View>
-          {detailsLive && showAllErrors && missing > 0 && (
+          {detailsUsable && showAllErrors && missing > 0 && (
             <Text style={[styles.err, { marginTop: 14 }]} accessibilityLiveRegion="polite">
               {missing === 1 ? '1 field needs a look' : `${missing} fields need a look`} before you continue.
             </Text>
           )}
-          <Button label="Continue" icon="arrow-right" onPress={detailsNext} style={{ marginTop: 14 }} accessibilityLabel={detailsLive && missing ? `Continue. ${missing} fields still need attention` : 'Continue'} />
+          <Button label="Continue" icon="arrow-right" onPress={detailsNext} style={{ marginTop: 14 }} disabled={detailsLoading} accessibilityLabel={detailsUsable && missing ? `Continue. ${missing} fields still need attention` : 'Continue'} />
         </FadeIn>
       )}
 
@@ -212,20 +227,7 @@ export default function Onboarding() {
               {hostelOptions.none && <Text style={styles.note}>Hostels aren’t set up yet. You can pick yours later in Edit profile.</Text>}
             </View>
           )}
-          <Button label="Continue" icon="arrow-right" onPress={next} style={{ marginTop: 18 }} />
-          <Text style={styles.skip} onPress={next}>I’m a day scholar — skip</Text>
-        </FadeIn>
-      )}
-
-      {step === 4 && (
-        <FadeIn>
-          <Kicker style={{ marginTop: 16 }}>Step 4 · Open to Meet</Kicker>
-          <Display size={38} style={{ marginTop: 4 }}>Up for{'\n'}<Text style={{ color: colors.primary }}>IRL plans?</Text></Display>
-          <Text style={styles.lead2}>Optional. You can flip this any time — it’s off until you turn it on.</Text>
-          <View style={{ marginTop: 14 }}>
-            <OpenToMeetToggle value={me.data?.open_to_meet ?? false} />
-          </View>
-          {!detailsLive && (
+          {!detailsUsable && (
             <View style={styles.notice} accessibilityLiveRegion="polite">
               <Icon name="progress-wrench" size={16} color={colors.violet} />
               <Text style={styles.noticeText}>Profile details aren’t saved yet — that part isn’t live. Your mode, hostel and setup will be saved.</Text>
@@ -237,7 +239,8 @@ export default function Onboarding() {
               {errorKind(save.error) === 'not_live' && <Text style={styles.skip} onPress={() => router.replace({ pathname: '/avatar', params: { from: 'onboarding' } })}>Continue without saving</Text>}
             </View>
           )}
-          <Button label={save.status === 'loading' ? 'Saving…' : 'Finish'} icon="check" disabled={save.status === 'loading'} onPress={finish} style={{ marginTop: 18 }} />
+          <Button label={save.status === 'loading' ? 'Saving…' : 'Finish'} icon="check" disabled={save.status === 'loading'} onPress={() => finish()} style={{ marginTop: 18 }} />
+          <Text style={styles.skip} onPress={save.status === 'loading' ? undefined : () => finish(false)}>I’m a day scholar — skip and finish</Text>
           <Tagline size={16} rotate={-3} style={{ alignSelf: 'center', marginTop: 16 }}>Same campus. New people.</Tagline>
         </FadeIn>
       )}
