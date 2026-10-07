@@ -58,6 +58,11 @@ export const MAPLIBRE_URL = trim(process.env.EXPO_PUBLIC_MAPLIBRE_URL);
 export const MAP_TILES_URL = trim(process.env.EXPO_PUBLIC_MAP_TILES_URL);
 export const MAP_GLYPHS_URL = trim(process.env.EXPO_PUBLIC_MAP_GLYPHS_URL);
 
+/** IISER Kolkata territory map (src/features/campus): a backend serving GET /zones, /territories,
+ *  /territories/:id, /crews, /zones/:id/activity, /me and POST /zones/:id/{claim,attack,capture,
+ *  defend,challenge}. Unset: the map plays a labelled Preview Season on the device. */
+export const CAMPUS_MAP_API_URL = trim(process.env.EXPO_PUBLIC_CAMPUS_MAP_API_URL);
+
 /** Development only: the live-workout debug overlay and [FRAME]/[POSE]/[EXERCISE] logs
  *  (EXPO_PUBLIC_POSE_DEBUG=1 at build time). Never set it for a production build. */
 export const POSE_DEBUG = process.env.EXPO_PUBLIC_POSE_DEBUG === '1';

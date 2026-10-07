@@ -124,6 +124,41 @@ When no campus backend serves its own zones, a run plays out on the Territory Ne
 
 The run logic is in `logic/runProgress.ts` and is pure and incremental, with node tests. Influence is a Preview Season mechanic and never claims anything; claims still happen on the Territory map. On the web (no GPS), the labelled demo route loops through College Street (`logic/worldDemo.ts`).
 
+## IISER Kolkata territory map (Map tab → campus)
+
+`src/features/campus/` turns the IISER Kolkata campus (Mohanpur) into a territory game. You reach it from the Territory Network's IISER pin.
+
+- **Real geography.** The campus outline (OSM way 354549537), buildings, roads, grounds and water come from the OpenStreetMap extract in `api/campus/campusOsm.json`. Street tiles (OpenFreeMap) dim the town around the campus.
+- **Zones from landmarks.** There are 24 zones (`data/geography.ts`), each named after real OSM landmarks: the halls, Dining Hall, the LHC, Library, AJC Bose, RC Lake, the grounds, Gate No. 7 and others.
+  - Every vertex of each landmark seeds a Voronoi cell inside the campus outline, and each zone is the union of its landmarks' cells. Zones therefore tile the campus exactly (tested) and neighbours share edges.
+  - Three areas OSM leaves unnamed have plain descriptive names and are marked as such.
+  - Faculty and staff residences and the Garden High School are **protected**: drawn, but never playable.
+- **Kept apart.** Geography (`ZoneGeometry`) is separate from game state (`Zone`, `Territory`, `Crew`, `Activity` in `types.ts`). `engine/features.ts` is the only place state becomes colours. The engine draws only what it is sent.
+- **Rules** (`logic/rules.ts`):
+  - **CLAIM** a neutral zone.
+  - **ATTACK** a rival's zone; at 75 % the button becomes **CAPTURE**.
+  - **DEFEND** your own zone.
+  - **CHALLENGE CREW** calls a 2-hour battle and works from anywhere.
+  - The other moves need you within 300 m of the zone or inside it.
+  - The sheet shows only the moves you can make, and names the ones you could make from closer by.
+- **Map:**
+  - The five modes are Explore, Territory, Crews, Activity and Battles. They change emphasis only.
+  - Neighbouring zones of one crew merge into one region, and crew network links connect them.
+  - Attack vectors run from the attackers' nearest zone, with animated contested borders.
+  - XP particles flow into the nodes, and the map shows activity rings and pings.
+  - Capture floods outward from where you stood. Defend shows a shield pulse; attack sends shockwaves.
+  - There is an original squirrel location marker.
+  - Everything runs in one rAF loop at about 30 fps.
+- **Backend.** `services/types.ts` is the contract:
+  - `GET /zones`, `/territories`, `/territories/:id`, `/crews`, `/zones/:id/activity`, `/me`.
+  - `POST /zones/:id/{claim,attack,capture,defend,challenge}`.
+  - Set `EXPO_PUBLIC_CAMPUS_MAP_API_URL` to use a real backend (`httpService.ts`). The server can omit polygons; zones are joined to the app's geometry by id.
+  - Without it, `previewService.ts` runs a seeded **Preview Season**, labelled as such in the UI.
+- **Live board.** When the campus backend is live, the people icon in the top bar opens the older live board (nearby Squirrels, pokes, heat).
+- **Location.** A GPS fix within 2.5 km of campus is used, on the device only. Otherwise you stand at a labelled preview position on campus.
+
+The engine source is `engine/campusEngine.js` and `.css`. After editing them, run `node scripts/world-engine.mjs`. Tests are in `logic/campus.test.mjs`.
+
 ## Not launched yet (locked)
 
 `src/data/features.ts` holds the launch switches (`LOCKED`, `COMING_SOON`, `isLocked`). UI reads them through `components/Locked.tsx`: `useLocks()` (`locked`, `notify`, `guard`) and `<FeatureGate feature fallback>`. Lock-aware components (e.g. `EventCard`) handle their own locked state, so no screen can render an interactive locked card. While a flag is on, the feature stays visible as **Coming soon** but can't be used. Every entry point is blocked: buttons, routes and the `AppState` actions.

@@ -1,17 +1,18 @@
 /**
- * MAP — two views of Squirrel Social's world:
+ * MAP — Squirrel Social's world:
  *   CITY    the Territory Network (features/world): Bengal → Kolkata → zones → territories, crews,
  *           claims and battles. The default.
- *   CAMPUS  the campus map below: its territories, points of interest and the Squirrels around
- *           you; tap someone → card → POKE 👋. Everything shown (who appears, where roughly, who
- *           holds what, relationship state) comes from the backend.
+ *   CAMPUS  IISER Kolkata as a territory game (features/campus): the real campus from
+ *           OpenStreetMap, zones grown from its landmarks, crews, battles, five map modes.
+ *   BOARD   the live campus board below (only when the campus backend is live): the Squirrels
+ *           around you; tap someone → card → POKE 👋. Everything it shows comes from the backend.
  */
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Mascot } from '@/art/Mascot';
-import { featureUnavailable } from '@/api/campus';
+import { CAMPUS_SOURCE, featureUnavailable } from '@/api/campus';
 import type { Heatmap, HeatWindow, MapPlayer, Zone } from '@/api/campus/types';
 import { DEFAULT_HEAT_WINDOW, getHeatmap } from '@/api/campus/discovery';
 import { ErrorState, SourceBadge } from '@/components/campus/States';
@@ -29,15 +30,19 @@ import { useAllTerritories } from '@/state/territoryStore';
 import { useApp } from '@/state/AppState';
 import { alpha, colors, fonts, mapColors, radius } from '@/theme';
 import { WorldScreen } from '@/features/world/WorldScreen';
+import { CampusMapScreen } from '@/features/campus/CampusMapScreen';
 
 type Sheet = { kind: 'player'; player: MapPlayer } | { kind: 'zone'; zone: Zone } | { kind: 'poi'; id: string } | { kind: 'list'; players: MapPlayer[]; title: string } | null;
 
 export default function MapTab() {
-  const [view, setView] = useState<'city' | 'campus'>('city');
-  return view === 'city' ? <WorldScreen onOpenCampus={() => setView('campus')} /> : <CampusMapScreen onBack={() => setView('city')} />;
+  const [view, setView] = useState<'city' | 'campus' | 'board'>('city');
+  if (view === 'city') return <WorldScreen onOpenCampus={() => setView('campus')} />;
+  if (view === 'campus') return <CampusMapScreen onBack={() => setView('city')} onOpenBoard={CAMPUS_SOURCE === 'live' ? () => setView('board') : undefined} />;
+  return <CampusBoardScreen onBack={() => setView('campus')} />;
 }
 
-function CampusMapScreen({ onBack }: { onBack: () => void }) {
+/** The live campus board: the Squirrels around you (from the campus backend), pokes, heat. */
+function CampusBoardScreen({ onBack }: { onBack: () => void }) {
   const insets = useSafeAreaInsets();
   const { toast } = useApp();
   const me = useMe();
@@ -130,9 +135,9 @@ function CampusMapScreen({ onBack }: { onBack: () => void }) {
 
       {/* Status banners: they never block or wipe the map */}
       <View style={[styles.banners, { top: headerTop + 64 }]} pointerEvents="box-none">
-        <Pressable onPress={() => { tap(); onBack(); }} style={styles.back} accessibilityRole="button" accessibilityLabel="Back to the Kolkata territory network">
+        <Pressable onPress={() => { tap(); onBack(); }} style={styles.back} accessibilityRole="button" accessibilityLabel="Back to the IISER Kolkata map">
           <Icon name="chevron-left" size={16} color={colors.primary} />
-          <Text style={styles.backText}>Territory network</Text>
+          <Text style={styles.backText}>Campus map</Text>
         </Pressable>
         <SourceBadge style={{ alignSelf: 'center' }} />
         {/* One banner at a time, most important first, so the map stays visible. */}
