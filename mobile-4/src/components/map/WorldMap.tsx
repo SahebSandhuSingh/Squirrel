@@ -25,6 +25,7 @@ import { LabelLayer, type MapLabel } from '@/components/map/LabelLayer';
 import { ClusterMarker, CurrentUserMarker, PlayerMarker, PoiMarker } from '@/components/map/markers';
 import { HeatLayer } from '@/components/map/HeatLayer';
 import { MAX_SCALE, PanZoom } from '@/components/map/PanZoom';
+import { groupMarkers } from '@/logic/mapCluster';
 import { PERSON_LABEL_MPP, placeLabel, sameName, zoneTier, type Obstacle } from '@/logic/mapLabels';
 import { getLocationSnapshot, useLocation } from '@/state/locationStore';
 import { useAllTerritories } from '@/state/territoryStore';
@@ -88,7 +89,6 @@ export type WorldMapProps = {
 
 type ClusterItem = { kind: 'player'; player: MapPlayer; x: number; y: number } | { kind: 'cluster'; id: string; players: MapPlayer[]; live: number; x: number; y: number };
 
-const CELL_PX = 46; // on-screen cluster cell
 /** "Around you": roughly 350–450 m across a phone screen. */
 const AROUND_MPP = 1.15;
 
@@ -182,31 +182,24 @@ export const WorldMap = forwardRef<WorldMapHandle, WorldMapProps>(function World
   const shownPlayers = useMemo(() => (!showPeople ? [] : layers?.liveOnly ? (players ?? []).filter((p) => !!p.activity) : players ?? []), [players, showPeople, layers?.liveOnly]);
   const items = useMemo<ClusterItem[]>(() => {
     if (!fit || !shownPlayers.length) return [];
-    const cell = CELL_PX / zoom;
-    const buckets = new Map<string, { players: MapPlayer[]; x: number; y: number }>();
-    for (const p of shownPlayers) {
-      const v = view(p.position);
-      const k = `${Math.floor(v.x / cell)}:${Math.floor(v.y / cell)}`;
-      const b = buckets.get(k);
-      if (b) {
-        b.players.push(p);
-        b.x += v.x;
-        b.y += v.y;
-      } else buckets.set(k, { players: [p], x: v.x, y: v.y });
-    }
-    const out: ClusterItem[] = [];
-    for (const [k, b] of buckets) {
-      const n = b.players.length;
-      if (n >= 3) out.push({ kind: 'cluster', id: k, players: b.players, live: b.players.filter((p) => !!p.activity).length, x: b.x / n, y: b.y / n });
-      else
-        b.players.forEach((p, i) => {
-          const v = view(p.position);
-          // Two people in one approximate cell: nudge apart so both are tappable.
-          out.push({ kind: 'player', player: p, x: v.x + (n > 1 ? (i ? 9 : -9) / zoom : 0), y: v.y });
-        });
-    }
-    return out;
-  }, [shownPlayers, fit, zoom, view]);
+    // Grouped by distance on screen (logic/mapCluster.ts); positions back in unscaled view units.
+    const byId = new Map(shownPlayers.map((p) => [p.user_id, p]));
+    // Your dot stays uncovered. Read (not subscribed) when grouping reruns, so GPS updates never re-render the map.
+    const mine = me === 'watch' ? getLocationSnapshot().position : me;
+    const mv = mine ? view(mine) : null;
+    const placed = groupMarkers(
+      shownPlayers.map((p) => {
+        const v = view(p.position);
+        return { id: p.user_id, x: v.x * zoom, y: v.y * zoom };
+      }),
+      mv ? { x: mv.x * zoom, y: mv.y * zoom } : null,
+    );
+    return placed.map((g): ClusterItem => {
+      if (g.kind === 'single') return { kind: 'player', player: byId.get(g.id)!, x: g.x / zoom, y: g.y / zoom };
+      const players = g.ids.map((id) => byId.get(id)!);
+      return { kind: 'cluster', id: g.key, players, live: players.filter((p) => !!p.activity).length, x: g.x / zoom, y: g.y / zoom };
+    });
+  }, [shownPlayers, fit, zoom, view, me]);
   const clusterById = useMemo(() => new Map(items.filter((i) => i.kind === 'cluster').map((i) => [(i as { id: string }).id, i])), [items]);
 
   // ---- labels: zones by importance; places and the base map's own names close up (deduplicated)
