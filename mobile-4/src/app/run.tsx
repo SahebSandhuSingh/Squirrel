@@ -9,7 +9,7 @@
  * background location task with a foreground-only fallback, discard, and resumable upload retry.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { ActivityIndicator, Animated, AppState as RNAppState, Easing, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Animated, AppState as RNAppState, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -17,13 +17,12 @@ import * as TaskManager from 'expo-task-manager';
 import Constants, { AppOwnership } from 'expo-constants';
 import { Scene } from '@/art/Scene';
 import { RunRoute } from '@/art/CityMap';
-import { Mascot } from '@/art/Mascot';
 import { campusApi, CAMPUS_MAP_ON_SERVICE, CAMPUS_SOURCE, type ActivityType, type LatLng } from '@/api/campus';
 import { formatArea, rejectionText, submitRun, TERMINAL_STATUSES, xpApi, type RunSummary } from '@/api/endpoints';
 import { useAuth } from '@/auth/AuthProvider';
 import { CampusMap } from '@/components/campus/CampusMap';
 import { RunZones, type RunZonesState } from '@/components/campus/RunZones';
-import { Button, Display, Icon, IconButton, Kicker, NATIVE, Pulse, Segmented, tap } from '@/components/ui';
+import { Button, Display, Icon, IconButton, Kicker, Pulse, tap } from '@/components/ui';
 import { useMe, useTerritorySync, useZones } from '@/hooks/useCampus';
 import { DEMO_SPEED, demoPosition } from '@/logic/demoRoute';
 import { localVerdict, MAX_ACCURACY_M, type Fix, type Verdict } from '@/logic/track';
@@ -45,6 +44,17 @@ import { uploadAndClearOnSuccess } from '@/logic/uploadLifecycle';
 import { recordedRunReason } from '@/logic/runOutcome';
 import { useApp, type FinishRunResult } from '@/state/AppState';
 import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
+import { advance, emptyProgress, paceZone, rollingPace, type RunProgress } from '@/features/run/logic/runProgress';
+import { worldDemoPosition } from '@/features/run/logic/worldDemo';
+import { RunMap, type RunMapHandle } from '@/features/run/components/RunMap';
+import { PausedCard, RunControls, RunTopBar, StatsPanel, ZoneCard } from '@/features/run/components/RunHud';
+import { GoFlash, RunCountdown, RunMomentView, type RunMoment } from '@/features/run/components/RunMoments';
+import { ResultsHero, Splits, TerritoriesCrossed } from '@/features/run/components/RunResults';
+import { WorldMoment } from '@/features/world/components/WorldMoments';
+import { discover, getTerritory, getWorld, isDiscovered, useMoment } from '@/features/world/state/worldStore';
+import { territoryAt } from '@/features/world/logic/camera';
+import { HUD } from '@/features/world/components/hud';
 import { alpha, colors, fonts, MAX_WIDTH, radius, statusBarStyle } from '@/theme';
 
 const two = (n: number) => String(Math.floor(n)).padStart(2, '0');
@@ -65,7 +75,6 @@ function isApproximate(p: Location.LocationPermissionResponse) {
 type Outcome = Verdict | 'processing';
 type Source = 'gps' | 'demo';
 const STAGE_TEXT = { uploading: 'Uploading your route…', finishing: 'Closing it out…', polling: 'Verifying your activity…' } as const;
-const KINDS = ['Run', 'Walk'] as const;
 
 const VERDICT_UI: Record<Outcome, { label: string; icon: React.ComponentProps<typeof Icon>['name']; color: string }> = {
   accepted: { label: 'Activity accepted', icon: 'check-decagram', color: colors.primary },
@@ -113,6 +122,13 @@ export default function Run() {
   const me = useMe();
   useTerritorySync();
   const meId = me.data?.user_id ?? null;
+  // The run plays out on the Territory Network unless a live campus backend serves its own zones.
+  const zoneList = zones.data ?? [];
+  const worldMode = zoneList.length === 0;
+  const worldModeRef = useRef(worldMode);
+  useEffect(() => {
+    worldModeRef.current = worldMode;
+  });
 
   const [kind, setKind] = useState<ActivityType>(params.type === 'walk' ? 'walk' : 'run');
   const [phase, setPhase] = useState<Phase>('setup');
@@ -148,7 +164,15 @@ export default function Run() {
   const demoMeters = useRef(0);
   const lastKmMarker = useRef(0);
   const [progress] = useState(() => new Animated.Value(0.2));
-  const [pop] = useState(() => new Animated.Value(0));
+  // Territory Network progress for this run (what you crossed, influence, splits) + its moments.
+  const runProgRef = useRef<RunProgress>(emptyProgress());
+  const [runProg, setRunProg] = useState<RunProgress>(emptyProgress);
+  const [moments, setMoments] = useState<RunMoment[]>([]);
+  const momentKey = useRef(0);
+  const [go, setGo] = useState(false);
+  const [following, setFollowing] = useState(true);
+  const mapRef = useRef<RunMapHandle>(null);
+  const worldMoment = useMoment();
   const setBackgroundCapability = (available: boolean) => {
     backgroundAvailableRef.current = available;
     setBackgroundAvailable(available);
@@ -313,8 +337,6 @@ export default function Run() {
   // ---- Countdown
   useEffect(() => {
     if (phase !== 'countdown') return;
-    pop.setValue(0);
-    Animated.timing(pop, { toValue: 1, duration: 800, easing: Easing.out(Easing.back(2)), useNativeDriver: NATIVE }).start();
     const t = setTimeout(() => {
       if (count <= 1) {
         tap('success');
@@ -323,13 +345,14 @@ export default function Run() {
         pausedTotalMs.current = 0;
         beginRunTracking(sourceRef.current ?? 'gps', startedAt.current);
         setPhase('running');
+        setGo(true);
       } else {
         tap('impact');
         setCount(count - 1);
       }
     }, 850);
     return () => clearTimeout(t);
-  }, [phase, count, pop]);
+  }, [phase, count]);
 
   // ---- Clock (+ demo movement, + no-fix detection)
   useEffect(() => {
@@ -338,7 +361,7 @@ export default function Run() {
       setSec(elapsedSeconds());
       if (sourceRef.current === 'demo') {
         demoMeters.current += DEMO_SPEED[kind];
-        const [lat, lon] = demoPosition(demoMeters.current);
+        const [lat, lon] = worldModeRef.current ? worldDemoPosition(demoMeters.current) : demoPosition(demoMeters.current);
         addRunTrackingFix({ lat, lon, t: Date.now(), accuracy: 5 });
       } else if (Date.now() - getRunTrackingSnapshot().lastFixAt > 20_000) {
         setNotice('No GPS fix for 20 s. Head into open sky — distance only counts with a location fix.');
@@ -364,10 +387,39 @@ export default function Run() {
     const whole = Math.floor(km);
     if (whole > lastKmMarker.current && whole > 0) {
       lastKmMarker.current = whole;
-      tap('success');
-      toast(`${whole} km! 🎉`, 'flag-checkered', colors.gold);
+      if (!worldModeRef.current) {
+        tap('success');
+        toast(`${whole} km! 🎉`, 'flag-checkered', colors.gold);
+      }
     }
   }, [km, phase, toast]);
+
+  // ---- Territory Network: each new point → which territory, influence, splits → moments.
+  useEffect(() => {
+    if (!worldMode || (phase !== 'running' && phase !== 'paused')) return;
+    const { progress: next, events } = advance(runProgRef.current, track.points, getWorld());
+    if (next === runProgRef.current) return;
+    const prevSplits = runProgRef.current.splits;
+    runProgRef.current = next;
+    setRunProg(next);
+    if (!events.length) return;
+    const add: RunMoment[] = [];
+    for (const e of events) {
+      if (e.kind === 'enter') {
+        // Walking into uncharted ground with a real GPS fix discovers it.
+        if (e.first && sourceRef.current === 'gps' && !isDiscovered(e.id)) {
+          const t = getTerritory(e.id);
+          if (t?.parentId && !isDiscovered(t.parentId)) discover(t.parentId);
+          discover(e.id);
+        }
+        tap();
+      } else tap('success');
+      add.push({ ...e, key: ++momentKey.current, prevSplit: e.kind === 'split' ? (e.km > 1 ? next.splits[e.km - 2] ?? prevSplits[e.km - 2] : undefined) : undefined });
+    }
+    // Keep the queue short: the newest crossing replaces stale ones still waiting.
+    setMoments((q) => [...q, ...add].filter((m, i, all) => i === 0 || m.kind !== 'enter' || !all.slice(i + 1).some((n) => n.kind === 'enter')).slice(-4));
+  }, [worldMode, phase, track.points]);
+  const dropMoment = useCallback(() => setMoments((q) => q.slice(1)), []);
   useEffect(() => {
     Animated.timing(progress, { toValue: Math.min(1, 0.2 + (km % 1) * 0.8), duration: 900, useNativeDriver: false }).start();
   }, [km, progress]);
@@ -417,6 +469,10 @@ export default function Run() {
       setSec(src === 'demo' ? DEMO_START : 0);
       demoMeters.current = DEMO_START;
       lastKmMarker.current = 0;
+      runProgRef.current = emptyProgress();
+      setRunProg(runProgRef.current);
+      setMoments([]);
+      setFollowing(true);
       setNotice(src === 'gps' && !backgroundReady
         ? backgroundFailure === 'app_resume'
           ? 'Squirrel is still returning to the foreground. Keep the app open during your run; background tracking did not start.'
@@ -638,10 +694,9 @@ export default function Run() {
 
   // ---- Render
   const heroH = Math.max(300, height * 0.46);
-  const zoneList = zones.data ?? [];
   const gpsPill =
     source === 'demo'
-      ? { text: 'Demo · simulated route', color: colors.dim }
+      ? { text: 'Demo · simulated', color: colors.dim }
       : perm === 'granted'
         ? accuracy == null
           ? { text: 'GPS · searching', color: colors.gold }
@@ -654,139 +709,190 @@ export default function Run() {
             ? { text: 'Checking location…', color: colors.dim }
             : { text: 'Location off', color: colors.coral };
   const title = kind === 'walk' ? (phase === 'setup' ? 'Walk' : 'Walking') : phase === 'setup' ? 'Run' : 'Running';
+  const active = phase === 'running' || phase === 'paused';
+  const currentTerritory = runProg.current ? getTerritory(runProg.current) ?? null : null;
+  const startTerritory = useMemo(() => (here ? territoryAt(getWorld(), [here[1], here[0]], 20).territory : null), [here?.[0], here?.[1]]); // eslint-disable-line react-hooks/exhaustive-deps
+  const livePace = rollingPace(track.points);
+  const zone = paceZone(Number.isFinite(livePace) ? livePace : paceSec, kind);
+  const powered = Object.values(runProg.byTerritory).filter((t) => t.powered).length;
+  const meState: 'idle' | 'active' | 'battle' = currentTerritory && (currentTerritory.state.status === 'contested' || currentTerritory.state.status === 'under_attack') ? 'battle' : active ? 'active' : 'idle';
+  const showWorldMap = worldMode && (source === 'demo' || (here != null && here[0] > 21.4 && here[0] < 27.3 && here[1] > 85.8 && here[1] < 89.95) || phase === 'setup');
+
+  // Results: frame the whole route above the sheet.
+  useEffect(() => {
+    if (phase === 'done' && worldMode) mapRef.current?.frameRoute({ top: insets.top + 40, bottom: height * 0.66, left: 40, right: 40 });
+  }, [phase, worldMode, height, insets.top]);
+
+  const mapLayer = showWorldMap ? (
+    <RunMap
+      ref={mapRef}
+      route={route}
+      here={here}
+      accuracy={accuracy}
+      visited={runProg.order}
+      current={runProg.current}
+      follow={following && phase !== 'done'}
+      state={meState}
+      preview={source === 'demo'}
+      cover={{ top: insets.top + 60, bottom: phase === 'paused' ? height * 0.36 : height * 0.56 }}
+      style={StyleSheet.absoluteFill}
+    />
+  ) : zoneList.length ? (
+    <CampusMap zones={zoneList} meId={meId} route={route} me={here} interactive={false} style={[StyleSheet.absoluteFill, { borderRadius: 0, borderWidth: 0 }]} />
+  ) : (
+    <>
+      <Scene kind="city-night" seed={9} aspect={width / heroH} style={StyleSheet.absoluteFill} />
+      <RunRoute progress={progress} style={StyleSheet.absoluteFill} />
+    </>
+  );
 
   return (
-    <View style={styles.root}>
-      <StatusBar style={statusBarStyle} />
-      <View style={{ height: heroH }}>
-        {zoneList.length ? (
-          <CampusMap zones={zoneList} meId={meId} route={route} me={here} interactive={false} style={[StyleSheet.absoluteFill, { borderRadius: 0, borderWidth: 0 }]} />
-        ) : (
-          <>
-            <Scene kind="city-night" seed={9} aspect={width / heroH} style={StyleSheet.absoluteFill} />
-            <RunRoute progress={progress} style={StyleSheet.absoluteFill} />
-          </>
-        )}
-      </View>
+    <View style={[styles.root, { backgroundColor: '#06070A' }]}>
+      <StatusBar style={active || phase === 'done' || worldMode ? 'light' : statusBarStyle} />
+      {mapLayer}
+      {/* Fall-off behind the top bar and the bottom HUD so the numbers always read. */}
+      <LinearGradient pointerEvents="none" colors={['rgba(6,7,10,0.85)', 'rgba(6,7,10,0)']} style={[styles.fadeTop, { height: insets.top + 110 }]} />
+      <LinearGradient pointerEvents="none" colors={['rgba(6,7,10,0)', 'rgba(6,7,10,0.92)']} style={[styles.fadeBottom, { height: height * 0.55 }]} />
 
-      <View style={[styles.overlay, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
-        <View style={styles.header}>
-          <IconButton icon={phase === 'running' || phase === 'paused' ? 'close' : 'chevron-down'} size={24} onPress={close} label={phase === 'running' || phase === 'paused' ? 'Discard activity' : 'Close'} />
-          <Display size={30} color={colors.onImage} style={{ flex: 1, marginLeft: 10 }}>{title}</Display>
-          <View style={[styles.gps, { borderColor: `${gpsPill.color}88` }]} accessibilityLabel={gpsPill.text}>
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: gpsPill.color }}>{perm === 'granted' && source !== 'demo' && <Pulse size={8} color={gpsPill.color} />}</View>
-            <Text style={[styles.gpsText, { color: gpsPill.color }]}>{gpsPill.text}</Text>
+      {phase === 'setup' && (
+        <View style={[styles.overlay, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
+          <View style={styles.header}>
+            <IconButton icon="chevron-down" size={24} onPress={close} label="Close" />
+            <Display size={30} color={colors.onImage} style={{ flex: 1, marginLeft: 10 }}>{title}</Display>
+            <View style={[styles.gps, { borderColor: `${gpsPill.color}88` }]} accessibilityLabel={gpsPill.text}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: gpsPill.color }}>{perm === 'granted' && <Pulse size={8} color={gpsPill.color} />}</View>
+              <Text style={[styles.gpsText, { color: gpsPill.color }]}>{gpsPill.text}</Text>
+            </View>
           </View>
         </View>
-        {(notice || weak) && phase === 'running' && (
-          <Pressable onPress={() => setNotice(null)} style={styles.notice} accessibilityRole="alert">
-            <Icon name={weak ? 'signal-cellular-1' : 'information-outline'} size={16} color={colors.gold} />
-            <Text style={styles.noticeText}>{notice ?? `Weak GPS (±${Math.round(accuracy ?? 0)} m). Points worse than ±${MAX_ACCURACY_M} m are skipped.`}</Text>
-          </Pressable>
-        )}
-      </View>
+      )}
 
-      {phase === 'setup' ? (
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.col, { paddingTop: 16, paddingBottom: insets.bottom + 18 }]}>
-          <Kicker>Start activity</Kicker>
-          <Segmented items={KINDS} value={kind === 'walk' ? 'Walk' : 'Run'} onChange={(k) => setKind(k === 'Walk' ? 'walk' : 'run')} style={{ marginTop: 8 }} />
-          <Text style={styles.setupText}>
-            Your route shows on the campus map as you go. Afterwards you’ll see which zones you moved through — and any you’re eligible to claim. Crossing a zone never claims it on its own.
-          </Text>
-          {perm === 'granted' ? (
-            <Button label={`Start ${kind}`} icon="arrow-right" onPress={() => start('gps')} style={{ marginTop: 16 }} />
-          ) : perm === 'checking' ? (
-            <View style={{ marginTop: 16, alignItems: 'center' }}>
-              <ActivityIndicator color={colors.primary} />
+      {phase === 'setup' && (
+        <ScrollView style={styles.setupScroll} contentContainerStyle={[styles.col, { paddingBottom: insets.bottom + 18, flexGrow: 1, justifyContent: 'flex-end' }]} pointerEvents="box-none">
+          <View style={styles.setupCard}>
+            <Text style={styles.setupKicker}>{startTerritory ? `YOU’RE IN ${startTerritory.name.toUpperCase()}` : 'START AN ACTIVITY'}</Text>
+            <View style={styles.kinds}>
+              {(['run', 'walk'] as const).map((k) => {
+                const on = kind === k;
+                return (
+                  <Pressable key={k} onPress={() => { tap(); setKind(k); }} style={[styles.kindTile, on && styles.kindTileOn]} accessibilityRole="radio" accessibilityState={{ checked: on }} accessibilityLabel={k === 'run' ? 'Run' : 'Walk'}>
+                    <Icon name={k === 'run' ? 'run-fast' : 'walk'} size={30} color={on ? colors.onPrimary : HUD.ink} />
+                    <Text style={[styles.kindName, on && { color: colors.onPrimary }]}>{k === 'run' ? 'RUN' : 'WALK'}</Text>
+                    <Text style={[styles.kindSub, on && { color: alpha(colors.onPrimary, 0.75) }]}>{k === 'run' ? '≈ 80 kcal / km' : '≈ 55 kcal / km'}</Text>
+                  </Pressable>
+                );
+              })}
             </View>
-          ) : (
-            <View style={styles.permBox}>
-              <Icon name={perm === 'services_off' ? 'map-marker-off-outline' : perm === 'web' ? 'monitor' : 'map-marker-alert-outline'} size={26} color={colors.gold} />
-              <Text style={styles.permTitle}>
-                {perm === 'web'
-                  ? 'GPS tracking needs the phone app'
-                  : perm === 'services_off'
-                    ? 'Location services are off'
-                    : perm === 'approximate'
-                      ? 'Precise location required'
-                      : perm === 'undetermined'
-                        ? 'Squirrel needs your location'
-                        : 'Location required'}
-              </Text>
-              <Text style={styles.setupText}>
-                {perm === 'web'
-                  ? 'The web preview can’t read GPS. You can try a demo route instead — it’s clearly marked and never counts as a real activity.'
-                  : perm === 'services_off'
-                    ? 'Turn on location in your phone settings, then come back.'
-                    : perm === 'approximate'
-                      ? 'Approximate location can’t record a reliable route. Switch Squirrel to Precise location in Settings.'
-                      : perm === 'undetermined'
-                        ? 'We use it only while you record, to draw your route and check which zones you moved through. Other people never see your location.'
-                        : 'Turn on location permission to track your run.'}
-              </Text>
-              {perm === 'undetermined' && <Button label="Allow location" iconLeft="crosshairs-gps" size="md" onPress={askPermission} style={{ alignSelf: 'stretch', marginTop: 10 }} />}
-              {(perm === 'denied' || perm === 'blocked' || perm === 'approximate' || perm === 'services_off') && (
-                <Button label="Open settings" iconLeft="cog-outline" size="md" onPress={() => void Linking.openSettings()} style={{ alignSelf: 'stretch', marginTop: 10 }} />
-              )}
-              {perm === 'denied' && <Button label="Ask again" variant="ghost" size="md" onPress={askPermission} style={{ alignSelf: 'stretch', marginTop: 6 }} />}
-              {/* The labelled demo is only offered where GPS can't exist (the web preview). */}
-              {perm === 'web' && <Button label="Try a demo route" variant="secondary" size="md" onPress={() => start('demo')} style={{ alignSelf: 'stretch', marginTop: 8 }} />}
-            </View>
-          )}
-        </ScrollView>
-      ) : (
-        <View style={[styles.col, { flex: 1, justifyContent: 'flex-end', paddingBottom: insets.bottom + 18 }]}>
-          <View style={styles.panel}>
-            <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center' }}>
-              <Text style={styles.km}>{km.toFixed(2)}</Text>
-              <Text style={styles.kmUnit}> KM</Text>
-            </View>
-            <View style={styles.metrics}>
-              {[
-                [time, 'Duration'],
-                [fmtPace(paceSec), 'Pace'],
-                [String(kcal), 'Calories'],
-              ].map(([v, l], i) => (
-                <View key={l} style={[styles.metric, i > 0 && { borderLeftWidth: 1, borderLeftColor: colors.line }]}>
-                  <Text style={styles.metricV}>{v}</Text>
-                  <Text style={styles.metricL}>{l}</Text>
-                </View>
-              ))}
-            </View>
-            {source === 'demo' && <Text style={styles.demoNote}>Demo route · simulated, not a real activity</Text>}
-          </View>
-
-          <View style={styles.controls}>
-            <Pressable
-              onPress={toggleManualPause}
-              onLongPress={finish}
-              disabled={phase === 'countdown' || phase === 'uploading'}
-              accessibilityLabel={phase === 'running' ? 'Pause' : 'Resume'}
-              accessibilityHint="Long press to finish"
-              style={({ pressed }) => [styles.pauseWrap, { transform: [{ scale: pressed ? 0.94 : 1 }] }]}>
-              {phase === 'running' && <Pulse size={104} color={colors.primary} />}
-              <View style={styles.pause}>
-                <Icon name={phase === 'running' ? 'pause' : 'play'} size={48} color={colors.onPrimary} />
+            <Text style={styles.setupText}>
+              {worldMode
+                ? 'Every territory you cross lights up on the map. Cover enough ground in one to power it, and claim it from the Territory map afterwards. Crossing a zone never claims it on its own.'
+                : 'Your route shows on the campus map as you go. Afterwards you’ll see which zones you moved through — and any you’re eligible to claim. Crossing a zone never claims it on its own.'}
+            </Text>
+            {perm === 'granted' ? (
+              <Pressable onPress={() => start('gps')} style={({ pressed }) => [styles.startPlate, pressed && { transform: [{ skewX: '-6deg' }, { scale: 0.98 }] }]} accessibilityRole="button" accessibilityLabel={`Start ${kind}`}>
+                <Text style={styles.startText}>START {kind === 'walk' ? 'WALK' : 'RUN'}</Text>
+                <Icon name="arrow-right" size={24} color={colors.onPrimary} />
+              </Pressable>
+            ) : perm === 'checking' ? (
+              <View style={{ marginTop: 16, alignItems: 'center' }}>
+                <ActivityIndicator color={colors.primary} />
               </View>
-            </Pressable>
+            ) : (
+              <View style={styles.permBox}>
+                <Icon name={perm === 'services_off' ? 'map-marker-off-outline' : perm === 'web' ? 'monitor' : 'map-marker-alert-outline'} size={26} color={colors.gold} />
+                <Text style={styles.permTitle}>
+                  {perm === 'web'
+                    ? 'GPS tracking needs the phone app'
+                    : perm === 'services_off'
+                      ? 'Location services are off'
+                      : perm === 'approximate'
+                        ? 'Precise location required'
+                        : perm === 'undetermined'
+                          ? 'Squirrel needs your location'
+                          : 'Location required'}
+                </Text>
+                <Text style={[styles.setupText, { textAlign: 'center' }]}>
+                  {perm === 'web'
+                    ? 'The web preview can’t read GPS. You can try a demo route instead — it’s clearly marked and never counts as a real activity.'
+                    : perm === 'services_off'
+                      ? 'Turn on location in your phone settings, then come back.'
+                      : perm === 'approximate'
+                        ? 'Approximate location can’t record a reliable route. Switch Squirrel to Precise location in Settings.'
+                        : perm === 'undetermined'
+                          ? 'We use it only while you record, to draw your route and check which zones you moved through. Other people never see your location.'
+                          : 'Turn on location permission to track your run.'}
+                </Text>
+                {perm === 'undetermined' && <Button label="Allow location" iconLeft="crosshairs-gps" size="md" onPress={askPermission} style={{ alignSelf: 'stretch', marginTop: 10 }} />}
+                {(perm === 'denied' || perm === 'blocked' || perm === 'approximate' || perm === 'services_off') && (
+                  <Button label="Open settings" iconLeft="cog-outline" size="md" onPress={() => void Linking.openSettings()} style={{ alignSelf: 'stretch', marginTop: 10 }} />
+                )}
+                {perm === 'denied' && <Button label="Ask again" variant="ghost" size="md" onPress={askPermission} style={{ alignSelf: 'stretch', marginTop: 6 }} />}
+                {/* The labelled demo is only offered where GPS can't exist (the web preview). */}
+                {perm === 'web' && <Button label="Try a demo route" variant="secondary" size="md" onPress={() => start('demo')} style={{ alignSelf: 'stretch', marginTop: 8 }} />}
+              </View>
+            )}
           </View>
-          {phase === 'paused' ? (
-            <View style={{ gap: 10, marginTop: 14 }}>
-              <Button label={`Finish ${kind}`} iconLeft="flag-checkered" onPress={finish} />
-              <Button label={confirmDiscard ? 'Tap again to discard — nothing is saved' : 'Discard'} variant="secondary" size="md" iconLeft="delete-outline" onPress={discard} />
-            </View>
-          ) : (
-            <Text style={styles.hint}>{confirmDiscard ? 'Tap ✕ again to discard this activity' : 'Tap to pause · hold to finish'}</Text>
-          )}
-        </View>
+        </ScrollView>
       )}
 
-      {phase === 'countdown' && (
-        <View style={styles.overlayFull}>
-          <Animated.Text style={[styles.countText, { opacity: pop, transform: [{ scale: pop.interpolate({ inputRange: [0, 1], outputRange: [2, 1] }) }] }]}>{count}</Animated.Text>
-          <Text style={styles.countSub}>Get ready…</Text>
-        </View>
+      {(active || phase === 'countdown') && (
+        <>
+          <RunTopBar
+            top={insets.top + 8}
+            kind={kind}
+            time={time}
+            live={phase === 'running'}
+            gps={gpsPill}
+            onClose={close}
+            closeLabel={confirmDiscard ? 'Tap again to discard this activity' : 'Discard activity'}
+          />
+          {(notice || weak) && phase === 'running' && (
+            <Pressable onPress={() => setNotice(null)} style={[styles.notice, { top: insets.top + 60 }]} accessibilityRole="alert">
+              <Icon name={weak ? 'signal-cellular-1' : 'information-outline'} size={16} color={colors.gold} />
+              <Text style={styles.noticeText}>{notice ?? `Weak GPS (±${Math.round(accuracy ?? 0)} m). Points worse than ±${MAX_ACCURACY_M} m are skipped.`}</Text>
+            </Pressable>
+          )}
+          {confirmDiscard && phase === 'running' && <Text style={[styles.discardHint, { top: insets.top + 56 }]}>TAP ✕ AGAIN TO DISCARD — NOTHING IS SAVED</Text>}
+
+          <View style={[styles.col, styles.bottomStack, { paddingBottom: insets.bottom + 28 }]} pointerEvents="box-none">
+            {phase === 'paused' ? (
+              <PausedCard kind={kind} onResume={toggleManualPause} onFinish={finish} onDiscard={discard} confirmDiscard={confirmDiscard} />
+            ) : (
+              <>
+                {worldMode && <ZoneCard territory={currentTerritory} meters={runProg.current ? runProg.byTerritory[runProg.current]?.meters ?? 0 : 0} powered={!!(runProg.current && runProg.byTerritory[runProg.current]?.powered)} />}
+                <StatsPanel
+                  km={km}
+                  pace={fmtPace(Number.isFinite(livePace) ? livePace : paceSec)}
+                  avgPace={fmtPace(paceSec)}
+                  kcal={kcal}
+                  zone={zone}
+                  nextKmProgress={km % 1}
+                  territories={runProg.order.length}
+                  streak={runProg.streak}
+                  powered={powered}
+                  demo={source === 'demo'}
+                />
+                <RunControls
+                  running={phase === 'running'}
+                  onPause={toggleManualPause}
+                  onFinish={finish}
+                  following={following}
+                  onRecenter={() => {
+                    setFollowing(true);
+                    mapRef.current?.recenter();
+                  }}
+                />
+              </>
+            )}
+          </View>
+
+          {moments[0] && phase === 'running' && <RunMomentView key={moments[0].key} m={moments[0]} top={insets.top + 60} onDone={dropMoment} />}
+          {worldMoment?.kind === 'discover' && <WorldMoment m={worldMoment} top={insets.top + 150} />}
+        </>
       )}
+
+      {phase === 'countdown' && <RunCountdown count={count} where={worldMode ? startTerritory?.name ?? null : null} />}
+      {go && <GoFlash onDone={() => setGo(false)} />}
 
       {phase === 'uploading' && (
         <View style={styles.overlayFull}>
@@ -797,23 +903,24 @@ export default function Run() {
       )}
 
       {phase === 'done' && summary && (
-        <View style={[styles.overlayFull, { justifyContent: 'flex-start', padding: 0 }]}>
-          <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 12, paddingBottom: insets.bottom + 24, alignItems: 'center' }}>
+        <View style={[StyleSheet.absoluteFill, { justifyContent: 'flex-end' }]} pointerEvents="box-none">
+          <ScrollView style={{ maxHeight: worldMode ? '64%' : '100%' }} contentContainerStyle={{ padding: 12, paddingTop: worldMode ? 0 : insets.top + 12, paddingBottom: insets.bottom + 24, alignItems: 'center' }}>
             <View style={styles.summary}>
-              <Mascot pose={summary.verdict === 'rejected' ? 'sit' : 'celebrate'} size={96} animated />
-              <View style={[styles.verdict, { borderColor: VERDICT_UI[summary.verdict].color }]}>
+              <ResultsHero kind={kind} km={summary.km} time={summary.time} pace={`${summary.pace}/km`} kcal={kcal} progress={worldMode ? runProg : null} demo={source === 'demo'} />
+              <View style={[styles.verdict, { borderColor: VERDICT_UI[summary.verdict].color, alignSelf: 'flex-start', marginTop: 14 }]}>
                 <Icon name={VERDICT_UI[summary.verdict].icon} size={16} color={VERDICT_UI[summary.verdict].color} />
                 <Text style={[styles.verdictText, { color: VERDICT_UI[summary.verdict].color }]}>{VERDICT_UI[summary.verdict].label}</Text>
               </View>
-              {!!summary.reason && <Text style={styles.reason}>{summary.reason}</Text>}
-              <Display size={34} style={{ marginTop: 6 }}>{summary.km.toFixed(2)} km</Display>
-              <Text style={styles.sumLine}>{summary.time} · {summary.pace}/km · {kind}</Text>
+              {!!summary.reason && <Text style={[styles.reason, { textAlign: 'left', alignSelf: 'stretch' }]}>{summary.reason}</Text>}
 
-              {zoneList.length > 0 && route.length > 1 && (
+              {!worldMode && zoneList.length > 0 && route.length > 1 && (
                 <CampusMap zones={zoneList} meId={meId} route={route} interactive={false} highlight={zonesState.data?.zones.map((z) => z.zone_id)} style={styles.sumMap} />
               )}
+              {worldMode && <Splits splits={runProg.splits} />}
+              {worldMode && <TerritoriesCrossed progress={runProg} />}
 
-              <RunZones state={zonesState} meId={meId} onRetry={loadZones} />
+              {/* On the network the influence list says it all; the campus backend's zones show when it has something to say. */}
+              {!(worldMode && zonesState.status === 'unavailable') && <RunZones state={zonesState} meId={meId} onRetry={loadZones} />}
 
               <View style={styles.xpBox}>
                 <Kicker>XP</Kicker>
@@ -832,16 +939,20 @@ export default function Run() {
               {summary.uploadNote && <Text style={[styles.note, summary.uploadFailed && { color: colors.coral }]}>{summary.uploadNote}</Text>}
               {summary.uploadFailed && <Button label="Retry upload" iconLeft="cloud-upload-outline" size="md" onPress={retryUpload} style={{ alignSelf: 'stretch', marginTop: 10 }} />}
 
+              {worldMode && powered > 0 && (
+                <Button label="Claim on the Territory map" iconLeft="flag-checkered" onPress={() => router.replace('/explore')} style={{ alignSelf: 'stretch', marginTop: 14 }} />
+              )}
               {summary.verdict !== 'rejected' && source !== 'demo' && (
                 <Button
                   label="Share to feed"
                   iconLeft="send"
+                  variant={worldMode && powered > 0 ? 'secondary' : 'primary'}
                   onPress={() => router.replace({ pathname: '/compose', params: { km: summary.km.toFixed(2), min: String(Math.round((finishedMovingSec ?? movingSec) / 60)), pace: summary.pace } })}
-                  style={{ alignSelf: 'stretch', marginTop: 14 }}
+                  style={{ alignSelf: 'stretch', marginTop: 10 }}
                 />
               )}
               <Button
-                label={summary.leveledUp ? 'See level up' : 'Open campus map'}
+                label={summary.leveledUp ? 'See level up' : worldMode ? 'Open Territory map' : 'Open campus map'}
                 variant="secondary"
                 size="md"
                 onPress={() => (summary.leveledUp ? router.replace('/level-up') : router.replace('/explore'))}
@@ -858,16 +969,30 @@ export default function Run() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
+  fadeTop: { position: 'absolute', left: 0, right: 0, top: 0 },
+  fadeBottom: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+  bottomStack: { position: 'absolute', bottom: 0, left: 0, right: 0, gap: 10 },
+  discardHint: { position: 'absolute', left: 0, right: 0, textAlign: 'center', color: colors.coral, fontFamily: fonts.labelBold, fontSize: 11, letterSpacing: 1.6 },
+  setupScroll: { ...StyleSheet.absoluteFill },
+  setupCard: { backgroundColor: '#08090C', borderWidth: 1, borderColor: 'rgba(237,230,214,0.12)', padding: 16 },
+  setupKicker: { color: HUD.inkDim, fontFamily: fonts.labelBold, fontSize: 11.5, letterSpacing: 2 },
+  kinds: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  kindTile: { flex: 1, alignItems: 'flex-start', gap: 2, padding: 14, borderWidth: 1.5, borderColor: 'rgba(237,230,214,0.2)' },
+  kindTileOn: { backgroundColor: colors.primaryFill, borderColor: colors.primaryFill },
+  kindName: { color: HUD.ink, fontFamily: fonts.display, fontSize: 28, letterSpacing: 1.5, marginTop: 4, transform: [{ skewX: '-6deg' }] },
+  kindSub: { color: HUD.inkMute, fontFamily: fonts.labelBold, fontSize: 11, letterSpacing: 1 },
+  startPlate: { marginTop: 16, height: 62, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, backgroundColor: colors.primaryFill, transform: [{ skewX: '-6deg' }] },
+  startText: { color: colors.onPrimary, fontFamily: fonts.display, fontSize: 26, letterSpacing: 2 },
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: 16, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' },
   col: { paddingHorizontal: 16, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' },
   header: { flexDirection: 'row', alignItems: 'center' },
   gps: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: alpha(colors.panel, 0.88), borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1 },
   gpsText: { fontFamily: fonts.label, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },
-  notice: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', marginTop: 10, backgroundColor: alpha(colors.panel, 0.93), borderRadius: radius.md, borderWidth: 1, borderColor: alpha(colors.gold, 0.5), padding: 10 },
+  notice: { position: 'absolute', left: 12, right: 12, flexDirection: 'row', gap: 8, alignItems: 'flex-start', backgroundColor: alpha(colors.panel, 0.93), borderRadius: radius.md, borderWidth: 1, borderColor: alpha(colors.gold, 0.5), padding: 10 },
   noticeText: { flex: 1, color: colors.sub, fontFamily: fonts.regular, fontSize: 12, lineHeight: 17 },
-  setupText: { color: colors.dim, fontFamily: fonts.regular, fontSize: 13, lineHeight: 19, marginTop: 10, textAlign: 'left' },
-  permBox: { marginTop: 16, alignItems: 'center', backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, padding: 16, gap: 4 },
-  permTitle: { color: colors.text, fontFamily: fonts.label, fontSize: 17, letterSpacing: 0.8, textTransform: 'uppercase', textAlign: 'center', marginTop: 4 },
+  setupText: { color: HUD.inkDim, fontFamily: fonts.regular, fontSize: 13, lineHeight: 19, marginTop: 12, textAlign: 'left' },
+  permBox: { marginTop: 16, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(237,230,214,0.12)', padding: 16, gap: 4 },
+  permTitle: { color: HUD.ink, fontFamily: fonts.label, fontSize: 17, letterSpacing: 0.8, textTransform: 'uppercase', textAlign: 'center', marginTop: 4 },
   panel: { backgroundColor: colors.bg, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.line, paddingTop: 16, paddingBottom: 12, paddingHorizontal: 12 },
   km: { color: colors.text, fontFamily: fonts.labelBold, fontSize: 64, lineHeight: 76, letterSpacing: 1 },
   kmUnit: { color: colors.primary, fontFamily: fonts.labelBold, fontSize: 24 },
@@ -883,15 +1008,15 @@ const styles = StyleSheet.create({
   overlayFull: { ...StyleSheet.absoluteFill, backgroundColor: alpha(colors.panel, 0.94), alignItems: 'center', justifyContent: 'center', padding: 20 },
   countText: { color: colors.primary, fontFamily: fonts.display, fontSize: 150 },
   countSub: { color: colors.onImageSub, fontFamily: fonts.mono, fontSize: 14, letterSpacing: 2, textTransform: 'uppercase' },
-  summary: { width: '100%', maxWidth: 440, alignItems: 'center', backgroundColor: colors.bg2, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.line, padding: 16 },
+  summary: { width: '100%', maxWidth: 480, backgroundColor: '#08090C', borderWidth: 1, borderColor: 'rgba(237,230,214,0.12)', padding: 16 },
   sumMap: { alignSelf: 'stretch', height: 200, marginTop: 12 },
   verdict: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1.5, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 5, marginTop: 4 },
   verdictText: { fontFamily: fonts.label, fontSize: 13, letterSpacing: 1, textTransform: 'uppercase' },
   reason: { color: colors.dim, fontFamily: fonts.regular, fontSize: 12, marginTop: 6, textAlign: 'center' },
   sumLine: { color: colors.sub, fontFamily: fonts.mono, fontSize: 13 },
-  xpBox: { alignSelf: 'stretch', marginTop: 12, backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, padding: 12, gap: 6 },
+  xpBox: { alignSelf: 'stretch', marginTop: 16, backgroundColor: '#0C0D11', borderWidth: 1, borderColor: 'rgba(237,230,214,0.12)', padding: 12, gap: 6 },
   xpRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  xpLabel: { color: colors.sub, fontFamily: fonts.regular, fontSize: 13 },
+  xpLabel: { color: HUD.inkDim, fontFamily: fonts.regular, fontSize: 13 },
   xpVal: { color: colors.primary, fontFamily: fonts.labelBold, fontSize: 15 },
   note: { color: colors.dim, fontFamily: fonts.mono, fontSize: 11, textAlign: 'center', marginTop: 8 },
 });

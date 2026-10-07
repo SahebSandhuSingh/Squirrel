@@ -31,7 +31,11 @@ export type HostMessage =
   | { type: 'ping'; pos: [number, number]; color: string }
   | { type: 'heat'; on: boolean }
   | { type: 'insets'; top: number; right: number; focusTop: number; focusBottom: number }
-  | { type: 'active'; on: boolean };
+  | { type: 'active'; on: boolean }
+  /** Run mode: your route so far ([lng, lat]), crossed territories, and a camera that follows you. */
+  | { type: 'route'; coords: [number, number][] }
+  | { type: 'trail'; visited: string[]; here: string | null }
+  | { type: 'follow'; on: boolean; zoom?: number; pitch?: number; top?: number; bottom?: number };
 
 /** Engine → app. */
 export type EngineMessage =

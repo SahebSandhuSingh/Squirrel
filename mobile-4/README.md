@@ -43,7 +43,7 @@ With no backend URLs (`.env.example`) every screen shows an honest *Not connecte
 | `/social` *(tab)* | Stories, For You / Following / Nearby feed, **Squirrels near you** (with Poke), suggested people, crews teaser |
 | `/profile` *(tab)* | **Campus profile**: photo, name, bio, connection mode, Founding Squirrel, Open to Meet toggle, activity stats (distance, month, zones, defended, stolen, crews, events, streak), territory, crews, badges, activity history, verification. (The offline demo profile when the campus backend is off.) |
 | `/edit-profile` | Name, bio, connection mode, hostel |
-| `/run` | **Run / Walk**: pick activity, permission handling, live GPS route on the campus map, distance/duration/pace, pause, finish or discard; summary with route, **zones interacted with / eligible**, and the backend-allowed claim action. Upload retry on network failure |
+| `/run` | **Run / Walk** (live on the Territory Network, see below): pick activity, permission handling, live GPS route on the campus map, distance/duration/pace, pause, finish or discard; summary with route, **zones interacted with / eligible**, and the backend-allowed claim action. Upload retry on network failure |
 | `/missions` | Daily / Weekly / Special missions with completion and claim states |
 | `/progress` | **Your Progress**, in four sections:<br>• **Today:** goal ring, today's XP, activities done, XP left, run XP, streak and a level bar.<br>• **Progress:** Day/Week/Month/Year with Steps/Active/Calories/Workouts, a tap-to-read bar chart and the streak calendar with active days.<br>• **Your performance:** change vs the previous period, campus rank and milestones in reach.<br>• **Next:** the best next action (claim, run, or log a mission). |
 | `/crews`, `/crew/[id]`, `/crew/new` | Discover / my crews with search, crew profile (members, crew territory, upcoming events), join / leave, create (when the backend allows) |
@@ -103,6 +103,26 @@ With no backend URLs (`.env.example`) every screen shows an honest *Not connecte
 - There is a single DOM marker (you). Everything else is GPU-drawn.
 
 **Privacy.** Activity is only ever aggregated per territory ("12 squirrels ran through…"). Your position comes from your own device and is never sent anywhere by this screen. With no GPS fix inside Bengal, you appear at a labelled preview position at College Street.
+
+### Run / Walk on the Territory Network
+
+When no campus backend serves its own zones, a run plays out on the Territory Network map (`src/features/run/`). The GPS, permission, background-tracking, upload and backend zone checks in `app/run.tsx` are unchanged.
+
+- **Setup:** Run / Walk tiles over the live map, showing the territory you're starting in.
+- **Countdown:** a 3 · 2 · 1 ring sweep, then a GO flash.
+- **While moving:**
+  - A tilted camera follows you, kept in the part of the map the HUD doesn't cover. Dragging takes the camera back for a few seconds; ◎ resumes following.
+  - Your route glows behind you, and every territory you've crossed keeps a bright edge.
+  - A **zone card** shows where you are, who holds it, and your **influence** there. Cover 200 m in a micro territory (500 m in a zone) to **power** it.
+  - The stats panel shows distance, current pace coloured by an **Easy / Steady / Tempo / Fast** gauge, average pace, next-km progress, territories, streak, powered count and kcal.
+  - Controls: tap to pause, **hold to finish** (a charge ring fills), and follow-me.
+- **Moments:** NEW TERRITORY / ENTERING banners with a streak badge, TERRITORY POWERED stamps, and km split stamps (faster / slower than the last). Walking into uncharted ground with a real GPS fix discovers it.
+- **Results:**
+  - The whole route framed on the map, the big numbers, and km splits (fastest lit).
+  - Every territory crossed, with your influence there.
+  - Then the existing verdict, XP and upload state, and "Claim on the Territory map".
+
+The run logic is in `logic/runProgress.ts` and is pure and incremental, with node tests. Influence is a Preview Season mechanic and never claims anything; claims still happen on the Territory map. On the web (no GPS), the labelled demo route loops through College Street (`logic/worldDemo.ts`).
 
 ## Not launched yet (locked)
 

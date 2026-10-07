@@ -70,7 +70,7 @@
     ['==', ['get', 'status'], 'locked'], 0.1,
     ['+', 0.03, ['*', ['/', ['get', 'control'], 100], 0.08]],
   ];
-  var FILL_STATE = ['+', FILL_BASE, ['case', ['boolean', ['feature-state', 'selected'], false], 0.1, ['boolean', ['feature-state', 'hover'], false], 0.06, 0]];
+  var FILL_STATE = ['+', FILL_BASE, ['case', ['boolean', ['feature-state', 'selected'], false], 0.1, ['boolean', ['feature-state', 'here'], false], 0.12, ['boolean', ['feature-state', 'visited'], false], 0.06, ['boolean', ['feature-state', 'hover'], false], 0.06, 0]];
   /** Split zones hand over to their micro territories between z12.8 and z13.6. */
   function tierFade(expr, lowSplit, highSplit, lowMicro, highMicro) {
     return [
@@ -124,7 +124,7 @@
   }
 
   function buildStyle() {
-    var sources = { geo: src(), terr: { type: 'geojson', data: EMPTY, promoteId: 'id' }, labels: { type: 'geojson', data: EMPTY, promoteId: 'id' }, particles: src(), pings: src(), cities: src(), places: src(), corridors: src(), me: src(), fx: src(), grid: src(), campuses: { type: 'geojson', data: EMPTY, cluster: true, clusterMaxZoom: 11, clusterRadius: 44 } };
+    var sources = { geo: src(), terr: { type: 'geojson', data: EMPTY, promoteId: 'id' }, labels: { type: 'geojson', data: EMPTY, promoteId: 'id' }, particles: src(), pings: src(), cities: src(), places: src(), corridors: src(), me: src(), fx: src(), grid: src(), route: { type: 'geojson', data: EMPTY, lineMetrics: true }, campuses: { type: 'geojson', data: EMPTY, cluster: true, clusterMaxZoom: 11, clusterRadius: 44 } };
     if (CFG.tiles) sources.omt = { type: 'vector', url: CFG.tiles };
     var isTerr = ['==', ['get', 'disc'], 1];
     var layers = [{ id: 'bg', type: 'background', paint: { 'background-color': '#06070A' } }]
@@ -165,6 +165,12 @@
         { id: 'pings', type: 'circle', source: 'pings', paint: { 'circle-color': 'rgba(0,0,0,0)', 'circle-stroke-color': ['get', 'color'], 'circle-stroke-width': 1.6, 'circle-radius': 4, 'circle-stroke-opacity': 0, 'circle-pitch-alignment': 'map' } },
         { id: 'fx-fill', type: 'fill', source: 'fx', filter: ['==', ['get', 'kind'], 'fill'], paint: { 'fill-color': ['get', 'color'], 'fill-opacity': ['get', 'opacity'] } },
         { id: 'fx-ring', type: 'line', source: 'fx', filter: ['==', ['get', 'kind'], 'ring'], layout: { 'line-join': 'round' }, paint: { 'line-color': ['get', 'color'], 'line-width': ['get', 'width'], 'line-blur': 1.5, 'line-opacity': ['get', 'opacity'] } },
+        // Run mode: the territories you've crossed, and the one you're in, get a bright edge.
+        { id: 'terr-trail', type: 'line', source: 'terr', minzoom: 10, layout: { 'line-join': 'round' }, paint: { 'line-color': ['case', ['boolean', ['feature-state', 'here'], false], '#F4F0E6', '#D7FF1F'], 'line-width': ['case', ['boolean', ['feature-state', 'here'], false], 3, 1.6], 'line-opacity': ['case', ['boolean', ['feature-state', 'here'], false], 0.95, ['boolean', ['feature-state', 'visited'], false], 0.55, 0] } },
+        // Run mode: your route — a soft glow, a bright core that fades in from the start.
+        { id: 'route-glow', type: 'line', source: 'route', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#D7FF1F', 'line-width': zi([12, 8, 17, 18]), 'line-blur': 8, 'line-opacity': 0.35 } },
+        { id: 'route-core', type: 'line', source: 'route', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-width': zi([12, 2.5, 17, 5.5]), 'line-gradient': ['interpolate', ['linear'], ['line-progress'], 0, 'rgba(215,255,31,0.25)', 0.6, 'rgba(215,255,31,0.85)', 1, '#F2FFD0'] } },
+        { id: 'route-start', type: 'circle', source: 'route', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': 5, 'circle-color': '#06070A', 'circle-stroke-color': '#D7FF1F', 'circle-stroke-width': 2.5 } },
         { id: 'me-acc', type: 'circle', source: 'me', paint: { 'circle-color': '#D7FF1F', 'circle-opacity': 0.07, 'circle-stroke-color': '#D7FF1F', 'circle-stroke-opacity': 0.35, 'circle-stroke-width': 1, 'circle-radius': ['interpolate', ['exponential', 2], ['zoom'], 0, 0, 22, ['get', 'r22']], 'circle-pitch-alignment': 'map' } },
       ])
       .concat(tileLabels())
@@ -613,6 +619,40 @@
   // ---------------------------------------------------------------------------
   var selected = null;
   var data = { terr: EMPTY };
+  var NO_PADDING = { top: 0, bottom: 0, left: 0, right: 0 };
+
+  // ---- Run mode -------------------------------------------------------------
+  var follow = null;
+  var lastMe = null;
+  var userMovedAt = 0;
+  // A drag / pinch takes the camera back from follow mode for a few seconds.
+  ['dragstart', 'zoomstart', 'rotatestart', 'pitchstart'].forEach(function (ev) {
+    map.on(ev, function (e) {
+      if (e && e.originalEvent) userMovedAt = Date.now();
+    });
+  });
+  function followTo(pos, ms) {
+    if (!follow || Date.now() - userMovedAt < 8000) return;
+    // Keep you in the part of the map the HUD doesn't cover.
+    map.easeTo({ center: pos, zoom: Math.max(map.getZoom() < 12 ? follow.zoom : map.getZoom(), 12), pitch: follow.pitch, padding: { top: follow.top, bottom: follow.bottom, left: 0, right: 0 }, duration: ms, easing: function (t) { return t; }, essential: true });
+  }
+  function setRoute(coords) {
+    var f = [];
+    if (coords && coords.length > 1) f.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: {} });
+    if (coords && coords.length) f.push({ type: 'Feature', geometry: { type: 'Point', coordinates: coords[0] }, properties: {} });
+    map.getSource('route').setData({ type: 'FeatureCollection', features: f });
+  }
+  var trail = { visited: [], here: null };
+  function setTrail(visited, here) {
+    trail.visited.forEach(function (id) {
+      map.setFeatureState({ source: 'terr', id: id }, { visited: false, here: false });
+    });
+    (visited || []).forEach(function (id) {
+      map.setFeatureState({ source: 'terr', id: id }, { visited: true, here: id === here });
+    });
+    if (here && (visited || []).indexOf(here) < 0) map.setFeatureState({ source: 'terr', id: here }, { here: true });
+    trail = { visited: (visited || []).concat(here ? [here] : []), here: here };
+  }
   /**
    * Start a camera move cleanly. Starting a flyTo while another is mid-flight can leave MapLibre
    * stuck "zooming" (seen when a search interrupts the intro), so stop first and fly next frame.
@@ -641,6 +681,7 @@
         map.getSource('labels').setData(m.labels);
         data.terr = m.terr;
         if (selected) map.setFeatureState({ source: 'terr', id: selected }, { selected: true });
+        if (trail.visited.length) setTrail(trail.visited.filter(function (id) { return id !== trail.here; }), trail.here);
         break;
       case 'particles':
         map.getSource('particles').setData(m.particles);
@@ -649,25 +690,35 @@
         endIntro();
         move(function () {
           var opts = { center: m.view.center, zoom: m.view.zoom, pitch: m.view.pitch == null ? map.getPitch() : m.view.pitch, bearing: m.view.bearing == null ? map.getBearing() : m.view.bearing, duration: m.duration == null ? 1600 : m.duration, curve: 1.45, essential: true };
-          // Only pass padding when there is some: MapLibre 5 throws mid-flight on `padding: undefined`.
-          if (m.padding) opts.padding = m.padding;
+          // Always an explicit padding: MapLibre 5 throws mid-flight on `padding: undefined`, and
+          // padding persists, so a stale one (from follow mode or a fit) must be replaced.
+          opts.padding = m.padding || NO_PADDING;
           map.flyTo(opts);
         });
         break;
       case 'fit':
         endIntro();
         move(function () {
-          var cam = map.cameraForBounds([[m.bbox[0], m.bbox[1]], [m.bbox[2], m.bbox[3]]], { padding: m.padding, maxZoom: m.maxZoom || 16 });
-          if (cam) map.flyTo({ center: cam.center, zoom: cam.zoom, pitch: m.pitch == null ? map.getPitch() : m.pitch, bearing: map.getBearing(), duration: m.duration || 1300, curve: 1.3, essential: true });
+          var cam = map.cameraForBounds([[m.bbox[0], m.bbox[1]], [m.bbox[2], m.bbox[3]]], { padding: m.padding, maxZoom: m.maxZoom || 16, pitch: m.pitch == null ? map.getPitch() : m.pitch, bearing: map.getBearing() });
+          // Fly to the box's own centre WITH the padding: MapLibre puts it at the centre of the
+          // unpadded area, tilted or not. (cameraForBounds' centre already bakes the padding in, so
+          // flying there with padding would shift it twice; without, a tilt drifts it.)
+          var mid = [(m.bbox[0] + m.bbox[2]) / 2, (m.bbox[1] + m.bbox[3]) / 2];
+          if (cam) map.flyTo({ center: mid, zoom: cam.zoom, padding: m.padding, pitch: m.pitch == null ? map.getPitch() : m.pitch, bearing: map.getBearing(), duration: m.duration || 1300, curve: 1.3, essential: true });
         });
         break;
       case 'select':
         if (selected) map.setFeatureState({ source: 'terr', id: selected }, { selected: false });
         selected = m.id;
         if (selected) map.setFeatureState({ source: 'terr', id: selected }, { selected: true });
+        if (trail.visited.length) setTrail(trail.visited.filter(function (id) { return id !== trail.here; }), trail.here);
         break;
       case 'me':
         setMe(m);
+        if (m.pos) {
+          lastMe = m.pos;
+          if (follow) followTo(m.pos, 1000);
+        }
         break;
       case 'fx':
         fx(m);
@@ -685,6 +736,19 @@
         document.documentElement.style.setProperty('--inset-right', (m.right || 0) + 'px');
         focus = { top: m.focusTop || 0, bottom: m.focusBottom || 0 };
         camera(false);
+        break;
+      case 'route':
+        setRoute(m.coords);
+        break;
+      case 'trail':
+        setTrail(m.visited, m.here);
+        break;
+      case 'follow':
+        follow = m.on ? { zoom: m.zoom || 16, pitch: m.pitch == null ? 55 : m.pitch, bottom: m.bottom || 0, top: m.top || 0 } : null;
+        if (follow) userMovedAt = 0;
+        // Leaving follow mode: drop the follow padding so later camera moves centre normally.
+        else map.setPadding(NO_PADDING);
+        if (follow && lastMe) followTo(lastMe, 900);
         break;
       case 'active':
         active = !!m.on;

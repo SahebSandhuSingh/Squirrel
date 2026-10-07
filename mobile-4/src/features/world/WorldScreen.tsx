@@ -22,7 +22,8 @@ import { startLocationWatch, useLocation } from '@/state/locationStore';
 import { darkColors } from '@/theme';
 import { crewOf, MY_CREW_ID } from './data/crews';
 import { PLACES, VIEWS } from './data/world';
-import { cityFeatures, colorOfCrew, corridorFeatures, geoFeatures, particleFeatures, placeFeatures, territoryFeatures } from './engine/features';
+import { colorOfCrew, particleFeatures, territoryFeatures } from './engine/features';
+import { initMessage } from './engine/init';
 import type { EngineMessage, Padding } from './engine/protocol';
 import { regionTitle, territoryAt, type RegionTitle } from './logic/camera';
 import type { SearchResult } from './logic/search';
@@ -181,7 +182,7 @@ export function WorldScreen({ onOpenCampus }: { onOpenCampus: () => void }) {
   const focusTerritory = useCallback(
     (t: Territory, force = false) => {
       const z = cam.current.zoom;
-      if (force || z < 12.5 || t.tier === 4) send({ type: 'fit', bbox: t.bbox, padding: sheetPadding(), maxZoom: t.tier === 5 ? 16.4 : t.split ? 14.1 : 14.8, pitch: t.tier === 5 ? 48 : 32, duration: 1200 });
+      if (force || z < 12.5 || t.tier === 4) send({ type: 'fit', bbox: t.bbox, padding: sheetPadding(), maxZoom: t.tier === 5 ? 16.4 : t.split ? 14.1 : 14.8, pitch: t.tier === 5 ? 45 : 28, duration: 1200 });
       else send({ type: 'fly', view: { center: t.centroid, zoom: Math.max(z, 14.6) }, padding: sheetPadding(), duration: 700 });
     },
     [send, sheetPadding],
@@ -203,17 +204,7 @@ export function WorldScreen({ onOpenCampus }: { onOpenCampus: () => void }) {
   const engineHandler = (m: EngineMessage) => {
     switch (m.type) {
       case 'ready': {
-        const world = getWorld();
-        send({
-          type: 'init',
-          intro,
-          view: VIEWS.kolkata,
-          geo: geoFeatures(),
-          ...territoryFeatures(world, discoveredRef.current, false),
-          cities: cityFeatures(world),
-          ...placeFeatures(),
-          corridors: corridorFeatures(),
-        });
+        send(initMessage(getWorld(), discoveredRef.current, { intro, view: VIEWS.kolkata }));
         setEngineReady(true);
         if (intro) introPlayed = true;
         break;
@@ -329,7 +320,7 @@ export function WorldScreen({ onOpenCampus }: { onOpenCampus: () => void }) {
     [selected, busy, toast],
   );
 
-  const onEnter = useCallback((t: Territory) => send({ type: 'fit', bbox: t.bbox, padding: sheetPadding(), maxZoom: 15.2, pitch: 45, duration: 1300 }), [send, sheetPadding]);
+  const onEnter = useCallback((t: Territory) => send({ type: 'fit', bbox: t.bbox, padding: sheetPadding(), maxZoom: 15.2, pitch: 40, duration: 1300 }), [send, sheetPadding]);
 
   // Android back closes the panel first.
   useEffect(() => {
